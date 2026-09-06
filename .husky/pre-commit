@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "Running Prettier & ESLint..."
+npx lint-staged
+
+echo "Running Frontend Tests..."
+npm run test:frontend
+
+echo "Running Backend Tests..."
+npm run test:backend
+
+echo "Running Rustfmt & Clippy..."
+cd src-tauri
+cargo fmt -- --check
+cargo clippy -- -D warnings
+cd ..

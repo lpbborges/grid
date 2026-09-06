@@ -1,0 +1,26 @@
+@import 'tailwindcss';
+
+:root {
+  --eva-primary: #7634c2;
+  --eva-accent-green: #5bff3b;
+  --eva-accent-orange: #ff7300;
+  --eva-bg-dark: #1f1f2e;
+  --eva-surface: #4b4b5c;
+  --eva-text-main: #f4f4f5;
+}
+
+body {
+  background-color: var(--eva-bg-dark);
+  color: var(--eva-text-main);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    'Noto Sans',
+    sans-serif;
+}

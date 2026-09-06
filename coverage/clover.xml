@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1788726590837" clover="3.2.0">
+  <project timestamp="1788726590838" name="All files">
+    <metrics statements="43" coveredstatements="42" conditionals="27" coveredconditionals="22" methods="10" coveredmethods="10" elements="80" coveredelements="74" complexity="0" loc="43" ncloc="43" packages="3" files="4" classes="4"/>
+    <package name="api">
+      <metrics statements="15" coveredstatements="14" conditionals="15" coveredconditionals="12" methods="2" coveredmethods="2"/>
+      <file name="yts.ts" path="/home/lp01/code/auto/grid-play/src/lib/api/yts.ts">
+        <metrics statements="15" coveredstatements="14" conditionals="15" coveredconditionals="12" methods="2" coveredmethods="2"/>
+        <line num="3" count="1" type="stmt"/>
+        <line num="6" count="3" type="stmt"/>
+        <line num="7" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="8" count="1" type="stmt"/>
+        <line num="10" count="2" type="stmt"/>
+        <line num="11" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="12" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="14" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="18" count="2" type="stmt"/>
+        <line num="19" count="2" type="cond" truecount="1" falsecount="1"/>
+        <line num="20" count="0" type="stmt"/>
+        <line num="22" count="2" type="stmt"/>
+        <line num="23" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="24" count="1" type="cond" truecount="2" falsecount="0"/>
+        <line num="26" count="1" type="stmt"/>
+      </file>
+    </package>
+    <package name="components">
+      <metrics statements="11" coveredstatements="11" conditionals="4" coveredconditionals="2" methods="3" coveredmethods="3"/>
+      <file name="MovieCard.svelte" path="/home/lp01/code/auto/grid-play/src/lib/components/MovieCard.svelte">
+        <metrics statements="9" coveredstatements="9" conditionals="4" coveredconditionals="2" methods="1" coveredmethods="1"/>
+        <line num="7" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="8" count="1" type="stmt"/>
+        <line num="9" count="1" type="stmt"/>
+        <line num="15" count="1" type="stmt"/>
+        <line num="17" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="20" count="1" type="stmt"/>
+        <line num="21" count="1" type="stmt"/>
+        <line num="22" count="1" type="stmt"/>
+        <line num="23" count="1" type="stmt"/>
+      </file>
+      <file name="VideoPlayer.svelte" path="/home/lp01/code/auto/grid-play/src/lib/components/VideoPlayer.svelte">
+        <metrics statements="2" coveredstatements="2" conditionals="0" coveredconditionals="0" methods="2" coveredmethods="2"/>
+        <line num="5" count="1" type="stmt"/>
+        <line num="7" count="1" type="stmt"/>
+      </file>
+    </package>
+    <package name="engine">
+      <metrics statements="17" coveredstatements="17" conditionals="8" coveredconditionals="8" methods="5" coveredmethods="5"/>
+      <file name="torrent.ts" path="/home/lp01/code/auto/grid-play/src/lib/engine/torrent.ts">
+        <metrics statements="17" coveredstatements="17" conditionals="8" coveredconditionals="8" methods="5" coveredmethods="5"/>
+        <line num="4" count="1" type="stmt"/>
+        <line num="7" count="2" type="stmt"/>
+        <line num="8" count="2" type="stmt"/>
+        <line num="10" count="1" type="stmt"/>
+        <line num="15" count="2" type="stmt"/>
+        <line num="23" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="24" count="1" type="stmt"/>
+        <line num="27" count="1" type="stmt"/>
+        <line num="28" count="1" type="stmt"/>
+        <line num="32" count="1" type="stmt"/>
+        <line num="33" count="1" type="stmt"/>
+        <line num="35" count="1" type="stmt"/>
+        <line num="36" count="3" type="cond" truecount="6" falsecount="0"/>
+        <line num="37" count="2" type="stmt"/>
+        <line num="38" count="2" type="stmt"/>
+        <line num="42" count="1" type="stmt"/>
+        <line num="46" count="1" type="stmt"/>
+      </file>
+    </package>
+  </project>
+</coverage>
