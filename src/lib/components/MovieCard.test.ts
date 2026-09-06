@@ -20,8 +20,6 @@ describe('MovieCard component', () => {
     const { getByText, getByAltText } = render(MovieCard, { movie: mockMovie });
 
     expect(getByText('Test Evangelion')).toBeDefined();
-    expect(getByText('2024')).toBeDefined();
-    expect(getByText('9.9 / 10')).toBeDefined();
     expect(getByAltText('Test Evangelion')).toBeDefined();
   });
 });

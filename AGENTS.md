@@ -5,6 +5,7 @@ This document serves as a living repository of the core architectural decisions,
 ## 1. Architecture & Modularity
 
 - **No Monolithic Files:** Do not cram logic, API fetching, and complex UI into a single Svelte component (like `+page.svelte`).
+- **ONLY Svelte 5 Runes:** Always use Svelte 5 Runes (`$state`, `$derived`, `$effect`, `$props`, etc.) for ALL new components and refactorings. Do not use legacy syntax (`export let`, reactive statements like `$:`) in new code.
 - **Separation of Concerns:**
   - UI Elements belong in `src/lib/components/`
   - External API calls (e.g., YTS) belong in `src/lib/api/`

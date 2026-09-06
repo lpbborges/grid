@@ -18,22 +18,30 @@ describe('yts api', () => {
     globalThis.fetch = vi.fn();
   });
 
-  it('fetches popular movies successfully', async () => {
+  it('fetches popular movies successfully from cinemeta', async () => {
     (globalThis.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        status: 'ok',
-        data: { movies: [mockMovie] }
+        metas: [
+          {
+            imdb_id: 'tt123',
+            name: 'Test Movie',
+            year: '2024',
+            imdbRating: '8.5',
+            poster: 'img.jpg'
+          }
+        ]
       })
     });
 
     const movies = await getPopularMovies();
-    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('list_movies.json'));
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('top.json'));
     expect(movies.length).toBe(1);
     expect(movies[0].title).toBe('Test Movie');
+    expect(movies[0].id).toBe('tt123');
   });
 
-  it('fetches movie details successfully', async () => {
+  it('fetches movie details successfully with movie_id', async () => {
     (globalThis.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -49,15 +57,36 @@ describe('yts api', () => {
     expect(movie.title).toBe('Test Movie');
   });
 
-  it('throws an error when status is not ok in popular movies', async () => {
+  it('fetches movie details successfully with imdb_id', async () => {
     (globalThis.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        status: 'error',
-        status_message: 'Invalid API Key'
+        status: 'ok',
+        data: { movie: mockMovie }
       })
     });
-    await expect(getPopularMovies()).rejects.toThrow('Invalid API Key');
+
+    const movie = await getMovieDetails('tt12345');
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('movie_details.json?imdb_id=tt12345')
+    );
+    expect(movie.title).toBe('Test Movie');
+  });
+
+  it('returns empty array when cinemeta api fails', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      statusText: 'Not Found'
+    });
+
+    // Console error will be printed, we can mock it or just let it print
+    const originalConsoleError = console.error;
+    console.error = vi.fn();
+
+    const movies = await getPopularMovies();
+    expect(movies).toEqual([]);
+
+    console.error = originalConsoleError;
   });
 
   it('throws an error when status is not ok in movie details', async () => {
@@ -68,14 +97,5 @@ describe('yts api', () => {
       })
     });
     await expect(getMovieDetails(1)).rejects.toThrow('API returned an error');
-  });
-
-  it('throws an error when api fails', async () => {
-    (globalThis.fetch as any).mockResolvedValueOnce({
-      ok: false,
-      statusText: 'Not Found'
-    });
-
-    await expect(getPopularMovies()).rejects.toThrow('Failed to fetch popular movies: Not Found');
   });
 });

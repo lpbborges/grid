@@ -9,7 +9,7 @@ export interface Torrent {
 }
 
 export interface Movie {
-  id: number;
+  id: string | number;
   title: string;
   year: number;
   rating: number;

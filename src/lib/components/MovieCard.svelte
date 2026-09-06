@@ -6,30 +6,16 @@
 
 <a
   href="/movie/{movie.id}"
-  class="group relative overflow-hidden rounded border border-transparent bg-[#1a1a24] transition-all duration-300 hover:border-[var(--eva-accent-green)]"
+  class="group flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent bg-transparent transition-all duration-200 hover:scale-105 hover:border-[#7c3aed] hover:shadow-[0_0_15px_rgba(124,58,237,0.5)]"
   data-testid="movie-card"
 >
-  <div class="relative aspect-[2/3] w-full bg-[var(--eva-surface)]">
-    <img
-      src={movie.medium_cover_image}
-      alt={movie.title}
-      loading="lazy"
-      class="h-full w-full object-cover"
-    />
-    <div
-      class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4 text-center opacity-0 backdrop-blur-sm transition-opacity duration-300 group-hover:opacity-100"
-    >
-      <span class="mb-2 font-bold text-[var(--eva-accent-green)]">ACCESS</span>
-      <span class="text-sm font-bold text-[var(--eva-primary)]">{movie.rating} / 10</span>
-    </div>
-  </div>
-  <div class="p-3">
-    <h2 class="truncate text-sm font-bold" title={movie.title}>{movie.title}</h2>
-    <div class="mt-1 flex items-center justify-between">
-      <span class="text-xs text-gray-400">{movie.year}</span>
-      <span class="rounded bg-[var(--eva-primary)]/20 px-1 text-xs text-[var(--eva-primary)]"
-        >HD</span
-      >
-    </div>
+  <img
+    src={movie.medium_cover_image}
+    alt={movie.title}
+    loading="lazy"
+    class="h-[270px] w-full rounded-none object-cover"
+  />
+  <div class="mt-2 w-full truncate text-center text-[0.95rem] font-medium text-[#e0e0e0]">
+    {movie.title}
   </div>
 </a>
