@@ -106,7 +106,7 @@
 <div class="relative z-20 mb-8">
   <a
     href="/"
-    class="group flex w-fit items-center gap-2 text-sm font-bold tracking-wider text-white uppercase transition-colors hover:text-[var(--eva-accent-green)]"
+    class="group hover:text-accent-green flex w-fit items-center gap-2 text-sm font-bold tracking-wider text-white uppercase transition-colors"
     style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
   >
     <svg
@@ -119,7 +119,7 @@
       stroke-width="2"
       stroke-linecap="round"
       stroke-linejoin="round"
-      class="text-[var(--eva-primary)] transition-colors group-hover:text-[var(--eva-accent-green)]"
+      class="text-primary group-hover:text-accent-green transition-colors"
       ><path d="m15 18-6-6 6-6" /></svg
     >
     Voltar ao Catálogo
@@ -128,16 +128,12 @@
 
 {#if loading}
   <div class="flex justify-center py-20">
-    <div
-      class="animate-pulse font-mono text-xl tracking-widest text-[var(--eva-accent-green)] uppercase"
-    >
+    <div class="text-accent-green animate-pulse font-mono text-xl tracking-widest uppercase">
       Carregando Dados...
     </div>
   </div>
 {:else if error}
-  <div
-    class="border-l-4 border-[var(--eva-accent-orange)] bg-[var(--eva-surface)] p-4 font-mono text-[var(--eva-accent-orange)]"
-  >
+  <div class="border-accent-orange bg-surface text-accent-orange border-l-4 p-4 font-mono">
     Erro: {error}
   </div>
 {:else if movie}
@@ -159,7 +155,7 @@
 
   <div class="relative z-10 flex flex-col gap-8 md:flex-row">
     <div class="w-full max-w-sm md:w-1/3">
-      <div class="rounded border border-[var(--eva-primary)]/30 bg-[var(--eva-surface)] p-2">
+      <div class="border-primary/30 bg-surface rounded border p-2">
         <img
           src={movie.large_cover_image}
           alt={movie.title}
@@ -172,14 +168,13 @@
           <div class="flex flex-col gap-2">
             <label
               for="quality-select"
-              class="text-sm font-bold tracking-widest text-[var(--eva-primary)] uppercase"
-              >Qualidade</label
+              class="text-primary text-sm font-bold tracking-widest uppercase">Qualidade</label
             >
             <div class="relative w-full">
               <select
                 id="quality-select"
                 bind:value={selectedTorrentHash}
-                class="w-full appearance-none rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24] p-3 pr-10 font-mono text-sm text-white focus:border-[var(--eva-accent-green)] focus:outline-none"
+                class="border-primary/50 focus:border-accent-green w-full appearance-none rounded border bg-[#1a1a24] p-3 pr-10 font-mono text-sm text-white focus:outline-none"
               >
                 {#each movie.torrents as torrent}
                   <option value={torrent.hash} class="bg-[#1a1a24] text-white">
@@ -188,7 +183,7 @@
                 {/each}
               </select>
               <div
-                class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[var(--eva-primary)]"
+                class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center px-3"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -207,7 +202,7 @@
 
           <button
             onclick={playMovie}
-            class="flex w-full items-center justify-center gap-2 rounded border-2 border-transparent bg-[var(--eva-primary)] py-4 text-lg font-bold tracking-widest text-white uppercase shadow-[0_0_15px_rgba(118,52,194,0.5)] transition-all duration-300 hover:border-white hover:bg-[var(--eva-accent-green)] hover:text-[var(--eva-bg-dark)] hover:shadow-[0_0_20px_rgba(91,255,59,0.8)]"
+            class="bg-primary hover:bg-accent-green hover:text-bg-dark flex w-full items-center justify-center gap-2 rounded border-2 border-transparent py-4 text-lg font-bold tracking-widest text-white uppercase shadow-[0_0_15px_rgba(118,52,194,0.5)] transition-all duration-300 hover:border-white hover:shadow-[0_0_20px_rgba(91,255,59,0.8)]"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -221,9 +216,7 @@
           </button>
         </div>
         {#if engineStatus}
-          <div
-            class="mt-4 animate-pulse text-center font-mono text-sm text-[var(--eva-accent-orange)]"
-          >
+          <div class="text-accent-orange mt-4 animate-pulse text-center font-mono text-sm">
             {engineStatus}
           </div>
         {/if}
@@ -232,23 +225,23 @@
 
     <div class="w-full md:w-2/3">
       <h1
-        class="mb-2 text-4xl font-bold tracking-tight text-[var(--eva-text-main)] md:text-5xl"
+        class="text-text-main mb-2 text-4xl font-bold tracking-tight md:text-5xl"
         style="text-shadow: 0 0 10px rgba(255,255,255,0.2);"
       >
         {translatedTitle}
       </h1>
 
-      <div class="mb-6 flex flex-wrap gap-4 font-mono text-sm text-[var(--eva-primary)]">
-        <span class="rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24] px-3 py-1"
+      <div class="text-primary mb-6 flex flex-wrap gap-4 font-mono text-sm">
+        <span class="border-primary/50 rounded border bg-[#1a1a24] px-3 py-1"
           >ANO: {movie.year}</span
         >
         {#if movie.director && movie.director.length > 0}
-          <span class="rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24] px-3 py-1"
+          <span class="border-primary/50 rounded border bg-[#1a1a24] px-3 py-1"
             >DIRETOR: {movie.director.join(', ')}</span
           >
         {/if}
         <span
-          class="flex items-center gap-1 rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24] px-3 py-1"
+          class="border-primary/50 flex items-center gap-1 rounded border bg-[#1a1a24] px-3 py-1"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -274,7 +267,7 @@
       {:else}
         <div class="prose prose-invert mb-8 max-w-none leading-relaxed text-gray-300">
           <h3
-            class="mb-4 border-b border-[var(--eva-surface)] pb-2 text-sm font-bold tracking-widest text-[var(--eva-accent-green)] uppercase"
+            class="border-surface text-accent-green mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
           >
             Sinopse
           </h3>
@@ -284,7 +277,7 @@
         {#if movie.cast && movie.cast.length > 0}
           <div>
             <h3
-              class="mb-4 border-b border-[var(--eva-surface)] pb-2 text-sm font-bold tracking-widest text-[var(--eva-primary)] uppercase"
+              class="border-surface text-primary mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
             >
               Elenco
             </h3>
@@ -295,11 +288,11 @@
                     <img
                       src={actor.url_small_image}
                       alt={actor.name}
-                      class="mb-2 h-16 w-16 rounded-full border-2 border-[var(--eva-primary)]/50 object-cover"
+                      class="border-primary/50 mb-2 h-16 w-16 rounded-full border-2 object-cover"
                     />
                   {:else}
                     <div
-                      class="mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2 border-[var(--eva-primary)]/50 bg-[var(--eva-surface)] text-gray-500"
+                      class="border-primary/50 bg-surface mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2 text-gray-500"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -323,7 +316,7 @@
                     >{actor.name}</span
                   >
                   <span
-                    class="mt-1 text-xs leading-tight text-[var(--eva-accent-green)]"
+                    class="text-accent-green mt-1 text-xs leading-tight"
                     title={actor.character_name}>{actor.character_name}</span
                   >
                 </div>

@@ -1,17 +1,25 @@
 @import 'tailwindcss';
 
+@theme {
+  --color-primary: var(--primary);
+  --color-accent-green: var(--accent-green);
+  --color-accent-orange: var(--accent-orange);
+  --color-bg-dark: var(--bg-dark);
+  --color-surface: var(--surface);
+  --color-text-main: var(--text-main);
+}
+
 :root {
-  --eva-primary: #7634c2;
-  --eva-accent-green: #5bff3b;
-  --eva-accent-orange: #ff7300;
-  --eva-bg-dark: #1f1f2e;
-  --eva-surface: #4b4b5c;
-  --eva-text-main: #f4f4f5;
+  --primary: #7634c2;
+  --accent-green: #5bff3b;
+  --accent-orange: #ff7300;
+  --bg-dark: #1f1f2e;
+  --surface: #4b4b5c;
+  --text-main: #f4f4f5;
 }
 
 body {
-  background-color: var(--eva-bg-dark);
-  color: var(--eva-text-main);
+  @apply bg-bg-dark text-text-main;
   font-family:
     ui-sans-serif,
     system-ui,

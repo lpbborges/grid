@@ -109,7 +109,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:this={containerElement}
-  class="relative mb-6 aspect-video w-full overflow-hidden rounded border-2 border-[var(--eva-accent-green)] bg-black shadow-[0_0_30px_rgba(91,255,59,0.2)]"
+  class="border-accent-green relative mb-6 aspect-video w-full overflow-hidden rounded border-2 bg-black shadow-[0_0_30px_rgba(91,255,59,0.2)]"
   data-testid="video-player-container"
   onmousemove={handleMouseMove}
   onmouseleave={handleMouseLeave}
@@ -147,15 +147,15 @@
       min="0"
       max={duration || 100}
       bind:value={currentTime}
-      class="mb-3 w-full cursor-pointer accent-[var(--eva-accent-green)]"
+      class="accent-accent-green mb-3 w-full cursor-pointer"
     />
 
-    <div class="flex items-center justify-between font-mono text-[var(--eva-primary)]">
+    <div class="text-primary flex items-center justify-between font-mono">
       <div class="flex items-center gap-4">
         <button
           onclick={togglePlay}
           aria-label={paused ? 'Play' : 'Pause'}
-          class="transition-colors hover:text-[var(--eva-accent-green)]"
+          class="hover:text-accent-green transition-colors"
         >
           {#if paused}
             <svg
@@ -191,7 +191,7 @@
           <button
             onclick={() => (volume = volume === 0 ? 1 : 0)}
             aria-label="Toggle Mute"
-            class="transition-colors hover:text-[var(--eva-accent-green)]"
+            class="hover:text-accent-green transition-colors"
           >
             {#if volume > 0}
               <svg
@@ -238,7 +238,7 @@
               step="0.05"
               bind:value={volume}
               aria-label="Volume"
-              class="w-full cursor-pointer accent-[var(--eva-accent-green)]"
+              class="accent-accent-green w-full cursor-pointer"
             />
           </div>
         </div>
@@ -250,8 +250,8 @@
             <button
               onclick={() => (showAudioMenu = !showAudioMenu)}
               aria-label="Audio Tracks Menu"
-              class="rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors hover:text-[var(--eva-accent-green)] {showAudioMenu
-                ? 'text-[var(--eva-accent-green)]'
+              class="hover:text-accent-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors {showAudioMenu
+                ? 'text-accent-green'
                 : ''}"
             >
               ÁUDIO
@@ -259,10 +259,10 @@
 
             {#if showAudioMenu}
               <div
-                class="absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24]/95 p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
+                class="border-primary/50 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border bg-[#1a1a24]/95 p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
               >
                 <div
-                  class="mt-1 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest text-[var(--eva-primary)] uppercase"
+                  class="text-primary mt-1 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest uppercase"
                 >
                   Faixa de Áudio
                 </div>
@@ -270,7 +270,7 @@
                   <button
                     class="w-full truncate rounded px-3 py-1.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white {activeAudioIndex ===
                     track.index
-                      ? 'bg-[var(--eva-primary)]/30 text-white'
+                      ? 'bg-primary/30 text-white'
                       : ''}"
                     title={track.label}
                     onclick={() => selectAudioTrack(track.index)}
@@ -288,8 +288,8 @@
             <button
               onclick={() => (showMenu = !showMenu)}
               aria-label="Subtitles Menu"
-              class="rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors hover:text-[var(--eva-accent-green)] {showMenu
-                ? 'text-[var(--eva-accent-green)]'
+              class="hover:text-accent-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors {showMenu
+                ? 'text-accent-green'
                 : ''}"
             >
               CC
@@ -297,7 +297,7 @@
 
             {#if showMenu}
               <div
-                class="absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24]/95 p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
+                class="border-primary/50 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border bg-[#1a1a24]/95 p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
               >
                 <button
                   class="w-full rounded px-3 py-1.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white {activeIndex ===
@@ -311,7 +311,7 @@
 
                 {#if torrentSubs.length > 0}
                   <div
-                    class="mt-3 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest text-[var(--eva-primary)] uppercase"
+                    class="text-primary mt-3 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest uppercase"
                   >
                     Embutida
                   </div>
@@ -319,7 +319,7 @@
                     <button
                       class="w-full truncate rounded px-3 py-1.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white {activeIndex ===
                       subtitles.indexOf(sub)
-                        ? 'bg-[var(--eva-primary)]/30 text-white'
+                        ? 'bg-primary/30 text-white'
                         : ''}"
                       title={sub.label}
                       onclick={() => selectTrack(subtitles.indexOf(sub))}
@@ -331,7 +331,7 @@
 
                 {#if externalSubs.length > 0}
                   <div
-                    class="mt-3 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest text-[var(--eva-primary)] uppercase"
+                    class="text-primary mt-3 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest uppercase"
                   >
                     Externa
                   </div>
@@ -339,7 +339,7 @@
                     <button
                       class="w-full truncate rounded px-3 py-1.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white {activeIndex ===
                       subtitles.indexOf(sub)
-                        ? 'bg-[var(--eva-primary)]/30 text-white'
+                        ? 'bg-primary/30 text-white'
                         : ''}"
                       title={sub.label}
                       onclick={() => selectTrack(subtitles.indexOf(sub))}
@@ -356,7 +356,7 @@
         <button
           onclick={toggleFullscreen}
           aria-label="Fullscreen"
-          class="ml-2 transition-colors hover:text-[var(--eva-accent-green)]"
+          class="hover:text-accent-green ml-2 transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
