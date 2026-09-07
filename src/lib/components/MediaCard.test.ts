@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/svelte';
-import MovieCard from './MovieCard.svelte';
+import MediaCard from './MediaCard.svelte';
 import type { Movie } from '../types';
 
 const mockMovie: Movie = {
@@ -15,14 +15,24 @@ const mockMovie: Movie = {
   torrents: []
 };
 
-describe('MovieCard component', () => {
-  it('renders movie title and details', () => {
-    const { getByText, getByAltText } = render(MovieCard, { movie: mockMovie });
+describe('MediaCard component', () => {
+  it('renders media title and details for movie', () => {
+    const { getByText, getByAltText } = render(MediaCard, { media: mockMovie, type: 'movie' });
 
     expect(getByText('Test Evangelion')).toBeDefined();
     expect(getByAltText('Test Evangelion')).toBeDefined();
 
     const link = getByText('Test Evangelion').closest('a');
     expect(link?.getAttribute('href')).toBe('/movie/123');
+  });
+
+  it('renders media title and details for series', () => {
+    const { getByText, getByAltText } = render(MediaCard, { media: mockMovie, type: 'series' });
+
+    expect(getByText('Test Evangelion')).toBeDefined();
+    expect(getByAltText('Test Evangelion')).toBeDefined();
+
+    const link = getByText('Test Evangelion').closest('a');
+    expect(link?.getAttribute('href')).toBe('/series/123');
   });
 });

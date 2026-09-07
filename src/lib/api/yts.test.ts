@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getPopularMovies, getMovieDetails } from './yts';
+import { getPopularMovies, getMovieDetails, getPopularSeries, getSeriesDetails } from './yts';
 
 const mockMovie = {
   id: 1,
@@ -106,6 +106,61 @@ describe('yts api', () => {
     });
     await expect(getMovieDetails(1)).rejects.toThrow(
       'Failed to fetch movie details: Internal Server Error'
+    );
+  });
+
+  it('fetches popular series successfully from cinemeta', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        metas: [
+          {
+            imdb_id: 'tt987',
+            name: 'Test Series',
+            year: '2024',
+            imdbRating: '9.0',
+            poster: 'img_series.jpg'
+          }
+        ]
+      })
+    });
+
+    const series = await getPopularSeries();
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('series/top.json'));
+    expect(series.length).toBe(1);
+    expect(series[0].title).toBe('Test Series');
+    expect(series[0].id).toBe('tt987');
+  });
+
+  it('fetches series details successfully', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        meta: {
+          id: 'tt987',
+          name: 'Test Series Detail',
+          year: '2024',
+          imdbRating: '9.0',
+          poster: 'img_series.jpg'
+        }
+      })
+    });
+
+    const details = await getSeriesDetails('tt987');
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('meta/series/tt987.json')
+    );
+    expect(details.title).toBe('Test Series Detail');
+    expect(details.id).toBe('tt987');
+  });
+
+  it('throws an error when fetch fails in series details', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      statusText: 'Not Found'
+    });
+    await expect(getSeriesDetails('tt987')).rejects.toThrow(
+      'Failed to fetch series details: Not Found'
     );
   });
 });

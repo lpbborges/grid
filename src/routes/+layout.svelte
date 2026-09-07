@@ -5,7 +5,7 @@
 </script>
 
 <div class="text-text-main flex h-screen flex-col overflow-hidden bg-[#0f0f15]">
-  {#if !$page.url.pathname.startsWith('/movie')}
+  {#if !$page.url.pathname.startsWith('/movie') && !$page.url.pathname.startsWith('/series')}
     <!-- Top navigation bar -->
     <header class="flex items-center justify-between bg-[#0f0f15] p-4">
       <!-- Left: Logo -->

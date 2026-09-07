@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getPopularMovies } from '$lib/api/yts';
+  import { getPopularMovies, getPopularSeries } from '$lib/api/yts';
   import type { Movie } from '$lib/types';
-  import MovieCard from '$lib/components/MovieCard.svelte';
+  import MediaCard from '$lib/components/MediaCard.svelte';
 
   let popularMovies = $state<Movie[]>([]);
+  let popularSeries = $state<Movie[]>([]);
   let loading = $state(true);
   let error = $state('');
 
@@ -12,14 +13,22 @@
   let canScrollLeft = $state(false);
   let canScrollRight = $state(false);
 
+  let seriesScrollContainer: any = $state();
+  let canScrollSeriesLeft = $state(false);
+  let canScrollSeriesRight = $state(false);
+
   onMount(async () => {
     try {
       popularMovies = await getPopularMovies(24);
+      popularSeries = await getPopularSeries(24);
     } catch (e: any) {
-      error = e.message || 'Error fetching movies';
+      error = e.message || 'Error fetching data';
     } finally {
       loading = false;
-      setTimeout(checkScroll, 100);
+      setTimeout(() => {
+        checkScroll();
+        checkSeriesScroll();
+      }, 100);
     }
   });
 
@@ -37,6 +46,22 @@
   function scrollRight() {
     scrollContainer.scrollBy({ left: 800, behavior: 'smooth' });
   }
+
+  function checkSeriesScroll() {
+    if (!seriesScrollContainer) return;
+    canScrollSeriesLeft = seriesScrollContainer.scrollLeft > 0;
+    canScrollSeriesRight =
+      seriesScrollContainer.scrollLeft <
+      seriesScrollContainer.scrollWidth - seriesScrollContainer.clientWidth - 1;
+  }
+
+  function scrollSeriesLeft() {
+    seriesScrollContainer.scrollBy({ left: -800, behavior: 'smooth' });
+  }
+
+  function scrollSeriesRight() {
+    seriesScrollContainer.scrollBy({ left: 800, behavior: 'smooth' });
+  }
 </script>
 
 {#if loading}
@@ -46,7 +71,7 @@
     </div>
   </div>
 {:else if error}
-  <div class="border-accent-orange bg-surface text-accent-orange border-l-4 p-4 font-mono">
+  <div class="border-accent-orange text-accent-orange border-l-4 bg-black/80 p-4 font-mono">
     Erro: {error}
   </div>
 {:else}
@@ -55,7 +80,7 @@
       <h1 class="text-xl text-white">Filmes - Populares</h1>
     </div>
 
-    <div class="group relative">
+    <div class="group relative mb-8">
       <!-- Left Arrow -->
       {#if canScrollLeft}
         <button
@@ -74,7 +99,7 @@
         class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
       >
         {#each popularMovies as movie}
-          <MovieCard {movie} />
+          <MediaCard media={movie} type="movie" />
         {/each}
       </div>
 
@@ -82,6 +107,45 @@
       {#if canScrollRight}
         <button
           onclick={scrollRight}
+          class="border-primary text-primary hover:bg-primary absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border bg-[rgba(20,20,20,0.8)] text-xl transition-all duration-200 hover:scale-110 hover:text-white hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
+          aria-label="Avançar"
+        >
+          &#10095;
+        </button>
+      {/if}
+    </div>
+
+    <div class="mb-4 flex items-center justify-between">
+      <h1 class="text-xl text-white">Séries - Populares</h1>
+    </div>
+
+    <div class="group relative">
+      <!-- Left Arrow -->
+      {#if canScrollSeriesLeft}
+        <button
+          onclick={scrollSeriesLeft}
+          class="border-primary text-primary hover:bg-primary absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border bg-[rgba(20,20,20,0.8)] text-xl transition-all duration-200 hover:scale-110 hover:text-white hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
+          aria-label="Voltar"
+        >
+          &#10094;
+        </button>
+      {/if}
+
+      <!-- List -->
+      <div
+        bind:this={seriesScrollContainer}
+        onscroll={checkSeriesScroll}
+        class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
+      >
+        {#each popularSeries as series}
+          <MediaCard media={series} type="series" />
+        {/each}
+      </div>
+
+      <!-- Right Arrow -->
+      {#if canScrollSeriesRight}
+        <button
+          onclick={scrollSeriesRight}
           class="border-primary text-primary hover:bg-primary absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border bg-[rgba(20,20,20,0.8)] text-xl transition-all duration-200 hover:scale-110 hover:text-white hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
           aria-label="Avançar"
         >

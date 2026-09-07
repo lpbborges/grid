@@ -133,7 +133,7 @@
     </div>
   </div>
 {:else if error}
-  <div class="border-accent-orange bg-surface text-accent-orange border-l-4 p-4 font-mono">
+  <div class="border-accent-orange text-accent-orange border-l-4 bg-black/80 p-4 font-mono">
     Erro: {error}
   </div>
 {:else if movie}
@@ -155,7 +155,7 @@
 
   <div class="relative z-10 flex flex-col gap-8 md:flex-row">
     <div class="w-full max-w-sm md:w-1/3">
-      <div class="border-primary/30 bg-surface rounded border p-2">
+      <div class="border-primary/30 rounded border bg-black/40 p-2">
         <img
           src={movie.large_cover_image}
           alt={movie.title}
@@ -267,7 +267,7 @@
       {:else}
         <div class="prose prose-invert mb-8 max-w-none leading-relaxed text-gray-300">
           <h3
-            class="border-surface text-accent-green mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
+            class="text-accent-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
           >
             Sinopse
           </h3>
@@ -277,7 +277,7 @@
         {#if movie.cast && movie.cast.length > 0}
           <div>
             <h3
-              class="border-surface text-primary mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
+              class="text-primary border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
             >
               Elenco
             </h3>
@@ -292,7 +292,7 @@
                     />
                   {:else}
                     <div
-                      class="border-primary/50 bg-surface mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2 text-gray-500"
+                      class="border-primary/50 mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2 bg-[#1a1a24] text-gray-500"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
