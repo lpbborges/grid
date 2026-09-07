@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getBestVideoFileIndex, getStreamUrl, addTorrent, startEngine } from './torrent';
+import {
+  getBestVideoFileIndex,
+  getStreamUrl,
+  addTorrent,
+  startEngine,
+  waitForEngine
+} from './torrent';
 import { invoke } from '@tauri-apps/api/core';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -65,5 +71,24 @@ describe('torrent engine', () => {
     });
 
     await expect(addTorrent('magnet:')).rejects.toThrow('Failed to add torrent to engine');
+  });
+
+  it('waitForEngine resolves when fetch succeeds', async () => {
+    (globalThis.fetch as any)
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true });
+
+    await expect(waitForEngine(3, 10)).resolves.toBeUndefined();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('waitForEngine throws when max retries reached', async () => {
+    (globalThis.fetch as any).mockRejectedValue(new Error('Network error'));
+
+    await expect(waitForEngine(2, 10)).rejects.toThrow(
+      'Torrent engine failed to become ready in time'
+    );
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 });

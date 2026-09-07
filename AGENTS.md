@@ -38,6 +38,10 @@ This document serves as a living repository of the core architectural decisions,
 - **Formatting & Linting:** `eslint` and `prettier` are mandated for all TS/JS/Svelte code. `cargo fmt` and `cargo clippy` are mandated for Rust code.
 - **Pre-commit Checks:** Husky and `lint-staged` are configured in `.husky/pre-commit` to guarantee that all commits are fully formatted, linted, and pass both frontend (`vitest`) and backend (`cargo test`) tests prior to committing. Never bypass this hook unless absolutely necessary.
 
+## 6. Documentation
+
+- **Keep README Updated:** Whenever a new feature is added, or an existing one is modified, ALWAYS update `README.md` to reflect the changes (e.g., adding descriptions of new features, updating setup instructions, or modifying usage guides).
+
 ---
 
 _Note: This file should be continuously updated whenever a new architectural rule, workflow, or significant library is introduced._

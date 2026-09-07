@@ -6,9 +6,24 @@ const ENGINE_URL = 'http://127.0.0.1:3030';
 export async function startEngine(): Promise<void> {
   try {
     await invoke('start_torrent_engine');
-  } catch (e) {
-    console.warn('Engine might already be running or failed to start via Tauri:', e);
+  } catch (error) {
+    console.warn('Failed to start torrent engine:', error);
   }
+}
+
+export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<void> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const res = await fetch(`${ENGINE_URL}/torrents`);
+      if (res.ok) {
+        return;
+      }
+    } catch {
+      // Ignored, wait and retry
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error('Torrent engine failed to become ready in time');
 }
 
 export async function addTorrent(magnetLink: string): Promise<TorrentEngineDetails> {

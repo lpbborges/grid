@@ -5,7 +5,7 @@ use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
 struct EngineState {
-    running: Mutex<bool>,
+    child: Mutex<Option<tauri_plugin_shell::process::CommandChild>>,
 }
 
 #[tauri::command]
@@ -13,8 +13,8 @@ async fn start_torrent_engine(
     app: tauri::AppHandle,
     state: State<'_, EngineState>,
 ) -> Result<String, String> {
-    let mut running = state.running.lock().unwrap();
-    if *running {
+    let mut child_guard = state.child.lock().unwrap();
+    if child_guard.is_some() {
         return Ok("Engine already running".to_string());
     }
 
@@ -24,14 +24,20 @@ async fn start_torrent_engine(
     let sidecar_command = app
         .shell()
         .sidecar("rqbit")
-        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            println!("Sidecar builder error: {}", e);
+            e.to_string()
+        })?
         .arg("server")
         .arg("start")
         .arg(output_folder);
 
-    let (mut rx, _child) = sidecar_command.spawn().map_err(|e| e.to_string())?;
+    let (mut rx, child) = sidecar_command.spawn().map_err(|e| {
+        println!("Sidecar spawn error: {}", e);
+        e.to_string()
+    })?;
 
-    *running = true;
+    *child_guard = Some(child);
 
     tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
@@ -50,7 +56,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .manage(EngineState {
-            running: Mutex::new(false),
+            child: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![start_torrent_engine])
         .run(tauri::generate_context!())
@@ -64,22 +70,8 @@ mod tests {
     #[test]
     fn test_engine_state_initialization() {
         let state = EngineState {
-            running: Mutex::new(false),
+            child: Mutex::new(None),
         };
-        assert_eq!(*state.running.lock().unwrap(), false);
-    }
-
-    #[test]
-    fn test_engine_state_mutation() {
-        let state = EngineState {
-            running: Mutex::new(false),
-        };
-
-        {
-            let mut running = state.running.lock().unwrap();
-            *running = true;
-        }
-
-        assert_eq!(*state.running.lock().unwrap(), true);
+        assert!(state.child.lock().unwrap().is_none());
     }
 }

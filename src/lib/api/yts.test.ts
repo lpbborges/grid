@@ -98,4 +98,14 @@ describe('yts api', () => {
     });
     await expect(getMovieDetails(1)).rejects.toThrow('API returned an error');
   });
+
+  it('throws an error when fetch fails in movie details', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      statusText: 'Internal Server Error'
+    });
+    await expect(getMovieDetails(1)).rejects.toThrow(
+      'Failed to fetch movie details: Internal Server Error'
+    );
+  });
 });

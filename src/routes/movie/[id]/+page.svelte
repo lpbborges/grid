@@ -4,6 +4,7 @@
   import { getMovieDetails } from '$lib/api/yts';
   import {
     startEngine,
+    waitForEngine,
     addTorrent,
     getBestVideoFileIndex,
     getStreamUrl
@@ -48,7 +49,7 @@
       engineStatus = 'Starting torrent engine...';
       await startEngine();
 
-      await new Promise((r) => setTimeout(r, 1000));
+      await waitForEngine();
 
       engineStatus = 'Acquiring torrent metadata...';
       const details = await addTorrent(magnet);

@@ -21,5 +21,8 @@ describe('MovieCard component', () => {
 
     expect(getByText('Test Evangelion')).toBeDefined();
     expect(getByAltText('Test Evangelion')).toBeDefined();
+
+    const link = getByText('Test Evangelion').closest('a');
+    expect(link?.getAttribute('href')).toBe('/movie/123');
   });
 });
