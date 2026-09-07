@@ -4,7 +4,9 @@ Grid-Play is a native desktop application built with **Tauri**, **SvelteKit**, *
 
 ## Features
 
-- **Cinemeta Integration:** Browse popular movies.
+- **Cinemeta & YTS Integration:** Browse popular movies with high-quality fallback metadata.
+- **Localization:** Automatically translates movie titles and synopses into the user's native system language on the fly.
+- **Cinematic UI:** Beautiful fully-opaque movie poster backgrounds with Stremio-style gradients that blend seamlessly with the Evangelion theme.
 - **Torrent Engine Integration:** Seamless streaming powered by the `rqbit` sidecar.
 - **Advanced Media Player:** Custom Svelte 5 video controls with multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded (torrent) and Extra (downloaded) subtitles.
 - **Evangelion Unit-01 Theme:** A unique visual identity using Tailwind CSS v4.

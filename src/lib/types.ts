@@ -8,6 +8,13 @@ export interface Torrent {
   size: string;
 }
 
+export interface CastMember {
+  name: string;
+  character_name: string;
+  url_small_image: string | null;
+  imdb_code: string;
+}
+
 export interface Movie {
   id: string | number;
   title: string;
@@ -15,9 +22,13 @@ export interface Movie {
   rating: number;
   medium_cover_image: string;
   large_cover_image: string;
+  background_image?: string;
+  background_image_original?: string;
   summary: string;
   description_full: string;
   torrents: Torrent[];
+  cast?: CastMember[];
+  director?: string[];
 }
 
 export interface TorrentEngineDetails {

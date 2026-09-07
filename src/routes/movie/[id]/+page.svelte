@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { getMovieDetails } from '$lib/api/yts';
   import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
+  import { translateText } from '$lib/api/translate';
   import {
     startEngine,
     waitForEngine,
@@ -23,14 +24,46 @@
   let videoSrc = $state('');
   let subtitles = $state<SubtitleTrack[]>([]);
   let engineStatus = $state('');
+  let selectedTorrentHash = $state('');
+
+  let translatedTitle = $state('');
+  let translatedSynopsis = $state('');
 
   onMount(async () => {
     try {
       movie = await getMovieDetails(movieId);
+      translatedTitle = movie.title;
+      translatedSynopsis = movie.description_full || movie.summary || 'Nenhuma sinopse disponível.';
+
+      if (typeof window !== 'undefined' && window.navigator) {
+        const userLang = window.navigator.language || 'en';
+        if (!userLang.startsWith('en')) {
+          const targetLang = userLang.split('-')[0];
+          translateText(movie.title, targetLang).then((res) => {
+            if (res) translatedTitle = res;
+          });
+          if (movie.description_full || movie.summary) {
+            translateText(movie.description_full || movie.summary, targetLang).then((res) => {
+              if (res) translatedSynopsis = res;
+            });
+          }
+        }
+      }
     } catch (e: any) {
       error = e.message || 'Erro ao carregar filme';
     } finally {
       loading = false;
+    }
+  });
+
+  $effect(() => {
+    if (movie && movie.torrents && movie.torrents.length > 0 && !selectedTorrentHash) {
+      let bestTorrent = movie.torrents.reduce((prev, current) => {
+        if (current.quality === '1080p' && prev.quality !== '1080p') return current;
+        if (prev.quality === '1080p' && current.quality !== '1080p') return prev;
+        return prev.seeds > current.seeds ? prev : current;
+      });
+      selectedTorrentHash = bestTorrent.hash;
     }
   });
 
@@ -40,13 +73,9 @@
       return;
     }
 
-    let bestTorrent = movie.torrents.reduce((prev, current) => {
-      if (current.quality === '1080p' && prev.quality !== '1080p') return current;
-      if (prev.quality === '1080p' && current.quality !== '1080p') return prev;
-      return prev.seeds > current.seeds ? prev : current;
-    });
-
-    const magnet = `magnet:?xt=urn:btih:${bestTorrent.hash}&dn=${encodeURIComponent(movie.title)}`;
+    const selectedTorrent =
+      movie.torrents.find((t) => t.hash === selectedTorrentHash) || movie.torrents[0];
+    const magnet = `magnet:?xt=urn:btih:${selectedTorrent.hash}&dn=${encodeURIComponent(movie.title)}`;
 
     try {
       engineStatus = 'Iniciando player...';
@@ -74,10 +103,11 @@
   }
 </script>
 
-<div class="mb-4">
+<div class="relative z-20 mb-8">
   <a
     href="/"
-    class="flex items-center gap-2 text-sm font-bold tracking-wider text-[var(--eva-primary)] uppercase transition-colors hover:text-[var(--eva-accent-green)]"
+    class="group flex w-fit items-center gap-2 text-sm font-bold tracking-wider text-white uppercase transition-colors hover:text-[var(--eva-accent-green)]"
+    style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
   >
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -88,7 +118,9 @@
       stroke="currentColor"
       stroke-width="2"
       stroke-linecap="round"
-      stroke-linejoin="round"><path d="m15 18-6-6 6-6" /></svg
+      stroke-linejoin="round"
+      class="text-[var(--eva-primary)] transition-colors group-hover:text-[var(--eva-accent-green)]"
+      ><path d="m15 18-6-6 6-6" /></svg
     >
     Voltar ao Catálogo
   </a>
@@ -109,7 +141,23 @@
     Erro: {error}
   </div>
 {:else if movie}
-  <div class="flex flex-col gap-8 md:flex-row">
+  {#if movie.background_image_original || movie.background_image}
+    <div class="pointer-events-none fixed inset-0">
+      <img
+        src={movie.background_image_original || movie.background_image}
+        class="h-full w-full object-cover"
+        alt=""
+      />
+      <div
+        class="absolute inset-0 bg-gradient-to-t from-[#0f0f15] via-[#0f0f15]/80 to-transparent"
+      ></div>
+      <div
+        class="absolute inset-0 bg-gradient-to-r from-[#0f0f15]/90 via-[#0f0f15]/40 to-transparent"
+      ></div>
+    </div>
+  {/if}
+
+  <div class="relative z-10 flex flex-col gap-8 md:flex-row">
     <div class="w-full max-w-sm md:w-1/3">
       <div class="rounded border border-[var(--eva-primary)]/30 bg-[var(--eva-surface)] p-2">
         <img
@@ -120,20 +168,58 @@
       </div>
 
       {#if !isPlaying}
-        <button
-          onclick={playMovie}
-          class="mt-6 flex w-full items-center justify-center gap-2 rounded border-2 border-transparent bg-[var(--eva-primary)] py-4 text-lg font-bold tracking-widest text-white uppercase shadow-[0_0_15px_rgba(118,52,194,0.5)] transition-all duration-300 hover:border-white hover:bg-[var(--eva-accent-green)] hover:text-[var(--eva-bg-dark)] hover:shadow-[0_0_20px_rgba(91,255,59,0.8)]"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
+        <div class="mt-6 flex flex-col gap-4">
+          <div class="flex flex-col gap-2">
+            <label
+              for="quality-select"
+              class="text-sm font-bold tracking-widest text-[var(--eva-primary)] uppercase"
+              >Qualidade</label
+            >
+            <div class="relative w-full">
+              <select
+                id="quality-select"
+                bind:value={selectedTorrentHash}
+                class="w-full appearance-none rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24] p-3 pr-10 font-mono text-sm text-white focus:border-[var(--eva-accent-green)] focus:outline-none"
+              >
+                {#each movie.torrents as torrent}
+                  <option value={torrent.hash} class="bg-[#1a1a24] text-white">
+                    {torrent.quality} - {torrent.type} ({torrent.size})
+                  </option>
+                {/each}
+              </select>
+              <div
+                class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[var(--eva-primary)]"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
+                >
+              </div>
+            </div>
+          </div>
+
+          <button
+            onclick={playMovie}
+            class="flex w-full items-center justify-center gap-2 rounded border-2 border-transparent bg-[var(--eva-primary)] py-4 text-lg font-bold tracking-widest text-white uppercase shadow-[0_0_15px_rgba(118,52,194,0.5)] transition-all duration-300 hover:border-white hover:bg-[var(--eva-accent-green)] hover:text-[var(--eva-bg-dark)] hover:shadow-[0_0_20px_rgba(91,255,59,0.8)]"
           >
-          Reproduzir
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
+            >
+            Reproduzir
+          </button>
+        </div>
         {#if engineStatus}
           <div
             class="mt-4 animate-pulse text-center font-mono text-sm text-[var(--eva-accent-orange)]"
@@ -149,13 +235,18 @@
         class="mb-2 text-4xl font-bold tracking-tight text-[var(--eva-text-main)] md:text-5xl"
         style="text-shadow: 0 0 10px rgba(255,255,255,0.2);"
       >
-        {movie.title}
+        {translatedTitle}
       </h1>
 
       <div class="mb-6 flex flex-wrap gap-4 font-mono text-sm text-[var(--eva-primary)]">
         <span class="rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24] px-3 py-1"
           >ANO: {movie.year}</span
         >
+        {#if movie.director && movie.director.length > 0}
+          <span class="rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24] px-3 py-1"
+            >DIRETOR: {movie.director.join(', ')}</span
+          >
+        {/if}
         <span
           class="flex items-center gap-1 rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24] px-3 py-1"
         >
@@ -187,31 +278,59 @@
           >
             Sinopse
           </h3>
-          <p>{movie.description_full || movie.summary || 'Nenhuma sinopse disponível.'}</p>
+          <p>{translatedSynopsis}</p>
         </div>
 
-        <div>
-          <h3
-            class="mb-4 border-b border-[var(--eva-surface)] pb-2 text-sm font-bold tracking-widest text-[var(--eva-primary)] uppercase"
-          >
-            Streams Disponíveis
-          </h3>
-          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {#each movie.torrents as torrent}
-              <div
-                class="flex flex-col justify-between rounded border border-[var(--eva-surface)] bg-[#1a1a24] p-3 transition-colors hover:border-[var(--eva-primary)]"
-              >
-                <div class="mb-2 flex items-center justify-between">
-                  <span class="font-bold text-white">{torrent.quality}</span>
-                  <span class="text-xs text-gray-400">{torrent.type}</span>
+        {#if movie.cast && movie.cast.length > 0}
+          <div>
+            <h3
+              class="mb-4 border-b border-[var(--eva-surface)] pb-2 text-sm font-bold tracking-widest text-[var(--eva-primary)] uppercase"
+            >
+              Elenco
+            </h3>
+            <div class="flex snap-x gap-4 overflow-x-auto pb-4">
+              {#each movie.cast as actor}
+                <div class="flex w-32 flex-none snap-start flex-col items-center text-center">
+                  {#if actor.url_small_image}
+                    <img
+                      src={actor.url_small_image}
+                      alt={actor.name}
+                      class="mb-2 h-16 w-16 rounded-full border-2 border-[var(--eva-primary)]/50 object-cover"
+                    />
+                  {:else}
+                    <div
+                      class="mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2 border-[var(--eva-primary)]/50 bg-[var(--eva-surface)] text-gray-500"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        ><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle
+                          cx="12"
+                          cy="7"
+                          r="4"
+                        /></svg
+                      >
+                    </div>
+                  {/if}
+                  <span class="text-sm leading-tight font-bold text-gray-200" title={actor.name}
+                    >{actor.name}</span
+                  >
+                  <span
+                    class="mt-1 text-xs leading-tight text-[var(--eva-accent-green)]"
+                    title={actor.character_name}>{actor.character_name}</span
+                  >
                 </div>
-                <div class="flex justify-end font-mono text-xs">
-                  <span class="text-[var(--eva-primary)]">{torrent.size}</span>
-                </div>
-              </div>
-            {/each}
+              {/each}
+            </div>
           </div>
-        </div>
+        {/if}
       {/if}
     </div>
   </div>

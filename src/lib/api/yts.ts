@@ -33,7 +33,7 @@ export async function getPopularMovies(limit = 24): Promise<Movie[]> {
 export async function getMovieDetails(movieId: number | string): Promise<Movie> {
   const isImdbId = typeof movieId === 'string' && movieId.startsWith('tt');
   const queryParam = isImdbId ? `imdb_id=${movieId}` : `movie_id=${movieId}`;
-  const res = await fetch(`${BASE_URL}/movie_details.json?${queryParam}`);
+  const res = await fetch(`${BASE_URL}/movie_details.json?${queryParam}&with_cast=true`);
   if (!res.ok) {
     throw new Error(`Failed to fetch movie details: ${res.statusText}`);
   }
@@ -41,5 +41,26 @@ export async function getMovieDetails(movieId: number | string): Promise<Movie> 
   if (data.status !== 'ok') {
     throw new Error(data.status_message || 'API returned an error');
   }
-  return data.data.movie;
+  const movie = data.data.movie;
+
+  // Try to fetch director from cinemeta if we have an IMDB ID
+  if (isImdbId || movie.imdb_code) {
+    const imdbId = isImdbId ? movieId : movie.imdb_code;
+    try {
+      const cineRes = await fetch(`https://v3-cinemeta.strem.io/meta/movie/${imdbId}.json`);
+      if (cineRes.ok) {
+        const cineData = await cineRes.json();
+        if (cineData?.meta?.director) {
+          movie.director = cineData.meta.director;
+        }
+        if (cineData?.meta?.background) {
+          movie.background_image_original = cineData.meta.background;
+        }
+      }
+    } catch {
+      // Ignore cinemeta fetch errors
+    }
+  }
+
+  return movie;
 }
