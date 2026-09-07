@@ -42,7 +42,7 @@
         parsed.push({
           index: i,
           id: tracks[i].id,
-          label: tracks[i].label || tracks[i].language || `Track ${i + 1}`,
+          label: tracks[i].label || tracks[i].language || `Faixa ${i + 1}`,
           enabled: tracks[i].enabled
         });
         if (tracks[i].enabled) activeAudioIndex = i;
@@ -254,7 +254,7 @@
                 ? 'text-[var(--eva-accent-green)]'
                 : ''}"
             >
-              AUDIO
+              ÁUDIO
             </button>
 
             {#if showAudioMenu}
@@ -264,7 +264,7 @@
                 <div
                   class="mt-1 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest text-[var(--eva-primary)] uppercase"
                 >
-                  Audio Track
+                  Faixa de Áudio
                 </div>
                 {#each audioTracks as track}
                   <button
@@ -306,14 +306,14 @@
                     : ''}"
                   onclick={() => selectTrack(-1)}
                 >
-                  Off
+                  Desativado
                 </button>
 
                 {#if torrentSubs.length > 0}
                   <div
                     class="mt-3 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest text-[var(--eva-primary)] uppercase"
                   >
-                    Embedded
+                    Embutida
                   </div>
                   {#each torrentSubs as sub}
                     <button
@@ -333,7 +333,7 @@
                   <div
                     class="mt-3 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest text-[var(--eva-primary)] uppercase"
                   >
-                    Extra
+                    Externa
                   </div>
                   {#each externalSubs as sub}
                     <button

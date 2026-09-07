@@ -42,6 +42,10 @@ This document serves as a living repository of the core architectural decisions,
 
 - **Keep README Updated:** Whenever a new feature is added, or an existing one is modified, ALWAYS update `README.md` to reflect the changes (e.g., adding descriptions of new features, updating setup instructions, or modifying usage guides).
 
+## 7. User Experience & Terminology
+
+- **User-Friendly Language:** The app should function like Netflix for non-technical users. NEVER mention technical terms like "torrent", "magnet", "seeders", or "peers" in the UI. Use simple, familiar terms like "Stream", "Play", "Loading", "Quality", etc., instead.
+
 ---
 
 _Note: This file should be continuously updated whenever a new architectural rule, workflow, or significant library is introduced._

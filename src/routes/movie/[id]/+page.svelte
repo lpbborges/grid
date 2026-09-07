@@ -28,7 +28,7 @@
     try {
       movie = await getMovieDetails(movieId);
     } catch (e: any) {
-      error = e.message || 'Error fetching movie';
+      error = e.message || 'Erro ao carregar filme';
     } finally {
       loading = false;
     }
@@ -36,7 +36,7 @@
 
   async function playMovie() {
     if (!movie || !movie.torrents || movie.torrents.length === 0) {
-      error = 'No torrents available';
+      error = 'Nenhum stream disponível';
       return;
     }
 
@@ -49,26 +49,26 @@
     const magnet = `magnet:?xt=urn:btih:${bestTorrent.hash}&dn=${encodeURIComponent(movie.title)}`;
 
     try {
-      engineStatus = 'Starting torrent engine...';
+      engineStatus = 'Iniciando player...';
       await startEngine();
 
       await waitForEngine();
 
-      engineStatus = 'Acquiring torrent metadata...';
+      engineStatus = 'Preparando stream...';
       const details = await addTorrent(magnet);
 
       const bestFileIdx = getBestVideoFileIndex(details.files);
       const tSubs = getTorrentSubtitles(details.info_hash, details.files);
 
-      engineStatus = 'Fetching external subtitles...';
+      engineStatus = 'Baixando legendas...';
       const eSubs = movieId ? await getExternalSubtitles(movieId) : [];
 
-      engineStatus = 'Streaming initialized.';
+      engineStatus = 'Pronto para assistir.';
       videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
       subtitles = [...tSubs, ...eSubs];
       isPlaying = true;
     } catch (e: any) {
-      error = `Playback error: ${e.message}`;
+      error = `Erro de reprodução: ${e.message}`;
       engineStatus = '';
     }
   }
@@ -90,7 +90,7 @@
       stroke-linecap="round"
       stroke-linejoin="round"><path d="m15 18-6-6 6-6" /></svg
     >
-    Back to Catalog
+    Voltar ao Catálogo
   </a>
 </div>
 
@@ -99,14 +99,14 @@
     <div
       class="animate-pulse font-mono text-xl tracking-widest text-[var(--eva-accent-green)] uppercase"
     >
-      Retrieving Data...
+      Carregando Dados...
     </div>
   </div>
 {:else if error}
   <div
     class="border-l-4 border-[var(--eva-accent-orange)] bg-[var(--eva-surface)] p-4 font-mono text-[var(--eva-accent-orange)]"
   >
-    Error: {error}
+    Erro: {error}
   </div>
 {:else if movie}
   <div class="flex flex-col gap-8 md:flex-row">
@@ -132,7 +132,7 @@
             fill="currentColor"
             stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
           >
-          Initialize Playback
+          Reproduzir
         </button>
         {#if engineStatus}
           <div
@@ -154,7 +154,7 @@
 
       <div class="mb-6 flex flex-wrap gap-4 font-mono text-sm text-[var(--eva-primary)]">
         <span class="rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24] px-3 py-1"
-          >YEAR: {movie.year}</span
+          >ANO: {movie.year}</span
         >
         <span
           class="flex items-center gap-1 rounded border border-[var(--eva-primary)]/50 bg-[#1a1a24] px-3 py-1"
@@ -185,16 +185,16 @@
           <h3
             class="mb-4 border-b border-[var(--eva-surface)] pb-2 text-sm font-bold tracking-widest text-[var(--eva-accent-green)] uppercase"
           >
-            Synopsis
+            Sinopse
           </h3>
-          <p>{movie.description_full || movie.summary || 'No synopsis available.'}</p>
+          <p>{movie.description_full || movie.summary || 'Nenhuma sinopse disponível.'}</p>
         </div>
 
         <div>
           <h3
             class="mb-4 border-b border-[var(--eva-surface)] pb-2 text-sm font-bold tracking-widest text-[var(--eva-primary)] uppercase"
           >
-            Available Streams
+            Streams Disponíveis
           </h3>
           <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {#each movie.torrents as torrent}
@@ -205,8 +205,7 @@
                   <span class="font-bold text-white">{torrent.quality}</span>
                   <span class="text-xs text-gray-400">{torrent.type}</span>
                 </div>
-                <div class="flex justify-between font-mono text-xs">
-                  <span class="text-[var(--eva-accent-green)]">S: {torrent.seeds}</span>
+                <div class="flex justify-end font-mono text-xs">
                   <span class="text-[var(--eva-primary)]">{torrent.size}</span>
                 </div>
               </div>
