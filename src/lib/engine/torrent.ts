@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
+import { getLanguageName } from '../api/subtitles';
 
 const ENGINE_URL = 'http://127.0.0.1:3030';
 
@@ -62,4 +63,39 @@ export function getBestVideoFileIndex(files: { name: string; length: number }[])
 
 export function getStreamUrl(infoHash: string, fileIdx: number): string {
   return `${ENGINE_URL}/torrents/${infoHash}/stream/${fileIdx}`;
+}
+
+export function getTorrentSubtitles(
+  infoHash: string,
+  files: { name: string; length: number }[]
+): { id: string; url: string; lang: string; label: string; group: 'Embedded' | 'Extra' }[] {
+  const subs: {
+    id: string;
+    url: string;
+    lang: string;
+    label: string;
+    group: 'Embedded' | 'Extra';
+  }[] = [];
+  files.forEach((f, idx) => {
+    if (f.name.endsWith('.srt') || f.name.endsWith('.vtt')) {
+      const langMatch = f.name.match(/[._]([a-zA-Z]{2,3})\.(srt|vtt)$/i);
+      const lang = langMatch ? langMatch[1] : 'Unknown';
+      const langName = getLanguageName(lang);
+
+      subs.push({
+        id: `torrent-${idx}`,
+        url: `/api/subtitle/torrent?infoHash=${infoHash}&fileIdx=${idx}`,
+        lang,
+        label:
+          lang === 'Unknown'
+            ? f.name
+                .split(/[/\\]/)
+                .pop()
+                ?.replace(/\.(srt|vtt)$/i, '') || f.name
+            : langName,
+        group: 'Embedded' as const
+      });
+    }
+  });
+  return subs;
 }

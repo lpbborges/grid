@@ -4,7 +4,8 @@ import {
   getStreamUrl,
   addTorrent,
   startEngine,
-  waitForEngine
+  waitForEngine,
+  getTorrentSubtitles
 } from './torrent';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -90,5 +91,40 @@ describe('torrent engine', () => {
       'Torrent engine failed to become ready in time'
     );
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('getTorrentSubtitles', () => {
+  it('extracts and formats subtitle files', () => {
+    const files = [
+      { name: 'movie.mp4', length: 1000 },
+      { name: 'movie_en.srt', length: 100 },
+      { name: 'movie_fr.vtt', length: 100 },
+      { name: 'Subs/weird-name.srt', length: 100 }
+    ];
+    const subs = getTorrentSubtitles('dummyHash', files);
+
+    expect(subs).toHaveLength(3);
+    expect(subs[0]).toEqual({
+      id: 'torrent-1',
+      url: '/api/subtitle/torrent?infoHash=dummyHash&fileIdx=1',
+      lang: 'en',
+      label: 'English',
+      group: 'Embedded'
+    });
+    expect(subs[1]).toEqual({
+      id: 'torrent-2',
+      url: '/api/subtitle/torrent?infoHash=dummyHash&fileIdx=2',
+      lang: 'fr',
+      label: 'French',
+      group: 'Embedded'
+    });
+    expect(subs[2]).toEqual({
+      id: 'torrent-3',
+      url: '/api/subtitle/torrent?infoHash=dummyHash&fileIdx=3',
+      lang: 'Unknown',
+      label: 'weird-name',
+      group: 'Embedded'
+    });
   });
 });

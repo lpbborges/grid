@@ -2,12 +2,14 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { getMovieDetails } from '$lib/api/yts';
+  import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
   import {
     startEngine,
     waitForEngine,
     addTorrent,
     getBestVideoFileIndex,
-    getStreamUrl
+    getStreamUrl,
+    getTorrentSubtitles
   } from '$lib/engine/torrent';
   import type { Movie } from '$lib/types';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
@@ -19,6 +21,7 @@
 
   let isPlaying = $state(false);
   let videoSrc = $state('');
+  let subtitles = $state<SubtitleTrack[]>([]);
   let engineStatus = $state('');
 
   onMount(async () => {
@@ -55,9 +58,14 @@
       const details = await addTorrent(magnet);
 
       const bestFileIdx = getBestVideoFileIndex(details.files);
+      const tSubs = getTorrentSubtitles(details.info_hash, details.files);
+
+      engineStatus = 'Fetching external subtitles...';
+      const eSubs = movieId ? await getExternalSubtitles(movieId) : [];
 
       engineStatus = 'Streaming initialized.';
       videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
+      subtitles = [...tSubs, ...eSubs];
       isPlaying = true;
     } catch (e: any) {
       error = `Playback error: ${e.message}`;
@@ -171,7 +179,7 @@
       </div>
 
       {#if isPlaying}
-        <VideoPlayer src={videoSrc} />
+        <VideoPlayer src={videoSrc} {subtitles} />
       {:else}
         <div class="prose prose-invert mb-8 max-w-none leading-relaxed text-gray-300">
           <h3
