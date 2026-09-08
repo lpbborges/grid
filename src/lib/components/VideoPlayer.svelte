@@ -41,6 +41,27 @@
   let torrentSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Embedded'));
   let externalSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Extra'));
 
+  let expandedGroups = $state<Record<string, boolean>>({});
+
+  function toggleGroup(group: string, label: string) {
+    const key = `${group}-${label}`;
+    expandedGroups[key] = !expandedGroups[key];
+  }
+
+  function groupByLanguage(subs: SubtitleTrack[]) {
+    const groups: Record<string, SubtitleTrack[]> = {};
+    for (const sub of subs) {
+      if (!groups[sub.label]) groups[sub.label] = [];
+      groups[sub.label].push(sub);
+    }
+    return Object.keys(groups)
+      .sort()
+      .map((label) => ({ label, subs: groups[label] }));
+  }
+
+  let torrentSubsGrouped = $derived(groupByLanguage(torrentSubs));
+  let externalSubsGrouped = $derived(groupByLanguage(externalSubs));
+
   $effect(() => {
     if (infoHash && !isVideoPlaying) {
       if (!statsInterval) {
@@ -473,43 +494,99 @@
                   Desativado
                 </button>
 
-                {#if torrentSubs.length > 0}
+                {#if torrentSubsGrouped.length > 0}
                   <div
                     class="text-primary border-main/10 mt-3 mb-1 border-b px-3 pb-1 text-xs font-bold tracking-widest uppercase"
                   >
                     Embutida
                   </div>
-                  {#each torrentSubs as sub}
-                    <button
-                      class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
-                      subtitles.indexOf(sub)
-                        ? 'bg-primary/30 text-main'
-                        : ''}"
-                      title={sub.label}
-                      onclick={() => selectTrack(subtitles.indexOf(sub))}
-                    >
-                      {sub.label}
-                    </button>
+                  {#each torrentSubsGrouped as group}
+                    {#if group.subs.length === 1}
+                      <button
+                        class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
+                        subtitles.indexOf(group.subs[0])
+                          ? 'bg-primary/30 text-main'
+                          : ''}"
+                        title={group.label}
+                        onclick={() => selectTrack(subtitles.indexOf(group.subs[0]))}
+                      >
+                        {group.label}
+                      </button>
+                    {:else}
+                      <button
+                        class="text-muted hover:bg-main/10 hover:text-main flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors"
+                        onclick={() => toggleGroup('Embedded', group.label)}
+                      >
+                        <span>{group.label}</span>
+                        <span class="flex items-center text-[10px] opacity-70"
+                          >{expandedGroups[`Embedded-${group.label}`] ? '▼' : '▶'}</span
+                        >
+                      </button>
+                      {#if expandedGroups[`Embedded-${group.label}`]}
+                        <div class="border-main/10 my-1 ml-3 border-l pl-3">
+                          {#each group.subs as sub, index}
+                            <button
+                              class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1 text-left text-xs transition-colors {activeIndex ===
+                              subtitles.indexOf(sub)
+                                ? 'bg-primary/30 text-main'
+                                : ''}"
+                              title={`Opção ${index + 1}`}
+                              onclick={() => selectTrack(subtitles.indexOf(sub))}
+                            >
+                              Opção {index + 1}
+                            </button>
+                          {/each}
+                        </div>
+                      {/if}
+                    {/if}
                   {/each}
                 {/if}
 
-                {#if externalSubs.length > 0}
+                {#if externalSubsGrouped.length > 0}
                   <div
                     class="text-primary border-main/10 mt-3 mb-1 border-b px-3 pb-1 text-xs font-bold tracking-widest uppercase"
                   >
                     Externa
                   </div>
-                  {#each externalSubs as sub}
-                    <button
-                      class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
-                      subtitles.indexOf(sub)
-                        ? 'bg-primary/30 text-main'
-                        : ''}"
-                      title={sub.label}
-                      onclick={() => selectTrack(subtitles.indexOf(sub))}
-                    >
-                      {sub.label}
-                    </button>
+                  {#each externalSubsGrouped as group}
+                    {#if group.subs.length === 1}
+                      <button
+                        class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
+                        subtitles.indexOf(group.subs[0])
+                          ? 'bg-primary/30 text-main'
+                          : ''}"
+                        title={group.label}
+                        onclick={() => selectTrack(subtitles.indexOf(group.subs[0]))}
+                      >
+                        {group.label}
+                      </button>
+                    {:else}
+                      <button
+                        class="text-muted hover:bg-main/10 hover:text-main flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors"
+                        onclick={() => toggleGroup('Extra', group.label)}
+                      >
+                        <span>{group.label}</span>
+                        <span class="flex items-center text-[10px] opacity-70"
+                          >{expandedGroups[`Extra-${group.label}`] ? '▼' : '▶'}</span
+                        >
+                      </button>
+                      {#if expandedGroups[`Extra-${group.label}`]}
+                        <div class="border-main/10 my-1 ml-3 border-l pl-3">
+                          {#each group.subs as sub, index}
+                            <button
+                              class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1 text-left text-xs transition-colors {activeIndex ===
+                              subtitles.indexOf(sub)
+                                ? 'bg-primary/30 text-main'
+                                : ''}"
+                              title={`Opção ${index + 1}`}
+                              onclick={() => selectTrack(subtitles.indexOf(sub))}
+                            >
+                              Opção {index + 1}
+                            </button>
+                          {/each}
+                        </div>
+                      {/if}
+                    {/if}
                   {/each}
                 {/if}
               </div>
