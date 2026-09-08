@@ -3,12 +3,29 @@
   import { onMount } from 'svelte';
   import { getSeriesDetails } from '$lib/api/yts';
   import { translateText } from '$lib/api/translate';
-  // Note: we don't import Torrent engine stuff for series yet
+  import { getSeriesStreams } from '$lib/api/torrentio';
+  import {
+    startEngine,
+    waitForEngine,
+    clearTorrents,
+    addTorrent,
+    getBestVideoFileIndex,
+    getStreamUrl,
+    getTorrentSubtitles
+  } from '$lib/engine/torrent';
+  import VideoPlayer from '$lib/components/VideoPlayer.svelte';
+  import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
 
   let seriesId = $page.params.id as string;
   let series = $state<any>(null);
   let loading = $state(true);
   let error = $state('');
+
+  let isPlaying = $state(false);
+  let videoSrc = $state('');
+  let subtitles = $state<SubtitleTrack[]>([]);
+  let engineStatus = $state('');
+  let preferredQuality = $state('1080p');
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
@@ -77,10 +94,67 @@
     }
   });
 
-  // Torrents are not yet supported for series playback
-  function playEpisode() {
-    if (typeof window !== 'undefined') {
-      window.alert('Reprodução de séries estará disponível em breve!');
+  async function playEpisode(episode: any) {
+    if (typeof window === 'undefined') return;
+
+    try {
+      error = '';
+      engineStatus = 'Buscando fontes disponíveis...';
+      const streams = await getSeriesStreams(seriesId, episode.season, episode.episode);
+
+      if (!streams || streams.length === 0) {
+        error = 'Nenhuma fonte encontrada para este episódio.';
+        engineStatus = '';
+        return;
+      }
+
+      let bestStream = streams.find(
+        (s) =>
+          (s.title?.toLowerCase().includes(preferredQuality) ||
+            s.name?.toLowerCase().includes(preferredQuality)) &&
+          s.infoHash
+      );
+
+      if (!bestStream) {
+        bestStream = streams.find((s) => s.infoHash);
+      }
+
+      if (!bestStream || !bestStream.infoHash) {
+        error = 'Fonte incompatível (sem infoHash).';
+        engineStatus = '';
+        return;
+      }
+
+      const magnet = `magnet:?xt=urn:btih:${bestStream.infoHash}&dn=${encodeURIComponent(`${series.title} S${episode.season}E${episode.episode}`)}`;
+
+      engineStatus = 'Iniciando player...';
+      await startEngine();
+      await waitForEngine();
+
+      engineStatus = 'Preparando stream...';
+      await clearTorrents();
+      const details = await addTorrent(magnet);
+
+      let bestFileIdx = bestStream.fileIdx;
+      if (bestFileIdx === undefined) {
+        bestFileIdx = getBestVideoFileIndex(details.files);
+      }
+
+      const tSubs = getTorrentSubtitles(details.info_hash, details.files);
+
+      engineStatus = 'Baixando legendas...';
+      const eSubs = seriesId
+        ? await getExternalSubtitles(seriesId, episode.season, episode.episode)
+        : [];
+
+      engineStatus = 'Pronto para assistir.';
+      videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
+      subtitles = [...tSubs, ...eSubs];
+      isPlaying = true;
+      engineStatus = '';
+    } catch (e: any) {
+      error = `Erro de reprodução: ${e.message}`;
+      engineStatus = '';
     }
   }
 </script>
@@ -147,136 +221,173 @@
     </div>
 
     <div class="w-full lg:w-1/2">
-      <h1
-        class="text-text-main mb-2 text-4xl font-bold tracking-tight md:text-5xl"
-        style="text-shadow: 0 0 10px rgba(255,255,255,0.2);"
-      >
-        {translatedTitle}
-      </h1>
-
-      <div class="text-primary mb-6 flex flex-wrap gap-4 font-mono text-sm">
-        <span class="border-primary/50 rounded border bg-[#1a1a24] px-3 py-1"
-          >ANO: {series.year}</span
+      {#if isPlaying}
+        <VideoPlayer src={videoSrc} {subtitles} />
+      {:else}
+        <h1
+          class="text-text-main mb-2 text-4xl font-bold tracking-tight md:text-5xl"
+          style="text-shadow: 0 0 10px rgba(255,255,255,0.2);"
         >
-        {#if series.director && series.director.length > 0}
+          {translatedTitle}
+        </h1>
+
+        <div class="text-primary mb-6 flex flex-wrap gap-4 font-mono text-sm">
           <span class="border-primary/50 rounded border bg-[#1a1a24] px-3 py-1"
-            >DIRETOR: {series.director.join(', ')}</span
+            >ANO: {series.year}</span
           >
-        {/if}
-        <span
-          class="border-primary/50 flex items-center gap-1 rounded border bg-[#1a1a24] px-3 py-1"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="text-yellow-400"
-            ><polygon
-              points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-            /></svg
+          {#if series.director && series.director.length > 0}
+            <span class="border-primary/50 rounded border bg-[#1a1a24] px-3 py-1"
+              >DIRETOR: {series.director.join(', ')}</span
+            >
+          {/if}
+          <span
+            class="border-primary/50 flex items-center gap-1 rounded border bg-[#1a1a24] px-3 py-1"
           >
-          IMDB: {series.rating}
-        </span>
-      </div>
-
-      <div class="prose prose-invert mb-8 max-w-none leading-relaxed text-gray-300">
-        <h3
-          class="text-accent-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
-        >
-          Sinopse
-        </h3>
-        <p>{translatedSynopsis}</p>
-      </div>
-
-      {#if series.cast && series.cast.length > 0}
-        <div class="mb-8">
-          <h3
-            class="text-primary border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
-          >
-            Elenco
-          </h3>
-          <div class="flex snap-x gap-4 overflow-x-auto pb-4">
-            {#each series.cast as actor}
-              <div class="flex w-32 flex-none snap-start flex-col items-center text-center">
-                {#if actor.url_small_image}
-                  <img
-                    src={actor.url_small_image}
-                    alt={actor.name}
-                    class="border-primary/50 mb-2 h-16 w-16 rounded-full border-2 object-cover"
-                  />
-                {:else}
-                  <div
-                    class="border-primary/50 mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2 bg-[#1a1a24] text-gray-500"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      ><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle
-                        cx="12"
-                        cy="7"
-                        r="4"
-                      /></svg
-                    >
-                  </div>
-                {/if}
-                <span class="text-sm leading-tight font-bold text-gray-200" title={actor.name}
-                  >{actor.name}</span
-                >
-                <span
-                  class="text-accent-green mt-1 text-xs leading-tight"
-                  title={actor.character_name}>{actor.character_name}</span
-                >
-              </div>
-            {/each}
-          </div>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="text-yellow-400"
+              ><polygon
+                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+              /></svg
+            >
+            IMDB: {series.rating}
+          </span>
         </div>
+
+        <div class="prose prose-invert mb-8 max-w-none leading-relaxed text-gray-300">
+          <h3
+            class="text-accent-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
+          >
+            Sinopse
+          </h3>
+          <p>{translatedSynopsis}</p>
+        </div>
+
+        {#if series.cast && series.cast.length > 0}
+          <div class="mb-8">
+            <h3
+              class="text-primary border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
+            >
+              Elenco
+            </h3>
+            <div class="flex snap-x gap-4 overflow-x-auto pb-4">
+              {#each series.cast as actor}
+                <div class="flex w-32 flex-none snap-start flex-col items-center text-center">
+                  {#if actor.url_small_image}
+                    <img
+                      src={actor.url_small_image}
+                      alt={actor.name}
+                      class="border-primary/50 mb-2 h-16 w-16 rounded-full border-2 object-cover"
+                    />
+                  {:else}
+                    <div
+                      class="border-primary/50 mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2 bg-[#1a1a24] text-gray-500"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        ><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle
+                          cx="12"
+                          cy="7"
+                          r="4"
+                        /></svg
+                      >
+                    </div>
+                  {/if}
+                  <span class="text-sm leading-tight font-bold text-gray-200" title={actor.name}
+                    >{actor.name}</span
+                  >
+                  <span
+                    class="text-accent-green mt-1 text-xs leading-tight"
+                    title={actor.character_name}>{actor.character_name}</span
+                  >
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
       {/if}
     </div>
 
     <!-- Episodes Right Column -->
     <div class="w-full lg:w-1/4">
+      {#if engineStatus}
+        <div
+          class="text-accent-orange border-accent-orange mb-4 animate-pulse rounded border bg-black/60 p-3 text-center font-mono text-sm"
+        >
+          {engineStatus}
+        </div>
+      {/if}
       {#if series.videos && series.videos.length > 0}
         <div class="flex flex-col gap-4">
-          <div class="border-primary/30 flex items-center justify-between border-b pb-2">
+          <div class="border-primary/30 flex flex-col gap-3 border-b pb-3">
             <h3 class="text-primary text-sm font-bold tracking-widest uppercase">Episódios</h3>
-            <div class="relative">
-              <select
-                bind:value={selectedSeason}
-                class="border-primary/50 focus:border-accent-green appearance-none rounded border bg-[#1a1a24] py-1 pr-6 pl-2 font-mono text-xs text-white focus:outline-none"
-              >
-                {#each availableSeasons as season}
-                  <option value={season} class="bg-[#1a1a24] text-white">Temporada {season}</option>
-                {/each}
-              </select>
-              <div
-                class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+            <div class="flex items-center gap-2">
+              <div class="relative w-1/2">
+                <select
+                  bind:value={selectedSeason}
+                  class="border-primary/50 focus:border-accent-green w-full appearance-none rounded border bg-[#1a1a24] py-1 pr-6 pl-2 font-mono text-xs text-white focus:outline-none"
                 >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
+                  {#each availableSeasons as season}
+                    <option value={season} class="bg-[#1a1a24] text-white">Temp. {season}</option>
+                  {/each}
+                </select>
+                <div
+                  class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
+                  >
+                </div>
+              </div>
+              <div class="relative w-1/2">
+                <select
+                  bind:value={preferredQuality}
+                  class="border-primary/50 focus:border-accent-green w-full appearance-none rounded border bg-[#1a1a24] py-1 pr-6 pl-2 font-mono text-xs text-white focus:outline-none"
+                >
+                  <option value="4k" class="bg-[#1a1a24] text-white">4K</option>
+                  <option value="1080p" class="bg-[#1a1a24] text-white">1080p</option>
+                  <option value="720p" class="bg-[#1a1a24] text-white">720p</option>
+                  <option value="480p" class="bg-[#1a1a24] text-white">480p</option>
+                </select>
+                <div
+                  class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
+                  >
+                </div>
               </div>
             </div>
           </div>
@@ -287,7 +398,7 @@
             {#each filteredEpisodes as episode}
               <button
                 class="hover:border-accent-green border-primary/30 flex items-center justify-between rounded border bg-black/40 p-3 text-left transition-all hover:bg-black/60 hover:shadow-[0_0_10px_rgba(91,255,59,0.2)]"
-                onclick={playEpisode}
+                onclick={() => playEpisode(episode)}
               >
                 <div class="flex flex-col">
                   <span class="text-sm font-bold text-white">

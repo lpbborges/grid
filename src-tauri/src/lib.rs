@@ -18,7 +18,14 @@ async fn start_torrent_engine(
         return Ok("Engine already running".to_string());
     }
 
+    // Kill any orphaned rqbit processes to prevent memory/disk leaks across crashes
+    let _ = std::process::Command::new("pkill")
+        .arg("-9")
+        .arg("rqbit")
+        .status();
+
     let output_folder = "/tmp/grid-play-downloads";
+    let _ = std::fs::remove_dir_all(output_folder); // cleanup previous sessions
     let _ = std::fs::create_dir_all(output_folder);
 
     let sidecar_command = app

@@ -27,6 +27,19 @@ export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<voi
   throw new Error('Torrent engine failed to become ready in time');
 }
 
+export async function clearTorrents(): Promise<void> {
+  try {
+    const res = await fetch(`${ENGINE_URL}/torrents`);
+    if (!res.ok) return;
+    const data = await res.json();
+    for (const torrent of data.torrents || []) {
+      await fetch(`${ENGINE_URL}/torrents/${torrent.info_hash}/delete`, { method: 'POST' });
+    }
+  } catch (error) {
+    console.warn('Failed to clear torrents:', error);
+  }
+}
+
 export async function addTorrent(magnetLink: string): Promise<TorrentEngineDetails> {
   const res = await fetch(`${ENGINE_URL}/torrents`, {
     method: 'POST',

@@ -7,6 +7,7 @@
   import {
     startEngine,
     waitForEngine,
+    clearTorrents,
     addTorrent,
     getBestVideoFileIndex,
     getStreamUrl,
@@ -84,6 +85,7 @@
       await waitForEngine();
 
       engineStatus = 'Preparando stream...';
+      await clearTorrents();
       const details = await addTorrent(magnet);
 
       const bestFileIdx = getBestVideoFileIndex(details.files);

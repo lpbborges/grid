@@ -60,9 +60,17 @@ export function getLanguageName(code: string): string {
   return map[normalized] || normalized.toUpperCase();
 }
 
-export async function getExternalSubtitles(imdbId: string): Promise<SubtitleTrack[]> {
+export async function getExternalSubtitles(
+  imdbId: string,
+  season?: number,
+  episode?: number
+): Promise<SubtitleTrack[]> {
   try {
-    const res = await fetch(`https://opensubtitles-v3.strem.io/subtitles/movie/${imdbId}.json`);
+    const url =
+      season !== undefined && episode !== undefined
+        ? `https://opensubtitles-v3.strem.io/subtitles/series/${imdbId}:${season}:${episode}.json`
+        : `https://opensubtitles-v3.strem.io/subtitles/movie/${imdbId}.json`;
+    const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
     if (!data.subtitles) return [];
