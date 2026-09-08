@@ -15,6 +15,7 @@
   } from '$lib/engine/torrent';
   import type { Movie } from '$lib/types';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
+  import { playerState } from '$lib/stores.svelte';
 
   let movieId = $page.params.id as string;
   let movie = $state<Movie | null>(null);
@@ -81,6 +82,7 @@
     const magnet = `magnet:?xt=urn:btih:${selectedTorrent.hash}&dn=${encodeURIComponent(movie.title)}`;
 
     isPlaying = true;
+    playerState.isPlaying = true;
     engineStatus = 'Iniciando player...';
 
     try {
@@ -107,11 +109,13 @@
       error = `Erro de reprodução: ${e.message}`;
       engineStatus = '';
       isPlaying = false;
+      playerState.isPlaying = false;
     }
   }
 
   async function stopPlaying() {
     isPlaying = false;
+    playerState.isPlaying = false;
     videoSrc = '';
     selectedInfoHash = '';
     selectedTotalBytes = 0;
@@ -149,9 +153,21 @@
 {/if}
 
 {#if loading}
-  <div class="flex justify-center py-20">
-    <div class="text-accent-green animate-pulse font-mono text-xl tracking-widest uppercase">
-      Carregando Dados...
+  <div class="flex h-full min-h-[400px] items-center justify-center">
+    <div class="flex flex-col items-center gap-4">
+      <div class="relative h-16 w-16">
+        <div
+          class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
+        ></div>
+        <div
+          class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
+        ></div>
+      </div>
+      <div
+        class="text-accent-green font-cyber animate-pulse text-xl tracking-[0.3em] uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
+      >
+        Carregando...
+      </div>
     </div>
   </div>
 {:else if error}
@@ -220,8 +236,16 @@
 
           <button
             onclick={playMovie}
-            class="bg-primary hover:bg-accent-green hover:text-dark text-main flex w-full items-center justify-center gap-2 rounded border-2 border-transparent py-4 text-lg font-bold tracking-widest uppercase shadow-[0_0_15px_rgba(118,52,194,0.5)] transition-all duration-300 hover:border-white hover:shadow-[0_0_20px_rgba(91,255,59,0.8)]"
+            class="group bg-primary/20 hover:bg-primary text-main border-primary font-cyber relative flex w-full items-center justify-center gap-2 border py-4 text-lg tracking-widest uppercase transition-all duration-300 hover:shadow-[0_0_20px_rgba(107,33,168,0.8)]"
           >
+            <!-- Cyberpunk border effect -->
+            <div
+              class="border-accent-green absolute -top-[1px] -left-[1px] h-3 w-3 border-t-2 border-l-2 transition-colors duration-300 group-hover:border-white"
+            ></div>
+            <div
+              class="border-accent-green absolute -right-[1px] -bottom-[1px] h-3 w-3 border-r-2 border-b-2 transition-colors duration-300 group-hover:border-white"
+            ></div>
+
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="24"
@@ -238,8 +262,8 @@
 
     <div class="w-full md:w-2/3">
       <h1
-        class="text-main mb-2 text-4xl font-bold tracking-tight md:text-5xl"
-        style="text-shadow: 0 0 10px rgba(255,255,255,0.2);"
+        class="text-main font-cyber mb-2 text-4xl tracking-widest uppercase md:text-5xl"
+        style="text-shadow: 0 0 15px rgba(107,33,168,0.5);"
       >
         {translatedTitle}
       </h1>

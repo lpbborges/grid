@@ -186,21 +186,17 @@
     <div
       class="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black px-4 text-center"
     >
-      <svg
-        class="text-accent-green mb-4 h-12 w-12 animate-spin"
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
+      <div class="relative mb-6 h-16 w-16">
+        <div
+          class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
+        ></div>
+        <div
+          class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
+        ></div>
+      </div>
+      <div
+        class="text-accent-green font-cyber mb-2 text-xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
       >
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
-        ></circle>
-        <path
-          class="opacity-75"
-          fill="currentColor"
-          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-        ></path>
-      </svg>
-      <div class="text-accent-green mb-2 text-xl font-bold tracking-widest uppercase">
         {engineStatus || 'Carregando...'}
       </div>
       {#if infoHash && downloadPercent > 0}

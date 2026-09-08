@@ -65,9 +65,21 @@
 </script>
 
 {#if loading}
-  <div class="flex justify-center py-20">
-    <div class="text-accent-green animate-pulse font-mono text-xl tracking-widest uppercase">
-      Sincronizando...
+  <div class="flex h-full min-h-[400px] items-center justify-center">
+    <div class="flex flex-col items-center gap-4">
+      <div class="relative h-16 w-16">
+        <div
+          class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
+        ></div>
+        <div
+          class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
+        ></div>
+      </div>
+      <div
+        class="text-accent-green font-cyber animate-pulse text-xl tracking-[0.3em] uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
+      >
+        Sincronizando...
+      </div>
     </div>
   </div>
 {:else if error}
@@ -76,16 +88,21 @@
   </div>
 {:else}
   <div>
-    <div class="mb-4 flex items-center justify-between">
-      <h1 class="text-main text-xl">Filmes - Populares</h1>
+    <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
+      <h1
+        class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
+      >
+        <span class="bg-primary inline-block h-5 w-2"></span>
+        Filmes Populares
+      </h1>
     </div>
 
-    <div class="group relative mb-8">
+    <div class="relative mb-8">
       <!-- Left Arrow -->
       {#if canScrollLeft}
         <button
           onclick={scrollLeft}
-          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-main absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
+          class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
           aria-label="Voltar"
         >
           &#10094;
@@ -107,7 +124,7 @@
       {#if canScrollRight}
         <button
           onclick={scrollRight}
-          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-main absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
+          class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
           aria-label="Avançar"
         >
           &#10095;
@@ -115,16 +132,21 @@
       {/if}
     </div>
 
-    <div class="mb-4 flex items-center justify-between">
-      <h1 class="text-main text-xl">Séries - Populares</h1>
+    <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
+      <h1
+        class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
+      >
+        <span class="bg-primary inline-block h-5 w-2"></span>
+        Séries Populares
+      </h1>
     </div>
 
-    <div class="group relative">
+    <div class="relative">
       <!-- Left Arrow -->
       {#if canScrollSeriesLeft}
         <button
           onclick={scrollSeriesLeft}
-          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-main absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
+          class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
           aria-label="Voltar"
         >
           &#10094;
@@ -146,7 +168,7 @@
       {#if canScrollSeriesRight}
         <button
           onclick={scrollSeriesRight}
-          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-main absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
+          class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
           aria-label="Avançar"
         >
           &#10095;
