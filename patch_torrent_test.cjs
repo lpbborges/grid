@@ -3,7 +3,10 @@ const fs = require('fs');
 let code = fs.readFileSync('src/lib/engine/torrent.test.ts', 'utf-8');
 
 const importTarget = `  waitForEngine,\n  getTorrentSubtitles\n} from './torrent';`;
-code = code.replace(importTarget, `  waitForEngine,\n  clearTorrents,\n  getTorrentSubtitles\n} from './torrent';`);
+code = code.replace(
+  importTarget,
+  `  waitForEngine,\n  clearTorrents,\n  getTorrentSubtitles\n} from './torrent';`
+);
 
 const testTarget = `  it('adds a torrent successfully', async () => {`;
 const newTest = `  it('clears torrents successfully', async () => {

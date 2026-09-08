@@ -6,7 +6,8 @@ import {
   startEngine,
   waitForEngine,
   clearTorrents,
-  getTorrentSubtitles
+  getTorrentSubtitles,
+  getTorrentStats
 } from './torrent';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -119,6 +120,28 @@ describe('torrent engine', () => {
       'Torrent engine failed to become ready in time'
     );
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('getTorrentStats returns data when successful', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ snapshot: { downloaded_and_checked_bytes: 100 } })
+    });
+    const stats = await getTorrentStats('123');
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/torrents/123/stats'));
+    expect(stats.snapshot.downloaded_and_checked_bytes).toBe(100);
+  });
+
+  it('getTorrentStats returns null when not ok', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ ok: false });
+    const stats = await getTorrentStats('123');
+    expect(stats).toBeNull();
+  });
+
+  it('getTorrentStats returns null on network error', async () => {
+    (globalThis.fetch as any).mockRejectedValueOnce(new Error('Network error'));
+    const stats = await getTorrentStats('123');
+    expect(stats).toBeNull();
   });
 });
 

@@ -16,4 +16,22 @@ describe('VideoPlayer component', () => {
     expect(video.autoplay).toBe(true);
     expect(video.controls).toBe(false); // Controls are now custom
   });
+  it('renders loading overlay when not playing', () => {
+    HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
+    const { getByText } = render(VideoPlayer, {
+      src: 'test.mp4',
+      engineStatus: 'Preparando test...'
+    });
+    expect(getByText('Preparando test...')).toBeDefined();
+  });
+
+  it('renders close button when onclose is provided', async () => {
+    HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
+    const oncloseMock = vi.fn();
+    const { getByLabelText } = render(VideoPlayer, { src: 'test.mp4', onclose: oncloseMock });
+    const closeBtn = getByLabelText('Close');
+    expect(closeBtn).toBeDefined();
+    closeBtn.click();
+    expect(oncloseMock).toHaveBeenCalled();
+  });
 });

@@ -26,6 +26,8 @@
   let subtitles = $state<SubtitleTrack[]>([]);
   let engineStatus = $state('');
   let selectedTorrentHash = $state('');
+  let selectedInfoHash = $state('');
+  let selectedTotalBytes = $state(0);
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
@@ -78,15 +80,19 @@
       movie.torrents.find((t) => t.hash === selectedTorrentHash) || movie.torrents[0];
     const magnet = `magnet:?xt=urn:btih:${selectedTorrent.hash}&dn=${encodeURIComponent(movie.title)}`;
 
-    try {
-      engineStatus = 'Iniciando player...';
-      await startEngine();
+    isPlaying = true;
+    engineStatus = 'Iniciando player...';
 
+    try {
+      await startEngine();
       await waitForEngine();
 
       engineStatus = 'Preparando stream...';
       await clearTorrents();
       const details = await addTorrent(magnet);
+
+      selectedInfoHash = details.info_hash;
+      selectedTotalBytes = details.files.reduce((acc, f) => acc + f.length, 0);
 
       const bestFileIdx = getBestVideoFileIndex(details.files);
       const tSubs = getTorrentSubtitles(details.info_hash, details.files);
@@ -95,38 +101,27 @@
       const eSubs = movieId ? await getExternalSubtitles(movieId) : [];
 
       engineStatus = 'Pronto para assistir.';
-      videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
       subtitles = [...tSubs, ...eSubs];
-      isPlaying = true;
+      videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
     } catch (e: any) {
       error = `Erro de reprodução: ${e.message}`;
       engineStatus = '';
+      isPlaying = false;
+    }
+  }
+
+  async function stopPlaying() {
+    isPlaying = false;
+    videoSrc = '';
+    selectedInfoHash = '';
+    selectedTotalBytes = 0;
+    try {
+      await clearTorrents();
+    } catch (e) {
+      console.error('Erro ao limpar torrents', e);
     }
   }
 </script>
-
-<div class="relative z-20 mb-8">
-  <a
-    href="/"
-    class="group hover:text-accent-green text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
-    style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
-  >
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="text-primary group-hover:text-accent-green transition-colors"
-      ><path d="m15 18-6-6 6-6" /></svg
-    >
-    Voltar ao Catálogo
-  </a>
-</div>
 
 {#if loading}
   <div class="flex justify-center py-20">
@@ -146,12 +141,8 @@
         class="h-full w-full object-cover"
         alt=""
       />
-      <div
-        class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"
-      ></div>
-      <div
-        class="from-dark/90 via-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"
-      ></div>
+      <div class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"></div>
+      <div class="from-dark/90 via-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"></div>
     </div>
   {/if}
 
@@ -217,11 +208,6 @@
             Reproduzir
           </button>
         </div>
-        {#if engineStatus}
-          <div class="text-accent-orange mt-4 animate-pulse text-center font-mono text-sm">
-            {engineStatus}
-          </div>
-        {/if}
       {/if}
     </div>
 
@@ -261,7 +247,14 @@
       </div>
 
       {#if isPlaying}
-        <VideoPlayer src={videoSrc} {subtitles} />
+        <VideoPlayer
+          src={videoSrc}
+          {subtitles}
+          onclose={stopPlaying}
+          {engineStatus}
+          infoHash={selectedInfoHash}
+          totalBytes={selectedTotalBytes}
+        />
       {:else}
         <div class="prose prose-invert text-muted mb-8 max-w-none leading-relaxed">
           <h3

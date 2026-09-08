@@ -1,7 +1,22 @@
 <script lang="ts">
+  import { getTorrentStats } from '$lib/engine/torrent';
   import type { SubtitleTrack } from '$lib/api/subtitles';
 
-  let { src, subtitles = [] } = $props<{ src: string; subtitles?: SubtitleTrack[] }>();
+  let {
+    src,
+    subtitles = [],
+    onclose,
+    engineStatus = '',
+    infoHash = '',
+    totalBytes = 0
+  } = $props<{
+    src: string;
+    subtitles?: SubtitleTrack[];
+    onclose?: () => void;
+    engineStatus?: string;
+    infoHash?: string;
+    totalBytes?: number;
+  }>();
   /* global HTMLVideoElement, HTMLElement */
   let videoElement = $state<HTMLVideoElement | null>(null);
   let containerElement = $state<HTMLElement | null>(null);
@@ -19,8 +34,34 @@
   let showAudioMenu = $state(false);
   let activeAudioIndex = $state(0);
 
+  let downloadPercent = $state<number>(0);
+  let isVideoPlaying = $state(false);
+  let statsInterval: ReturnType<typeof window.setInterval>;
+
   let torrentSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Embedded'));
   let externalSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Extra'));
+
+  $effect(() => {
+    if (infoHash && !isVideoPlaying) {
+      if (!statsInterval) {
+        statsInterval = window.setInterval(async () => {
+          if (isVideoPlaying) return;
+          const stats = await getTorrentStats(infoHash);
+          if (stats && stats.snapshot && totalBytes > 0) {
+            const downloaded = stats.snapshot.downloaded_and_checked_bytes || 0;
+            const percent = (downloaded / totalBytes) * 100;
+            downloadPercent = Math.min(Math.round(percent), 100);
+          }
+        }, 1000);
+      }
+    } else {
+      if (statsInterval) window.clearInterval(statsInterval);
+    }
+
+    return () => {
+      if (statsInterval) window.clearInterval(statsInterval);
+    };
+  });
 
   function selectTrack(index: number) {
     if (!videoElement) return;
@@ -109,11 +150,73 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:this={containerElement}
-  class="border-accent-green relative mb-6 aspect-video w-full overflow-hidden rounded border-2 bg-black shadow-[0_0_30px_rgba(91,255,59,0.2)]"
+  class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden bg-black"
   data-testid="video-player-container"
   onmousemove={handleMouseMove}
   onmouseleave={handleMouseLeave}
 >
+  {#if onclose}
+    <button
+      onclick={onclose}
+      class="hover:text-accent-green hover:bg-main/10 absolute top-6 right-6 z-50 rounded-full p-2 text-white/50 transition-all duration-300 {showControls ||
+      paused ||
+      showMenu
+        ? 'opacity-100'
+        : 'opacity-0'}"
+      aria-label="Close"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  {/if}
+
+  {#if !isVideoPlaying}
+    <div
+      class="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black px-4 text-center"
+    >
+      <svg
+        class="text-accent-green mb-4 h-12 w-12 animate-spin"
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+      >
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+        ></circle>
+        <path
+          class="opacity-75"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+        ></path>
+      </svg>
+      <div class="text-accent-green mb-2 text-xl font-bold tracking-widest uppercase">
+        {engineStatus || 'Carregando...'}
+      </div>
+      {#if infoHash && downloadPercent > 0}
+        <div class="bg-dark border-primary/30 mb-2 h-2 w-full max-w-md rounded-full border">
+          <div
+            class="bg-accent-green h-2 rounded-full transition-all duration-300"
+            style="width: {downloadPercent}%"
+          ></div>
+        </div>
+        <div class="text-main font-mono text-sm">
+          Baixando: {downloadPercent}%
+        </div>
+      {/if}
+    </div>
+  {/if}
+
   <!-- svelte-ignore a11y_media_has_caption -->
   <video
     bind:this={videoElement}
@@ -123,11 +226,15 @@
     bind:volume
     {src}
     autoplay
-    class="h-full w-full cursor-pointer object-contain"
+    class="h-full w-full cursor-pointer object-contain {isVideoPlaying
+      ? 'opacity-100'
+      : 'opacity-0'}"
     data-testid="video-element"
     crossorigin="anonymous"
     onclick={togglePlay}
     onloadedmetadata={handleLoadedMetadata}
+    onplaying={() => (isVideoPlaying = true)}
+    onwaiting={() => (isVideoPlaying = false)}
   >
     {#each subtitles as sub}
       <track kind="subtitles" src={sub.url} srclang={sub.lang} label={sub.label} />

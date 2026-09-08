@@ -27,6 +27,9 @@
   let engineStatus = $state('');
   let preferredQuality = $state('1080p');
 
+  let selectedInfoHash = $state('');
+  let selectedTotalBytes = $state(0);
+
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
 
@@ -127,13 +130,18 @@
 
       const magnet = `magnet:?xt=urn:btih:${bestStream.infoHash}&dn=${encodeURIComponent(`${series.title} S${episode.season}E${episode.episode}`)}`;
 
+      isPlaying = true;
       engineStatus = 'Iniciando player...';
+
       await startEngine();
       await waitForEngine();
 
       engineStatus = 'Preparando stream...';
       await clearTorrents();
       const details = await addTorrent(magnet);
+
+      selectedInfoHash = details.info_hash;
+      selectedTotalBytes = details.files.reduce((acc, f) => acc + f.length, 0);
 
       let bestFileIdx = bestStream.fileIdx;
       if (bestFileIdx === undefined) {
@@ -148,39 +156,27 @@
         : [];
 
       engineStatus = 'Pronto para assistir.';
-      videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
       subtitles = [...tSubs, ...eSubs];
-      isPlaying = true;
-      engineStatus = '';
+      videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
     } catch (e: any) {
       error = `Erro de reprodução: ${e.message}`;
       engineStatus = '';
+      isPlaying = false;
+    }
+  }
+
+  async function stopPlaying() {
+    isPlaying = false;
+    videoSrc = '';
+    selectedInfoHash = '';
+    selectedTotalBytes = 0;
+    try {
+      await clearTorrents();
+    } catch (e) {
+      console.error('Erro ao limpar torrents', e);
     }
   }
 </script>
-
-<div class="relative z-20 mb-8">
-  <a
-    href="/"
-    class="group hover:text-accent-green text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
-    style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
-  >
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="text-primary group-hover:text-accent-green transition-colors"
-      ><path d="m15 18-6-6 6-6" /></svg
-    >
-    Voltar ao Catálogo
-  </a>
-</div>
 
 {#if loading}
   <div class="flex justify-center py-20">
@@ -200,12 +196,8 @@
         class="h-full w-full object-cover opacity-50"
         alt=""
       />
-      <div
-        class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"
-      ></div>
-      <div
-        class="from-dark/90 via-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"
-      ></div>
+      <div class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"></div>
+      <div class="from-dark/90 via-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"></div>
     </div>
   {/if}
 
@@ -222,7 +214,14 @@
 
     <div class="w-full lg:w-1/2">
       {#if isPlaying}
-        <VideoPlayer src={videoSrc} {subtitles} />
+        <VideoPlayer
+          src={videoSrc}
+          {subtitles}
+          onclose={stopPlaying}
+          {engineStatus}
+          infoHash={selectedInfoHash}
+          totalBytes={selectedTotalBytes}
+        />
       {:else}
         <h1
           class="text-main mb-2 text-4xl font-bold tracking-tight md:text-5xl"
@@ -326,13 +325,6 @@
 
     <!-- Episodes Right Column -->
     <div class="w-full lg:w-1/4">
-      {#if engineStatus}
-        <div
-          class="text-accent-orange border-accent-orange bg-surface/60 mb-4 animate-pulse rounded border p-3 text-center font-mono text-sm"
-        >
-          {engineStatus}
-        </div>
-      {/if}
       {#if series.videos && series.videos.length > 0}
         <div class="flex flex-col gap-4">
           <div class="border-primary/30 flex flex-col gap-3 border-b pb-3">
