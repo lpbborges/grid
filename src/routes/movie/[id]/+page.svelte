@@ -123,6 +123,31 @@
   }
 </script>
 
+{#if !isPlaying}
+  <div class="relative z-20 mb-8">
+    <a
+      href="/"
+      class="group hover:text-accent-green text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
+      style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="text-primary group-hover:text-accent-green transition-colors"
+        ><path d="m15 18-6-6 6-6" /></svg
+      >
+      Voltar ao Catálogo
+    </a>
+  </div>
+{/if}
+
 {#if loading}
   <div class="flex justify-center py-20">
     <div class="text-accent-green animate-pulse font-mono text-xl tracking-widest uppercase">
