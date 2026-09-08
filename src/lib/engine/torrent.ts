@@ -2,11 +2,14 @@ import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
 import { getLanguageName } from '../api/subtitles';
 
-const ENGINE_URL = 'http://127.0.0.1:3030';
+let ENGINE_URL = 'http://127.0.0.1:3030';
 
 export async function startEngine(): Promise<void> {
   try {
-    await invoke('start_torrent_engine');
+    const url = await invoke<string>('start_torrent_engine');
+    if (url && url.startsWith('http')) {
+      ENGINE_URL = url;
+    }
   } catch (error) {
     console.warn('Failed to start torrent engine:', error);
   }

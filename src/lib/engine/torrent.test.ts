@@ -36,10 +36,12 @@ describe('torrent engine', () => {
     expect(url).toBe('http://127.0.0.1:3030/torrents/abc123hash/stream/2');
   });
 
-  it('calls startEngine tauri invoke', async () => {
-    (invoke as any).mockResolvedValueOnce('Engine started');
+  it('calls startEngine tauri invoke and updates URL', async () => {
+    (invoke as any).mockResolvedValueOnce('http://127.0.0.1:41349');
     await startEngine();
     expect(invoke).toHaveBeenCalledWith('start_torrent_engine');
+    // We can verify it updated by checking the stream url
+    expect(getStreamUrl('abc', 1)).toBe('http://127.0.0.1:41349/torrents/abc/stream/1');
   });
 
   it('handles startEngine failure gracefully', async () => {
@@ -59,13 +61,18 @@ describe('torrent engine', () => {
       .mockResolvedValue({ ok: true });
 
     await clearTorrents();
-    expect(globalThis.fetch).toHaveBeenCalledWith('http://127.0.0.1:3030/torrents');
-    expect(globalThis.fetch).toHaveBeenCalledWith('http://127.0.0.1:3030/torrents/123/delete', {
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/torrents'));
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/torrents/123/delete'), {
       method: 'POST'
     });
-    expect(globalThis.fetch).toHaveBeenCalledWith('http://127.0.0.1:3030/torrents/456/delete', {
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/torrents/456/delete'), {
       method: 'POST'
     });
+  });
+
+  it('handles clearTorrents failure gracefully', async () => {
+    (globalThis.fetch as any).mockRejectedValueOnce(new Error('Clear error'));
+    await clearTorrents(); // Should warn, not throw
   });
 
   it('adds a torrent successfully', async () => {
@@ -78,7 +85,7 @@ describe('torrent engine', () => {
 
     const details = await addTorrent('magnet:?xt=test');
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:3030/torrents',
+      expect.stringContaining('/torrents'),
       expect.objectContaining({
         method: 'POST',
         body: 'magnet:?xt=test'

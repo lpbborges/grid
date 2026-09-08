@@ -6,6 +6,7 @@ use tauri_plugin_shell::ShellExt;
 
 struct EngineState {
     child: Mutex<Option<tauri_plugin_shell::process::CommandChild>>,
+    port: Mutex<Option<u16>>,
 }
 
 #[tauri::command]
@@ -14,7 +15,11 @@ async fn start_torrent_engine(
     state: State<'_, EngineState>,
 ) -> Result<String, String> {
     let mut child_guard = state.child.lock().unwrap();
+    let mut port_guard = state.port.lock().unwrap();
     if child_guard.is_some() {
+        if let Some(p) = *port_guard {
+            return Ok(format!("http://127.0.0.1:{}", p));
+        }
         return Ok("Engine already running".to_string());
     }
 
@@ -28,6 +33,13 @@ async fn start_torrent_engine(
     let _ = std::fs::remove_dir_all(output_folder); // cleanup previous sessions
     let _ = std::fs::create_dir_all(output_folder);
 
+    // Find a free ephemeral port for the HTTP API
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .map_err(|e| e.to_string())?
+        .local_addr()
+        .map_err(|e| e.to_string())?
+        .port();
+
     let sidecar_command = app
         .shell()
         .sidecar("rqbit")
@@ -35,6 +47,10 @@ async fn start_torrent_engine(
             println!("Sidecar builder error: {}", e);
             e.to_string()
         })?
+        .arg("--http-api-listen-addr")
+        .arg(format!("127.0.0.1:{}", port))
+        .arg("--listen-port")
+        .arg("0")
         .arg("server")
         .arg("start")
         .arg(output_folder);
@@ -45,6 +61,7 @@ async fn start_torrent_engine(
     })?;
 
     *child_guard = Some(child);
+    *port_guard = Some(port);
 
     tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
@@ -54,7 +71,7 @@ async fn start_torrent_engine(
         }
     });
 
-    Ok("Engine started".to_string())
+    Ok(format!("http://127.0.0.1:{}", port))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -64,6 +81,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(EngineState {
             child: Mutex::new(None),
+            port: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![start_torrent_engine])
         .run(tauri::generate_context!())
@@ -78,6 +96,7 @@ mod tests {
     fn test_engine_state_initialization() {
         let state = EngineState {
             child: Mutex::new(None),
+            port: Mutex::new(None),
         };
         assert!(state.child.lock().unwrap().is_none());
     }

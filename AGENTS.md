@@ -31,6 +31,7 @@ This document serves as a living repository of the core architectural decisions,
 
 - **Theme Consistency:** We strictly adhere to the Evangelion Unit-01 style guide (Neon Green, Primary Purple, Armor Black).
 - **Tailwind v4:** All styling should be implemented using Tailwind utility classes. Global CSS variables for the theme are maintained in `src/app.css`.
+- **Tailwind v4 Variable Naming:** When adding custom variables to `@theme` in `src/app.css` (e.g. `--color-*`), do NOT include property contexts like `bg-` or `text-` in the variable name. Tailwind automatically prepends these contexts. Use base names (e.g., `--color-dark` instead of `--color-bg-dark`) to avoid generating redundant utility classes like `bg-bg-dark` or `text-text-main`.
 - **Responsive Design:** Desktop application layouts should remain responsive and gracefully handle window resizing.
 
 ## 5. Code Quality & Git Hooks
