@@ -19,6 +19,7 @@ describe('translateText', () => {
 
   it('should return translated text on success', async () => {
     (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
       json: async () => [[['Olá mundo', 'Hello world']]]
     });
 
@@ -32,13 +33,15 @@ describe('translateText', () => {
   it('should return original text on failure', async () => {
     (globalThis.fetch as any).mockRejectedValueOnce(new Error('Network error'));
 
-    // suppress console.error for this test
+    // suppress console errors/warnings for this test
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await translateText('Hello world', 'pt');
     expect(result).toBe('Hello world');
 
     consoleSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 });
 
@@ -48,6 +51,7 @@ describe('translation helpers', () => {
       navigator: { language: 'pt-BR' }
     });
     globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
       json: async () => [[['Traduzido', 'Original']]]
     });
   });

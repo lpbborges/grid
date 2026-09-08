@@ -1,16 +1,54 @@
 export async function translateText(text: string, targetLang: string): Promise<string> {
   if (!text) return text;
+
   try {
     // google translate free endpoint
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
     const res = await fetch(url);
-    const data = await res.json();
-    if (data && data[0]) {
-      return data[0].map((item: any) => item[0]).join('');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data[0]) {
+        return data[0].map((item: any) => item[0]).join('');
+      }
     }
   } catch (e) {
-    console.error('Translation error:', e);
+    console.warn('Google Translation error, trying Lingva fallback:', e);
   }
+
+  // Fallback 1: Lingva API (Google Translate proxy)
+  try {
+    const lingvaUrl = `https://lingva.ml/api/v1/auto/${targetLang}/${encodeURIComponent(text)}`;
+    const lingvaRes = await fetch(lingvaUrl);
+    if (lingvaRes.ok) {
+      const lingvaData = await lingvaRes.json();
+      if (lingvaData && lingvaData.translation) {
+        return lingvaData.translation;
+      }
+    }
+  } catch (e) {
+    console.warn('Lingva fallback error, trying MyMemory fallback:', e);
+  }
+
+  // Fallback 2: MyMemory API
+  try {
+    const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=auto|${targetLang}`;
+    const myMemoryRes = await fetch(myMemoryUrl);
+    if (myMemoryRes.ok) {
+      const myMemoryData = await myMemoryRes.json();
+      // MyMemory returns 200 status in JSON for success
+      if (
+        myMemoryData &&
+        myMemoryData.responseStatus === 200 &&
+        myMemoryData.responseData &&
+        myMemoryData.responseData.translatedText
+      ) {
+        return myMemoryData.responseData.translatedText;
+      }
+    }
+  } catch (e) {
+    console.error('All translation APIs failed:', e);
+  }
+
   return text;
 }
 

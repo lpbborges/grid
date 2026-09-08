@@ -17,7 +17,7 @@
     infoHash?: string;
     totalBytes?: number;
   }>();
-  /* global HTMLVideoElement, HTMLElement */
+  /* global HTMLVideoElement, HTMLElement, FocusEvent, Node */
   let videoElement = $state<HTMLVideoElement | null>(null);
   let containerElement = $state<HTMLElement | null>(null);
   let showMenu = $state(false);
@@ -112,16 +112,36 @@
     showAudioMenu = false;
   }
 
+  let isFocused = $state(false);
+
   function handleMouseMove() {
     showControls = true;
     window.clearTimeout(controlsTimeout);
     controlsTimeout = window.setTimeout(() => {
-      if (!paused) showControls = false;
+      if (!paused && !isFocused) showControls = false;
     }, 2500);
   }
 
   function handleMouseLeave() {
-    if (!paused) showControls = false;
+    if (!paused && !isFocused) showControls = false;
+  }
+
+  function handleFocusIn() {
+    isFocused = true;
+    showControls = true;
+    window.clearTimeout(controlsTimeout);
+  }
+
+  function handleFocusOut(e: FocusEvent) {
+    if (!containerElement?.contains(e.relatedTarget as Node)) {
+      isFocused = false;
+      if (!paused) {
+        window.clearTimeout(controlsTimeout);
+        controlsTimeout = window.setTimeout(() => {
+          showControls = false;
+        }, 2500);
+      }
+    }
   }
 
   function togglePlay() {
@@ -147,13 +167,16 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:this={containerElement}
+  role="region"
+  aria-label="Video Player"
   class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden bg-black"
   data-testid="video-player-container"
   onmousemove={handleMouseMove}
   onmouseleave={handleMouseLeave}
+  onfocusin={handleFocusIn}
+  onfocusout={handleFocusOut}
 >
   {#if onclose}
     <button
