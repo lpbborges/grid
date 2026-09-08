@@ -259,18 +259,18 @@
 
             {#if showAudioMenu}
               <div
-                class="border-primary/50 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border bg-[#1a1a24]/95 p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
+                class="border-primary/50 bg-surface/95 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
               >
                 <div
-                  class="text-primary mt-1 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest uppercase"
+                  class="text-primary border-text-main/10 mt-1 mb-1 border-b px-3 pb-1 text-xs font-bold tracking-widest uppercase"
                 >
                   Faixa de Áudio
                 </div>
                 {#each audioTracks as track}
                   <button
-                    class="w-full truncate rounded px-3 py-1.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white {activeAudioIndex ===
+                    class="text-text-muted hover:bg-text-main/10 hover:text-text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeAudioIndex ===
                     track.index
-                      ? 'bg-primary/30 text-white'
+                      ? 'bg-primary/30 text-text-main'
                       : ''}"
                     title={track.label}
                     onclick={() => selectAudioTrack(track.index)}
@@ -297,12 +297,12 @@
 
             {#if showMenu}
               <div
-                class="border-primary/50 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border bg-[#1a1a24]/95 p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
+                class="border-primary/50 bg-surface/95 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
               >
                 <button
-                  class="w-full rounded px-3 py-1.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white {activeIndex ===
+                  class="text-text-muted hover:bg-text-main/10 hover:text-text-main w-full rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
                   -1
-                    ? 'bg-white/10 text-white'
+                    ? 'bg-text-main/10 text-text-main'
                     : ''}"
                   onclick={() => selectTrack(-1)}
                 >
@@ -311,15 +311,15 @@
 
                 {#if torrentSubs.length > 0}
                   <div
-                    class="text-primary mt-3 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest uppercase"
+                    class="text-primary border-text-main/10 mt-3 mb-1 border-b px-3 pb-1 text-xs font-bold tracking-widest uppercase"
                   >
                     Embutida
                   </div>
                   {#each torrentSubs as sub}
                     <button
-                      class="w-full truncate rounded px-3 py-1.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white {activeIndex ===
+                      class="text-text-muted hover:bg-text-main/10 hover:text-text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
                       subtitles.indexOf(sub)
-                        ? 'bg-primary/30 text-white'
+                        ? 'bg-primary/30 text-text-main'
                         : ''}"
                       title={sub.label}
                       onclick={() => selectTrack(subtitles.indexOf(sub))}
@@ -331,15 +331,15 @@
 
                 {#if externalSubs.length > 0}
                   <div
-                    class="text-primary mt-3 mb-1 border-b border-white/10 px-3 pb-1 text-xs font-bold tracking-widest uppercase"
+                    class="text-primary border-text-main/10 mt-3 mb-1 border-b px-3 pb-1 text-xs font-bold tracking-widest uppercase"
                   >
                     Externa
                   </div>
                   {#each externalSubs as sub}
                     <button
-                      class="w-full truncate rounded px-3 py-1.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white {activeIndex ===
+                      class="text-text-muted hover:bg-text-main/10 hover:text-text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
                       subtitles.indexOf(sub)
-                        ? 'bg-primary/30 text-white'
+                        ? 'bg-primary/30 text-text-main'
                         : ''}"
                       title={sub.label}
                       onclick={() => selectTrack(subtitles.indexOf(sub))}

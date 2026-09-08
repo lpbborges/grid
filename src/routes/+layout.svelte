@@ -4,14 +4,14 @@
   let { children } = $props();
 </script>
 
-<div class="text-text-main flex h-screen flex-col overflow-hidden bg-[#0f0f15]">
+<div class="text-text-main bg-bg-dark flex h-screen flex-col overflow-hidden">
   {#if !$page.url.pathname.startsWith('/movie') && !$page.url.pathname.startsWith('/series')}
     <!-- Top navigation bar -->
-    <header class="flex items-center justify-between bg-[#0f0f15] p-4">
+    <header class="bg-bg-dark flex items-center justify-between p-4">
       <!-- Left: Logo -->
       <div class="flex w-1/4 items-center">
         <div class="flex items-center gap-2">
-          <div class="bg-primary flex h-8 w-8 items-center justify-center rounded text-white">
+          <div class="bg-primary text-text-main flex h-8 w-8 items-center justify-center rounded">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="20"
@@ -24,7 +24,7 @@
               stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg
             >
           </div>
-          <span class="text-xl font-bold tracking-wider text-white">GridPlay</span>
+          <span class="text-text-main text-xl font-bold tracking-wider">GridPlay</span>
         </div>
       </div>
 
@@ -34,7 +34,7 @@
           <input
             type="text"
             placeholder="Procurar filme..."
-            class="border-primary text-text-main focus:border-accent-green w-[300px] rounded border bg-[#111111] px-4 py-2.5 font-mono text-base placeholder-[#6b7280] transition-all duration-200 outline-none focus:w-[450px] focus:shadow-[0_0_10px_rgba(91,255,59,0.5)]"
+            class="border-primary text-text-main focus:border-accent-green bg-surface placeholder-text-muted w-[300px] rounded border px-4 py-2.5 font-mono text-base transition-all duration-200 outline-none focus:w-[450px] focus:shadow-[0_0_10px_rgba(91,255,59,0.5)]"
           />
         </div>
       </div>

@@ -108,7 +108,7 @@
 <div class="relative z-20 mb-8">
   <a
     href="/"
-    class="group hover:text-accent-green flex w-fit items-center gap-2 text-sm font-bold tracking-wider text-white uppercase transition-colors"
+    class="group hover:text-accent-green text-text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
     style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
   >
     <svg
@@ -135,7 +135,7 @@
     </div>
   </div>
 {:else if error}
-  <div class="border-accent-orange text-accent-orange border-l-4 bg-black/80 p-4 font-mono">
+  <div class="border-accent-orange text-accent-orange bg-surface/80 border-l-4 p-4 font-mono">
     Erro: {error}
   </div>
 {:else if movie}
@@ -147,17 +147,17 @@
         alt=""
       />
       <div
-        class="absolute inset-0 bg-gradient-to-t from-[#0f0f15] via-[#0f0f15]/80 to-transparent"
+        class="from-bg-dark via-bg-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"
       ></div>
       <div
-        class="absolute inset-0 bg-gradient-to-r from-[#0f0f15]/90 via-[#0f0f15]/40 to-transparent"
+        class="from-bg-dark/90 via-bg-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"
       ></div>
     </div>
   {/if}
 
   <div class="relative z-10 flex flex-col gap-8 md:flex-row">
     <div class="w-full max-w-sm md:w-1/3">
-      <div class="border-primary/30 rounded border bg-black/40 p-2">
+      <div class="border-primary/30 bg-surface/40 rounded border p-2">
         <img
           src={movie.large_cover_image}
           alt={movie.title}
@@ -176,10 +176,10 @@
               <select
                 id="quality-select"
                 bind:value={selectedTorrentHash}
-                class="border-primary/50 focus:border-accent-green w-full appearance-none rounded border bg-[#1a1a24] p-3 pr-10 font-mono text-sm text-white focus:outline-none"
+                class="border-primary/50 focus:border-accent-green bg-surface text-text-main w-full appearance-none rounded border p-3 pr-10 font-mono text-sm focus:outline-none"
               >
                 {#each movie.torrents as torrent}
-                  <option value={torrent.hash} class="bg-[#1a1a24] text-white">
+                  <option value={torrent.hash} class="bg-surface text-text-main">
                     {torrent.quality} - {torrent.type} ({torrent.size})
                   </option>
                 {/each}
@@ -204,7 +204,7 @@
 
           <button
             onclick={playMovie}
-            class="bg-primary hover:bg-accent-green hover:text-bg-dark flex w-full items-center justify-center gap-2 rounded border-2 border-transparent py-4 text-lg font-bold tracking-widest text-white uppercase shadow-[0_0_15px_rgba(118,52,194,0.5)] transition-all duration-300 hover:border-white hover:shadow-[0_0_20px_rgba(91,255,59,0.8)]"
+            class="bg-primary hover:bg-accent-green hover:text-bg-dark text-text-main flex w-full items-center justify-center gap-2 rounded border-2 border-transparent py-4 text-lg font-bold tracking-widest uppercase shadow-[0_0_15px_rgba(118,52,194,0.5)] transition-all duration-300 hover:border-white hover:shadow-[0_0_20px_rgba(91,255,59,0.8)]"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -234,17 +234,13 @@
       </h1>
 
       <div class="text-primary mb-6 flex flex-wrap gap-4 font-mono text-sm">
-        <span class="border-primary/50 rounded border bg-[#1a1a24] px-3 py-1"
-          >ANO: {movie.year}</span
-        >
+        <span class="border-primary/50 bg-surface rounded border px-3 py-1">ANO: {movie.year}</span>
         {#if movie.director && movie.director.length > 0}
-          <span class="border-primary/50 rounded border bg-[#1a1a24] px-3 py-1"
+          <span class="border-primary/50 bg-surface rounded border px-3 py-1"
             >DIRETOR: {movie.director.join(', ')}</span
           >
         {/if}
-        <span
-          class="border-primary/50 flex items-center gap-1 rounded border bg-[#1a1a24] px-3 py-1"
-        >
+        <span class="border-primary/50 bg-surface flex items-center gap-1 rounded border px-3 py-1">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="14"
@@ -267,7 +263,7 @@
       {#if isPlaying}
         <VideoPlayer src={videoSrc} {subtitles} />
       {:else}
-        <div class="prose prose-invert mb-8 max-w-none leading-relaxed text-gray-300">
+        <div class="prose prose-invert text-text-muted mb-8 max-w-none leading-relaxed">
           <h3
             class="text-accent-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
           >
@@ -294,7 +290,7 @@
                     />
                   {:else}
                     <div
-                      class="border-primary/50 mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2 bg-[#1a1a24] text-gray-500"
+                      class="border-primary/50 bg-surface text-text-muted mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -314,7 +310,7 @@
                       >
                     </div>
                   {/if}
-                  <span class="text-sm leading-tight font-bold text-gray-200" title={actor.name}
+                  <span class="text-text-main text-sm leading-tight font-bold" title={actor.name}
                     >{actor.name}</span
                   >
                   <span

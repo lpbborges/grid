@@ -162,7 +162,7 @@
 <div class="relative z-20 mb-8">
   <a
     href="/"
-    class="group hover:text-accent-green flex w-fit items-center gap-2 text-sm font-bold tracking-wider text-white uppercase transition-colors"
+    class="group hover:text-accent-green text-text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
     style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
   >
     <svg
@@ -189,7 +189,7 @@
     </div>
   </div>
 {:else if error}
-  <div class="border-accent-orange text-accent-orange border-l-4 bg-black/80 p-4 font-mono">
+  <div class="border-accent-orange text-accent-orange bg-surface/80 border-l-4 p-4 font-mono">
     Erro: {error}
   </div>
 {:else if series}
@@ -201,17 +201,17 @@
         alt=""
       />
       <div
-        class="absolute inset-0 bg-gradient-to-t from-[#0f0f15] via-[#0f0f15]/80 to-transparent"
+        class="from-bg-dark via-bg-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"
       ></div>
       <div
-        class="absolute inset-0 bg-gradient-to-r from-[#0f0f15]/90 via-[#0f0f15]/40 to-transparent"
+        class="from-bg-dark/90 via-bg-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"
       ></div>
     </div>
   {/if}
 
   <div class="relative z-10 flex flex-col gap-8 lg:flex-row">
     <div class="w-full max-w-sm lg:w-1/4">
-      <div class="border-primary/30 rounded border bg-black/40 p-2">
+      <div class="border-primary/30 bg-surface/40 rounded border p-2">
         <img
           src={series.large_cover_image}
           alt={series.title}
@@ -232,16 +232,16 @@
         </h1>
 
         <div class="text-primary mb-6 flex flex-wrap gap-4 font-mono text-sm">
-          <span class="border-primary/50 rounded border bg-[#1a1a24] px-3 py-1"
+          <span class="border-primary/50 bg-surface rounded border px-3 py-1"
             >ANO: {series.year}</span
           >
           {#if series.director && series.director.length > 0}
-            <span class="border-primary/50 rounded border bg-[#1a1a24] px-3 py-1"
+            <span class="border-primary/50 bg-surface rounded border px-3 py-1"
               >DIRETOR: {series.director.join(', ')}</span
             >
           {/if}
           <span
-            class="border-primary/50 flex items-center gap-1 rounded border bg-[#1a1a24] px-3 py-1"
+            class="border-primary/50 bg-surface flex items-center gap-1 rounded border px-3 py-1"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -262,7 +262,7 @@
           </span>
         </div>
 
-        <div class="prose prose-invert mb-8 max-w-none leading-relaxed text-gray-300">
+        <div class="prose prose-invert text-text-muted mb-8 max-w-none leading-relaxed">
           <h3
             class="text-accent-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
           >
@@ -289,7 +289,7 @@
                     />
                   {:else}
                     <div
-                      class="border-primary/50 mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2 bg-[#1a1a24] text-gray-500"
+                      class="border-primary/50 bg-surface text-text-muted mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -309,7 +309,7 @@
                       >
                     </div>
                   {/if}
-                  <span class="text-sm leading-tight font-bold text-gray-200" title={actor.name}
+                  <span class="text-text-main text-sm leading-tight font-bold" title={actor.name}
                     >{actor.name}</span
                   >
                   <span
@@ -328,7 +328,7 @@
     <div class="w-full lg:w-1/4">
       {#if engineStatus}
         <div
-          class="text-accent-orange border-accent-orange mb-4 animate-pulse rounded border bg-black/60 p-3 text-center font-mono text-sm"
+          class="text-accent-orange border-accent-orange bg-surface/60 mb-4 animate-pulse rounded border p-3 text-center font-mono text-sm"
         >
           {engineStatus}
         </div>
@@ -341,10 +341,10 @@
               <div class="relative w-1/2">
                 <select
                   bind:value={selectedSeason}
-                  class="border-primary/50 focus:border-accent-green w-full appearance-none rounded border bg-[#1a1a24] py-1 pr-6 pl-2 font-mono text-xs text-white focus:outline-none"
+                  class="border-primary/50 focus:border-accent-green bg-surface text-text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
                 >
                   {#each availableSeasons as season}
-                    <option value={season} class="bg-[#1a1a24] text-white">Temp. {season}</option>
+                    <option value={season} class="bg-surface text-text-main">Temp. {season}</option>
                   {/each}
                 </select>
                 <div
@@ -366,12 +366,12 @@
               <div class="relative w-1/2">
                 <select
                   bind:value={preferredQuality}
-                  class="border-primary/50 focus:border-accent-green w-full appearance-none rounded border bg-[#1a1a24] py-1 pr-6 pl-2 font-mono text-xs text-white focus:outline-none"
+                  class="border-primary/50 focus:border-accent-green bg-surface text-text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
                 >
-                  <option value="4k" class="bg-[#1a1a24] text-white">4K</option>
-                  <option value="1080p" class="bg-[#1a1a24] text-white">1080p</option>
-                  <option value="720p" class="bg-[#1a1a24] text-white">720p</option>
-                  <option value="480p" class="bg-[#1a1a24] text-white">480p</option>
+                  <option value="4k" class="bg-surface text-text-main">4K</option>
+                  <option value="1080p" class="bg-surface text-text-main">1080p</option>
+                  <option value="720p" class="bg-surface text-text-main">720p</option>
+                  <option value="480p" class="bg-surface text-text-main">480p</option>
                 </select>
                 <div
                   class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
@@ -397,17 +397,17 @@
           >
             {#each filteredEpisodes as episode}
               <button
-                class="hover:border-accent-green border-primary/30 flex items-center justify-between rounded border bg-black/40 p-3 text-left transition-all hover:bg-black/60 hover:shadow-[0_0_10px_rgba(91,255,59,0.2)]"
+                class="hover:border-accent-green border-primary/30 bg-surface/40 hover:bg-surface/60 flex items-center justify-between rounded border p-3 text-left transition-all hover:shadow-[0_0_10px_rgba(91,255,59,0.2)]"
                 onclick={() => playEpisode(episode)}
               >
                 <div class="flex flex-col">
-                  <span class="text-sm font-bold text-white">
+                  <span class="text-text-main text-sm font-bold">
                     {episode.episode}. {translatedEpisodes[episode.id] ||
                       episode.name ||
                       `Episódio ${episode.episode}`}
                   </span>
                   {#if episode.firstAired}
-                    <span class="text-xs text-gray-400">
+                    <span class="text-text-muted text-xs">
                       Lançado em: {new Date(episode.firstAired).toLocaleDateString('pt-BR')}
                     </span>
                   {/if}

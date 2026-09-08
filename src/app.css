@@ -7,15 +7,17 @@
   --color-bg-dark: var(--bg-dark);
   --color-surface: var(--surface);
   --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
 }
 
 :root {
   --primary: #7634c2;
   --accent-green: #5bff3b;
   --accent-orange: #ff7300;
-  --bg-dark: #1f1f2e;
-  --surface: #4b4b5c;
+  --bg-dark: #0f0f15;
+  --surface: #1a1a24;
   --text-main: #f4f4f5;
+  --text-muted: #9ca3af;
 }
 
 body {
