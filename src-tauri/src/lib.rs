@@ -24,14 +24,17 @@ async fn start_torrent_engine(
     }
 
     // Kill any orphaned rqbit processes to prevent memory/disk leaks across crashes
-    let _ = std::process::Command::new("pkill")
-        .arg("-9")
-        .arg("rqbit")
-        .status();
+    let mut sys = sysinfo::System::new_all();
+    sys.refresh_all();
+    for process in sys.processes().values() {
+        if process.name().to_string_lossy().contains("rqbit") {
+            process.kill();
+        }
+    }
 
-    let output_folder = "/tmp/grid-play-downloads";
-    let _ = std::fs::remove_dir_all(output_folder); // cleanup previous sessions
-    let _ = std::fs::create_dir_all(output_folder);
+    let output_folder = std::env::temp_dir().join("grid-play-downloads");
+    let _ = std::fs::remove_dir_all(&output_folder); // cleanup previous sessions
+    let _ = std::fs::create_dir_all(&output_folder);
 
     // Find a free ephemeral port for the HTTP API
     let port = std::net::TcpListener::bind("127.0.0.1:0")

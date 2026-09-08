@@ -11,7 +11,7 @@ This document serves as a living repository of the core architectural decisions,
   - External API calls (e.g., YTS) belong in `src/lib/api/`
   - Core app logic and backend wrappers (e.g., Torrent engine) belong in `src/lib/engine/`
   - TypeScript interfaces belong in `src/lib/types.ts`
-- **Tauri Native Features:** When heavy lifting is required (like torrenting), rely on Rust via Tauri commands or pre-compiled native binaries distributed as Tauri Sidecars (e.g., `rqbit`). Avoid heavy Node.js runtimes in the frontend.
+- **Tauri Native Features:** When heavy lifting is required (like torrenting), rely on Rust via Tauri commands or pre-compiled native binaries distributed as Tauri Sidecars (e.g., `rqbit`). Avoid heavy Node.js runtimes in the frontend. Ensure all Rust implementations are cross-platform by using crates like `sysinfo` and standard library functions (e.g., `std::env::temp_dir()`) instead of hardcoding OS-specific shell commands or absolute paths.
 
 ## 2. Type Safety
 
