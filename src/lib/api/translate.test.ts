@@ -1,5 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { translateText } from './translate';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  translateText,
+  getUserLanguage,
+  translateMediaInfo,
+  translateEpisodesList
+} from './translate';
 
 describe('translateText', () => {
   beforeEach(() => {
@@ -34,5 +39,49 @@ describe('translateText', () => {
     expect(result).toBe('Hello world');
 
     consoleSpy.mockRestore();
+  });
+});
+
+describe('translation helpers', () => {
+  beforeEach(() => {
+    vi.stubGlobal('window', {
+      navigator: { language: 'pt-BR' }
+    });
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      json: async () => [[['Traduzido', 'Original']]]
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('getUserLanguage returns parsed language', () => {
+    expect(getUserLanguage()).toBe('pt');
+  });
+
+  it('getUserLanguage returns en if language is english', () => {
+    vi.stubGlobal('window', {
+      navigator: { language: 'en-US' }
+    });
+    expect(getUserLanguage()).toBe('en');
+  });
+
+  it('translateMediaInfo translates title and synopsis', async () => {
+    const res = await translateMediaInfo('Title', 'Synopsis');
+    expect(res.title).toBe('Traduzido');
+    expect(res.synopsis).toBe('Traduzido');
+  });
+
+  it('translateMediaInfo returns original if language is english', async () => {
+    vi.stubGlobal('window', { navigator: { language: 'en-US' } });
+    const res = await translateMediaInfo('Title', 'Synopsis');
+    expect(res.title).toBe('Title');
+    expect(res.synopsis).toBe('Synopsis');
+  });
+
+  it('translateEpisodesList translates list of episodes', async () => {
+    const res = await translateEpisodesList([{ id: '1', name: 'Episode 1' }]);
+    expect(res['1']).toBe('Traduzido');
   });
 });

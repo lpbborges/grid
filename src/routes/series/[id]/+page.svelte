@@ -1,25 +1,17 @@
 <script lang="ts">
-  import { page } from '$app/stores';
-  import { onMount } from 'svelte';
-  import { getSeriesDetails } from '$lib/api/yts';
-  import { translateText } from '$lib/api/translate';
+  import { prepareStream } from '$lib/engine/orchestrator';
+  import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
   import { getSeriesStreams } from '$lib/api/torrentio';
-  import {
-    startEngine,
-    waitForEngine,
-    clearTorrents,
-    addTorrent,
-    getBestVideoFileIndex,
-    getStreamUrl,
-    getTorrentSubtitles
-  } from '$lib/engine/torrent';
+  import { clearTorrents } from '$lib/engine/torrent';
+  import type { SubtitleTrack } from '$lib/api/subtitles';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
+  import MediaInfo from '$lib/components/MediaInfo.svelte';
+  import EpisodeList from '$lib/components/EpisodeList.svelte';
   import { playerState } from '$lib/stores.svelte';
-  import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
 
-  let seriesId = $page.params.id as string;
-  let series = $state<any>(null);
-  let loading = $state(true);
+  let { data } = $props();
+  let seriesId = $derived(data.seriesId);
+  let series = $derived(data.series);
   let error = $state('');
 
   let isPlaying = $state(false);
@@ -34,65 +26,51 @@
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
 
-  let availableSeasons = $derived(
-    series?.videos ? Array.from(new Set(series.videos.map((v: any) => v.season))) : []
-  );
   let selectedSeason = $state<number | null>(null);
-
-  let filteredEpisodes = $derived(
-    series?.videos ? series.videos.filter((v: any) => v.season === selectedSeason) : []
-  );
-
-  $effect(() => {
-    if (availableSeasons.length > 0 && selectedSeason === null) {
-      selectedSeason = availableSeasons[0] as number;
-    }
-  });
-
-  onMount(async () => {
-    try {
-      series = await getSeriesDetails(seriesId);
-      translatedTitle = series.title;
-      translatedSynopsis =
-        series.description_full || series.summary || 'Nenhuma sinopse disponível.';
-
-      if (typeof window !== 'undefined' && window.navigator) {
-        const userLang = window.navigator.language || 'en';
-        if (!userLang.startsWith('en')) {
-          const targetLang = userLang.split('-')[0];
-          translateText(series.title, targetLang).then((res) => {
-            if (res) translatedTitle = res;
-          });
-          if (series.description_full || series.summary) {
-            translateText(series.description_full || series.summary, targetLang).then((res) => {
-              if (res) translatedSynopsis = res;
-            });
-          }
-        }
-      }
-    } catch (e: any) {
-      error = e.message || 'Erro ao carregar série';
-    } finally {
-      loading = false;
-    }
-  });
-
   let translatedEpisodes = $state<Record<string, string>>({});
 
   $effect(() => {
-    if (typeof window !== 'undefined' && window.navigator && filteredEpisodes.length > 0) {
-      const userLang = window.navigator.language || 'en';
-      if (!userLang.startsWith('en')) {
-        const targetLang = userLang.split('-')[0];
-        filteredEpisodes.forEach((ep: any) => {
-          if (ep.name && !translatedEpisodes[ep.id]) {
-            translatedEpisodes[ep.id] = ep.name; // mark as translating
-            translateText(ep.name, targetLang).then((res) => {
-              if (res) {
-                translatedEpisodes[ep.id] = res;
-              }
-            });
-          }
+    if (data.error) error = data.error;
+    else if (seriesId) error = '';
+  });
+
+  $effect(() => {
+    if (seriesId) {
+      isPlaying = false;
+      playerState.isPlaying = false;
+      videoSrc = '';
+      selectedInfoHash = '';
+      selectedTotalBytes = 0;
+      engineStatus = '';
+      selectedSeason = null;
+      translatedEpisodes = {};
+      clearTorrents().catch(console.error);
+    }
+  });
+
+  $effect(() => {
+    if (series) {
+      const currentTitle = series.title;
+      const currentSynopsis = series.description_full || series.summary;
+
+      translatedTitle = currentTitle;
+      translatedSynopsis = currentSynopsis || 'Nenhuma sinopse disponível.';
+
+      translateMediaInfo(currentTitle, currentSynopsis).then((res) => {
+        if (series && series.title === currentTitle) {
+          translatedTitle = res.title;
+          translatedSynopsis = res.synopsis;
+        }
+      });
+    }
+  });
+
+  $effect(() => {
+    if (series && series.videos && series.videos.length > 0) {
+      const episodesToTranslate = series.videos.filter((v: any) => v.season === selectedSeason);
+      if (episodesToTranslate.length > 0) {
+        translateEpisodesList(episodesToTranslate).then((res) => {
+          translatedEpisodes = { ...translatedEpisodes, ...res };
         });
       }
     }
@@ -133,33 +111,22 @@
 
       isPlaying = true;
       playerState.isPlaying = true;
-      engineStatus = 'Iniciando player...';
 
-      await startEngine();
-      await waitForEngine();
+      const streamData = await prepareStream(
+        magnet,
+        (status) => {
+          engineStatus = status;
+        },
+        seriesId,
+        episode.season,
+        episode.episode,
+        bestStream.fileIdx
+      );
 
-      engineStatus = 'Preparando stream...';
-      await clearTorrents();
-      const details = await addTorrent(magnet);
-
-      selectedInfoHash = details.info_hash;
-      selectedTotalBytes = details.files.reduce((acc, f) => acc + f.length, 0);
-
-      let bestFileIdx = bestStream.fileIdx;
-      if (bestFileIdx === undefined) {
-        bestFileIdx = getBestVideoFileIndex(details.files);
-      }
-
-      const tSubs = getTorrentSubtitles(details.info_hash, details.files);
-
-      engineStatus = 'Baixando legendas...';
-      const eSubs = seriesId
-        ? await getExternalSubtitles(seriesId, episode.season, episode.episode)
-        : [];
-
-      engineStatus = 'Pronto para assistir.';
-      subtitles = [...tSubs, ...eSubs];
-      videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
+      selectedInfoHash = streamData.infoHash;
+      selectedTotalBytes = streamData.totalBytes;
+      videoSrc = streamData.videoSrc;
+      subtitles = streamData.subtitles;
     } catch (e: any) {
       error = `Erro de reprodução: ${e.message}`;
       isPlaying = false;
@@ -207,25 +174,7 @@
   </div>
 {/if}
 
-{#if loading}
-  <div class="flex h-full min-h-[400px] items-center justify-center">
-    <div class="flex flex-col items-center gap-4">
-      <div class="relative h-16 w-16">
-        <div
-          class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
-        ></div>
-        <div
-          class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
-        ></div>
-      </div>
-      <div
-        class="text-accent-green font-cyber animate-pulse text-xl tracking-[0.3em] uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
-      >
-        Carregando...
-      </div>
-    </div>
-  </div>
-{:else if error}
+{#if error}
   <div class="border-accent-orange text-accent-orange bg-surface/80 border-l-4 p-4 font-mono">
     Erro: {error}
   </div>
@@ -264,215 +213,27 @@
           totalBytes={selectedTotalBytes}
         />
       {:else}
-        <h1
-          class="text-main font-cyber mb-2 text-4xl tracking-widest uppercase md:text-5xl"
-          style="text-shadow: 0 0 15px rgba(107,33,168,0.5);"
-        >
-          {translatedTitle}
-        </h1>
-
-        <div class="text-primary mb-6 flex flex-wrap gap-4 font-mono text-sm">
-          <span class="border-primary/50 bg-surface rounded border px-3 py-1"
-            >ANO: {series.year}</span
-          >
-          {#if series.director && series.director.length > 0}
-            <span class="border-primary/50 bg-surface rounded border px-3 py-1"
-              >DIRETOR: {series.director.join(', ')}</span
-            >
-          {/if}
-          <span
-            class="border-primary/50 bg-surface flex items-center gap-1 rounded border px-3 py-1"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-yellow-400"
-              ><polygon
-                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-              /></svg
-            >
-            IMDB: {series.rating}
-          </span>
-        </div>
-
-        <div class="prose prose-invert text-muted mb-8 max-w-none leading-relaxed">
-          <h3
-            class="text-accent-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
-          >
-            Sinopse
-          </h3>
-          <p>{translatedSynopsis}</p>
-        </div>
-
-        {#if series.cast && series.cast.length > 0}
-          <div class="mb-8">
-            <h3
-              class="text-primary border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
-            >
-              Elenco
-            </h3>
-            <div class="flex snap-x gap-4 overflow-x-auto pb-4">
-              {#each series.cast as actor}
-                <div class="flex w-32 flex-none snap-start flex-col items-center text-center">
-                  {#if actor.url_small_image}
-                    <img
-                      src={actor.url_small_image}
-                      alt={actor.name}
-                      class="border-primary/50 mb-2 h-16 w-16 rounded-full border-2 object-cover"
-                    />
-                  {:else}
-                    <div
-                      class="border-primary/50 bg-surface text-muted mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        ><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle
-                          cx="12"
-                          cy="7"
-                          r="4"
-                        /></svg
-                      >
-                    </div>
-                  {/if}
-                  <span class="text-main text-sm leading-tight font-bold" title={actor.name}
-                    >{actor.name}</span
-                  >
-                  <span
-                    class="text-accent-green mt-1 text-xs leading-tight"
-                    title={actor.character_name}>{actor.character_name}</span
-                  >
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
+        <MediaInfo
+          title={translatedTitle}
+          year={series.year}
+          director={series.director}
+          rating={series.rating}
+          synopsis={translatedSynopsis}
+          cast={series.cast}
+        />
       {/if}
     </div>
 
     <!-- Episodes Right Column -->
     <div class="w-full lg:w-1/4">
-      {#if series.videos && series.videos.length > 0}
-        <div class="flex flex-col gap-4">
-          <div class="border-primary/30 flex flex-col gap-3 border-b pb-3">
-            <h3 class="text-primary text-sm font-bold tracking-widest uppercase">Episódios</h3>
-            <div class="flex items-center gap-2">
-              <div class="relative w-1/2">
-                <select
-                  bind:value={selectedSeason}
-                  class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
-                >
-                  {#each availableSeasons as season}
-                    <option value={season} class="bg-surface text-main">Temp. {season}</option>
-                  {/each}
-                </select>
-                <div
-                  class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
-                  >
-                </div>
-              </div>
-              <div class="relative w-1/2">
-                <select
-                  bind:value={preferredQuality}
-                  class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
-                >
-                  <option value="4k" class="bg-surface text-main">4K</option>
-                  <option value="1080p" class="bg-surface text-main">1080p</option>
-                  <option value="720p" class="bg-surface text-main">720p</option>
-                  <option value="480p" class="bg-surface text-main">480p</option>
-                </select>
-                <div
-                  class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
-                  >
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div
-            class="scrollbar-thumb-primary/50 flex max-h-[600px] scrollbar-thin flex-col gap-3 overflow-y-auto pr-2"
-          >
-            {#each filteredEpisodes as episode}
-              <button
-                class="group hover:border-accent-green border-primary/30 bg-surface/40 hover:bg-surface/80 relative flex items-center justify-between rounded-sm border p-3 text-left transition-all duration-300 hover:-translate-x-1 hover:shadow-[0_0_15px_rgba(91,255,59,0.3)]"
-                onclick={() => playEpisode(episode)}
-              >
-                <!-- Cyberpunk inner border left -->
-                <div
-                  class="bg-primary group-hover:bg-accent-green absolute top-0 bottom-0 left-0 w-1 transition-colors duration-300"
-                ></div>
-
-                <div class="flex flex-col pl-2">
-                  <span
-                    class="text-main font-cyber group-hover:text-accent-green text-sm tracking-wider uppercase transition-colors duration-300"
-                  >
-                    {episode.episode}. {translatedEpisodes[episode.id] ||
-                      episode.name ||
-                      `Episódio ${episode.episode}`}
-                  </span>
-                  {#if episode.firstAired}
-                    <span class="text-muted font-mono text-xs opacity-70">
-                      LANÇADO EM: {new Date(episode.firstAired).toLocaleDateString('pt-BR')}
-                    </span>
-                  {/if}
-                </div>
-                <div
-                  class="border-primary/50 group-hover:bg-accent-green group-hover:text-dark text-primary rounded-sm border p-2 transition-all duration-300"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polygon points="5 3 19 12 5 21 5 3" />
-                  </svg>
-                </div>
-              </button>
-            {/each}
-          </div>
-        </div>
+      {#if !isPlaying}
+        <EpisodeList
+          episodes={series.videos}
+          {translatedEpisodes}
+          bind:selectedSeason
+          bind:preferredQuality
+          onPlayEpisode={playEpisode}
+        />
       {/if}
     </div>
   </div>

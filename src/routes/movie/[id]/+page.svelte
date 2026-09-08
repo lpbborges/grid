@@ -1,26 +1,22 @@
 <script lang="ts">
-  import { page } from '$app/stores';
-  import { onMount } from 'svelte';
-  import { getMovieDetails } from '$lib/api/yts';
-  import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
-  import { translateText } from '$lib/api/translate';
-  import {
-    startEngine,
-    waitForEngine,
-    clearTorrents,
-    addTorrent,
-    getBestVideoFileIndex,
-    getStreamUrl,
-    getTorrentSubtitles
-  } from '$lib/engine/torrent';
-  import type { Movie } from '$lib/types';
+  import { prepareStream } from '$lib/engine/orchestrator';
+  import { translateMediaInfo } from '$lib/api/translate';
+  import { clearTorrents } from '$lib/engine/torrent';
+  import type { SubtitleTrack } from '$lib/api/subtitles';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
+  import MediaInfo from '$lib/components/MediaInfo.svelte';
+  import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import { playerState } from '$lib/stores.svelte';
 
-  let movieId = $page.params.id as string;
-  let movie = $state<Movie | null>(null);
-  let loading = $state(true);
+  let { data } = $props();
+  let movieId = $derived(data.movieId);
+  let movie = $derived(data.movie);
   let error = $state('');
+
+  $effect(() => {
+    if (data.error) error = data.error;
+    else if (movieId) error = '';
+  });
 
   let isPlaying = $state(false);
   let videoSrc = $state('');
@@ -33,36 +29,39 @@
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
 
-  onMount(async () => {
-    try {
-      movie = await getMovieDetails(movieId);
-      translatedTitle = movie.title;
-      translatedSynopsis = movie.description_full || movie.summary || 'Nenhuma sinopse disponível.';
+  $effect(() => {
+    if (movieId) {
+      isPlaying = false;
+      playerState.isPlaying = false;
+      videoSrc = '';
+      selectedInfoHash = '';
+      selectedTotalBytes = 0;
+      engineStatus = '';
+      selectedTorrentHash = '';
+      clearTorrents().catch(console.error);
+    }
+  });
 
-      if (typeof window !== 'undefined' && window.navigator) {
-        const userLang = window.navigator.language || 'en';
-        if (!userLang.startsWith('en')) {
-          const targetLang = userLang.split('-')[0];
-          translateText(movie.title, targetLang).then((res) => {
-            if (res) translatedTitle = res;
-          });
-          if (movie.description_full || movie.summary) {
-            translateText(movie.description_full || movie.summary, targetLang).then((res) => {
-              if (res) translatedSynopsis = res;
-            });
-          }
+  $effect(() => {
+    if (movie) {
+      const currentTitle = movie.title;
+      const currentSynopsis = movie.description_full || movie.summary;
+
+      translatedTitle = currentTitle;
+      translatedSynopsis = currentSynopsis || 'Nenhuma sinopse disponível.';
+
+      translateMediaInfo(currentTitle, currentSynopsis).then((res) => {
+        if (movie && movie.title === currentTitle) {
+          translatedTitle = res.title;
+          translatedSynopsis = res.synopsis;
         }
-      }
-    } catch (e: any) {
-      error = e.message || 'Erro ao carregar filme';
-    } finally {
-      loading = false;
+      });
     }
   });
 
   $effect(() => {
     if (movie && movie.torrents && movie.torrents.length > 0 && !selectedTorrentHash) {
-      let bestTorrent = movie.torrents.reduce((prev, current) => {
+      let bestTorrent = movie.torrents.reduce((prev: any, current: any) => {
         if (current.quality === '1080p' && prev.quality !== '1080p') return current;
         if (prev.quality === '1080p' && current.quality !== '1080p') return prev;
         return prev.seeds > current.seeds ? prev : current;
@@ -78,33 +77,25 @@
     }
 
     const selectedTorrent =
-      movie.torrents.find((t) => t.hash === selectedTorrentHash) || movie.torrents[0];
+      movie.torrents.find((t: any) => t.hash === selectedTorrentHash) || movie.torrents[0];
     const magnet = `magnet:?xt=urn:btih:${selectedTorrent.hash}&dn=${encodeURIComponent(movie.title)}`;
 
     isPlaying = true;
     playerState.isPlaying = true;
-    engineStatus = 'Iniciando player...';
 
     try {
-      await startEngine();
-      await waitForEngine();
+      const streamData = await prepareStream(
+        magnet,
+        (status) => {
+          engineStatus = status;
+        },
+        movieId
+      );
 
-      engineStatus = 'Preparando stream...';
-      await clearTorrents();
-      const details = await addTorrent(magnet);
-
-      selectedInfoHash = details.info_hash;
-      selectedTotalBytes = details.files.reduce((acc, f) => acc + f.length, 0);
-
-      const bestFileIdx = getBestVideoFileIndex(details.files);
-      const tSubs = getTorrentSubtitles(details.info_hash, details.files);
-
-      engineStatus = 'Baixando legendas...';
-      const eSubs = movieId ? await getExternalSubtitles(movieId) : [];
-
-      engineStatus = 'Pronto para assistir.';
-      subtitles = [...tSubs, ...eSubs];
-      videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
+      selectedInfoHash = streamData.infoHash;
+      selectedTotalBytes = streamData.totalBytes;
+      videoSrc = streamData.videoSrc;
+      subtitles = streamData.subtitles;
     } catch (e: any) {
       error = `Erro de reprodução: ${e.message}`;
       engineStatus = '';
@@ -152,25 +143,7 @@
   </div>
 {/if}
 
-{#if loading}
-  <div class="flex h-full min-h-[400px] items-center justify-center">
-    <div class="flex flex-col items-center gap-4">
-      <div class="relative h-16 w-16">
-        <div
-          class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
-        ></div>
-        <div
-          class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
-        ></div>
-      </div>
-      <div
-        class="text-accent-green font-cyber animate-pulse text-xl tracking-[0.3em] uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
-      >
-        Carregando...
-      </div>
-    </div>
-  </div>
-{:else if error}
+{#if error}
   <div class="border-accent-orange text-accent-orange bg-surface/80 border-l-4 p-4 font-mono">
     Erro: {error}
   </div>
@@ -198,103 +171,11 @@
       </div>
 
       {#if !isPlaying}
-        <div class="mt-6 flex flex-col gap-4">
-          <div class="flex flex-col gap-2">
-            <label
-              for="quality-select"
-              class="text-primary text-sm font-bold tracking-widest uppercase">Qualidade</label
-            >
-            <div class="relative w-full">
-              <select
-                id="quality-select"
-                bind:value={selectedTorrentHash}
-                class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border p-3 pr-10 font-mono text-sm focus:outline-none"
-              >
-                {#each movie.torrents as torrent}
-                  <option value={torrent.hash} class="bg-surface text-main">
-                    {torrent.quality} - {torrent.type} ({torrent.size})
-                  </option>
-                {/each}
-              </select>
-              <div
-                class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center px-3"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
-                >
-              </div>
-            </div>
-          </div>
-
-          <button
-            onclick={playMovie}
-            class="group bg-primary/20 hover:bg-primary text-main border-primary font-cyber relative flex w-full items-center justify-center gap-2 border py-4 text-lg tracking-widest uppercase transition-all duration-300 hover:shadow-[0_0_20px_rgba(107,33,168,0.8)]"
-          >
-            <!-- Cyberpunk border effect -->
-            <div
-              class="border-accent-green absolute -top-[1px] -left-[1px] h-3 w-3 border-t-2 border-l-2 transition-colors duration-300 group-hover:border-white"
-            ></div>
-            <div
-              class="border-accent-green absolute -right-[1px] -bottom-[1px] h-3 w-3 border-r-2 border-b-2 transition-colors duration-300 group-hover:border-white"
-            ></div>
-
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
-            >
-            Reproduzir
-          </button>
-        </div>
+        <PlayerSelection torrents={movie.torrents} bind:selectedTorrentHash onPlay={playMovie} />
       {/if}
     </div>
 
     <div class="w-full md:w-2/3">
-      <h1
-        class="text-main font-cyber mb-2 text-4xl tracking-widest uppercase md:text-5xl"
-        style="text-shadow: 0 0 15px rgba(107,33,168,0.5);"
-      >
-        {translatedTitle}
-      </h1>
-
-      <div class="text-primary mb-6 flex flex-wrap gap-4 font-mono text-sm">
-        <span class="border-primary/50 bg-surface rounded border px-3 py-1">ANO: {movie.year}</span>
-        {#if movie.director && movie.director.length > 0}
-          <span class="border-primary/50 bg-surface rounded border px-3 py-1"
-            >DIRETOR: {movie.director.join(', ')}</span
-          >
-        {/if}
-        <span class="border-primary/50 bg-surface flex items-center gap-1 rounded border px-3 py-1">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="text-yellow-400"
-            ><polygon
-              points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-            /></svg
-          >
-          IMDB: {movie.rating}
-        </span>
-      </div>
-
       {#if isPlaying}
         <VideoPlayer
           src={videoSrc}
@@ -305,65 +186,14 @@
           totalBytes={selectedTotalBytes}
         />
       {:else}
-        <div class="prose prose-invert text-muted mb-8 max-w-none leading-relaxed">
-          <h3
-            class="text-accent-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
-          >
-            Sinopse
-          </h3>
-          <p>{translatedSynopsis}</p>
-        </div>
-
-        {#if movie.cast && movie.cast.length > 0}
-          <div>
-            <h3
-              class="text-primary border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
-            >
-              Elenco
-            </h3>
-            <div class="flex snap-x gap-4 overflow-x-auto pb-4">
-              {#each movie.cast as actor}
-                <div class="flex w-32 flex-none snap-start flex-col items-center text-center">
-                  {#if actor.url_small_image}
-                    <img
-                      src={actor.url_small_image}
-                      alt={actor.name}
-                      class="border-primary/50 mb-2 h-16 w-16 rounded-full border-2 object-cover"
-                    />
-                  {:else}
-                    <div
-                      class="border-primary/50 bg-surface text-muted mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        ><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle
-                          cx="12"
-                          cy="7"
-                          r="4"
-                        /></svg
-                      >
-                    </div>
-                  {/if}
-                  <span class="text-main text-sm leading-tight font-bold" title={actor.name}
-                    >{actor.name}</span
-                  >
-                  <span
-                    class="text-accent-green mt-1 text-xs leading-tight"
-                    title={actor.character_name}>{actor.character_name}</span
-                  >
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
+        <MediaInfo
+          title={translatedTitle}
+          year={movie.year}
+          director={movie.director}
+          rating={movie.rating}
+          synopsis={translatedSynopsis}
+          cast={movie.cast}
+        />
       {/if}
     </div>
   </div>
