@@ -17,7 +17,7 @@
     infoHash?: string;
     totalBytes?: number;
   }>();
-  /* global HTMLVideoElement, HTMLElement, FocusEvent, Node */
+  /* global HTMLVideoElement, HTMLElement, FocusEvent, MouseEvent, Node */
   let videoElement = $state<HTMLVideoElement | null>(null);
   let containerElement = $state<HTMLElement | null>(null);
   let showMenu = $state(false);
@@ -262,19 +262,52 @@
 
   <!-- Custom Controls Bar -->
   <div
-    class="absolute right-0 bottom-0 left-0 bg-gradient-to-t from-black/90 to-transparent p-4 transition-opacity duration-300 {showControls ||
+    class="absolute right-0 bottom-0 left-0 bg-gradient-to-t from-black to-transparent p-4 transition-opacity duration-300 {showControls ||
     paused ||
     showMenu
       ? 'opacity-100'
       : 'opacity-0'}"
   >
-    <input
-      type="range"
-      min="0"
-      max={duration || 100}
-      bind:value={currentTime}
-      class="accent-accent-green mb-3 w-full cursor-pointer"
-    />
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div
+      class="group mb-3 flex w-full cursor-pointer items-center py-2"
+      onclick={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        currentTime = fraction * (duration || 0);
+      }}
+      onmousedown={(e) => {
+        const bar = e.currentTarget;
+        const rect = bar.getBoundingClientRect();
+        const onMove = (ev: MouseEvent) => {
+          const fraction = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+          currentTime = fraction * (duration || 0);
+        };
+        const onUp = () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      }}
+      role="slider"
+      aria-label="Seek"
+      aria-valuemin={0}
+      aria-valuemax={duration || 100}
+      aria-valuenow={currentTime}
+      tabindex={0}
+    >
+      <div class="relative h-1 w-full rounded-full bg-white/25 transition-all group-hover:h-2">
+        <div
+          class="bg-accent-green absolute top-0 left-0 h-full rounded-full"
+          style="width: {duration ? (currentTime / duration) * 100 : 0}%"
+        ></div>
+        <div
+          class="bg-accent-green absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 shadow-[0_0_6px_rgba(54,211,83,0.6)] transition-opacity group-hover:h-4 group-hover:w-4 group-hover:opacity-100"
+          style="left: {duration ? (currentTime / duration) * 100 : 0}%"
+        ></div>
+      </div>
+    </div>
 
     <div class="text-primary flex items-center justify-between font-mono">
       <div class="flex items-center gap-4">

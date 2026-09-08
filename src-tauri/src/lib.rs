@@ -26,9 +26,25 @@ async fn start_torrent_engine(
     // Kill any orphaned rqbit processes to prevent memory/disk leaks across crashes
     let mut sys = sysinfo::System::new_all();
     sys.refresh_all();
+    let mut killed_any = false;
     for process in sys.processes().values() {
         if process.name().to_string_lossy().contains("rqbit") {
             process.kill();
+            killed_any = true;
+        }
+    }
+    // Wait for orphaned processes to fully release their ports
+    if killed_any {
+        for _ in 0..30 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            sys.refresh_all();
+            let still_alive = sys
+                .processes()
+                .values()
+                .any(|p| p.name().to_string_lossy().contains("rqbit"));
+            if !still_alive {
+                break;
+            }
         }
     }
 
@@ -68,8 +84,14 @@ async fn start_torrent_engine(
 
     tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
-            if let CommandEvent::Stdout(line) = event {
-                println!("rqbit: {:?}", String::from_utf8_lossy(&line));
+            match event {
+                CommandEvent::Stdout(line) => {
+                    println!("rqbit: {:?}", String::from_utf8_lossy(&line));
+                }
+                CommandEvent::Stderr(line) => {
+                    eprintln!("rqbit: {:?}", String::from_utf8_lossy(&line));
+                }
+                _ => {}
             }
         }
     });
