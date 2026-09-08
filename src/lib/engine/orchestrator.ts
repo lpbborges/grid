@@ -45,7 +45,7 @@ export async function prepareStream(
   onStatus('Baixando legendas...');
   const eSubs = mediaId ? await getExternalSubtitles(mediaId, season, episode) : [];
 
-  onStatus('Pronto para assistir.');
+  onStatus('Carregando vídeo...');
   const subtitles = [...tSubs, ...eSubs];
   const videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
 

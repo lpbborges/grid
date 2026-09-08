@@ -50,6 +50,6 @@ describe('prepareStream', () => {
     expect(result.totalBytes).toBe(300);
     expect(result.videoSrc).toBe('http://localhost/stream');
     expect(result.subtitles).toHaveLength(2);
-    expect(statusCb).toHaveBeenCalledWith('Pronto para assistir.');
+    expect(statusCb).toHaveBeenCalledWith('Carregando vídeo...');
   });
 });
