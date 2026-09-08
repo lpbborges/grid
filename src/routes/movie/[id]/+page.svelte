@@ -108,7 +108,7 @@
 <div class="relative z-20 mb-8">
   <a
     href="/"
-    class="group hover:text-accent-green text-text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
+    class="group hover:text-accent-green text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
     style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
   >
     <svg
@@ -147,10 +147,10 @@
         alt=""
       />
       <div
-        class="from-bg-dark via-bg-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"
+        class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"
       ></div>
       <div
-        class="from-bg-dark/90 via-bg-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"
+        class="from-dark/90 via-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"
       ></div>
     </div>
   {/if}
@@ -176,10 +176,10 @@
               <select
                 id="quality-select"
                 bind:value={selectedTorrentHash}
-                class="border-primary/50 focus:border-accent-green bg-surface text-text-main w-full appearance-none rounded border p-3 pr-10 font-mono text-sm focus:outline-none"
+                class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border p-3 pr-10 font-mono text-sm focus:outline-none"
               >
                 {#each movie.torrents as torrent}
-                  <option value={torrent.hash} class="bg-surface text-text-main">
+                  <option value={torrent.hash} class="bg-surface text-main">
                     {torrent.quality} - {torrent.type} ({torrent.size})
                   </option>
                 {/each}
@@ -204,7 +204,7 @@
 
           <button
             onclick={playMovie}
-            class="bg-primary hover:bg-accent-green hover:text-bg-dark text-text-main flex w-full items-center justify-center gap-2 rounded border-2 border-transparent py-4 text-lg font-bold tracking-widest uppercase shadow-[0_0_15px_rgba(118,52,194,0.5)] transition-all duration-300 hover:border-white hover:shadow-[0_0_20px_rgba(91,255,59,0.8)]"
+            class="bg-primary hover:bg-accent-green hover:text-dark text-main flex w-full items-center justify-center gap-2 rounded border-2 border-transparent py-4 text-lg font-bold tracking-widest uppercase shadow-[0_0_15px_rgba(118,52,194,0.5)] transition-all duration-300 hover:border-white hover:shadow-[0_0_20px_rgba(91,255,59,0.8)]"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -227,7 +227,7 @@
 
     <div class="w-full md:w-2/3">
       <h1
-        class="text-text-main mb-2 text-4xl font-bold tracking-tight md:text-5xl"
+        class="text-main mb-2 text-4xl font-bold tracking-tight md:text-5xl"
         style="text-shadow: 0 0 10px rgba(255,255,255,0.2);"
       >
         {translatedTitle}
@@ -263,7 +263,7 @@
       {#if isPlaying}
         <VideoPlayer src={videoSrc} {subtitles} />
       {:else}
-        <div class="prose prose-invert text-text-muted mb-8 max-w-none leading-relaxed">
+        <div class="prose prose-invert text-muted mb-8 max-w-none leading-relaxed">
           <h3
             class="text-accent-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
           >
@@ -290,7 +290,7 @@
                     />
                   {:else}
                     <div
-                      class="border-primary/50 bg-surface text-text-muted mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2"
+                      class="border-primary/50 bg-surface text-muted mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -310,7 +310,7 @@
                       >
                     </div>
                   {/if}
-                  <span class="text-text-main text-sm leading-tight font-bold" title={actor.name}
+                  <span class="text-main text-sm leading-tight font-bold" title={actor.name}
                     >{actor.name}</span
                   >
                   <span

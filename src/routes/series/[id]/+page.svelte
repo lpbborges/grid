@@ -162,7 +162,7 @@
 <div class="relative z-20 mb-8">
   <a
     href="/"
-    class="group hover:text-accent-green text-text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
+    class="group hover:text-accent-green text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
     style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
   >
     <svg
@@ -201,10 +201,10 @@
         alt=""
       />
       <div
-        class="from-bg-dark via-bg-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"
+        class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"
       ></div>
       <div
-        class="from-bg-dark/90 via-bg-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"
+        class="from-dark/90 via-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"
       ></div>
     </div>
   {/if}
@@ -225,7 +225,7 @@
         <VideoPlayer src={videoSrc} {subtitles} />
       {:else}
         <h1
-          class="text-text-main mb-2 text-4xl font-bold tracking-tight md:text-5xl"
+          class="text-main mb-2 text-4xl font-bold tracking-tight md:text-5xl"
           style="text-shadow: 0 0 10px rgba(255,255,255,0.2);"
         >
           {translatedTitle}
@@ -262,7 +262,7 @@
           </span>
         </div>
 
-        <div class="prose prose-invert text-text-muted mb-8 max-w-none leading-relaxed">
+        <div class="prose prose-invert text-muted mb-8 max-w-none leading-relaxed">
           <h3
             class="text-accent-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
           >
@@ -289,7 +289,7 @@
                     />
                   {:else}
                     <div
-                      class="border-primary/50 bg-surface text-text-muted mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2"
+                      class="border-primary/50 bg-surface text-muted mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -309,7 +309,7 @@
                       >
                     </div>
                   {/if}
-                  <span class="text-text-main text-sm leading-tight font-bold" title={actor.name}
+                  <span class="text-main text-sm leading-tight font-bold" title={actor.name}
                     >{actor.name}</span
                   >
                   <span
@@ -341,10 +341,10 @@
               <div class="relative w-1/2">
                 <select
                   bind:value={selectedSeason}
-                  class="border-primary/50 focus:border-accent-green bg-surface text-text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
+                  class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
                 >
                   {#each availableSeasons as season}
-                    <option value={season} class="bg-surface text-text-main">Temp. {season}</option>
+                    <option value={season} class="bg-surface text-main">Temp. {season}</option>
                   {/each}
                 </select>
                 <div
@@ -366,12 +366,12 @@
               <div class="relative w-1/2">
                 <select
                   bind:value={preferredQuality}
-                  class="border-primary/50 focus:border-accent-green bg-surface text-text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
+                  class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
                 >
-                  <option value="4k" class="bg-surface text-text-main">4K</option>
-                  <option value="1080p" class="bg-surface text-text-main">1080p</option>
-                  <option value="720p" class="bg-surface text-text-main">720p</option>
-                  <option value="480p" class="bg-surface text-text-main">480p</option>
+                  <option value="4k" class="bg-surface text-main">4K</option>
+                  <option value="1080p" class="bg-surface text-main">1080p</option>
+                  <option value="720p" class="bg-surface text-main">720p</option>
+                  <option value="480p" class="bg-surface text-main">480p</option>
                 </select>
                 <div
                   class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
@@ -401,13 +401,13 @@
                 onclick={() => playEpisode(episode)}
               >
                 <div class="flex flex-col">
-                  <span class="text-text-main text-sm font-bold">
+                  <span class="text-main text-sm font-bold">
                     {episode.episode}. {translatedEpisodes[episode.id] ||
                       episode.name ||
                       `Episódio ${episode.episode}`}
                   </span>
                   {#if episode.firstAired}
-                    <span class="text-text-muted text-xs">
+                    <span class="text-muted text-xs">
                       Lançado em: {new Date(episode.firstAired).toLocaleDateString('pt-BR')}
                     </span>
                   {/if}

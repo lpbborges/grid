@@ -77,7 +77,7 @@
 {:else}
   <div>
     <div class="mb-4 flex items-center justify-between">
-      <h1 class="text-text-main text-xl">Filmes - Populares</h1>
+      <h1 class="text-main text-xl">Filmes - Populares</h1>
     </div>
 
     <div class="group relative mb-8">
@@ -85,7 +85,7 @@
       {#if canScrollLeft}
         <button
           onclick={scrollLeft}
-          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-text-main absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
+          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-main absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
           aria-label="Voltar"
         >
           &#10094;
@@ -107,7 +107,7 @@
       {#if canScrollRight}
         <button
           onclick={scrollRight}
-          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-text-main absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
+          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-main absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
           aria-label="Avançar"
         >
           &#10095;
@@ -116,7 +116,7 @@
     </div>
 
     <div class="mb-4 flex items-center justify-between">
-      <h1 class="text-text-main text-xl">Séries - Populares</h1>
+      <h1 class="text-main text-xl">Séries - Populares</h1>
     </div>
 
     <div class="group relative">
@@ -124,7 +124,7 @@
       {#if canScrollSeriesLeft}
         <button
           onclick={scrollSeriesLeft}
-          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-text-main absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
+          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-main absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
           aria-label="Voltar"
         >
           &#10094;
@@ -146,7 +146,7 @@
       {#if canScrollSeriesRight}
         <button
           onclick={scrollSeriesRight}
-          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-text-main absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
+          class="border-primary text-primary hover:bg-primary bg-surface/90 hover:text-main absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded border text-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_15px_rgba(118,52,194,0.6)]"
           aria-label="Avançar"
         >
           &#10095;

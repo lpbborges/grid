@@ -15,7 +15,7 @@
     loading="lazy"
     class="h-[270px] w-full rounded-none object-cover"
   />
-  <div class="text-text-main mt-2 w-full truncate text-center text-[0.95rem] font-medium">
+  <div class="text-main mt-2 w-full truncate text-center text-[0.95rem] font-medium">
     {media.title}
   </div>
 </a>
