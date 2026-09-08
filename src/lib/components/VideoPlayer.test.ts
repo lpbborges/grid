@@ -40,6 +40,49 @@ describe('VideoPlayer component', () => {
     expect(getByText('Preparando test...')).toBeDefined();
   });
 
+  it('hides loading overlay when playback events fire', async () => {
+    const { getByText, queryByText, getByTestId } = render(VideoPlayer, {
+      src: 'test.mp4',
+      engineStatus: 'Loading...'
+    });
+
+    // Initially showing loading
+    expect(getByText('Loading...')).toBeDefined();
+
+    const video = getByTestId('video-element');
+
+    // playing hides loading
+    await fireEvent.playing(video);
+    expect(queryByText('Loading...')).toBeNull();
+
+    // waiting shows loading
+    await fireEvent.waiting(video);
+    expect(getByText('Loading...')).toBeDefined();
+
+    // canplay hides loading
+    await fireEvent(video, new Event('canplay'));
+    expect(queryByText('Loading...')).toBeNull();
+
+    // waiting again
+    await fireEvent.waiting(video);
+    expect(getByText('Loading...')).toBeDefined();
+
+    // seeked hides loading
+    await fireEvent(video, new Event('seeked'));
+    expect(queryByText('Loading...')).toBeNull();
+
+    // waiting again
+    await fireEvent.waiting(video);
+    expect(getByText('Loading...')).toBeDefined();
+
+    // timeupdate hides loading
+    Object.defineProperty(video, 'paused', { value: false });
+    // we also need to fire play event for Svelte's bind:paused to update
+    await fireEvent.play(video);
+    await fireEvent(video, new Event('timeupdate'));
+    expect(queryByText('Loading...')).toBeNull();
+  });
+
   it('renders close button when onclose is provided', async () => {
     const oncloseMock = vi.fn();
     const { getByLabelText } = render(VideoPlayer, { src: 'test.mp4', onclose: oncloseMock });

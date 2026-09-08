@@ -254,6 +254,11 @@
     onloadedmetadata={handleLoadedMetadata}
     onplaying={() => (isVideoPlaying = true)}
     onwaiting={() => (isVideoPlaying = false)}
+    oncanplay={() => (isVideoPlaying = true)}
+    onseeked={() => (isVideoPlaying = true)}
+    ontimeupdate={() => {
+      if (!isVideoPlaying && !paused) isVideoPlaying = true;
+    }}
   >
     {#each subtitles as sub}
       <track kind="subtitles" src={sub.url} srclang={sub.lang} label={sub.label} />
