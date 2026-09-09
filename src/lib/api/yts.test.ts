@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getPopularMovies, getMovieDetails, getPopularSeries, getSeriesDetails } from './yts';
+import {
+  getPopularMovies,
+  getMovieDetails,
+  getPopularSeries,
+  getSeriesDetails,
+  searchMovies,
+  searchSeries,
+  searchCatalog
+} from './yts';
 
 const mockMovie = {
   id: 1,
@@ -162,5 +170,101 @@ describe('yts api', () => {
     await expect(getSeriesDetails('tt987')).rejects.toThrow(
       'Failed to fetch series details: Not Found'
     );
+  });
+
+  it('searches movies via cinemeta using the search endpoint', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        metas: [
+          {
+            id: 'tt1375666',
+            imdb_id: 'tt1375666',
+            name: 'Inception',
+            releaseInfo: '2010',
+            poster: 'inception.jpg'
+          }
+        ]
+      })
+    });
+
+    const results = await searchMovies('inception');
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('catalog/movie/top/search=inception.json')
+    );
+    expect(results.length).toBe(1);
+    expect(results[0].title).toBe('Inception');
+    expect(results[0].year).toBe(2010);
+  });
+
+  it('encodes the search query in the url', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ metas: [] })
+    });
+
+    await searchMovies('piratas do caribe');
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(encodeURIComponent('piratas do caribe'))
+    );
+  });
+
+  it('searches series via cinemeta using the search endpoint', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        metas: [
+          {
+            id: 'tt0903747',
+            imdb_id: 'tt0903747',
+            name: 'Breaking Bad',
+            releaseInfo: '2008-2013',
+            poster: 'breaking.jpg'
+          }
+        ]
+      })
+    });
+
+    const results = await searchSeries('breaking');
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('catalog/series/top/search=breaking.json')
+    );
+    expect(results.length).toBe(1);
+    expect(results[0].title).toBe('Breaking Bad');
+    expect(results[0].year).toBe(2008);
+  });
+
+  it('returns an empty array when the search request fails', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      statusText: 'Not Found'
+    });
+
+    const originalConsoleError = console.error;
+    console.error = vi.fn();
+
+    const results = await searchMovies('shrek');
+    expect(results).toEqual([]);
+
+    console.error = originalConsoleError;
+  });
+
+  it('searchCatalog queries movies and series in parallel', async () => {
+    (globalThis.fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ metas: [{ id: 'tt1', name: 'Movie Result', poster: 'a.jpg' }] })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ metas: [{ id: 'tt2', name: 'Series Result', poster: 'b.jpg' }] })
+      });
+
+    const { movies, series } = await searchCatalog('result');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(movies.length).toBe(1);
+    expect(movies[0].title).toBe('Movie Result');
+    expect(series.length).toBe(1);
+    expect(series[0].title).toBe('Series Result');
   });
 });

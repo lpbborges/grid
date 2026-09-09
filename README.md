@@ -5,6 +5,7 @@ Grid-Play is a native desktop application built with **Tauri**, **SvelteKit**, *
 ## Features
 
 - **Cinemeta & YTS Integration:** Browse popular movies and TV series with high-quality fallback metadata.
+- **Instant Search:** Live catalog search across the full Cinemeta library — movies and series found by title as you type, with debounced API queries.
 - **Localization:** Automatically translates movie and series titles, synopses, and episode names into the user's native system language on the fly.
 - **Cinematic UI:** Beautiful fully-opaque movie/series poster backgrounds with Stremio-style gradients that blend seamlessly with the Evangelion theme.
 - **Torrent Engine Integration:** Seamless streaming powered by the `rqbit` sidecar for both Movies (via YTS) and TV Series (via Torrentio). Includes automatic background-cleanup of previous streams to save bandwidth and disk space.

@@ -1,13 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { getPopularMovies, getPopularSeries } from '$lib/api/yts';
-  import type { Movie } from '$lib/types';
   import MediaCard from '$lib/components/MediaCard.svelte';
+  import type { Movie } from '$lib/types';
+  import { searchQuery } from '$lib/stores.svelte';
+  import { searchCatalog } from '$lib/api/yts';
 
-  let popularMovies = $state<Movie[]>([]);
-  let popularSeries = $state<Movie[]>([]);
-  let loading = $state(true);
-  let error = $state('');
+  let { data } = $props();
 
   let scrollContainer: any = $state();
   let canScrollLeft = $state(false);
@@ -17,19 +14,34 @@
   let canScrollSeriesLeft = $state(false);
   let canScrollSeriesRight = $state(false);
 
-  onMount(async () => {
-    try {
-      popularMovies = await getPopularMovies(24);
-      popularSeries = await getPopularSeries(24);
-    } catch (e: any) {
-      error = e.message || 'Error fetching data';
-    } finally {
-      loading = false;
-      setTimeout(() => {
-        checkScroll();
-        checkSeriesScroll();
-      }, 100);
+  let searchMovieResults = $state<Movie[]>([]);
+  let searchSeriesResults = $state<Movie[]>([]);
+  let searchLoading = $state(false);
+
+  let hasSearchQuery = $derived(searchQuery.value.trim().length > 0);
+
+  let searchVersion = 0;
+
+  $effect(() => {
+    const query = searchQuery.value.trim();
+    if (!query) {
+      searchMovieResults = [];
+      searchSeriesResults = [];
+      searchLoading = false;
+      return;
     }
+
+    const version = ++searchVersion;
+    searchLoading = true;
+
+    setTimeout(async () => {
+      if (version !== searchVersion) return;
+      const { movies, series } = await searchCatalog(query);
+      if (version !== searchVersion) return;
+      searchMovieResults = movies;
+      searchSeriesResults = series;
+      searchLoading = false;
+    }, 300);
   });
 
   function checkScroll() {
@@ -62,118 +74,227 @@
   function scrollSeriesRight() {
     seriesScrollContainer.scrollBy({ left: 800, behavior: 'smooth' });
   }
+
+  $effect(() => {
+    const movieItems = hasSearchQuery ? searchMovieResults : data.popularMovies;
+    const seriesItems = hasSearchQuery ? searchSeriesResults : data.popularSeries;
+    if (movieItems.length || seriesItems.length) {
+      checkScroll();
+      checkSeriesScroll();
+    }
+  });
 </script>
 
-{#if loading}
-  <div class="flex h-full min-h-[400px] items-center justify-center">
-    <div class="flex flex-col items-center gap-4">
-      <div class="relative h-16 w-16">
+{#if hasSearchQuery}
+  {#if searchLoading}
+    <div class="flex h-full min-h-[400px] items-center justify-center">
+      <div class="flex flex-col items-center gap-4">
+        <div class="relative h-16 w-16">
+          <div
+            class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
+          ></div>
+          <div
+            class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
+          ></div>
+        </div>
         <div
-          class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
-        ></div>
-        <div
-          class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
-        ></div>
-      </div>
-      <div
-        class="text-accent-green font-cyber animate-pulse text-xl tracking-[0.3em] uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
-      >
-        Sincronizando...
+          class="text-accent-green font-cyber animate-pulse text-xl tracking-[0.3em] uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
+        >
+          Pesquisando...
+        </div>
       </div>
     </div>
-  </div>
-{:else if error}
-  <div class="border-accent-orange text-accent-orange border-l-4 bg-black/80 p-4 font-mono">
-    Erro: {error}
+  {:else if searchMovieResults.length === 0 && searchSeriesResults.length === 0}
+    <div class="flex h-full min-h-[400px] items-center justify-center">
+      <div class="flex flex-col items-center gap-4">
+        <div class="text-muted font-cyber text-xl tracking-[0.3em] uppercase">
+          Nenhum resultado para "{searchQuery.value}"
+        </div>
+      </div>
+    </div>
+  {:else}
+    <div>
+      {#if searchMovieResults.length > 0}
+        <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
+          <h1
+            class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
+          >
+            <span class="bg-primary inline-block h-5 w-2"></span>
+            Filmes
+          </h1>
+        </div>
+
+        <div class="relative mb-8">
+          {#if canScrollLeft}
+            <button
+              onclick={scrollLeft}
+              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+              aria-label="Voltar"
+            >
+              &#10094;
+            </button>
+          {/if}
+
+          <div
+            bind:this={scrollContainer}
+            onscroll={checkScroll}
+            class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
+          >
+            {#each searchMovieResults as movie (movie.id)}
+              <MediaCard media={movie} type="movie" />
+            {/each}
+          </div>
+
+          {#if canScrollRight}
+            <button
+              onclick={scrollRight}
+              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+              aria-label="Avançar"
+            >
+              &#10095;
+            </button>
+          {/if}
+        </div>
+      {/if}
+
+      {#if searchSeriesResults.length > 0}
+        <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
+          <h1
+            class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
+          >
+            <span class="bg-primary inline-block h-5 w-2"></span>
+            Séries
+          </h1>
+        </div>
+
+        <div class="relative">
+          {#if canScrollSeriesLeft}
+            <button
+              onclick={scrollSeriesLeft}
+              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+              aria-label="Voltar"
+            >
+              &#10094;
+            </button>
+          {/if}
+
+          <div
+            bind:this={seriesScrollContainer}
+            onscroll={checkSeriesScroll}
+            class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
+          >
+            {#each searchSeriesResults as series (series.id)}
+              <MediaCard media={series} type="series" />
+            {/each}
+          </div>
+
+          {#if canScrollSeriesRight}
+            <button
+              onclick={scrollSeriesRight}
+              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+              aria-label="Avançar"
+            >
+              &#10095;
+            </button>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
+{:else if !data.popularMovies.length && !data.popularSeries.length}
+  <div class="flex h-full min-h-[400px] items-center justify-center">
+    <div class="flex flex-col items-center gap-4">
+      <div class="text-muted font-cyber text-xl tracking-[0.3em] uppercase">
+        Erro ao carregar dados
+      </div>
+    </div>
   </div>
 {:else}
   <div>
-    <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
-      <h1
-        class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
-      >
-        <span class="bg-primary inline-block h-5 w-2"></span>
-        Filmes Populares
-      </h1>
-    </div>
-
-    <div class="relative mb-8">
-      <!-- Left Arrow -->
-      {#if canScrollLeft}
-        <button
-          onclick={scrollLeft}
-          class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
-          aria-label="Voltar"
+    {#if data.popularMovies.length > 0}
+      <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
+        <h1
+          class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
         >
-          &#10094;
-        </button>
-      {/if}
-
-      <!-- List -->
-      <div
-        bind:this={scrollContainer}
-        onscroll={checkScroll}
-        class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
-      >
-        {#each popularMovies as movie}
-          <MediaCard media={movie} type="movie" />
-        {/each}
+          <span class="bg-primary inline-block h-5 w-2"></span>
+          Filmes Populares
+        </h1>
       </div>
 
-      <!-- Right Arrow -->
-      {#if canScrollRight}
-        <button
-          onclick={scrollRight}
-          class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
-          aria-label="Avançar"
+      <div class="relative mb-8">
+        {#if canScrollLeft}
+          <button
+            onclick={scrollLeft}
+            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+            aria-label="Voltar"
+          >
+            &#10094;
+          </button>
+        {/if}
+
+        <div
+          bind:this={scrollContainer}
+          onscroll={checkScroll}
+          class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
         >
-          &#10095;
-        </button>
-      {/if}
-    </div>
+          {#each data.popularMovies as movie (movie.id)}
+            <MediaCard media={movie} type="movie" />
+          {/each}
+        </div>
 
-    <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
-      <h1
-        class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
-      >
-        <span class="bg-primary inline-block h-5 w-2"></span>
-        Séries Populares
-      </h1>
-    </div>
+        {#if canScrollRight}
+          <button
+            onclick={scrollRight}
+            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+            aria-label="Avançar"
+          >
+            &#10095;
+          </button>
+        {/if}
+      </div>
+    {/if}
 
-    <div class="relative">
-      <!-- Left Arrow -->
-      {#if canScrollSeriesLeft}
-        <button
-          onclick={scrollSeriesLeft}
-          class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
-          aria-label="Voltar"
+    {#if data.popularSeries.length > 0}
+      <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
+        <h1
+          class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
         >
-          &#10094;
-        </button>
-      {/if}
-
-      <!-- List -->
-      <div
-        bind:this={seriesScrollContainer}
-        onscroll={checkSeriesScroll}
-        class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
-      >
-        {#each popularSeries as series}
-          <MediaCard media={series} type="series" />
-        {/each}
+          <span class="bg-primary inline-block h-5 w-2"></span>
+          Séries Populares
+        </h1>
       </div>
 
-      <!-- Right Arrow -->
-      {#if canScrollSeriesRight}
-        <button
-          onclick={scrollSeriesRight}
-          class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
-          aria-label="Avançar"
+      <div class="relative">
+        {#if canScrollSeriesLeft}
+          <button
+            onclick={scrollSeriesLeft}
+            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+            aria-label="Voltar"
+          >
+            &#10094;
+          </button>
+        {/if}
+
+        <div
+          bind:this={seriesScrollContainer}
+          onscroll={checkSeriesScroll}
+          class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
         >
-          &#10095;
-        </button>
-      {/if}
-    </div>
+          {#each data.popularSeries as series (series.id)}
+            <MediaCard media={series} type="series" />
+          {/each}
+        </div>
+
+        {#if canScrollSeriesRight}
+          <button
+            onclick={scrollSeriesRight}
+            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+            aria-label="Avançar"
+          >
+            &#10095;
+          </button>
+        {/if}
+      </div>
+    {/if}
   </div>
 {/if}

@@ -2,6 +2,7 @@
   import '../app.css';
   import { page } from '$app/stores';
   import Titlebar from '$lib/components/Titlebar.svelte';
+  import { searchQuery } from '$lib/stores.svelte';
   let { children } = $props();
 </script>
 
@@ -41,6 +42,7 @@
           <input
             type="text"
             placeholder="PROCURAR..."
+            bind:value={searchQuery.value}
             class="border-primary/50 text-main focus:border-accent-green bg-surface/50 placeholder-muted font-cyber focus:bg-surface w-[300px] rounded-sm border px-4 py-2 text-sm tracking-wider transition-all duration-300 outline-none focus:w-[450px] focus:shadow-[0_0_15px_rgba(54,211,83,0.3)]"
           />
           <div class="text-primary/50 absolute top-1/2 right-3 -translate-y-1/2">

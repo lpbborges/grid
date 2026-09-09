@@ -2,6 +2,21 @@ import type { Movie } from '../types';
 
 const BASE_URL = 'https://movies-api.accel.li/api/v2';
 
+function mapCinemetaMeta(m: any): Movie {
+  return {
+    id: m.imdb_id || m.id,
+    title: m.name,
+    year: parseInt(m.year || m.releaseInfo) || 0,
+    rating: parseFloat(m.imdbRating) || 0,
+    medium_cover_image: m.poster,
+    large_cover_image: m.poster,
+    background_image_original: m.background,
+    summary: m.description || '',
+    description_full: m.description || '',
+    torrents: []
+  };
+}
+
 export async function getPopularMovies(limit = 24): Promise<Movie[]> {
   try {
     const res = await fetch(`https://v3-cinemeta.strem.io/catalog/movie/top.json`);
@@ -11,19 +26,7 @@ export async function getPopularMovies(limit = 24): Promise<Movie[]> {
     const data = await res.json();
     const metas = data.metas || [];
 
-    return metas
-      .map((m: any) => ({
-        id: m.imdb_id || m.id,
-        title: m.name,
-        year: parseInt(m.year) || 0,
-        rating: parseFloat(m.imdbRating) || 0,
-        medium_cover_image: m.poster,
-        large_cover_image: m.poster,
-        summary: m.description || '',
-        description_full: m.description || '',
-        torrents: []
-      }))
-      .slice(0, limit);
+    return metas.slice(0, limit).map(mapCinemetaMeta);
   } catch (error) {
     console.error(error);
     return [];
@@ -40,23 +43,52 @@ export async function getPopularSeries(limit = 24): Promise<Movie[]> {
     const data = await res.json();
     const metas = data.metas || [];
 
-    return metas
-      .map((m: any) => ({
-        id: m.imdb_id || m.id,
-        title: m.name,
-        year: parseInt(m.year) || 0,
-        rating: parseFloat(m.imdbRating) || 0,
-        medium_cover_image: m.poster,
-        large_cover_image: m.poster,
-        summary: m.description || '',
-        description_full: m.description || '',
-        torrents: []
-      }))
-      .slice(0, limit);
+    return metas.slice(0, limit).map(mapCinemetaMeta);
   } catch (error) {
     console.error(error);
     return [];
   }
+}
+
+async function searchCinemeta(
+  type: 'movie' | 'series',
+  query: string,
+  limit = 12
+): Promise<Movie[]> {
+  try {
+    const res = await fetch(
+      `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(query)}.json`
+    );
+    if (!res.ok) {
+      throw new Error(`Failed to search cinemeta: ${res.statusText}`);
+    }
+    const data = await res.json();
+    const metas = data.metas || [];
+
+    return metas.slice(0, limit).map(mapCinemetaMeta);
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+}
+
+export function searchMovies(query: string, limit = 12): Promise<Movie[]> {
+  return searchCinemeta('movie', query, limit);
+}
+
+export function searchSeries(query: string, limit = 12): Promise<Movie[]> {
+  return searchCinemeta('series', query, limit);
+}
+
+export async function searchCatalog(
+  query: string,
+  limit = 12
+): Promise<{ movies: Movie[]; series: Movie[] }> {
+  const [movies, series] = await Promise.all([
+    searchMovies(query, limit),
+    searchSeries(query, limit)
+  ]);
+  return { movies, series };
 }
 
 export async function getMovieDetails(movieId: number | string): Promise<Movie> {
