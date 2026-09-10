@@ -153,6 +153,33 @@ describe('VideoPlayer component', () => {
     expect(video.textTracks[1].mode).toBe('disabled');
   });
 
+  it('repositions active subtitle cues when a track is selected', async () => {
+    const subtitles: any = [{ label: 'Eng', lang: 'en', url: 'sub.vtt', group: 'Extra' }];
+    const cues: any[] = [
+      { snapToLines: true, line: -1 },
+      { snapToLines: true, line: -1 }
+    ];
+    const track = { mode: 'disabled', cues, oncuechange: null };
+
+    const { getByLabelText, getByText, getByTestId } = render(VideoPlayer, {
+      src: 'test.mp4',
+      subtitles
+    });
+    const video = getByTestId('video-element') as any;
+
+    Object.defineProperty(video, 'textTracks', { writable: true, value: [track] });
+
+    await fireEvent.click(getByLabelText('Subtitles Menu'));
+    await fireEvent.click(getByText('Eng'));
+
+    expect(track.mode).toBe('showing');
+    expect(typeof track.oncuechange).toBe('function');
+    for (const cue of cues) {
+      expect(cue.snapToLines).toBe(false);
+      expect(cue.line).toBe(90);
+    }
+  });
+
   it('displays audio tracks menu and allows selection', async () => {
     const { getByLabelText, getByText, getByTestId } = render(VideoPlayer, { src: 'test.mp4' });
     const video = getByTestId('video-element') as any;

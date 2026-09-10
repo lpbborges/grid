@@ -17,7 +17,7 @@
     infoHash?: string;
     totalBytes?: number;
   }>();
-  /* global HTMLVideoElement, HTMLElement, FocusEvent, MouseEvent, Node */
+  /* global HTMLVideoElement, HTMLElement, FocusEvent, MouseEvent, Node, VTTCue */
   let videoElement = $state<HTMLVideoElement | null>(null);
   let containerElement = $state<HTMLElement | null>(null);
   let showMenu = $state(false);
@@ -84,13 +84,30 @@
     };
   });
 
+  function applyCueLayout() {
+    if (!videoElement) return;
+    for (const textTrack of videoElement.textTracks) {
+      if (textTrack.mode !== 'showing' || !textTrack.cues) continue;
+      for (let i = 0; i < textTrack.cues.length; i++) {
+        const cue = textTrack.cues[i] as VTTCue;
+        if (cue.snapToLines) {
+          cue.snapToLines = false;
+          cue.line = 90;
+        }
+      }
+    }
+  }
+
   function selectTrack(index: number) {
     if (!videoElement) return;
     for (let i = 0; i < videoElement.textTracks.length; i++) {
       videoElement.textTracks[i].mode = 'disabled';
     }
     if (index >= 0) {
-      videoElement.textTracks[index].mode = 'showing';
+      const track = videoElement.textTracks[index];
+      track.mode = 'showing';
+      track.oncuechange = () => applyCueLayout();
+      applyCueLayout();
     }
     activeIndex = index;
     showMenu = false;
