@@ -1,3 +1,4 @@
+import { logger } from '$lib/logger';
 import { prepareStream } from '$lib/engine/orchestrator';
 import { clearTorrents } from '$lib/engine/torrent';
 import type { SubtitleTrack } from '$lib/api/subtitles';
@@ -41,7 +42,7 @@ export function useStreamPlayer() {
       subtitles = streamData.subtitles;
       return true;
     } catch (e) {
-      console.error('Erro ao iniciar reprodução:', e);
+      logger.error('Erro ao iniciar reprodução:', e);
       error = 'Não foi possível iniciar a reprodução. Tente novamente.';
       engineStatus = '';
       isPlaying = false;
@@ -60,7 +61,7 @@ export function useStreamPlayer() {
     try {
       await clearTorrents();
     } catch (e) {
-      console.error('Erro ao limpar torrents', e);
+      logger.error('Erro ao limpar torrents', e);
     }
   }
 
@@ -69,7 +70,7 @@ export function useStreamPlayer() {
   // on mediaId change.
   $effect(() => {
     return () => {
-      clearTorrents().catch((e) => console.error('Erro ao limpar torrents no unmount', e));
+      clearTorrents().catch((e) => logger.error('Erro ao limpar torrents no unmount', e));
     };
   });
 

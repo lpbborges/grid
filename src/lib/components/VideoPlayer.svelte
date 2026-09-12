@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { logger } from '$lib/logger';
   import { getTorrentStats } from '$lib/engine/torrent';
   import type { SubtitleTrack } from '$lib/api/subtitles';
 
@@ -202,7 +203,7 @@
   function toggleFullscreen() {
     if (!document.fullscreenElement) {
       containerElement?.requestFullscreen().catch((err) => {
-        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+        logger.error(`Error attempting to enable full-screen mode: ${err.message}`);
       });
     } else {
       document.exitFullscreen();

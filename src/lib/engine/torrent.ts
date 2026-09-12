@@ -1,3 +1,4 @@
+import { logger } from '$lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
 import { getLanguageName } from '../api/subtitles';
@@ -20,7 +21,7 @@ export async function startEngine(): Promise<void> {
       ENGINE_URL = url;
     }
   } catch (error) {
-    console.warn('Failed to start torrent engine:', error);
+    logger.warn('Failed to start torrent engine:', error);
   }
 }
 
@@ -52,7 +53,7 @@ export async function clearTorrents(): Promise<void> {
       );
     }
   } catch (error) {
-    console.warn('Failed to clear torrents:', error);
+    logger.warn('Failed to clear torrents:', error);
   }
 }
 
@@ -161,7 +162,7 @@ export async function getTorrentSubtitles(
         group: 'Embedded';
       }> => {
         if (result.status === 'rejected') {
-          console.warn('Failed to fetch a torrent subtitle:', result.reason);
+          logger.warn('Failed to fetch a torrent subtitle:', result.reason);
           return false;
         }
         return true;

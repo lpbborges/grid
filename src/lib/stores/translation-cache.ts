@@ -1,3 +1,4 @@
+import { logger } from '$lib/logger';
 const DB_NAME = 'grid-play-translations';
 const DB_VERSION = 1;
 const STORE_NAME = 'entries';
@@ -64,14 +65,14 @@ export async function getCached(text: string, targetLang: string): Promise<strin
           request.onerror = () => reject(request.error);
         });
       } catch (e) {
-        console.warn('translation-cache: failed to delete stale entry', e);
+        logger.warn('translation-cache: failed to delete stale entry', e);
       }
       return undefined;
     }
 
     return entry.value;
   } catch (e) {
-    console.warn('translation-cache: read failed, falling through to network', e);
+    logger.warn('translation-cache: read failed, falling through to network', e);
     return undefined;
   }
 }
@@ -89,6 +90,6 @@ export async function setCached(text: string, targetLang: string, value: string)
       request.onerror = () => reject(request.error);
     });
   } catch (e) {
-    console.warn('translation-cache: write failed', e);
+    logger.warn('translation-cache: write failed', e);
   }
 }

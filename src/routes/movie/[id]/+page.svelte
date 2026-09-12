@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { logger } from '$lib/logger';
   import { translateMediaInfo } from '$lib/api/translate';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
@@ -15,7 +16,7 @@
 
   $effect(() => {
     if (data.error) {
-      console.error('Falha ao carregar filme:', data.error);
+      logger.error('Falha ao carregar filme:', data.error);
       error = 'Não foi possível carregar este título. Tente novamente.';
       errorSource = 'load';
     } else if (movieId) {
@@ -137,7 +138,7 @@
         alt=""
       />
       <div class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"></div>
-      <div class="from-dark/90 via-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"></div>
+      <div class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-r to-transparent"></div>
     </div>
   {/if}
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { logger } from '$lib/logger';
   import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
   import { getSeriesStreams } from '$lib/api/torrentio';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
@@ -25,7 +26,7 @@
 
   $effect(() => {
     if (data.error) {
-      console.error('Falha ao carregar série:', data.error);
+      logger.error('Falha ao carregar série:', data.error);
       error = 'Não foi possível carregar este título. Tente novamente.';
       errorSource = 'load';
     } else if (seriesId) {
@@ -118,7 +119,7 @@
         errorSource = 'play';
       }
     } catch (e: any) {
-      console.error('Erro ao buscar fontes do episódio:', e);
+      logger.error('Erro ao buscar fontes do episódio:', e);
       error = 'Não foi possível iniciar a reprodução. Tente novamente.';
       errorSource = 'play';
     }
@@ -179,7 +180,7 @@
         alt=""
       />
       <div class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"></div>
-      <div class="from-dark/90 via-dark/40 absolute inset-0 bg-gradient-to-r to-transparent"></div>
+      <div class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-r to-transparent"></div>
     </div>
   {/if}
 

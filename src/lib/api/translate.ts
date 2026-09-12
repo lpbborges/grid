@@ -1,3 +1,4 @@
+import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { getCached, setCached } from '../stores/translation-cache';
 
@@ -45,7 +46,7 @@ async function runTranslationCascade(text: string, targetLang: string): Promise<
       }
     }
   } catch (e) {
-    console.warn('Google Translation error, trying Lingva fallback:', e);
+    logger.warn('Google Translation error, trying Lingva fallback:', e);
   }
 
   // Fallback 1: Lingva API (Google Translate proxy)
@@ -59,7 +60,7 @@ async function runTranslationCascade(text: string, targetLang: string): Promise<
       }
     }
   } catch (e) {
-    console.warn('Lingva fallback error, trying MyMemory fallback:', e);
+    logger.warn('Lingva fallback error, trying MyMemory fallback:', e);
   }
 
   // Fallback 2: MyMemory API
@@ -79,7 +80,7 @@ async function runTranslationCascade(text: string, targetLang: string): Promise<
       }
     }
   } catch (e) {
-    console.error('All translation APIs failed:', e);
+    logger.error('All translation APIs failed:', e);
   }
 
   return text;

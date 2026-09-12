@@ -102,3 +102,48 @@ describe('Series page error handling', () => {
     expect(screen.getByRole('button', { name: /tentar novamente/i })).toBeInTheDocument();
   });
 });
+
+describe('Series page integration flow', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearTorrentsMock.mockResolvedValue(undefined);
+    translateMediaInfoMock.mockResolvedValue({ title: series.title, synopsis: series.summary });
+    translateEpisodesListMock.mockResolvedValue({});
+    HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
+    HTMLMediaElement.prototype.pause = vi.fn();
+  });
+
+  it('selects season, episode, and plays', async () => {
+    getSeriesStreamsMock.mockResolvedValue([{ title: '1080p', infoHash: 'def', fileIdx: 0 }]);
+    prepareStreamMock.mockResolvedValue({
+      videoSrc: 'http://localhost:3000/stream',
+      subtitles: [],
+      engineStatus: {
+        status: 'downloading',
+        progress: 50,
+        downloadSpeed: 1000000,
+        seeds: 50,
+        peers: 20
+      }
+    });
+
+    render(SeriesPage, {
+      props: { data: { seriesId: 'tt1', series, error: null } }
+    });
+
+    const episodeButton = screen.getByText(/Pilot/i);
+    await fireEvent.click(episodeButton);
+
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(prepareStreamMock).toHaveBeenCalledWith(
+      'magnet:?xt=urn:btih:def&dn=Some%20Series%20S1E1',
+      expect.any(Function),
+      'tt1',
+      1,
+      1,
+      0
+    );
+  });
+});

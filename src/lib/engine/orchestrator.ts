@@ -1,3 +1,4 @@
+import { logger } from '$lib/logger';
 import {
   startEngine,
   waitForEngine,
@@ -29,7 +30,7 @@ function revokeBlobUrls(urls: string[]): void {
     try {
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.warn('Failed to revoke subtitle blob URL:', error);
+      logger.warn('Failed to revoke subtitle blob URL:', error);
     }
   }
 }
@@ -67,12 +68,12 @@ export async function prepareStream(
   // fetched concurrently rather than sequentially.
   const [tSubs, eSubs] = await Promise.all([
     getTorrentSubtitles(details.info_hash, details.files).catch((error) => {
-      console.warn('Failed to fetch torrent subtitles, continuing without them:', error);
+      logger.warn('Failed to fetch torrent subtitles, continuing without them:', error);
       return [];
     }),
     mediaId
       ? getExternalSubtitles(mediaId, season, episode).catch((error) => {
-          console.warn('Failed to fetch external subtitles, continuing without them:', error);
+          logger.warn('Failed to fetch external subtitles, continuing without them:', error);
           return [];
         })
       : Promise.resolve([])

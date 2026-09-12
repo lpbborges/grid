@@ -1,3 +1,4 @@
+import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 
 export interface Stream {
@@ -24,7 +25,7 @@ export async function getSeriesStreams(
     const data = await res.json();
     return data.streams || [];
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     return [];
   }
 }

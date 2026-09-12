@@ -1,3 +1,4 @@
+import { logger } from '$lib/logger';
 import type { Movie } from '../types';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 
@@ -29,7 +30,7 @@ export async function getPopularMovies(limit = 24): Promise<Movie[]> {
 
     return metas.slice(0, limit).map(mapCinemetaMeta);
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     return [];
   }
 }
@@ -46,7 +47,7 @@ export async function getPopularSeries(limit = 24): Promise<Movie[]> {
 
     return metas.slice(0, limit).map(mapCinemetaMeta);
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     return [];
   }
 }
@@ -68,7 +69,7 @@ async function searchCinemeta(
 
     return metas.slice(0, limit).map(mapCinemetaMeta);
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     return [];
   }
 }

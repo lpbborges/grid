@@ -1,3 +1,4 @@
+import { logger } from '$lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 
@@ -97,14 +98,14 @@ export async function getExternalSubtitles(
     return results
       .filter((result): result is PromiseFulfilledResult<SubtitleTrack> => {
         if (result.status === 'rejected') {
-          console.warn('Failed to fetch an external subtitle:', result.reason);
+          logger.warn('Failed to fetch an external subtitle:', result.reason);
           return false;
         }
         return true;
       })
       .map((result) => result.value);
   } catch (error) {
-    console.error('Failed to fetch external subtitles:', error);
+    logger.error('Failed to fetch external subtitles:', error);
     return [];
   }
 }

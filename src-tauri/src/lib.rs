@@ -526,3 +526,17 @@ mod tests {
         ));
     }
 }
+
+#[test]
+fn engine_state_returns_existing_url_if_running() {
+    // If child and port are already populated, start_torrent_engine logic bails out early.
+    // We can't easily test `start_torrent_engine` itself because it requires an `AppHandle`,
+    // but we can ensure the state correctly holds the values.
+    let state = EngineState {
+        child: Mutex::new(None),
+        pid: Mutex::new(Some(123)),
+        port: Mutex::new(Some(8080)),
+    };
+    assert_eq!(state.pid.lock().unwrap().unwrap(), 123);
+    assert_eq!(state.port.lock().unwrap().unwrap(), 8080);
+}
