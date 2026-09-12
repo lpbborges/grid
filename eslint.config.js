@@ -15,7 +15,9 @@ export default [
         console: 'readonly',
         fetch: 'readonly',
         globalThis: 'readonly',
-        setTimeout: 'readonly'
+        setTimeout: 'readonly',
+        AbortController: 'readonly',
+        clearTimeout: 'readonly'
       }
     },
     rules: {

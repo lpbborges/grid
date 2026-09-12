@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+
 export interface Stream {
   name?: string;
   title?: string;
@@ -13,7 +15,7 @@ export async function getSeriesStreams(
   episode: number
 ): Promise<Stream[]> {
   try {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `https://torrentio.strem.fun/stream/series/${seriesId}:${season}:${episode}.json`
     );
     if (!res.ok) {

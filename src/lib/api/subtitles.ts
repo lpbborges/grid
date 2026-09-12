@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+
 export interface SubtitleTrack {
   id: string;
   url: string;
@@ -70,7 +72,7 @@ export async function getExternalSubtitles(
       season !== undefined && episode !== undefined
         ? `https://opensubtitles-v3.strem.io/subtitles/series/${imdbId}:${season}:${episode}.json`
         : `https://opensubtitles-v3.strem.io/subtitles/movie/${imdbId}.json`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) return [];
     const data = await res.json();
     if (!data.subtitles) return [];

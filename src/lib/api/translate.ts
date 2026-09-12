@@ -1,10 +1,14 @@
+import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+
+const TRANSLATE_TIMEOUT_MS = 6000;
+
 export async function translateText(text: string, targetLang: string): Promise<string> {
   if (!text) return text;
 
   try {
     // google translate free endpoint
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url, {}, TRANSLATE_TIMEOUT_MS);
     if (res.ok) {
       const data = await res.json();
       if (data && data[0]) {
@@ -18,7 +22,7 @@ export async function translateText(text: string, targetLang: string): Promise<s
   // Fallback 1: Lingva API (Google Translate proxy)
   try {
     const lingvaUrl = `https://lingva.ml/api/v1/auto/${targetLang}/${encodeURIComponent(text)}`;
-    const lingvaRes = await fetch(lingvaUrl);
+    const lingvaRes = await fetchWithTimeout(lingvaUrl, {}, TRANSLATE_TIMEOUT_MS);
     if (lingvaRes.ok) {
       const lingvaData = await lingvaRes.json();
       if (lingvaData && lingvaData.translation) {
@@ -32,7 +36,7 @@ export async function translateText(text: string, targetLang: string): Promise<s
   // Fallback 2: MyMemory API
   try {
     const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=auto|${targetLang}`;
-    const myMemoryRes = await fetch(myMemoryUrl);
+    const myMemoryRes = await fetchWithTimeout(myMemoryUrl, {}, TRANSLATE_TIMEOUT_MS);
     if (myMemoryRes.ok) {
       const myMemoryData = await myMemoryRes.json();
       // MyMemory returns 200 status in JSON for success

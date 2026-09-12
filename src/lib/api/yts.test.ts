@@ -43,7 +43,10 @@ describe('yts api', () => {
     });
 
     const movies = await getPopularMovies();
-    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('top.json'));
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('top.json'),
+      expect.objectContaining({ signal: expect.anything() })
+    );
     expect(movies.length).toBe(1);
     expect(movies[0].title).toBe('Test Movie');
     expect(movies[0].id).toBe('tt123');
@@ -60,7 +63,8 @@ describe('yts api', () => {
 
     const movie = await getMovieDetails(1);
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('movie_details.json?movie_id=1')
+      expect.stringContaining('movie_details.json?movie_id=1'),
+      expect.objectContaining({ signal: expect.anything() })
     );
     expect(movie.title).toBe('Test Movie');
   });
@@ -76,7 +80,8 @@ describe('yts api', () => {
 
     const movie = await getMovieDetails('tt12345');
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('movie_details.json?imdb_id=tt12345')
+      expect.stringContaining('movie_details.json?imdb_id=tt12345'),
+      expect.objectContaining({ signal: expect.anything() })
     );
     expect(movie.title).toBe('Test Movie');
   });
@@ -134,7 +139,10 @@ describe('yts api', () => {
     });
 
     const series = await getPopularSeries();
-    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('series/top.json'));
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('series/top.json'),
+      expect.objectContaining({ signal: expect.anything() })
+    );
     expect(series.length).toBe(1);
     expect(series[0].title).toBe('Test Series');
     expect(series[0].id).toBe('tt987');
@@ -156,7 +164,8 @@ describe('yts api', () => {
 
     const details = await getSeriesDetails('tt987');
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('meta/series/tt987.json')
+      expect.stringContaining('meta/series/tt987.json'),
+      expect.objectContaining({ signal: expect.anything() })
     );
     expect(details.title).toBe('Test Series Detail');
     expect(details.id).toBe('tt987');
@@ -190,7 +199,8 @@ describe('yts api', () => {
 
     const results = await searchMovies('inception');
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('catalog/movie/top/search=inception.json')
+      expect.stringContaining('catalog/movie/top/search=inception.json'),
+      expect.objectContaining({ signal: expect.anything() })
     );
     expect(results.length).toBe(1);
     expect(results[0].title).toBe('Inception');
@@ -205,7 +215,8 @@ describe('yts api', () => {
 
     await searchMovies('piratas do caribe');
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining(encodeURIComponent('piratas do caribe'))
+      expect.stringContaining(encodeURIComponent('piratas do caribe')),
+      expect.objectContaining({ signal: expect.anything() })
     );
   });
 
@@ -227,7 +238,8 @@ describe('yts api', () => {
 
     const results = await searchSeries('breaking');
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('catalog/series/top/search=breaking.json')
+      expect.stringContaining('catalog/series/top/search=breaking.json'),
+      expect.objectContaining({ signal: expect.anything() })
     );
     expect(results.length).toBe(1);
     expect(results[0].title).toBe('Breaking Bad');

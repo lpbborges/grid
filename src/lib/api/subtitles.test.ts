@@ -16,7 +16,8 @@ describe('subtitles api', () => {
       });
       await getExternalSubtitles('tt123456', 1, 2);
       expect(fetch).toHaveBeenCalledWith(
-        'https://opensubtitles-v3.strem.io/subtitles/series/tt123456:1:2.json'
+        'https://opensubtitles-v3.strem.io/subtitles/series/tt123456:1:2.json',
+        expect.objectContaining({ signal: expect.anything() })
       );
     });
 

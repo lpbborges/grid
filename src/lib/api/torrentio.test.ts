@@ -28,7 +28,8 @@ describe('torrentio api', () => {
 
       const streams = await getSeriesStreams('tt123456', 1, 1);
       expect(fetch).toHaveBeenCalledWith(
-        'https://torrentio.strem.fun/stream/series/tt123456:1:1.json'
+        'https://torrentio.strem.fun/stream/series/tt123456:1:1.json',
+        expect.objectContaining({ signal: expect.anything() })
       );
       expect(streams).toHaveLength(1);
       expect(streams[0].infoHash).toBe('abcdef123456');

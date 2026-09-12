@@ -26,7 +26,8 @@ describe('translateText', () => {
     const result = await translateText('Hello world', 'pt');
     expect(result).toBe('Olá mundo');
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('translate.googleapis.com')
+      expect.stringContaining('translate.googleapis.com'),
+      expect.objectContaining({ signal: expect.anything() })
     );
   });
 
