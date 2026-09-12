@@ -251,8 +251,14 @@ async fn start_torrent_engine(
     let _ = std::fs::remove_dir_all(&output_folder); // cleanup previous sessions
     let _ = std::fs::create_dir_all(&output_folder);
 
-    // Find a free ephemeral port for the HTTP API
+    // Find free ephemeral ports for HTTP API and peer listener
     let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .map_err(|e| e.to_string())?
+        .local_addr()
+        .map_err(|e| e.to_string())?
+        .port();
+
+    let peer_port = std::net::TcpListener::bind("127.0.0.1:0")
         .map_err(|e| e.to_string())?
         .local_addr()
         .map_err(|e| e.to_string())?
@@ -265,12 +271,14 @@ async fn start_torrent_engine(
             println!("Sidecar builder error: {}", e);
             e.to_string()
         })?
+        .arg("--disable-dht-persistence")
         .arg("--http-api-listen-addr")
         .arg(format!("127.0.0.1:{}", port))
         .arg("--listen-port")
-        .arg("0")
+        .arg(peer_port.to_string())
         .arg("server")
         .arg("start")
+        .arg("--disable-persistence")
         .arg(output_folder);
 
     let (mut rx, child) = sidecar_command.spawn().map_err(|e| {
