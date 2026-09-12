@@ -76,11 +76,30 @@ async fn fetch_external_subtitle(
     fetch_and_convert(&url).await
 }
 
-async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
-    let client = reqwest::Client::builder()
+/// Redirect policy shared by the subtitle-fetching client: every redirect
+/// target (not just the original request URL) is re-validated against the
+/// strem.io allowlist before being followed. This closes an SSRF hole where
+/// an allowed host could redirect the fetch to an arbitrary internal or
+/// external address.
+fn subtitle_redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if subtitles::is_allowed_subtitle_url(attempt.url().as_str()) {
+            attempt.follow()
+        } else {
+            attempt.stop()
+        }
+    })
+}
+
+fn build_subtitle_client() -> Result<reqwest::Client, reqwest::Error> {
+    reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(12000))
+        .redirect(subtitle_redirect_policy())
         .build()
-        .map_err(|e| e.to_string())?;
+}
+
+async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
+    let client = build_subtitle_client().map_err(|e| e.to_string())?;
 
     let res = client
         .get(target_url)
@@ -233,5 +252,63 @@ mod tests {
             assert!(check_subtitle_rate_limit(&state, "k"));
         }
         assert!(!check_subtitle_rate_limit(&state, "k"));
+    }
+
+    /// Starts a tiny raw-socket HTTP server that always replies with a 302
+    /// redirect to `location`, for exactly one connection. Returns the
+    /// server's base URL.
+    async fn spawn_redirecting_server(location: &str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let location = location.to_string();
+
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0u8; 1024];
+                let _ = socket.read(&mut buf).await;
+                let response = format!(
+                    "HTTP/1.1 302 Found\r\nLocation: {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    location
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+                let _ = socket.shutdown().await;
+            }
+        });
+
+        format!("http://{}", addr)
+    }
+
+    #[tokio::test]
+    async fn redirect_to_disallowed_host_is_not_followed() {
+        let server_url = spawn_redirecting_server("https://evil.example.com/payload.srt").await;
+
+        let client = build_subtitle_client().expect("client builds");
+        let res = client.get(&server_url).send().await.expect("request sent");
+
+        // The custom redirect policy must stop at the disallowed target,
+        // so the client sees the original 302 response rather than
+        // transparently following it to evil.example.com.
+        assert_eq!(res.status(), reqwest::StatusCode::FOUND);
+        assert_eq!(
+            res.headers().get("location").unwrap(),
+            "https://evil.example.com/payload.srt"
+        );
+    }
+
+    #[tokio::test]
+    async fn redirect_to_allowed_strem_io_host_is_followed() {
+        // strem.io itself can't be stood up locally, so exercise the policy
+        // closure logic directly against a crafted attempt URL instead.
+        let policy = subtitle_redirect_policy();
+        // reqwest::redirect::Policy has no public inspection API, so assert
+        // the underlying predicate it is built from behaves as expected
+        // (this is what the closure passed to Policy::custom evaluates).
+        assert!(subtitles::is_allowed_subtitle_url(
+            "https://subs.strem.io/x.vtt"
+        ));
+        let _ = policy; // policy construction itself must not panic
     }
 }

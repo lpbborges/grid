@@ -65,6 +65,30 @@ describe('subtitles api', () => {
       const subs = await getExternalSubtitles('tt123456');
       expect(subs).toEqual([]);
     });
+
+    it('keeps subtitles that succeed when another entry fails to fetch', async () => {
+      const mockResponse = {
+        subtitles: [
+          { id: 'ok', url: 'http://example.com/ok.srt', lang: 'en' },
+          { id: 'bad', url: 'http://example.com/bad.srt', lang: 'fr' }
+        ]
+      };
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockResponse)
+      });
+      (invoke as any).mockImplementation((_cmd: string, { url }: { url: string }) => {
+        if (url.includes('bad')) {
+          return Promise.reject(new Error('timeout'));
+        }
+        return Promise.resolve('WEBVTT\n\nHello');
+      });
+
+      const subs = await getExternalSubtitles('tt123456');
+
+      expect(subs).toHaveLength(1);
+      expect(subs[0].id).toBe('ok');
+    });
   });
 
   describe('srtToVtt', () => {

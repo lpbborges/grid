@@ -266,4 +266,24 @@ describe('getTorrentSubtitles', () => {
       group: 'Embedded'
     });
   });
+
+  it('keeps subtitles that succeed when another fileIdx fetch fails', async () => {
+    (invoke as any).mockImplementation((_cmd: string, { fileIdx }: { fileIdx: number }) => {
+      if (fileIdx === 2) {
+        return Promise.reject(new Error('rate limited'));
+      }
+      return Promise.resolve('WEBVTT\n\nHello');
+    });
+
+    const files = [
+      { name: 'movie.mp4', length: 1000 },
+      { name: 'movie_en.srt', length: 100 },
+      { name: 'movie_fr.vtt', length: 100 }
+    ];
+
+    const subs = await getTorrentSubtitles('dummyHash', files);
+
+    expect(subs).toHaveLength(1);
+    expect(subs[0].lang).toBe('en');
+  });
 });

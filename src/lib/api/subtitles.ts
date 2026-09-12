@@ -78,7 +78,7 @@ export async function getExternalSubtitles(
     const data = await res.json();
     if (!data.subtitles) return [];
 
-    return await Promise.all(
+    const results = await Promise.allSettled(
       data.subtitles.map(async (sub: any) => {
         const langName = getLanguageName(sub.lang);
         const vtt = await invoke<string>('fetch_external_subtitle', { url: sub.url });
@@ -90,9 +90,19 @@ export async function getExternalSubtitles(
           lang: sub.lang,
           label: langName,
           group: 'Extra'
-        };
+        } as SubtitleTrack;
       })
     );
+
+    return results
+      .filter((result): result is PromiseFulfilledResult<SubtitleTrack> => {
+        if (result.status === 'rejected') {
+          console.warn('Failed to fetch an external subtitle:', result.reason);
+          return false;
+        }
+        return true;
+      })
+      .map((result) => result.value);
   } catch (error) {
     console.error('Failed to fetch external subtitles:', error);
     return [];

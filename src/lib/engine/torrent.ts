@@ -120,7 +120,7 @@ export async function getTorrentSubtitles(
     }
   });
 
-  const subs = await Promise.all(
+  const results = await Promise.allSettled(
     candidates.map(async ({ idx, name }) => {
       const langMatch = name.match(/[._]([a-zA-Z]{2,3})\.(srt|vtt)$/i);
       const lang = langMatch ? langMatch[1] : 'Unknown';
@@ -148,7 +148,26 @@ export async function getTorrentSubtitles(
       };
     })
   );
-  return subs;
+
+  return results
+    .filter(
+      (
+        result
+      ): result is PromiseFulfilledResult<{
+        id: string;
+        url: string;
+        lang: string;
+        label: string;
+        group: 'Embedded';
+      }> => {
+        if (result.status === 'rejected') {
+          console.warn('Failed to fetch a torrent subtitle:', result.reason);
+          return false;
+        }
+        return true;
+      }
+    )
+    .map((result) => result.value);
 }
 
 export async function getTorrentStats(infoHash: string): Promise<any> {

@@ -27,6 +27,9 @@ sysinfo = "0.39.6"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 regex = "1"
 
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util"] }
+
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
