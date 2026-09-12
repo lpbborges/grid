@@ -70,4 +70,33 @@ describe('translation-cache', () => {
 
     consoleWarnSpy.mockRestore();
   });
+
+  it('self-heals after a transient IndexedDB open failure instead of disabling the cache for the rest of the session', async () => {
+    const realFactory = new IDBFactory();
+    let openCallCount = 0;
+    globalThis.indexedDB = {
+      open: (...args: Parameters<IDBFactory['open']>) => {
+        openCallCount++;
+        if (openCallCount === 1) {
+          throw new Error('Simulated transient IndexedDB failure');
+        }
+        return realFactory.open(...args);
+      }
+    } as unknown as IDBFactory;
+
+    const { getCached, setCached } = await import('./translation-cache');
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // First call hits the simulated transient failure: fails open (miss), doesn't throw.
+    const firstAttempt = await getCached('Retry', 'pt');
+    expect(firstAttempt).toBeUndefined();
+
+    // A later call should retry opening the DB rather than reuse a permanently-rejected
+    // singleton promise, so the cache recovers once IndexedDB is available again.
+    await setCached('Retry', 'pt', 'Tentar novamente');
+    const secondAttempt = await getCached('Retry', 'pt');
+    expect(secondAttempt).toBe('Tentar novamente');
+
+    consoleWarnSpy.mockRestore();
+  });
 });

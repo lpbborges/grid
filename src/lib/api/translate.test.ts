@@ -109,6 +109,52 @@ describe('translateText', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("dedup holds even when one call's cache lookup resolves before another's in creation order (no interleaving between map-check and map-set)", async () => {
+    vi.resetModules();
+    globalThis.indexedDB = new IDBFactory();
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [[['Traduzido', 'Race text']]]
+    });
+
+    let resolveFirstLookup: (value: string | undefined) => void;
+    let resolveSecondLookup: (value: string | undefined) => void;
+    const firstLookup = new Promise<string | undefined>((resolve) => {
+      resolveFirstLookup = resolve;
+    });
+    const secondLookup = new Promise<string | undefined>((resolve) => {
+      resolveSecondLookup = resolve;
+    });
+
+    // Simulate two independent IndexedDB read transactions for the same key that
+    // resolve out of creation order (IndexedDB gives no ordering guarantee here):
+    // call A's lookup resolves LAST even though call A started first.
+    vi.doMock('../stores/translation-cache', () => ({
+      getCached: vi
+        .fn()
+        .mockImplementationOnce(() => firstLookup)
+        .mockImplementationOnce(() => secondLookup),
+      setCached: vi.fn().mockResolvedValue(undefined)
+    }));
+
+    const { translateText } = await import('./translate');
+
+    const callA = translateText('Race text', 'pt');
+    const callB = translateText('Race text', 'pt');
+
+    // Call B's cache lookup (started second) resolves first; call A's resolves after.
+    resolveSecondLookup!(undefined);
+    await Promise.resolve();
+    await Promise.resolve();
+    resolveFirstLookup!(undefined);
+
+    await Promise.all([callA, callB]);
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    vi.doUnmock('../stores/translation-cache');
+  });
+
   it('allows a new request after a previous in-flight request has settled', async () => {
     const { translateText } = await freshTranslateModule();
     (globalThis.fetch as any)

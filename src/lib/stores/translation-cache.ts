@@ -17,7 +17,7 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 
 function openDb(): Promise<IDBDatabase> {
   if (!dbPromise) {
-    dbPromise = new Promise((resolve, reject) => {
+    dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       request.onupgradeneeded = () => {
         const db = request.result;
@@ -27,6 +27,12 @@ function openDb(): Promise<IDBDatabase> {
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
+    }).catch((error) => {
+      // Don't leave a permanently-rejected singleton behind: a transient failure
+      // (quota, blocked upgrade, private-mode edge case) shouldn't disable the
+      // cache for the rest of the session. Reset so the next call retries.
+      dbPromise = null;
+      throw error;
     });
   }
   return dbPromise;
