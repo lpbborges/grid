@@ -55,10 +55,12 @@
   let statsInterval: ReturnType<typeof window.setInterval>;
   let waitingTimeout: ReturnType<typeof setTimeout>;
   let watchedTriggered = $state(false);
+  let playbackError = $state('');
 
   function markPlaying() {
     window.clearTimeout(waitingTimeout);
     isVideoPlaying = true;
+    playbackError = '';
   }
 
   function markWaiting() {
@@ -66,6 +68,39 @@
     waitingTimeout = window.setTimeout(() => {
       isVideoPlaying = false;
     }, 250);
+  }
+
+  // The <video> element previously had no error handler at all: a decode or
+  // network failure (unsupported codec, CORS rejection, torrent stream
+  // aborting) left the loading overlay spinning forever with no way to tell
+  // that apart from "still downloading". Surface it instead.
+  const MEDIA_ERROR_MESSAGES: Record<number, string> = {
+    1: 'O carregamento do vídeo foi interrompido.',
+    2: 'Falha de rede ao carregar o vídeo.',
+    3: 'Não foi possível decodificar este vídeo (codec não suportado).',
+    4: 'Formato de vídeo não suportado.'
+  };
+
+  function handleVideoError() {
+    // Before `prepareStream()` resolves, this component is already mounted
+    // with `src=""` (the parent passes the stream URL only once it's known).
+    // An empty src makes the browser fail resource selection immediately and
+    // fire a spurious "error" with MEDIA_ERR_SRC_NOT_SUPPORTED — that's not a
+    // real playback failure, so ignore it.
+    if (!src) return;
+    const mediaError = videoElement?.error;
+    playbackError = mediaError
+      ? (MEDIA_ERROR_MESSAGES[mediaError.code] ?? 'Erro desconhecido ao reproduzir o vídeo.')
+      : 'Erro desconhecido ao reproduzir o vídeo.';
+    // Otherwise an error firing after playback already started (isVideoPlaying
+    // still true from an earlier 'playing'/'canplay') would leave the overlay
+    // hidden (it's gated on !isVideoPlaying) and the video frozen on its last
+    // frame with no visible indication anything went wrong.
+    isVideoPlaying = false;
+    logger.error('Video playback error:', {
+      code: mediaError?.code,
+      message: mediaError?.message
+    });
   }
 
   let torrentSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Embedded'));
@@ -497,20 +532,38 @@
     <div
       class="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black px-4 text-center"
     >
-      <div class="relative mb-6 h-16 w-16">
-        <div
-          class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
-        ></div>
-        <div
-          class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
-        ></div>
-      </div>
+      {#if playbackError}
+        <svg
+          class="mb-6 h-16 w-16 text-red-500 [filter:drop-shadow(0_0_10px_rgba(239,68,68,0.8))]"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 9v3.75m0 3.75h.008v.008H12v-.008ZM21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+          />
+        </svg>
+      {:else}
+        <div class="relative mb-6 h-16 w-16" data-testid="loading-spinner">
+          <div
+            class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
+          ></div>
+          <div
+            class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
+          ></div>
+        </div>
+      {/if}
       <div
-        class="text-accent-green font-cyber mb-2 text-xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
+        class="font-cyber mb-2 text-xl tracking-widest uppercase {playbackError
+          ? 'text-red-500 [text-shadow:0_0_10px_rgba(239,68,68,0.8)]'
+          : 'text-accent-green [text-shadow:0_0_10px_rgba(54,211,83,0.8)]'}"
       >
-        {engineStatus || 'Carregando...'}
+        {playbackError || engineStatus || 'Carregando...'}
       </div>
-      {#if infoHash && downloadPercent > 0}
+      {#if !playbackError && infoHash && downloadPercent > 0}
         <div class="bg-dark border-primary/30 mb-2 h-2 w-full max-w-md rounded-full border">
           <div
             class="bg-accent-green h-2 rounded-full transition-all duration-300"
@@ -546,13 +599,13 @@
       ? 'opacity-100'
       : 'opacity-0'}"
     data-testid="video-element"
-    crossorigin="anonymous"
     onclick={togglePlay}
     onloadedmetadata={handleLoadedMetadata}
     onplaying={markPlaying}
     onwaiting={markWaiting}
     oncanplay={markPlaying}
     onseeked={markPlaying}
+    onerror={handleVideoError}
     ontimeupdate={() => {
       if (!isVideoPlaying && !paused) markPlaying();
       if (mediaId && duration > 0) {

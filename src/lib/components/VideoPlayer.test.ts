@@ -430,6 +430,73 @@ describe('VideoPlayer component', () => {
     }
   });
 
+  it('ignores a spurious error event fired while src is still empty', async () => {
+    const { queryByText, getByTestId } = render(VideoPlayer, { src: '' });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'error', {
+      configurable: true,
+      value: { code: 4, message: 'MEDIA_ELEMENT_ERROR: Empty src attribute' }
+    });
+
+    await fireEvent(video, new Event('error'));
+
+    expect(queryByText('Formato de vídeo não suportado.')).toBeNull();
+  });
+
+  it('shows a mapped error message and hides the spinner when playback fails', async () => {
+    const { getByText, queryByTestId, getByTestId } = render(VideoPlayer, { src: 'test.mp4' });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'error', {
+      configurable: true,
+      value: { code: 3, message: 'decode failed' }
+    });
+
+    await fireEvent(video, new Event('error'));
+
+    expect(
+      getByText('Não foi possível decodificar este vídeo (codec não suportado).')
+    ).toBeDefined();
+    expect(queryByTestId('loading-spinner')).toBeNull();
+  });
+
+  it('clears a stale error once playback actually succeeds', async () => {
+    const { getByText, queryByText, getByTestId } = render(VideoPlayer, { src: 'test.mp4' });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'error', {
+      configurable: true,
+      value: { code: 4, message: 'not supported' }
+    });
+
+    await fireEvent(video, new Event('error'));
+    expect(getByText('Formato de vídeo não suportado.')).toBeDefined();
+
+    await fireEvent.playing(video);
+    expect(queryByText('Formato de vídeo não suportado.')).toBeNull();
+
+    // A later buffering blip must not resurface the stale error message.
+    await fireEvent.waiting(video);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(queryByText('Formato de vídeo não suportado.')).toBeNull();
+  });
+
+  it('shows the error overlay even if playback had already started', async () => {
+    const { getByText, queryByText, getByTestId } = render(VideoPlayer, { src: 'test.mp4' });
+    const video = getByTestId('video-element') as any;
+
+    // Playback is already underway (overlay hidden) when a fatal error hits
+    // mid-stream, e.g. the torrent source disappearing.
+    await fireEvent.playing(video);
+    expect(queryByText('Falha de rede ao carregar o vídeo.')).toBeNull();
+
+    Object.defineProperty(video, 'error', {
+      configurable: true,
+      value: { code: 2, message: 'network failure' }
+    });
+    await fireEvent(video, new Event('error'));
+
+    expect(getByText('Falha de rede ao carregar o vídeo.')).toBeDefined();
+  });
+
   it('applies focus-visible ring styling to key interactive controls', () => {
     const { getByLabelText, getByRole } = render(VideoPlayer, {
       src: 'test.mp4',
