@@ -333,6 +333,25 @@ describe('VideoPlayer component', () => {
     expect(revealContainer?.className).toContain('group-focus-within:w-20');
   });
 
+  it('renders no <track> elements when no subtitles are available', () => {
+    const { container } = render(VideoPlayer, { src: 'test.mp4' });
+    const tracks = container.querySelectorAll('track');
+    expect(tracks.length).toBe(0);
+  });
+
+  it('renders a <track kind="subtitles"> element for each provided subtitle', () => {
+    const subtitles: any = [
+      { label: 'Eng', lang: 'en', url: 'sub.vtt', group: 'Extra' },
+      { label: 'Por', lang: 'pt', url: 'sub2.vtt', group: 'Embedded' }
+    ];
+    const { container } = render(VideoPlayer, { src: 'test.mp4', subtitles });
+    const tracks = container.querySelectorAll('track');
+    expect(tracks.length).toBe(2);
+    for (const track of tracks) {
+      expect(track.getAttribute('kind')).toBe('subtitles');
+    }
+  });
+
   it('applies focus-visible ring styling to key interactive controls', () => {
     const { getByLabelText, getByRole } = render(VideoPlayer, {
       src: 'test.mp4',

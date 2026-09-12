@@ -309,6 +309,15 @@
     </div>
   {/if}
 
+  <!--
+    Captions/subtitles are an optional, per-torrent feature (see P0-5): tracks are
+    fetched via Tauri IPC and rendered below from the `subtitles` prop when the
+    source provides them. There is no reliable "always on" caption file to fall
+    back to by default (a fake <track kind="captions" src="..."> would 404 and
+    mislead assistive tech into thinking captions exist when they don't), so this
+    a11y gap is acknowledged and intentionally suppressed rather than papered over
+    with a broken fallback. See VideoPlayer.test.ts for the covered behavior.
+  -->
   <!-- svelte-ignore a11y_media_has_caption -->
   <video
     bind:this={videoElement}
