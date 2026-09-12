@@ -1,8 +1,46 @@
 use regex::Regex;
 
+/// Converts SRT subtitle content to WebVTT.
+///
+/// Handles:
+/// - Optional numeric cue-identifier lines that precede a timing line (SRT
+///   allows these; VTT doesn't require them, so they're dropped).
+/// - Multi-line cue text (VTT and SRT both allow several text lines per cue;
+///   lines are passed through unchanged).
+/// - Basic styling tags (`<i>`, `<b>`, `<u>`) — VTT supports these natively
+///   in cue text, so they're left untouched rather than stripped/escaped.
+/// - Timestamp separators (`,` -> `.`).
+///
+/// Empty or malformed input never panics: it's returned as-is (minus any
+/// cue-identifier stripping that still applies) under the WEBVTT header.
 pub fn srt_to_vtt(input: &str) -> String {
-    let re = Regex::new(r"(\d{2}:\d{2}:\d{2}),(\d{3})").unwrap();
-    let converted = re.replace_all(input, "$1.$2");
+    let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
+
+    let cue_id_re = Regex::new(r"^\d+\s*$").unwrap();
+    let timing_re =
+        Regex::new(r"^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}").unwrap();
+    let comma_re = Regex::new(r"(\d{2}:\d{2}:\d{2}),(\d{3})").unwrap();
+
+    let lines: Vec<&str> = normalized.lines().collect();
+    let mut out_lines: Vec<&str> = Vec::with_capacity(lines.len());
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        let is_cue_identifier = cue_id_re.is_match(line)
+            && lines
+                .get(i + 1)
+                .is_some_and(|next| timing_re.is_match(next.trim()));
+        if !is_cue_identifier {
+            out_lines.push(line);
+        }
+        i += 1;
+    }
+
+    let mut joined = out_lines.join("\n");
+    if normalized.ends_with('\n') && !normalized.is_empty() {
+        joined.push('\n');
+    }
+    let converted = comma_re.replace_all(&joined, "$1.$2");
     format!("WEBVTT\n\n{}", converted)
 }
 
@@ -52,6 +90,69 @@ mod tests {
         let srt = "00:00:01,000 --> 00:00:02,500\nA\n\n00:00:03,100 --> 00:00:04,900\nB\n";
         let vtt = srt_to_vtt(srt);
         assert!(!vtt.contains(','));
+    }
+
+    #[test]
+    fn strips_numeric_cue_identifier_lines() {
+        let srt =
+            "1\n00:00:01,000 --> 00:00:02,500\nHello\n\n2\n00:00:03,000 --> 00:00:04,000\nWorld\n";
+        let vtt = srt_to_vtt(srt);
+        // Cue identifier lines are removed entirely, not just left as stray digits.
+        assert_eq!(
+            vtt,
+            "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nHello\n\n00:00:03.000 --> 00:00:04.000\nWorld\n"
+        );
+    }
+
+    #[test]
+    fn works_without_cue_identifiers() {
+        let srt = "00:00:01,000 --> 00:00:02,500\nHello\n\n00:00:03,000 --> 00:00:04,000\nWorld\n";
+        let vtt = srt_to_vtt(srt);
+        assert_eq!(
+            vtt,
+            "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nHello\n\n00:00:03.000 --> 00:00:04.000\nWorld\n"
+        );
+    }
+
+    #[test]
+    fn preserves_multi_line_cue_text() {
+        let srt = "1\n00:00:01,000 --> 00:00:05,000\nFirst line\nSecond line\nThird line\n";
+        let vtt = srt_to_vtt(srt);
+        assert_eq!(
+            vtt,
+            "WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nFirst line\nSecond line\nThird line\n"
+        );
+    }
+
+    #[test]
+    fn preserves_basic_styling_tags() {
+        let srt = "1\n00:00:01,000 --> 00:00:02,000\n<i>italic</i> <b>bold</b> <u>underline</u>\n";
+        let vtt = srt_to_vtt(srt);
+        assert!(vtt.contains("<i>italic</i> <b>bold</b> <u>underline</u>"));
+    }
+
+    #[test]
+    fn does_not_strip_a_lone_numeric_cue_line_not_followed_by_a_timestamp() {
+        // A cue whose text happens to be just digits should not be mistaken
+        // for a cue identifier: the heuristic only strips a numeric line
+        // when the very next line is a timing line.
+        let srt = "1\n00:00:01,000 --> 00:00:02,000\n42\n";
+        let vtt = srt_to_vtt(srt);
+        assert!(vtt.contains("42"));
+    }
+
+    #[test]
+    fn handles_empty_input_without_crashing() {
+        let vtt = srt_to_vtt("");
+        assert_eq!(vtt, "WEBVTT\n\n");
+    }
+
+    #[test]
+    fn handles_malformed_input_without_crashing() {
+        let srt = "not a subtitle file\njust some garbage\n\n\n---\n";
+        let vtt = srt_to_vtt(srt);
+        assert!(vtt.starts_with("WEBVTT\n\n"));
+        assert!(vtt.contains("not a subtitle file"));
     }
 
     #[test]
