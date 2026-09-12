@@ -6,7 +6,7 @@ import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 let ENGINE_URL = 'http://127.0.0.1:3030';
 
 export function isValidInfoHash(value: string): boolean {
-  return /^[a-f0-9]{40}$/i.test(value);
+  return /^[a-f0-9]{40}$/i.test(value) || /^[a-f0-9]{64}$/i.test(value);
 }
 
 export function isValidFileIdx(value: number): boolean {

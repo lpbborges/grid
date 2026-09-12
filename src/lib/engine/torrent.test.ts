@@ -169,6 +169,10 @@ describe('infoHash/fileIdx validation', () => {
     expect(isValidInfoHash(validHash.toUpperCase())).toBe(true);
   });
 
+  it('isValidInfoHash accepts a 64-char hex string (BitTorrent v2/hybrid)', () => {
+    expect(isValidInfoHash('b'.repeat(64))).toBe(true);
+  });
+
   it('isValidInfoHash rejects wrong length', () => {
     expect(isValidInfoHash('abc123')).toBe(false);
   });
