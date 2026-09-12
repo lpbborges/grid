@@ -36,8 +36,8 @@
 {:else}
   <div class="mt-6 flex flex-col gap-4">
     <div class="flex flex-col gap-2">
-      <div class="flex items-center gap-2">
-        <div class="relative flex w-1/3 flex-col gap-1">
+      <div class="grid grid-cols-2 gap-2">
+        <div class="relative flex w-full flex-col gap-1">
           <label
             for="ps-audio-select"
             class="text-primary/70 text-[10px] font-bold tracking-widest uppercase">Áudio</label
@@ -49,7 +49,7 @@
             class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-2 pr-6 pl-2 font-mono text-xs focus:outline-none"
           >
             <option value="original" class="bg-surface text-main"
-              >Original{origDisplay ? ` (${origDisplay})` : ''}</option
+              >{origDisplay ? `${origDisplay} (Original)` : 'Original'}</option
             >
             {#if originalLanguage !== 'pt'}
               <option value="pt" class="bg-surface text-main">Português BR</option>
@@ -77,7 +77,7 @@
             >
           </div>
         </div>
-        <div class="relative flex w-1/3 flex-col gap-1">
+        <div class="relative flex w-full flex-col gap-1">
           <label
             for="ps-subtitle-select"
             class="text-primary/70 text-[10px] font-bold tracking-widest uppercase">Legenda</label
@@ -109,7 +109,7 @@
             >
           </div>
         </div>
-        <div class="relative flex w-1/3 flex-col gap-1">
+        <div class="relative col-span-2 flex w-full flex-col gap-1">
           <label
             for="ps-quality-select"
             class="text-primary/70 text-[10px] font-bold tracking-widest uppercase">Qualidade</label
