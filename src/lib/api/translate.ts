@@ -1,10 +1,39 @@
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+import { getCached, setCached } from '../stores/translation-cache';
 
 const TRANSLATE_TIMEOUT_MS = 6000;
+
+// Module-level dedup map: concurrent requests for the same (text, targetLang)
+// share a single in-flight promise instead of firing redundant fetch cascades.
+const inFlightRequests = new Map<string, Promise<string>>();
 
 export async function translateText(text: string, targetLang: string): Promise<string> {
   if (!text) return text;
 
+  const key = `${text}|${targetLang}`;
+
+  const cached = await getCached(text, targetLang);
+  if (cached !== undefined) return cached;
+
+  const existing = inFlightRequests.get(key);
+  if (existing) return existing;
+
+  const requestPromise = performTranslation(text, targetLang).finally(() => {
+    inFlightRequests.delete(key);
+  });
+  inFlightRequests.set(key, requestPromise);
+  return requestPromise;
+}
+
+async function performTranslation(text: string, targetLang: string): Promise<string> {
+  const translated = await runTranslationCascade(text, targetLang);
+  if (translated !== text) {
+    await setCached(text, targetLang, translated);
+  }
+  return translated;
+}
+
+async function runTranslationCascade(text: string, targetLang: string): Promise<string> {
   try {
     // google translate free endpoint
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
