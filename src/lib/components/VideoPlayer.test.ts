@@ -230,6 +230,45 @@ describe('VideoPlayer component', () => {
     expect(tracks[0].mode).toBe('disabled');
   });
 
+  it('applies the default subtitle once tracks register via addtrack, after subtitles arrive post-mount', async () => {
+    // Mirrors useStreamPlayer: the component mounts before the stream (and its
+    // subtitles) are known, and 'loadedmetadata' may already have come and
+    // gone for the empty initial src by the time subtitles show up.
+    const trackObjs = [{ mode: 'disabled' }, { mode: 'disabled' }];
+    const listeners: Record<string, (() => void)[]> = { addtrack: [] };
+    const list: any = [];
+    list.addEventListener = (type: string, fn: () => void) => {
+      (listeners[type] ||= []).push(fn);
+    };
+    list.removeEventListener = (type: string, fn: () => void) => {
+      listeners[type] = (listeners[type] || []).filter((f) => f !== fn);
+    };
+    const dispatchAddTrack = () => listeners.addtrack.forEach((fn) => fn());
+
+    const { getByTestId, rerender } = render(VideoPlayer, { src: '', subtitles: [] });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'textTracks', { writable: true, value: list });
+    await act(() => {});
+
+    const subtitles: any = [
+      { label: 'Inglês', lang: 'en', url: 'sub-en.vtt', group: 'Extra' },
+      { label: 'Português', lang: 'pt', url: 'sub-pt.vtt', group: 'Extra' }
+    ];
+    rerender({ src: 'http://localhost/stream', subtitles });
+    await act(() => {});
+
+    // Only the first track has registered so far: must not lock in yet.
+    list.push(trackObjs[0]);
+    dispatchAddTrack();
+    expect(trackObjs[0].mode).toBe('disabled');
+
+    // Second (Portuguese) track registers: now it can decide, and picks it.
+    list.push(trackObjs[1]);
+    dispatchAddTrack();
+    expect(trackObjs[1].mode).toBe('showing');
+    expect(trackObjs[0].mode).toBe('disabled');
+  });
+
   it('keeps subtitles off after the user picks "Desativado", even though a preference match exists', async () => {
     const subtitles: any = [{ label: 'Português', lang: 'pt', url: 'sub-pt.vtt', group: 'Extra' }];
     const track = { mode: 'disabled' };

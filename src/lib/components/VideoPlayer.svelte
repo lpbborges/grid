@@ -104,7 +104,7 @@
       subtitleAutoApplied ||
       settingsStore.subtitle === 'none' ||
       subtitles.length === 0 ||
-      videoElement.textTracks.length === 0
+      videoElement.textTracks.length < subtitles.length
     ) {
       return;
     }
@@ -130,14 +130,31 @@
   }
 
   // Subtitles may already be present when the component mounts, so this effect
-  // covers that case; `handleLoadedMetadata` covers the common case, matching
-  // the same deterministic 'loadedmetadata' signal the audio-track selection
-  // uses (an arbitrary setTimeout here previously raced with <track> elements
-  // registering in videoElement.textTracks and silently dropped the default).
+  // covers that case; `handleLoadedMetadata` covers the common case.
   $effect(() => {
     if (subtitles.length > 0 && !subtitleAutoApplied && settingsStore.subtitle !== 'none') {
       applyDefaultSubtitle();
     }
+  });
+
+  // `subtitles` is set (via useStreamPlayer) before the real video `src` is
+  // known, so this component can mount and reach 'loadedmetadata' before the
+  // <track> elements it just rendered have registered themselves on
+  // videoElement.textTracks — neither the effect above nor handleLoadedMetadata
+  // is guaranteed to land after that registration finishes. 'addtrack' is the
+  // one signal the platform itself guarantees fires exactly when a track
+  // becomes available, so it's the reliable place to retry instead of guessing.
+  $effect(() => {
+    // Reading `subtitles.length` here (even though the value itself is
+    // unused) makes this effect re-subscribe when the stream's subtitles
+    // arrive (post-mount, per the note above) — at which point new <track>
+    // elements are about to be added and it's worth getting a fresh
+    // reference to the (live) list.
+    const list = subtitles.length >= 0 && videoElement && (videoElement as any).textTracks;
+    if (!list || typeof list.addEventListener !== 'function') return;
+    const handler = () => applyDefaultSubtitle();
+    list.addEventListener('addtrack', handler);
+    return () => list.removeEventListener('addtrack', handler);
   });
 
   $effect(() => {
