@@ -15,20 +15,6 @@ describe('PlayerSelection component', () => {
     expect(queryByText('1080p - web (1GB)')).not.toBeInTheDocument();
   });
 
-  it('shows release type and size as secondary detail text for the selected option', () => {
-    const torrents = [
-      { hash: 'abc', quality: '1080p', type: 'BluRay', size: '2.1 GB' },
-      { hash: 'def', quality: '4K', type: 'web', size: '4.5 GB' }
-    ];
-
-    const { getByText } = render(PlayerSelection, {
-      props: { torrents, selectedTorrentHash: 'abc', onPlay: vi.fn() }
-    });
-
-    expect(getByText(/BluRay/)).toBeInTheDocument();
-    expect(getByText(/2\.1 GB/)).toBeInTheDocument();
-  });
-
   it('calls onPlay when the play button is clicked', async () => {
     const onPlay = vi.fn();
     const torrents = [{ hash: 'abc', quality: '1080p', type: 'web', size: '1GB' }];

@@ -15,6 +15,7 @@
 
   let {
     torrents,
+    // eslint-disable-next-line no-useless-assignment
     selectedTorrentHash = $bindable(),
     onPlay,
     originalLanguage
@@ -25,9 +26,6 @@
     originalLanguage?: string;
   }>();
 
-  let selectedTorrent = $derived(
-    torrents.find((torrent: TorrentOption) => torrent.hash === selectedTorrentHash)
-  );
   let origDisplay = $derived(originalLanguage ? getLanguageName(originalLanguage) : '');
 </script>
 
@@ -144,12 +142,6 @@
           </div>
         </div>
       </div>
-
-      {#if selectedTorrent}
-        <span class="text-muted font-mono text-xs opacity-70">
-          {selectedTorrent.type} &bull; {selectedTorrent.size}
-        </span>
-      {/if}
     </div>
 
     <button
