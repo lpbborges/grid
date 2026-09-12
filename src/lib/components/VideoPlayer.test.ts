@@ -55,8 +55,10 @@ describe('VideoPlayer component', () => {
     await fireEvent.playing(video);
     expect(queryByText('Loading...')).toBeNull();
 
-    // waiting shows loading
+    // waiting shows loading, but only after it persists (avoids flashing on brief resume blips)
     await fireEvent.waiting(video);
+    expect(queryByText('Loading...')).toBeNull();
+    await vi.advanceTimersByTimeAsync(250);
     expect(getByText('Loading...')).toBeDefined();
 
     // canplay hides loading
@@ -65,6 +67,7 @@ describe('VideoPlayer component', () => {
 
     // waiting again
     await fireEvent.waiting(video);
+    await vi.advanceTimersByTimeAsync(250);
     expect(getByText('Loading...')).toBeDefined();
 
     // seeked hides loading
@@ -73,6 +76,7 @@ describe('VideoPlayer component', () => {
 
     // waiting again
     await fireEvent.waiting(video);
+    await vi.advanceTimersByTimeAsync(250);
     expect(getByText('Loading...')).toBeDefined();
 
     // timeupdate hides loading
@@ -80,6 +84,28 @@ describe('VideoPlayer component', () => {
     // we also need to fire play event for Svelte's bind:paused to update
     await fireEvent.play(video);
     await fireEvent(video, new Event('timeupdate'));
+    expect(queryByText('Loading...')).toBeNull();
+  });
+
+  it('does not flash loading overlay on a brief waiting blip after resuming play', async () => {
+    const { queryByText, getByTestId } = render(VideoPlayer, {
+      src: 'test.mp4',
+      engineStatus: 'Loading...'
+    });
+
+    const video = getByTestId('video-element');
+
+    await fireEvent.playing(video);
+    expect(queryByText('Loading...')).toBeNull();
+
+    // Simulate the brief 'waiting' event browsers fire right after resuming from pause,
+    // which resolves quickly because there's already playable video buffered.
+    await fireEvent.waiting(video);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(queryByText('Loading...')).toBeNull();
+
+    await fireEvent.playing(video);
+    await vi.advanceTimersByTimeAsync(250);
     expect(queryByText('Loading...')).toBeNull();
   });
 

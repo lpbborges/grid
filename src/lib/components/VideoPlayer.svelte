@@ -37,6 +37,19 @@
   let downloadPercent = $state<number>(0);
   let isVideoPlaying = $state(false);
   let statsInterval: ReturnType<typeof window.setInterval>;
+  let waitingTimeout: ReturnType<typeof setTimeout>;
+
+  function markPlaying() {
+    window.clearTimeout(waitingTimeout);
+    isVideoPlaying = true;
+  }
+
+  function markWaiting() {
+    window.clearTimeout(waitingTimeout);
+    waitingTimeout = window.setTimeout(() => {
+      isVideoPlaying = false;
+    }, 250);
+  }
 
   let torrentSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Embedded'));
   let externalSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Extra'));
@@ -289,12 +302,12 @@
     crossorigin="anonymous"
     onclick={togglePlay}
     onloadedmetadata={handleLoadedMetadata}
-    onplaying={() => (isVideoPlaying = true)}
-    onwaiting={() => (isVideoPlaying = false)}
-    oncanplay={() => (isVideoPlaying = true)}
-    onseeked={() => (isVideoPlaying = true)}
+    onplaying={markPlaying}
+    onwaiting={markWaiting}
+    oncanplay={markPlaying}
+    onseeked={markPlaying}
     ontimeupdate={() => {
-      if (!isVideoPlaying && !paused) isVideoPlaying = true;
+      if (!isVideoPlaying && !paused) markPlaying();
     }}
   >
     {#each subtitles as sub}
