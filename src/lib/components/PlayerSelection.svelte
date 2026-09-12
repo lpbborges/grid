@@ -8,6 +8,10 @@
     selectedTorrentHash: string;
     onPlay: () => void;
   }>();
+
+  let selectedTorrent = $derived(
+    torrents.find((torrent: any) => torrent.hash === selectedTorrentHash)
+  );
 </script>
 
 <div class="mt-6 flex flex-col gap-4">
@@ -23,7 +27,7 @@
       >
         {#each torrents as torrent}
           <option value={torrent.hash} class="bg-surface text-main">
-            {torrent.quality} - {torrent.type} ({torrent.size})
+            {torrent.quality}
           </option>
         {/each}
       </select>
@@ -43,6 +47,11 @@
         >
       </div>
     </div>
+    {#if selectedTorrent}
+      <span class="text-muted font-mono text-xs opacity-70">
+        {selectedTorrent.type} &bull; {selectedTorrent.size}
+      </span>
+    {/if}
   </div>
 
   <button

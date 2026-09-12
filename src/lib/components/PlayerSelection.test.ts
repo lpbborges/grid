@@ -4,15 +4,38 @@ import PlayerSelection from './PlayerSelection.svelte';
 import '@testing-library/jest-dom';
 
 describe('PlayerSelection component', () => {
-  it('renders torrents and calls onPlay', async () => {
+  it('shows only the quality as the primary option label', () => {
+    const torrents = [{ hash: 'abc', quality: '1080p', type: 'web', size: '1GB' }];
+
+    const { getByText, queryByText } = render(PlayerSelection, {
+      props: { torrents, selectedTorrentHash: 'abc', onPlay: vi.fn() }
+    });
+
+    expect(getByText('1080p')).toBeInTheDocument();
+    expect(queryByText('1080p - web (1GB)')).not.toBeInTheDocument();
+  });
+
+  it('shows release type and size as secondary detail text for the selected option', () => {
+    const torrents = [
+      { hash: 'abc', quality: '1080p', type: 'BluRay', size: '2.1 GB' },
+      { hash: 'def', quality: '4K', type: 'web', size: '4.5 GB' }
+    ];
+
+    const { getByText } = render(PlayerSelection, {
+      props: { torrents, selectedTorrentHash: 'abc', onPlay: vi.fn() }
+    });
+
+    expect(getByText(/BluRay/)).toBeInTheDocument();
+    expect(getByText(/2\.1 GB/)).toBeInTheDocument();
+  });
+
+  it('calls onPlay when the play button is clicked', async () => {
     const onPlay = vi.fn();
     const torrents = [{ hash: 'abc', quality: '1080p', type: 'web', size: '1GB' }];
 
-    const { getByText, getByRole } = render(PlayerSelection, {
+    const { getByRole } = render(PlayerSelection, {
       props: { torrents, selectedTorrentHash: 'abc', onPlay }
     });
-
-    expect(getByText('1080p - web (1GB)')).toBeInTheDocument();
 
     const button = getByRole('button', { name: /reproduzir/i });
     await fireEvent.click(button);
