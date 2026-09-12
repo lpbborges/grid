@@ -152,12 +152,16 @@
 
   let isFocused = $state(false);
 
-  function handleMouseMove() {
-    showControls = true;
+  function scheduleHideControls() {
     window.clearTimeout(controlsTimeout);
     controlsTimeout = window.setTimeout(() => {
-      if (!paused && !isFocused) showControls = false;
+      if (!paused) showControls = false;
     }, 2500);
+  }
+
+  function handleMouseMove() {
+    showControls = true;
+    scheduleHideControls();
   }
 
   function handleMouseLeave() {
@@ -167,18 +171,13 @@
   function handleFocusIn() {
     isFocused = true;
     showControls = true;
-    window.clearTimeout(controlsTimeout);
+    scheduleHideControls();
   }
 
   function handleFocusOut(e: FocusEvent) {
     if (!containerElement?.contains(e.relatedTarget as Node)) {
       isFocused = false;
-      if (!paused) {
-        window.clearTimeout(controlsTimeout);
-        controlsTimeout = window.setTimeout(() => {
-          showControls = false;
-        }, 2500);
-      }
+      if (!paused) scheduleHideControls();
     }
   }
 
