@@ -7,6 +7,7 @@ describe('MediaInfo component', () => {
   it('renders media details correctly', () => {
     const { getByText } = render(MediaInfo, {
       props: {
+        id: '123',
         title: 'Test Movie',
         year: 2023,
         director: ['John Doe'],
@@ -28,6 +29,7 @@ describe('MediaInfo component', () => {
   it('renders without director and cast', () => {
     const { queryByText } = render(MediaInfo, {
       props: {
+        id: '123',
         title: 'Test Movie',
         year: 2023,
         rating: 8.5,

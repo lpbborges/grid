@@ -2,21 +2,32 @@
   import { logger } from '$lib/logger';
   import { getTorrentStats } from '$lib/engine/torrent';
   import type { SubtitleTrack } from '$lib/api/subtitles';
+  import { progressStore } from '$lib/stores/progress.svelte';
 
   let {
     src,
     subtitles = [],
     onclose,
+    onwatched,
     engineStatus = '',
     infoHash = '',
-    totalBytes = 0
+    totalBytes = 0,
+    mediaId,
+    season,
+    episode,
+    initialTime = 0
   } = $props<{
     src: string;
     subtitles?: SubtitleTrack[];
     onclose?: () => void;
+    onwatched?: () => void;
     engineStatus?: string;
     infoHash?: string;
     totalBytes?: number;
+    mediaId?: string | number;
+    season?: number;
+    episode?: number;
+    initialTime?: number;
   }>();
   /* global HTMLVideoElement, HTMLElement, FocusEvent, MouseEvent, KeyboardEvent, Node, VTTCue */
   let videoElement = $state<HTMLVideoElement | null>(null);
@@ -39,6 +50,7 @@
   let isVideoPlaying = $state(false);
   let statsInterval: ReturnType<typeof window.setInterval>;
   let waitingTimeout: ReturnType<typeof setTimeout>;
+  let watchedTriggered = $state(false);
 
   function markPlaying() {
     window.clearTimeout(waitingTimeout);
@@ -75,6 +87,13 @@
 
   let torrentSubsGrouped = $derived(groupByLanguage(torrentSubs));
   let externalSubsGrouped = $derived(groupByLanguage(externalSubs));
+
+  $effect(() => {
+    if (initialTime > 0 && videoElement && duration > 0) {
+      currentTime = initialTime;
+      initialTime = 0; // Prevent resetting
+    }
+  });
 
   $effect(() => {
     if (infoHash && !isVideoPlaying) {
@@ -341,6 +360,13 @@
     onseeked={markPlaying}
     ontimeupdate={() => {
       if (!isVideoPlaying && !paused) markPlaying();
+      if (mediaId && duration > 0) {
+        progressStore.update(mediaId, season, episode, currentTime, duration);
+      }
+      if (duration > 0 && currentTime / duration > 0.95 && onwatched && !watchedTriggered) {
+        watchedTriggered = true;
+        onwatched();
+      }
     }}
   >
     {#each subtitles as sub}

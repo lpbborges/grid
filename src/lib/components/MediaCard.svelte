@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Movie } from '../types';
   import { watchedStore } from '$lib/stores/watched.svelte';
+  import { progressStore } from '$lib/stores/progress.svelte';
 
   let { media, type = 'movie' } = $props<{ media: Movie; type?: 'movie' | 'series' }>();
 </script>
@@ -38,6 +39,13 @@
       >
         Assistido
       </div>
+    {/if}
+    {#if !watchedStore.watchedIds.includes(String(media.id)) && progressStore.get(media.id)}
+      <div
+        class="bg-accent-green absolute bottom-0 left-0 h-1 shadow-[0_0_8px_rgba(54,211,83,0.8)]"
+        style="width: {(progressStore.get(media.id)!.time / progressStore.get(media.id)!.duration) *
+          100}%"
+      ></div>
     {/if}
   </div>
 

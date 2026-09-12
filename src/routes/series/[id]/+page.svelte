@@ -7,6 +7,7 @@
   import EpisodeList from '$lib/components/EpisodeList.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
+  import { progressStore } from '$lib/stores/progress.svelte';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
@@ -201,6 +202,14 @@
         <VideoPlayer
           src={streamPlayer.videoSrc}
           subtitles={streamPlayer.subtitles}
+          mediaId={seriesId}
+          season={lastAttemptedEpisode?.season}
+          episode={lastAttemptedEpisode?.episode}
+          initialTime={progressStore.get(
+            seriesId,
+            lastAttemptedEpisode?.season,
+            lastAttemptedEpisode?.episode
+          )?.time || 0}
           onclose={streamPlayer.stop}
           onwatched={() => {
             watchedStore.add(seriesId);

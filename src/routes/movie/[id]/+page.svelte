@@ -6,6 +6,7 @@
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
+  import { progressStore } from '$lib/stores/progress.svelte';
 
   let { data } = $props();
   let movieId = $derived(data.movieId);
@@ -163,6 +164,8 @@
         <VideoPlayer
           src={streamPlayer.videoSrc}
           subtitles={streamPlayer.subtitles}
+          mediaId={movieId}
+          initialTime={progressStore.get(movieId)?.time || 0}
           onclose={streamPlayer.stop}
           onwatched={() => {
             watchedStore.add(movieId);
