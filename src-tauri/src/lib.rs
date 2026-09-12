@@ -183,12 +183,20 @@ fn cleanup_stale_engine(pid_path: &Path) {
         let exe = process.exe().map(|p| p.to_path_buf());
         if process_looks_like_rqbit(&name, exe.as_deref()) {
             process.kill();
+            let mut died = false;
             for _ in 0..30 {
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 sys.refresh_all();
                 if sys.process(sys_pid).is_none() {
+                    died = true;
                     break;
                 }
+            }
+            if !died {
+                println!(
+                    "PID {} (rqbit) did not exit within 3s of being killed; proceeding anyway",
+                    pid
+                );
             }
         } else {
             println!(
@@ -207,19 +215,37 @@ async fn start_torrent_engine(
     app: tauri::AppHandle,
     state: State<'_, EngineState>,
 ) -> Result<String, String> {
+    // Check-and-bail without holding any lock across the (up to ~3s)
+    // cleanup wait below: the window CloseRequested handler needs to be
+    // able to acquire `state.child` promptly even if a startup cleanup is
+    // still polling for a stale process to die, otherwise closing the
+    // window could block on this same mutex.
+    {
+        let child_guard = state.child.lock().unwrap();
+        let port_guard = state.port.lock().unwrap();
+        if child_guard.is_some() {
+            if let Some(p) = *port_guard {
+                return Ok(format!("http://127.0.0.1:{}", p));
+            }
+            return Ok("Engine already running".to_string());
+        }
+    }
+
+    // Identity-validated cleanup of any orphaned rqbit process from a
+    // previous run, tracked via the PID file (see cleanup_stale_engine).
+    // Deliberately run with no EngineState locks held (see comment above).
+    cleanup_stale_engine(&pid_file_path());
+
     let mut child_guard = state.child.lock().unwrap();
     let mut pid_guard = state.pid.lock().unwrap();
     let mut port_guard = state.port.lock().unwrap();
+    // Re-check in case another invocation raced us while cleanup ran.
     if child_guard.is_some() {
         if let Some(p) = *port_guard {
             return Ok(format!("http://127.0.0.1:{}", p));
         }
         return Ok("Engine already running".to_string());
     }
-
-    // Identity-validated cleanup of any orphaned rqbit process from a
-    // previous run, tracked via the PID file (see cleanup_stale_engine).
-    cleanup_stale_engine(&pid_file_path());
 
     let output_folder = std::env::temp_dir().join("grid-play-downloads");
     let _ = std::fs::remove_dir_all(&output_folder); // cleanup previous sessions
