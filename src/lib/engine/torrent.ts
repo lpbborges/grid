@@ -78,6 +78,30 @@ export async function addTorrent(magnetLink: string): Promise<TorrentEngineDetai
   return data.details as TorrentEngineDetails;
 }
 
+// rqbit selects every file in a torrent for download by default. For a
+// multi-file release (a season pack, a movie bundled with samples/extras)
+// that means bandwidth and piece-selection effort go to files nobody asked
+// for, so the file actually being streamed can lag far behind what the
+// torrent's overall (misleadingly reassuring) download percentage shows.
+// Restricting the selection to just the files we need fixes that.
+export async function updateOnlyFiles(infoHash: string, fileIndices: number[]): Promise<void> {
+  if (!isValidInfoHash(infoHash)) {
+    throw new Error('Invalid infoHash');
+  }
+  const res = await fetchWithTimeout(
+    `${ENGINE_URL}/torrents/${infoHash}/update_only_files`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ only_files: fileIndices })
+    },
+    8000
+  );
+  if (!res.ok) {
+    throw new Error('Failed to update torrent file selection');
+  }
+}
+
 export function getBestVideoFileIndex(files: { name: string; length: number }[]): number {
   let bestFileIdx = 0;
   let maxSize = 0;

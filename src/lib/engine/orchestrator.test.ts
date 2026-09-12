@@ -10,7 +10,8 @@ vi.mock('./torrent', () => ({
   addTorrent: vi.fn(),
   getBestVideoFileIndex: vi.fn(),
   getStreamUrl: vi.fn(),
-  getTorrentSubtitles: vi.fn()
+  getTorrentSubtitles: vi.fn(),
+  updateOnlyFiles: vi.fn()
 }));
 
 vi.mock('$lib/api/subtitles', () => ({
@@ -20,12 +21,16 @@ vi.mock('$lib/api/subtitles', () => ({
 describe('prepareStream', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(torrentApi.updateOnlyFiles).mockResolvedValue(undefined);
   });
 
   it('orchestrates stream preparation correctly', async () => {
     const mockDetails = {
       info_hash: '12345',
-      files: [{ length: 100 }, { length: 200 }]
+      files: [
+        { name: 'sample.mkv', length: 100 },
+        { name: 'movie.mkv', length: 200 }
+      ]
     };
 
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails as any);
@@ -47,16 +52,20 @@ describe('prepareStream', () => {
     expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test');
 
     expect(result.infoHash).toBe('12345');
-    expect(result.totalBytes).toBe(300);
+    expect(result.totalBytes).toBe(200);
     expect(result.videoSrc).toBe('http://localhost/stream');
     expect(result.subtitles).toHaveLength(2);
     expect(statusCb).toHaveBeenCalledWith('Carregando vídeo...');
+    expect(torrentApi.updateOnlyFiles).toHaveBeenCalledWith('12345', [1]);
   });
 
   it('degrades gracefully when torrent subtitle fetching fails, without blocking playback', async () => {
     const mockDetails = {
       info_hash: '12345',
-      files: [{ length: 100 }, { length: 200 }]
+      files: [
+        { name: 'sample.mkv', length: 100 },
+        { name: 'movie.mkv', length: 200 }
+      ]
     };
 
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails as any);
@@ -78,7 +87,10 @@ describe('prepareStream', () => {
   it('degrades gracefully when external subtitle fetching fails, without blocking playback', async () => {
     const mockDetails = {
       info_hash: '12345',
-      files: [{ length: 100 }, { length: 200 }]
+      files: [
+        { name: 'sample.mkv', length: 100 },
+        { name: 'movie.mkv', length: 200 }
+      ]
     };
 
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails as any);
@@ -100,7 +112,10 @@ describe('prepareStream', () => {
   it('revokes the previous session blob URLs when a new stream is prepared', async () => {
     const mockDetails = {
       info_hash: '12345',
-      files: [{ length: 100 }, { length: 200 }]
+      files: [
+        { name: 'sample.mkv', length: 100 },
+        { name: 'movie.mkv', length: 200 }
+      ]
     };
 
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails as any);

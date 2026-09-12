@@ -117,6 +117,34 @@ describe('torrent engine', () => {
     await expect(torrent.addTorrent('magnet:')).rejects.toThrow('Failed to add torrent to engine');
   });
 
+  it('restricts the torrent to the given file indices', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ ok: true });
+
+    await torrent.updateOnlyFiles('a'.repeat(40), [1, 3]);
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      `http://127.0.0.1:3030/torrents/${'a'.repeat(40)}/update_only_files`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ only_files: [1, 3] })
+      })
+    );
+  });
+
+  it('throws on invalid infoHash before calling update_only_files', async () => {
+    await expect(torrent.updateOnlyFiles('not-a-hash', [0])).rejects.toThrow('Invalid infoHash');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('throws when the engine rejects the file selection update', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ ok: false });
+
+    await expect(torrent.updateOnlyFiles('a'.repeat(40), [0])).rejects.toThrow(
+      'Failed to update torrent file selection'
+    );
+  });
+
   it('waitForEngine resolves when fetch succeeds', async () => {
     (globalThis.fetch as any)
       .mockRejectedValueOnce(new Error('Network error'))

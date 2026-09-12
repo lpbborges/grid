@@ -6,7 +6,8 @@ import {
   addTorrent,
   getBestVideoFileIndex,
   getStreamUrl,
-  getTorrentSubtitles
+  getTorrentSubtitles,
+  updateOnlyFiles
 } from '$lib/engine/torrent';
 import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
 import type { TorrentEngineDetails } from '$lib/types';
@@ -52,15 +53,30 @@ export async function prepareStream(
   const details = await addTorrent(magnet);
 
   const infoHash = details.info_hash;
-  const totalBytes = details.files.reduce(
-    (acc: number, f: TorrentEngineDetails['files'][number]) => acc + f.length,
-    0
-  );
 
   let bestFileIdx = preferredFileIdx;
   if (bestFileIdx === undefined || bestFileIdx < 0) {
     bestFileIdx = getBestVideoFileIndex(details.files);
   }
+
+  const totalBytes = details.files[bestFileIdx]?.length ?? 0;
+
+  // A multi-file torrent (a season pack, a movie bundled with samples/extras)
+  // otherwise has every file selected for download by rqbit, competing for
+  // bandwidth/piece-selection with the one file we're about to stream — the
+  // torrent's overall progress can look healthy while that specific file
+  // barely downloads. Restrict the selection to just what we need (the video
+  // plus any embedded .srt/.vtt subtitle files getTorrentSubtitles reads
+  // below). Best-effort: if it fails, the stream can still work, just slower.
+  const subtitleFileIndices = details.files
+    .map((f: TorrentEngineDetails['files'][number], idx: number) => ({ f, idx }))
+    .filter(({ f }) => f.name.endsWith('.srt') || f.name.endsWith('.vtt'))
+    .map(({ idx }) => idx);
+  await updateOnlyFiles(infoHash, [...new Set([bestFileIdx, ...subtitleFileIndices])]).catch(
+    (error) => {
+      logger.warn('Failed to restrict torrent file selection, continuing anyway:', error);
+    }
+  );
 
   onStatus('Baixando legendas...');
   // Subtitle failures must never block video playback, which does not
