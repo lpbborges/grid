@@ -12,3 +12,6 @@ coverage/
 
 # Untracked tasks/backlog
 .backlog/
+
+# Local plans, not part of the shipped codebase
+.claude/plans/
