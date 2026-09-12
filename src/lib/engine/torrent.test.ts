@@ -142,7 +142,7 @@ describe('torrent engine', () => {
       expect.stringContaining(`/torrents/${hash}/stats`),
       expect.objectContaining({ signal: expect.anything() })
     );
-    expect(stats.snapshot.downloaded_and_checked_bytes).toBe(100);
+    expect(stats?.snapshot?.downloaded_and_checked_bytes).toBe(100);
   });
 
   it('getTorrentStats returns null when not ok', async () => {

@@ -8,6 +8,7 @@ import {
   getTorrentSubtitles
 } from '$lib/engine/torrent';
 import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
+import type { TorrentEngineDetails } from '$lib/types';
 
 export interface StreamDetails {
   infoHash: string;
@@ -50,7 +51,10 @@ export async function prepareStream(
   const details = await addTorrent(magnet);
 
   const infoHash = details.info_hash;
-  const totalBytes = details.files.reduce((acc: number, f: any) => acc + f.length, 0);
+  const totalBytes = details.files.reduce(
+    (acc: number, f: TorrentEngineDetails['files'][number]) => acc + f.length,
+    0
+  );
 
   let bestFileIdx = preferredFileIdx;
   if (bestFileIdx === undefined || bestFileIdx < 0) {

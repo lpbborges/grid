@@ -1,4 +1,12 @@
 <script lang="ts">
+  export interface Episode {
+    id: string;
+    season: number;
+    episode: number;
+    name?: string;
+    firstAired?: string;
+  }
+
   let {
     episodes = [],
     translatedEpisodes = {},
@@ -6,18 +14,18 @@
     preferredQuality = $bindable(),
     onPlayEpisode
   } = $props<{
-    episodes: any[];
+    episodes: Episode[];
     translatedEpisodes: Record<string, string>;
     selectedSeason: number | null;
     preferredQuality: string;
-    onPlayEpisode: (episode: any) => void;
+    onPlayEpisode: (episode: Episode) => void;
   }>();
 
   let availableSeasons = $derived(
-    Array.from(new Set(episodes.map((v: any) => v.season))) as number[]
+    Array.from(new Set(episodes.map((v: Episode) => v.season))) as number[]
   );
 
-  let filteredEpisodes = $derived(episodes.filter((v: any) => v.season === selectedSeason));
+  let filteredEpisodes = $derived(episodes.filter((v: Episode) => v.season === selectedSeason));
 
   $effect(() => {
     if (availableSeasons.length > 0 && selectedSeason === null) {

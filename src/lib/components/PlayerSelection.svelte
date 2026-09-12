@@ -1,16 +1,26 @@
 <script lang="ts">
+  // Mirrors the subset of `Torrent` (see $lib/types) that this component
+  // actually reads. A full `Torrent[]` (e.g. movie.torrents) is assignable
+  // here since it's a structural superset.
+  export interface TorrentOption {
+    hash: string;
+    quality: string;
+    type: string;
+    size: string;
+  }
+
   let {
     torrents,
     selectedTorrentHash = $bindable(),
     onPlay
   } = $props<{
-    torrents: any[];
+    torrents: TorrentOption[];
     selectedTorrentHash: string;
     onPlay: () => void;
   }>();
 
   let selectedTorrent = $derived(
-    torrents.find((torrent: any) => torrent.hash === selectedTorrentHash)
+    torrents.find((torrent: TorrentOption) => torrent.hash === selectedTorrentHash)
   );
 
   // Multiple torrents can share the same quality (e.g. two 1080p releases
@@ -18,13 +28,13 @@
   // them apart before they pick one, so append the release type only when
   // its quality is not unique in the list.
   let qualityCounts = $derived(
-    torrents.reduce((counts: Record<string, number>, torrent: any) => {
+    torrents.reduce((counts: Record<string, number>, torrent: TorrentOption) => {
       counts[torrent.quality] = (counts[torrent.quality] || 0) + 1;
       return counts;
     }, {})
   );
 
-  function optionLabel(torrent: any) {
+  function optionLabel(torrent: TorrentOption) {
     return qualityCounts[torrent.quality] > 1
       ? `${torrent.quality} (${torrent.type})`
       : torrent.quality;

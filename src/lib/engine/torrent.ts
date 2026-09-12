@@ -170,7 +170,13 @@ export async function getTorrentSubtitles(
     .map((result) => result.value);
 }
 
-export async function getTorrentStats(infoHash: string): Promise<any> {
+export interface TorrentStats {
+  snapshot?: {
+    downloaded_and_checked_bytes?: number;
+  };
+}
+
+export async function getTorrentStats(infoHash: string): Promise<TorrentStats | null> {
   if (!isValidInfoHash(infoHash)) {
     return null;
   }
