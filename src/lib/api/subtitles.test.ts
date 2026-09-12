@@ -1,11 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getExternalSubtitles, srtToVtt } from './subtitles';
+import { invoke } from '@tauri-apps/api/core';
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn()
+}));
 
 globalThis.fetch = vi.fn() as any;
 
 describe('subtitles api', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    (invoke as any).mockResolvedValue('WEBVTT\n\nHello');
+    let counter = 0;
+    globalThis.URL.createObjectURL = vi.fn(() => `blob:mock-url-${counter++}`);
   });
 
   describe('getExternalSubtitles', () => {
@@ -40,9 +48,12 @@ describe('subtitles api', () => {
 
       const subs = await getExternalSubtitles('tt123456');
       expect(subs).toHaveLength(1);
+      expect(invoke).toHaveBeenCalledWith('fetch_external_subtitle', {
+        url: 'http://example.com/sub.srt'
+      });
       expect(subs[0]).toEqual({
         id: '123',
-        url: '/api/subtitle/external?url=http%3A%2F%2Fexample.com%2Fsub.srt',
+        url: 'blob:mock-url-0',
         lang: 'en',
         label: 'English',
         group: 'Extra'

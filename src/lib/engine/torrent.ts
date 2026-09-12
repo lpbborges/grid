@@ -104,38 +104,50 @@ export function getStreamUrl(infoHash: string, fileIdx: number): string {
   return `${ENGINE_URL}/torrents/${infoHash}/stream/${fileIdx}`;
 }
 
-export function getTorrentSubtitles(
+export async function getTorrentSubtitles(
   infoHash: string,
   files: { name: string; length: number }[]
-): { id: string; url: string; lang: string; label: string; group: 'Embedded' | 'Extra' }[] {
-  const subs: {
-    id: string;
-    url: string;
-    lang: string;
-    label: string;
-    group: 'Embedded' | 'Extra';
+): Promise<
+  { id: string; url: string; lang: string; label: string; group: 'Embedded' | 'Extra' }[]
+> {
+  const candidates: {
+    idx: number;
+    name: string;
   }[] = [];
   files.forEach((f, idx) => {
     if (f.name.endsWith('.srt') || f.name.endsWith('.vtt')) {
-      const langMatch = f.name.match(/[._]([a-zA-Z]{2,3})\.(srt|vtt)$/i);
+      candidates.push({ idx, name: f.name });
+    }
+  });
+
+  const subs = await Promise.all(
+    candidates.map(async ({ idx, name }) => {
+      const langMatch = name.match(/[._]([a-zA-Z]{2,3})\.(srt|vtt)$/i);
       const lang = langMatch ? langMatch[1] : 'Unknown';
       const langName = getLanguageName(lang);
 
-      subs.push({
+      const vtt = await invoke<string>('fetch_torrent_subtitle', {
+        infoHash,
+        fileIdx: idx
+      });
+      const blob = new Blob([vtt], { type: 'text/vtt' });
+      const url = URL.createObjectURL(blob);
+
+      return {
         id: `torrent-${idx}`,
-        url: `/api/subtitle/torrent?infoHash=${infoHash}&fileIdx=${idx}`,
+        url,
         lang,
         label:
           lang === 'Unknown'
-            ? f.name
+            ? name
                 .split(/[/\\]/)
                 .pop()
-                ?.replace(/\.(srt|vtt)$/i, '') || f.name
+                ?.replace(/\.(srt|vtt)$/i, '') || name
             : langName,
         group: 'Embedded' as const
-      });
-    }
-  });
+      };
+    })
+  );
   return subs;
 }
 

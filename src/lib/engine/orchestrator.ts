@@ -40,7 +40,7 @@ export async function prepareStream(
     bestFileIdx = getBestVideoFileIndex(details.files);
   }
 
-  const tSubs = getTorrentSubtitles(details.info_hash, details.files);
+  const tSubs = await getTorrentSubtitles(details.info_hash, details.files);
 
   onStatus('Baixando legendas...');
   const eSubs = mediaId ? await getExternalSubtitles(mediaId, season, episode) : [];

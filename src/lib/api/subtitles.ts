@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 
 export interface SubtitleTrack {
@@ -77,16 +78,21 @@ export async function getExternalSubtitles(
     const data = await res.json();
     if (!data.subtitles) return [];
 
-    return data.subtitles.map((sub: any) => {
-      const langName = getLanguageName(sub.lang);
-      return {
-        id: sub.id,
-        url: `/api/subtitle/external?url=${encodeURIComponent(sub.url)}`,
-        lang: sub.lang,
-        label: langName,
-        group: 'Extra'
-      };
-    });
+    return await Promise.all(
+      data.subtitles.map(async (sub: any) => {
+        const langName = getLanguageName(sub.lang);
+        const vtt = await invoke<string>('fetch_external_subtitle', { url: sub.url });
+        const blob = new Blob([vtt], { type: 'text/vtt' });
+        const url = URL.createObjectURL(blob);
+        return {
+          id: sub.id,
+          url,
+          lang: sub.lang,
+          label: langName,
+          group: 'Extra'
+        };
+      })
+    );
   } catch (error) {
     console.error('Failed to fetch external subtitles:', error);
     return [];

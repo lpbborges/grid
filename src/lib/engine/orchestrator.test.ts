@@ -30,7 +30,7 @@ describe('prepareStream', () => {
 
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails as any);
     vi.mocked(torrentApi.getBestVideoFileIndex).mockReturnValue(1);
-    vi.mocked(torrentApi.getTorrentSubtitles).mockReturnValue([
+    vi.mocked(torrentApi.getTorrentSubtitles).mockResolvedValue([
       { id: 't-1', url: 't-sub', lang: 'en', label: 'T-Sub', group: 'Embedded' }
     ]);
     vi.mocked(subtitlesApi.getExternalSubtitles).mockResolvedValue([

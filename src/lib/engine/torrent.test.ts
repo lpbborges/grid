@@ -216,33 +216,51 @@ describe('infoHash/fileIdx validation', () => {
 });
 
 describe('getTorrentSubtitles', () => {
-  it('extracts and formats subtitle files', () => {
+  beforeEach(() => {
+    (invoke as any).mockResolvedValue('WEBVTT\n\nHello');
+    let counter = 0;
+    globalThis.URL.createObjectURL = vi.fn(() => `blob:mock-url-${counter++}`);
+  });
+
+  it('extracts and formats subtitle files, resolving each to a blob URL via fetch_torrent_subtitle', async () => {
     const files = [
       { name: 'movie.mp4', length: 1000 },
       { name: 'movie_en.srt', length: 100 },
       { name: 'movie_fr.vtt', length: 100 },
       { name: 'Subs/weird-name.srt', length: 100 }
     ];
-    const subs = getTorrentSubtitles('dummyHash', files);
+    const subs = await getTorrentSubtitles('dummyHash', files);
 
     expect(subs).toHaveLength(3);
+    expect(invoke).toHaveBeenCalledWith('fetch_torrent_subtitle', {
+      infoHash: 'dummyHash',
+      fileIdx: 1
+    });
+    expect(invoke).toHaveBeenCalledWith('fetch_torrent_subtitle', {
+      infoHash: 'dummyHash',
+      fileIdx: 2
+    });
+    expect(invoke).toHaveBeenCalledWith('fetch_torrent_subtitle', {
+      infoHash: 'dummyHash',
+      fileIdx: 3
+    });
     expect(subs[0]).toEqual({
       id: 'torrent-1',
-      url: '/api/subtitle/torrent?infoHash=dummyHash&fileIdx=1',
+      url: expect.stringMatching(/^blob:mock-url-/),
       lang: 'en',
       label: 'English',
       group: 'Embedded'
     });
     expect(subs[1]).toEqual({
       id: 'torrent-2',
-      url: '/api/subtitle/torrent?infoHash=dummyHash&fileIdx=2',
+      url: expect.stringMatching(/^blob:mock-url-/),
       lang: 'fr',
       label: 'French',
       group: 'Embedded'
     });
     expect(subs[2]).toEqual({
       id: 'torrent-3',
-      url: '/api/subtitle/torrent?infoHash=dummyHash&fileIdx=3',
+      url: expect.stringMatching(/^blob:mock-url-/),
       lang: 'Unknown',
       label: 'weird-name',
       group: 'Embedded'
