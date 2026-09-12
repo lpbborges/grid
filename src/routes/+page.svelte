@@ -18,9 +18,32 @@
   let searchSeriesResults = $state<Movie[]>([]);
   let searchLoading = $state(false);
 
+  let popularMovies = $state<Movie[]>([]);
+  let popularSeries = $state<Movie[]>([]);
+  let popularLoading = $state(true);
+
   let hasSearchQuery = $derived(searchQuery.value.trim().length > 0);
 
   let searchVersion = 0;
+
+  $effect(() => {
+    const moviesPromise = data.popularMovies;
+    const seriesPromise = data.popularSeries;
+    let cancelled = false;
+
+    popularLoading = true;
+
+    Promise.all([moviesPromise, seriesPromise]).then(([movies, series]) => {
+      if (cancelled) return;
+      popularMovies = movies;
+      popularSeries = series;
+      popularLoading = false;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  });
 
   $effect(() => {
     const query = searchQuery.value.trim();
@@ -76,8 +99,8 @@
   }
 
   $effect(() => {
-    const movieItems = hasSearchQuery ? searchMovieResults : data.popularMovies;
-    const seriesItems = hasSearchQuery ? searchSeriesResults : data.popularSeries;
+    const movieItems = hasSearchQuery ? searchMovieResults : popularMovies;
+    const seriesItems = hasSearchQuery ? searchSeriesResults : popularSeries;
     if (movieItems.length || seriesItems.length) {
       checkScroll();
       checkSeriesScroll();
@@ -85,25 +108,29 @@
   });
 </script>
 
-{#if hasSearchQuery}
-  {#if searchLoading}
-    <div class="flex h-full min-h-[400px] items-center justify-center">
-      <div class="flex flex-col items-center gap-4">
-        <div class="relative h-16 w-16">
-          <div
-            class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
-          ></div>
-          <div
-            class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
-          ></div>
-        </div>
+{#snippet loadingIndicator(label: string)}
+  <div class="flex h-full min-h-[400px] items-center justify-center">
+    <div class="flex flex-col items-center gap-4">
+      <div class="relative h-16 w-16">
         <div
-          class="text-accent-green font-cyber animate-pulse text-xl tracking-[0.3em] uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
-        >
-          Pesquisando...
-        </div>
+          class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
+        ></div>
+        <div
+          class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
+        ></div>
+      </div>
+      <div
+        class="text-accent-green font-cyber animate-pulse text-xl tracking-[0.3em] uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
+      >
+        {label}
       </div>
     </div>
+  </div>
+{/snippet}
+
+{#if hasSearchQuery}
+  {#if searchLoading}
+    {@render loadingIndicator('Pesquisando...')}
   {:else if searchMovieResults.length === 0 && searchSeriesResults.length === 0}
     <div class="flex h-full min-h-[400px] items-center justify-center">
       <div class="flex flex-col items-center gap-4">
@@ -201,7 +228,9 @@
       {/if}
     </div>
   {/if}
-{:else if !data.popularMovies.length && !data.popularSeries.length}
+{:else if popularLoading}
+  {@render loadingIndicator('Carregando...')}
+{:else if !popularMovies.length && !popularSeries.length}
   <div class="flex h-full min-h-[400px] items-center justify-center">
     <div class="flex flex-col items-center gap-4">
       <div class="text-muted font-cyber text-xl tracking-[0.3em] uppercase">
@@ -211,7 +240,7 @@
   </div>
 {:else}
   <div>
-    {#if data.popularMovies.length > 0}
+    {#if popularMovies.length > 0}
       <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
         <h1
           class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
@@ -237,7 +266,7 @@
           onscroll={checkScroll}
           class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
         >
-          {#each data.popularMovies as movie (movie.id)}
+          {#each popularMovies as movie (movie.id)}
             <MediaCard media={movie} type="movie" />
           {/each}
         </div>
@@ -254,7 +283,7 @@
       </div>
     {/if}
 
-    {#if data.popularSeries.length > 0}
+    {#if popularSeries.length > 0}
       <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
         <h1
           class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
@@ -280,7 +309,7 @@
           onscroll={checkSeriesScroll}
           class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
         >
-          {#each data.popularSeries as series (series.id)}
+          {#each popularSeries as series (series.id)}
             <MediaCard media={series} type="series" />
           {/each}
         </div>

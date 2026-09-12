@@ -1,4 +1,6 @@
 <script lang="ts">
+  import EmptyState from './EmptyState.svelte';
+
   export interface Episode {
     id: string;
     season: number;
@@ -141,4 +143,6 @@
       {/each}
     </div>
   </div>
+{:else}
+  <EmptyState message="Nenhuma opção de reprodução disponível" />
 {/if}

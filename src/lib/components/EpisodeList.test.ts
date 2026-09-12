@@ -35,4 +35,18 @@ describe('EpisodeList component', () => {
 
     expect(onPlayEpisode).toHaveBeenCalledWith(episodes[0]);
   });
+
+  it('shows an empty state when there are no episodes', () => {
+    const { getByText } = render(EpisodeList, {
+      props: {
+        episodes: [],
+        translatedEpisodes: {},
+        selectedSeason: null,
+        preferredQuality: '1080p',
+        onPlayEpisode: vi.fn()
+      }
+    });
+
+    expect(getByText('Nenhuma opção de reprodução disponível')).toBeInTheDocument();
+  });
 });

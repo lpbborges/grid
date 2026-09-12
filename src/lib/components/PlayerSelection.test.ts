@@ -74,4 +74,12 @@ describe('PlayerSelection component', () => {
 
     expect(onPlay).toHaveBeenCalled();
   });
+
+  it('shows an empty state when there are no torrents', () => {
+    const { getByText } = render(PlayerSelection, {
+      props: { torrents: [], selectedTorrentHash: '', onPlay: vi.fn() }
+    });
+
+    expect(getByText('Nenhuma opção de reprodução disponível')).toBeInTheDocument();
+  });
 });

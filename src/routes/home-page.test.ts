@@ -26,10 +26,22 @@ function makeMovie(id: string, title: string): Movie {
   };
 }
 
-const popularData = {
-  popularMovies: [makeMovie('tt1', 'Popular Movie')],
-  popularSeries: [makeMovie('tt2', 'Popular Series')]
-};
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function popularDataWith(movies: Movie[], series: Movie[]) {
+  return {
+    popularMovies: Promise.resolve(movies),
+    popularSeries: Promise.resolve(series)
+  };
+}
 
 describe('Home page search', () => {
   beforeEach(() => {
@@ -44,8 +56,15 @@ describe('Home page search', () => {
     vi.useRealTimers();
   });
 
-  it('renders popular movies and series when not searching', () => {
-    render(HomePage, { data: popularData });
+  it('renders popular movies and series when not searching', async () => {
+    render(HomePage, {
+      data: popularDataWith(
+        [makeMovie('tt1', 'Popular Movie')],
+        [makeMovie('tt2', 'Popular Series')]
+      )
+    });
+
+    await act(async () => {});
 
     expect(screen.getByText('Popular Movie')).toBeTruthy();
     expect(screen.getByText('Popular Series')).toBeTruthy();
@@ -57,7 +76,8 @@ describe('Home page search', () => {
       series: []
     });
 
-    render(HomePage, { data: popularData });
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
 
     await act(() => {
       searchQuery.value = 'inception';
@@ -86,7 +106,8 @@ describe('Home page search', () => {
       series: [makeMovie('tt4', 'Searched Series')]
     });
 
-    render(HomePage, { data: popularData });
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
 
     await act(() => {
       searchQuery.value = 'searched';
@@ -101,7 +122,8 @@ describe('Home page search', () => {
   });
 
   it('shows a no-results message when nothing matches', async () => {
-    render(HomePage, { data: popularData });
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
 
     await act(() => {
       searchQuery.value = 'zzzz';
@@ -124,7 +146,8 @@ describe('Home page search', () => {
       )
       .mockResolvedValue({ movies: [makeMovie('tt5', 'Newer Result')], series: [] });
 
-    render(HomePage, { data: popularData });
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
 
     await act(() => {
       searchQuery.value = 'old';
@@ -156,7 +179,13 @@ describe('Home page search', () => {
       series: []
     });
 
-    render(HomePage, { data: popularData });
+    render(HomePage, {
+      data: popularDataWith(
+        [makeMovie('tt1', 'Popular Movie')],
+        [makeMovie('tt2', 'Popular Series')]
+      )
+    });
+    await act(async () => {});
 
     await act(() => {
       searchQuery.value = 'inception';
@@ -176,5 +205,32 @@ describe('Home page search', () => {
     expect(screen.queryByText('Searched Movie')).toBeNull();
     expect(screen.getByText('Popular Movie')).toBeTruthy();
     expect(screen.getByText('Popular Series')).toBeTruthy();
+  });
+
+  it('shows a loading skeleton while the popular catalog is still resolving', async () => {
+    const moviesDeferred = deferred<Movie[]>();
+    const seriesDeferred = deferred<Movie[]>();
+
+    render(HomePage, {
+      data: { popularMovies: moviesDeferred.promise, popularSeries: seriesDeferred.promise }
+    });
+
+    expect(screen.getByText('Carregando...')).toBeTruthy();
+    expect(screen.queryByText('Popular Movie')).toBeNull();
+
+    await act(async () => {
+      moviesDeferred.resolve([makeMovie('tt1', 'Popular Movie')]);
+      seriesDeferred.resolve([]);
+    });
+
+    expect(screen.queryByText('Carregando...')).toBeNull();
+    expect(screen.getByText('Popular Movie')).toBeTruthy();
+  });
+
+  it('shows the error/empty state when the catalog resolves with nothing', async () => {
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    expect(screen.getByText('Erro ao carregar dados')).toBeTruthy();
   });
 });
