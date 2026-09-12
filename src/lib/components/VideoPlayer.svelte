@@ -129,32 +129,30 @@
     if (idx !== -1) selectTrack(idx);
   }
 
-  // Subtitles may already be present when the component mounts, so this effect
-  // covers that case; `handleLoadedMetadata` covers the common case.
+  // Two different "the browser will tell us when tracks are ready" signals
+  // ('loadedmetadata', then the TextTrackList's 'addtrack' event) both proved
+  // unreliable in practice — in this WebView, videoElement.textTracks doesn't
+  // dependably reflect the just-rendered <track> elements by the time either
+  // fires. Since subtitle selection isn't time-critical (unlike, say, audio
+  // sync), polling actual readiness sidesteps needing to know which signal
+  // (if any) this platform actually honors.
   $effect(() => {
-    if (subtitles.length > 0 && !subtitleAutoApplied && settingsStore.subtitle !== 'none') {
-      applyDefaultSubtitle();
+    if (subtitles.length === 0 || subtitleAutoApplied || settingsStore.subtitle === 'none') {
+      return;
     }
-  });
+    applyDefaultSubtitle();
+    if (subtitleAutoApplied) return;
 
-  // `subtitles` is set (via useStreamPlayer) before the real video `src` is
-  // known, so this component can mount and reach 'loadedmetadata' before the
-  // <track> elements it just rendered have registered themselves on
-  // videoElement.textTracks — neither the effect above nor handleLoadedMetadata
-  // is guaranteed to land after that registration finishes. 'addtrack' is the
-  // one signal the platform itself guarantees fires exactly when a track
-  // becomes available, so it's the reliable place to retry instead of guessing.
-  $effect(() => {
-    // Reading `subtitles.length` here (even though the value itself is
-    // unused) makes this effect re-subscribe when the stream's subtitles
-    // arrive (post-mount, per the note above) — at which point new <track>
-    // elements are about to be added and it's worth getting a fresh
-    // reference to the (live) list.
-    const list = subtitles.length >= 0 && videoElement && (videoElement as any).textTracks;
-    if (!list || typeof list.addEventListener !== 'function') return;
-    const handler = () => applyDefaultSubtitle();
-    list.addEventListener('addtrack', handler);
-    return () => list.removeEventListener('addtrack', handler);
+    const interval = window.setInterval(() => {
+      applyDefaultSubtitle();
+      if (subtitleAutoApplied) window.clearInterval(interval);
+    }, 200);
+    const giveUpAfter = window.setTimeout(() => window.clearInterval(interval), 10000);
+
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(giveUpAfter);
+    };
   });
 
   $effect(() => {

@@ -230,24 +230,15 @@ describe('VideoPlayer component', () => {
     expect(tracks[0].mode).toBe('disabled');
   });
 
-  it('applies the default subtitle once tracks register via addtrack, after subtitles arrive post-mount', async () => {
+  it('applies the default subtitle by polling until tracks register, after subtitles arrive post-mount', async () => {
     // Mirrors useStreamPlayer: the component mounts before the stream (and its
-    // subtitles) are known, and 'loadedmetadata' may already have come and
-    // gone for the empty initial src by the time subtitles show up.
-    const trackObjs = [{ mode: 'disabled' }, { mode: 'disabled' }];
-    const listeners: Record<string, (() => void)[]> = { addtrack: [] };
-    const list: any = [];
-    list.addEventListener = (type: string, fn: () => void) => {
-      (listeners[type] ||= []).push(fn);
-    };
-    list.removeEventListener = (type: string, fn: () => void) => {
-      listeners[type] = (listeners[type] || []).filter((f) => f !== fn);
-    };
-    const dispatchAddTrack = () => listeners.addtrack.forEach((fn) => fn());
-
+    // subtitles) are known, and 'loadedmetadata'/'addtrack' both proved
+    // unreliable signals in the real WebView for catching the moment
+    // videoElement.textTracks reflects the just-rendered <track> elements —
+    // this polls actual state instead of trusting either event.
     const { getByTestId, rerender } = render(VideoPlayer, { src: '', subtitles: [] });
     const video = getByTestId('video-element') as any;
-    Object.defineProperty(video, 'textTracks', { writable: true, value: list });
+    Object.defineProperty(video, 'textTracks', { writable: true, value: [] });
     await act(() => {});
 
     const subtitles: any = [
@@ -257,14 +248,14 @@ describe('VideoPlayer component', () => {
     rerender({ src: 'http://localhost/stream', subtitles });
     await act(() => {});
 
-    // Only the first track has registered so far: must not lock in yet.
-    list.push(trackObjs[0]);
-    dispatchAddTrack();
-    expect(trackObjs[0].mode).toBe('disabled');
+    // Tracks still not registered: polling must not lock in early.
+    await vi.advanceTimersByTimeAsync(200);
+    const trackObjs = [{ mode: 'disabled' }, { mode: 'disabled' }];
 
-    // Second (Portuguese) track registers: now it can decide, and picks it.
-    list.push(trackObjs[1]);
-    dispatchAddTrack();
+    // Tracks become available later; the next poll picks up the preference.
+    Object.defineProperty(video, 'textTracks', { writable: true, value: trackObjs });
+    await vi.advanceTimersByTimeAsync(200);
+
     expect(trackObjs[1].mode).toBe('showing');
     expect(trackObjs[0].mode).toBe('disabled');
   });
