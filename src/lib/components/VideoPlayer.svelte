@@ -33,7 +33,7 @@
     originalLanguage?: string;
     initialTime?: number;
   }>();
-  /* global HTMLVideoElement, HTMLElement, FocusEvent, MouseEvent, KeyboardEvent, Node, VTTCue */
+  /* global HTMLVideoElement, HTMLElement, HTMLInputElement, FocusEvent, MouseEvent, KeyboardEvent, Node, VTTCue */
   let videoElement = $state<HTMLVideoElement | null>(null);
   let containerElement = $state<HTMLElement | null>(null);
   let showMenu = $state(false);
@@ -363,6 +363,11 @@
   }
 
   function togglePlay() {
+    if (showMenu || showAudioMenu) {
+      showMenu = false;
+      showAudioMenu = false;
+      return;
+    }
     if (paused) videoElement?.play();
     else videoElement?.pause();
   }
@@ -386,15 +391,48 @@
 
   const SEEK_STEP_SECONDS = 5;
 
-  function handleSeekKeydown(e: KeyboardEvent) {
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    const active = document.activeElement as HTMLElement;
+    const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+    const isButton = active && active.tagName === 'BUTTON';
+    const isSlider = active && active.getAttribute('role') === 'slider';
+
+    if (isInput) return;
+
     switch (e.key) {
+      case ' ':
+        if (isButton || isSlider) return;
+        e.preventDefault();
+        togglePlay();
+        showControls = true;
+        scheduleHideControls();
+        break;
       case 'ArrowLeft':
+        if (active && active.tagName === 'INPUT' && (active as HTMLInputElement).type === 'range')
+          return;
         e.preventDefault();
         currentTime = Math.max(0, currentTime - SEEK_STEP_SECONDS);
+        showControls = true;
+        scheduleHideControls();
         break;
       case 'ArrowRight':
+        if (active && active.tagName === 'INPUT' && (active as HTMLInputElement).type === 'range')
+          return;
         e.preventDefault();
         currentTime = Math.min(duration || 0, currentTime + SEEK_STEP_SECONDS);
+        showControls = true;
+        scheduleHideControls();
+        break;
+      case 'Escape':
+        if (document.fullscreenElement) {
+          e.preventDefault();
+          document.exitFullscreen().catch((err) => {
+            logger.error(`Error attempting to exit full-screen mode: ${err.message}`);
+          });
+        } else if (onclose) {
+          e.preventDefault();
+          onclose();
+        }
         break;
       case 'Home':
         e.preventDefault();
@@ -406,7 +444,16 @@
         break;
     }
   }
+  function handleGlobalClick(e: MouseEvent) {
+    if (!showMenu && !showAudioMenu) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-menu-element]')) return;
+    showMenu = false;
+    showAudioMenu = false;
+  }
 </script>
+
+<svelte:window onkeydown={handleGlobalKeydown} onclick={handleGlobalClick} />
 
 <div
   bind:this={containerElement}
@@ -551,7 +598,6 @@
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
       }}
-      onkeydown={handleSeekKeydown}
       role="slider"
       aria-label="Buscar posição"
       aria-valuemin={0}
@@ -669,6 +715,7 @@
         {#if audioTracks.length > 1}
           <div class="relative">
             <button
+              data-menu-element
               onclick={() => (showAudioMenu = !showAudioMenu)}
               aria-label="Menu de Faixas de Áudio"
               class="hover:text-accent-green focus-visible:ring-accent-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors focus-visible:ring-2 focus-visible:outline-none {showAudioMenu
@@ -680,6 +727,7 @@
 
             {#if showAudioMenu}
               <div
+                data-menu-element
                 class="border-primary/50 bg-surface/95 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
               >
                 <div
@@ -707,6 +755,7 @@
         {#if subtitles.length > 0}
           <div class="relative">
             <button
+              data-menu-element
               onclick={() => (showMenu = !showMenu)}
               aria-label="Menu de Legendas"
               class="hover:text-accent-green focus-visible:ring-accent-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors focus-visible:ring-2 focus-visible:outline-none {showMenu
@@ -718,6 +767,7 @@
 
             {#if showMenu}
               <div
+                data-menu-element
                 class="border-primary/50 bg-surface/95 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
               >
                 <button
