@@ -86,6 +86,20 @@ describe('yts api', () => {
     expect(movie.title).toBe('Test Movie');
   });
 
+  it('normalizes movie.id to movie.imdb_code when available', async () => {
+    const movieWithImdbCode = { ...mockMovie, imdb_code: 'tt9999999' };
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        status: 'ok',
+        data: { movie: movieWithImdbCode }
+      })
+    });
+
+    const movie = await getMovieDetails('tt9999999');
+    expect(movie.id).toBe('tt9999999');
+  });
+
   it('returns empty array when cinemeta api fails', async () => {
     (globalThis.fetch as any).mockResolvedValueOnce({
       ok: false,

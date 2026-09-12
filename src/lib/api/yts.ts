@@ -127,6 +127,11 @@ export async function getMovieDetails(movieId: number | string): Promise<Movie> 
     }
   }
 
+  // Normalize movie ID to be the IMDB code to match cinemeta and home screen
+  if (movie.imdb_code) {
+    movie.id = movie.imdb_code;
+  }
+
   return movie;
 }
 

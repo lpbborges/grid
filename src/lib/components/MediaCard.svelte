@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Movie } from '../types';
+  import { watchedStore } from '$lib/stores/watched.svelte';
 
   let { media, type = 'movie' } = $props<{ media: Movie; type?: 'movie' | 'series' }>();
 </script>
@@ -31,6 +32,13 @@
     <div
       class="pointer-events-none absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
     ></div>
+    {#if watchedStore.watchedIds.includes(String(media.id))}
+      <div
+        class="bg-accent-green text-dark absolute top-2 right-2 z-20 rounded px-2 py-0.5 text-xs font-bold tracking-wider uppercase shadow-[0_0_10px_rgba(54,211,83,0.8)]"
+      >
+        Assistido
+      </div>
+    {/if}
   </div>
 
   <div

@@ -6,6 +6,7 @@
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
+  import { watchedStore } from '$lib/stores/watched.svelte';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
@@ -201,12 +202,19 @@
           src={streamPlayer.videoSrc}
           subtitles={streamPlayer.subtitles}
           onclose={streamPlayer.stop}
+          onwatched={() => {
+            watchedStore.add(seriesId);
+            if (lastAttemptedEpisode) {
+              watchedStore.add(seriesId, lastAttemptedEpisode.season, lastAttemptedEpisode.episode);
+            }
+          }}
           engineStatus={streamPlayer.engineStatus}
           infoHash={streamPlayer.infoHash}
           totalBytes={streamPlayer.totalBytes}
         />
       {:else}
         <MediaInfo
+          id={series.id}
           title={translatedTitle}
           year={series.year}
           director={series.director}
@@ -221,6 +229,7 @@
     <div class="w-full lg:w-1/4">
       {#if !streamPlayer.isPlaying}
         <EpisodeList
+          {seriesId}
           episodes={series.videos}
           {translatedEpisodes}
           bind:selectedSeason

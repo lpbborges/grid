@@ -1,5 +1,8 @@
 <script lang="ts">
-  let { title, year, director, rating, synopsis, cast } = $props<{
+  import { watchedStore } from '$lib/stores/watched.svelte';
+
+  let { id, title, year, director, rating, synopsis, cast } = $props<{
+    id: string | number;
     title: string;
     year: number;
     director?: string[];
@@ -9,12 +12,24 @@
   }>();
 </script>
 
-<h1
-  class="text-main font-cyber mb-2 text-4xl tracking-widest uppercase md:text-5xl"
-  style="text-shadow: 0 0 15px rgba(107,33,168,0.5);"
->
-  {title}
-</h1>
+<div class="mb-2 flex items-center justify-between gap-4">
+  <h1
+    class="text-main font-cyber text-4xl tracking-widest uppercase md:text-5xl"
+    style="text-shadow: 0 0 15px rgba(107,33,168,0.5);"
+  >
+    {title}
+  </h1>
+  <button
+    onclick={() => watchedStore.toggle(id)}
+    class="focus-visible:ring-accent-green shrink-0 border px-4 py-2 text-sm font-bold tracking-widest uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none {watchedStore.watchedIds.includes(
+      String(id)
+    )
+      ? 'bg-accent-green text-dark border-accent-green shadow-[0_0_10px_rgba(54,211,83,0.8)]'
+      : 'border-primary/50 text-main bg-surface hover:bg-primary/20'}"
+  >
+    {watchedStore.watchedIds.includes(String(id)) ? 'Assistido' : 'Marcar como Assistido'}
+  </button>
+</div>
 
 <div class="text-primary mb-6 flex flex-wrap gap-4 font-mono text-sm">
   <span class="border-primary/50 bg-surface rounded border px-3 py-1">ANO: {year}</span>

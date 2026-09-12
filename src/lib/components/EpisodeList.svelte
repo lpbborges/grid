@@ -1,5 +1,6 @@
 <script lang="ts">
   import EmptyState from './EmptyState.svelte';
+  import { watchedStore } from '$lib/stores/watched.svelte';
 
   export interface Episode {
     id: string;
@@ -10,12 +11,14 @@
   }
 
   let {
+    seriesId,
     episodes = [],
     translatedEpisodes = {},
     selectedSeason = $bindable(),
     preferredQuality = $bindable(),
     onPlayEpisode
   } = $props<{
+    seriesId: string;
     episodes: Episode[];
     translatedEpisodes: Record<string, string>;
     selectedSeason: number | null;
@@ -122,22 +125,53 @@
               </span>
             {/if}
           </div>
-          <div
-            class="border-primary/50 group-hover:bg-accent-green group-hover:text-dark text-primary rounded-sm border p-2 transition-all duration-300"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+          <div class="flex items-center gap-2">
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_interactive_supports_focus -->
+            <div
+              role="button"
+              class="border-primary/50 group-hover:bg-primary/20 hover:text-accent-green hover:border-accent-green text-primary rounded-sm border p-2 transition-all duration-300 {watchedStore.watchedIds.includes(
+                seriesId + '-S' + episode.season + 'E' + episode.episode
+              )
+                ? 'bg-accent-green text-dark border-accent-green shadow-[0_0_10px_rgba(54,211,83,0.8)]'
+                : ''}"
+              title="Marcar como assistido"
+              onclick={(e) => {
+                e.stopPropagation();
+                watchedStore.toggle(seriesId, episode.season, episode.episode);
+              }}
             >
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <div
+              class="border-primary/50 group-hover:bg-accent-green group-hover:text-dark text-primary rounded-sm border p-2 transition-all duration-300"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            </div>
           </div>
         </button>
       {/each}

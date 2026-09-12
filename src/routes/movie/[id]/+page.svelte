@@ -5,6 +5,7 @@
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
+  import { watchedStore } from '$lib/stores/watched.svelte';
 
   let { data } = $props();
   let movieId = $derived(data.movieId);
@@ -163,12 +164,16 @@
           src={streamPlayer.videoSrc}
           subtitles={streamPlayer.subtitles}
           onclose={streamPlayer.stop}
+          onwatched={() => {
+            watchedStore.add(movieId);
+          }}
           engineStatus={streamPlayer.engineStatus}
           infoHash={streamPlayer.infoHash}
           totalBytes={streamPlayer.totalBytes}
         />
       {:else}
         <MediaInfo
+          id={movie.id}
           title={translatedTitle}
           year={movie.year}
           director={movie.director}

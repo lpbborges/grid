@@ -15,6 +15,7 @@ describe('EpisodeList component', () => {
 
     const { getByText, queryByText } = render(EpisodeList, {
       props: {
+        seriesId: 'series-123',
         episodes,
         translatedEpisodes,
         selectedSeason: 1,
@@ -39,6 +40,7 @@ describe('EpisodeList component', () => {
   it('shows an empty state when there are no episodes', () => {
     const { getByText } = render(EpisodeList, {
       props: {
+        seriesId: 'series-123',
         episodes: [],
         translatedEpisodes: {},
         selectedSeason: null,
