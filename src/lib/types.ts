@@ -29,6 +29,7 @@ export interface Movie {
   torrents: Torrent[];
   cast?: CastMember[];
   director?: string[];
+  language?: string;
 }
 
 export interface TorrentEngineDetails {

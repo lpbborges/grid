@@ -3,6 +3,8 @@
   import { getTorrentStats } from '$lib/engine/torrent';
   import type { SubtitleTrack } from '$lib/api/subtitles';
   import { progressStore } from '$lib/stores/progress.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+  import { getLanguageName } from '$lib/api/subtitles';
 
   let {
     src,
@@ -15,6 +17,7 @@
     mediaId,
     season,
     episode,
+    originalLanguage,
     initialTime = 0
   } = $props<{
     src: string;
@@ -27,6 +30,7 @@
     mediaId?: string | number;
     season?: number;
     episode?: number;
+    originalLanguage?: string;
     initialTime?: number;
   }>();
   /* global HTMLVideoElement, HTMLElement, FocusEvent, MouseEvent, KeyboardEvent, Node, VTTCue */
@@ -87,6 +91,54 @@
 
   let torrentSubsGrouped = $derived(groupByLanguage(torrentSubs));
   let externalSubsGrouped = $derived(groupByLanguage(externalSubs));
+
+  // Tracks whether the initial preference-based subtitle pick has already run,
+  // independent of `activeIndex`: `activeIndex === -1` also means "user chose
+  // Desativado", and reusing it here would make that explicit choice get
+  // silently re-applied every time this re-runs.
+  let subtitleAutoApplied = $state(false);
+
+  function applyDefaultSubtitle() {
+    if (
+      !videoElement ||
+      subtitleAutoApplied ||
+      settingsStore.subtitle === 'none' ||
+      subtitles.length === 0 ||
+      videoElement.textTracks.length === 0
+    ) {
+      return;
+    }
+    subtitleAutoApplied = true;
+
+    let idx = -1;
+    if (settingsStore.subtitle === 'pt') {
+      idx = subtitles.findIndex(
+        (s: any) => s.label.toLowerCase().includes('portug') || s.label.toLowerCase().includes('pt')
+      );
+    } else if (settingsStore.subtitle === 'en') {
+      idx = subtitles.findIndex(
+        (s: any) => s.label.toLowerCase().includes('ingl') || s.label.toLowerCase().includes('eng')
+      );
+    } else if (settingsStore.subtitle === 'es') {
+      idx = subtitles.findIndex(
+        (s: any) =>
+          s.label.toLowerCase().includes('espanh') || s.label.toLowerCase().includes('spa')
+      );
+    }
+
+    if (idx !== -1) selectTrack(idx);
+  }
+
+  // Subtitles may already be present when the component mounts, so this effect
+  // covers that case; `handleLoadedMetadata` covers the common case, matching
+  // the same deterministic 'loadedmetadata' signal the audio-track selection
+  // uses (an arbitrary setTimeout here previously raced with <track> elements
+  // registering in videoElement.textTracks and silently dropped the default).
+  $effect(() => {
+    if (subtitles.length > 0 && !subtitleAutoApplied && settingsStore.subtitle !== 'none') {
+      applyDefaultSubtitle();
+    }
+  });
 
   $effect(() => {
     if (initialTime > 0 && videoElement && duration > 0) {
@@ -150,15 +202,94 @@
     if (videoElement && (videoElement as any).audioTracks) {
       const tracks = (videoElement as any).audioTracks;
       let parsed = [];
+      const seenLanguages: Record<string, boolean> = {};
+
       for (let i = 0; i < tracks.length; i++) {
+        let label =
+          getLanguageName(tracks[i].label, true) ||
+          getLanguageName(tracks[i].language, true) ||
+          `Faixa ${i + 1}`;
+
+        if (seenLanguages[label]) {
+          tracks[i].enabled = false;
+          continue;
+        }
+        seenLanguages[label] = true;
+
         parsed.push({
           index: i,
           id: tracks[i].id,
-          label: tracks[i].label || tracks[i].language || `Faixa ${i + 1}`,
+          label: label,
           enabled: tracks[i].enabled
         });
-        if (tracks[i].enabled) activeAudioIndex = i;
       }
+
+      let preferredAudioIdx = -1;
+      if (settingsStore.audio && settingsStore.audio !== 'none') {
+        if (settingsStore.audio === 'original') {
+          if (originalLanguage) {
+            const originalName = getLanguageName(originalLanguage, true);
+            if (originalName) {
+              preferredAudioIdx = parsed.findIndex((t) =>
+                t.label.toLowerCase().includes(originalName.toLowerCase())
+              );
+            }
+          }
+          if (preferredAudioIdx === -1) {
+            preferredAudioIdx = parsed.findIndex((t) => t.label.toLowerCase().includes('orig'));
+          }
+          if (preferredAudioIdx === -1 && parsed.length > 1) {
+            const origLangs = ['ingl', 'eng', 'japon', 'jpn', 'corean', 'kor'];
+            for (const lang of origLangs) {
+              preferredAudioIdx = parsed.findIndex((t: any) =>
+                t.label.toLowerCase().includes(lang)
+              );
+              if (preferredAudioIdx !== -1) break;
+            }
+            if (preferredAudioIdx === -1) {
+              preferredAudioIdx = parsed.findIndex(
+                (t: any) => !t.label.toLowerCase().includes('portug')
+              );
+            }
+          }
+        } else if (settingsStore.audio === 'pt') {
+          preferredAudioIdx = parsed.findIndex(
+            (t: any) =>
+              t.label.toLowerCase().includes('portug') || t.label.toLowerCase().includes('pt')
+          );
+        } else if (settingsStore.audio === 'en') {
+          preferredAudioIdx = parsed.findIndex(
+            (t: any) =>
+              t.label.toLowerCase().includes('ingl') || t.label.toLowerCase().includes('eng')
+          );
+        } else if (settingsStore.audio === 'es') {
+          preferredAudioIdx = parsed.findIndex(
+            (t: any) =>
+              t.label.toLowerCase().includes('espanh') || t.label.toLowerCase().includes('spa')
+          );
+        }
+      }
+
+      if (preferredAudioIdx !== -1) {
+        // the index in 'parsed' is preferredAudioIdx, but we need the native tracks index
+        const nativeIndex = parsed[preferredAudioIdx].index;
+        activeAudioIndex = nativeIndex;
+        for (let i = 0; i < tracks.length; i++) {
+          tracks[i].enabled = i === nativeIndex;
+        }
+        for (let i = 0; i < parsed.length; i++) {
+          parsed[i].enabled = i === preferredAudioIdx;
+        }
+      } else {
+        for (let i = 0; i < tracks.length; i++) {
+          if (tracks[i].enabled) activeAudioIndex = i;
+        }
+        for (let i = 0; i < parsed.length; i++) {
+          if (parsed[i].index === activeAudioIndex) parsed[i].enabled = true;
+          else parsed[i].enabled = false;
+        }
+      }
+
       audioTracks = parsed;
 
       tracks.onchange = () => {
@@ -170,6 +301,8 @@
         }
       };
     }
+
+    applyDefaultSubtitle();
   }
 
   function selectAudioTrack(index: number) {

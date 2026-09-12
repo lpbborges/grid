@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { getLanguageName } from '$lib/api/subtitles';
   import EmptyState from './EmptyState.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   // Mirrors the subset of `Torrent` (see $lib/types) that this component
   // actually reads. A full `Torrent[]` (e.g. movie.torrents) is assignable
@@ -14,33 +16,19 @@
   let {
     torrents,
     selectedTorrentHash = $bindable(),
-    onPlay
+    onPlay,
+    originalLanguage
   } = $props<{
     torrents: TorrentOption[];
     selectedTorrentHash: string;
     onPlay: () => void;
+    originalLanguage?: string;
   }>();
 
   let selectedTorrent = $derived(
     torrents.find((torrent: TorrentOption) => torrent.hash === selectedTorrentHash)
   );
-
-  // Multiple torrents can share the same quality (e.g. two 1080p releases
-  // with different source/size). The option label must still let users tell
-  // them apart before they pick one, so append the release type only when
-  // its quality is not unique in the list.
-  let qualityCounts = $derived(
-    torrents.reduce((counts: Record<string, number>, torrent: TorrentOption) => {
-      counts[torrent.quality] = (counts[torrent.quality] || 0) + 1;
-      return counts;
-    }, {})
-  );
-
-  function optionLabel(torrent: TorrentOption) {
-    return qualityCounts[torrent.quality] > 1
-      ? `${torrent.quality} (${torrent.type})`
-      : torrent.quality;
-  }
+  let origDisplay = $derived(originalLanguage ? getLanguageName(originalLanguage) : '');
 </script>
 
 {#if torrents.length === 0}
@@ -50,37 +38,113 @@
 {:else}
   <div class="mt-6 flex flex-col gap-4">
     <div class="flex flex-col gap-2">
-      <label for="quality-select" class="text-primary text-sm font-bold tracking-widest uppercase"
-        >Qualidade</label
-      >
-      <div class="relative w-full">
-        <select
-          id="quality-select"
-          bind:value={selectedTorrentHash}
-          class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border p-3 pr-10 font-mono text-sm focus:outline-none"
-        >
-          {#each torrents as torrent}
-            <option value={torrent.hash} class="bg-surface text-main">
-              {optionLabel(torrent)}
-            </option>
-          {/each}
-        </select>
-        <div
-          class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center px-3"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
+      <div class="flex items-center gap-2">
+        <div class="relative flex w-1/3 flex-col gap-1">
+          <label
+            for="ps-audio-select"
+            class="text-primary/70 text-[10px] font-bold tracking-widest uppercase">Áudio</label
           >
+          <select
+            id="ps-audio-select"
+            value={settingsStore.audio}
+            onchange={(e) => (settingsStore.audio = e.currentTarget.value)}
+            class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-2 pr-6 pl-2 font-mono text-xs focus:outline-none"
+          >
+            <option value="original" class="bg-surface text-main"
+              >Original{origDisplay ? ` (${origDisplay})` : ''}</option
+            >
+            {#if originalLanguage !== 'pt'}
+              <option value="pt" class="bg-surface text-main">Português BR</option>
+            {/if}
+            {#if originalLanguage !== 'en'}
+              <option value="en" class="bg-surface text-main">Inglês</option>
+            {/if}
+            {#if originalLanguage !== 'es'}
+              <option value="es" class="bg-surface text-main">Espanhol</option>
+            {/if}
+          </select>
+          <div
+            class="text-primary pointer-events-none absolute right-0 bottom-0 flex h-8 items-center pr-2"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
+            >
+          </div>
+        </div>
+        <div class="relative flex w-1/3 flex-col gap-1">
+          <label
+            for="ps-subtitle-select"
+            class="text-primary/70 text-[10px] font-bold tracking-widest uppercase">Legenda</label
+          >
+          <select
+            id="ps-subtitle-select"
+            value={settingsStore.subtitle}
+            onchange={(e) => (settingsStore.subtitle = e.currentTarget.value)}
+            class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-2 pr-6 pl-2 font-mono text-xs focus:outline-none"
+          >
+            <option value="none" class="bg-surface text-main">Nenhuma</option>
+            <option value="pt" class="bg-surface text-main">Português BR</option>
+            <option value="en" class="bg-surface text-main">Inglês</option>
+            <option value="es" class="bg-surface text-main">Espanhol</option>
+          </select>
+          <div
+            class="text-primary pointer-events-none absolute right-0 bottom-0 flex h-8 items-center pr-2"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
+            >
+          </div>
+        </div>
+        <div class="relative flex w-1/3 flex-col gap-1">
+          <label
+            for="ps-quality-select"
+            class="text-primary/70 text-[10px] font-bold tracking-widest uppercase">Qualidade</label
+          >
+          <select
+            id="ps-quality-select"
+            value={settingsStore.quality}
+            onchange={(e) => (settingsStore.quality = e.currentTarget.value)}
+            class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-2 pr-6 pl-2 font-mono text-xs focus:outline-none"
+          >
+            <option value="4k" class="bg-surface text-main">4K</option>
+            <option value="1080p" class="bg-surface text-main">1080p</option>
+            <option value="720p" class="bg-surface text-main">720p</option>
+            <option value="480p" class="bg-surface text-main">480p</option>
+          </select>
+          <div
+            class="text-primary pointer-events-none absolute right-0 bottom-0 flex h-8 items-center pr-2"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
+            >
+          </div>
         </div>
       </div>
+
       {#if selectedTorrent}
         <span class="text-muted font-mono text-xs opacity-70">
           {selectedTorrent.type} &bull; {selectedTorrent.size}

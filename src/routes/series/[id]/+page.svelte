@@ -8,6 +8,7 @@
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
@@ -17,8 +18,6 @@
   let lastAttemptedEpisode = $state<any>(null);
 
   const streamPlayer = useStreamPlayer();
-
-  let preferredQuality = $state('1080p');
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
@@ -90,16 +89,29 @@
         return;
       }
 
-      let bestStream = streams.find(
-        (s) =>
-          (s.title?.toLowerCase().includes(preferredQuality) ||
-            s.name?.toLowerCase().includes(preferredQuality)) &&
-          s.infoHash
-      );
+      const getScore = (s: any) => {
+        if (!s.infoHash) return -1;
+        let score = 0;
+        const text = (s.title || '').toLowerCase() + ' ' + (s.name || '').toLowerCase();
 
-      if (!bestStream) {
-        bestStream = streams.find((s) => s.infoHash);
-      }
+        if (text.includes(settingsStore.quality)) score += 100;
+        score += 50;
+
+        const wantPt = settingsStore.audio === 'pt';
+        const isPt =
+          text.includes('dublado') ||
+          text.includes('dual audio') ||
+          text.includes('multi-audio') ||
+          text.includes('pt-br') ||
+          text.includes('🇧🇷');
+
+        if (wantPt && isPt) score += 500;
+        if (!wantPt && !isPt) score += 100;
+
+        return score;
+      };
+
+      let bestStream = streams.sort((a, b) => getScore(b) - getScore(a))[0];
 
       if (!bestStream || !bestStream.infoHash) {
         error = 'Fonte incompatível para este episódio.';
@@ -205,6 +217,7 @@
           mediaId={seriesId}
           season={lastAttemptedEpisode?.season}
           episode={lastAttemptedEpisode?.episode}
+          originalLanguage={series?.language}
           initialTime={progressStore.get(
             seriesId,
             lastAttemptedEpisode?.season,
@@ -242,8 +255,8 @@
           episodes={series.videos}
           {translatedEpisodes}
           bind:selectedSeason
-          bind:preferredQuality
           onPlayEpisode={playEpisode}
+          originalLanguage={series?.language}
         />
       {/if}
     </div>

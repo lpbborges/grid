@@ -10,15 +10,9 @@ export interface Stream {
   behaviorHints?: any;
 }
 
-export async function getSeriesStreams(
-  seriesId: string,
-  season: number,
-  episode: number
-): Promise<Stream[]> {
+async function fetchTorrentioStreams(path: string): Promise<Stream[]> {
   try {
-    const res = await fetchWithTimeout(
-      `https://torrentio.strem.fun/stream/series/${seriesId}:${season}:${episode}.json`
-    );
+    const res = await fetchWithTimeout(`https://torrentio.strem.fun/stream/${path}.json`);
     if (!res.ok) {
       throw new Error(`Failed to fetch streams: ${res.statusText}`);
     }
@@ -28,4 +22,16 @@ export async function getSeriesStreams(
     logger.error(error);
     return [];
   }
+}
+
+export function getSeriesStreams(
+  seriesId: string,
+  season: number,
+  episode: number
+): Promise<Stream[]> {
+  return fetchTorrentioStreams(`series/${seriesId}:${season}:${episode}`);
+}
+
+export function getMovieStreams(movieId: string): Promise<Stream[]> {
+  return fetchTorrentioStreams(`movie/${movieId}`);
 }

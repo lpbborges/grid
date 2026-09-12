@@ -206,6 +206,54 @@ describe('VideoPlayer component', () => {
     }
   });
 
+  it('auto-selects the subtitle matching the stored preference once tracks are ready', async () => {
+    const subtitles: any = [
+      { label: 'Inglês', lang: 'en', url: 'sub-en.vtt', group: 'Extra' },
+      { label: 'Português', lang: 'pt', url: 'sub-pt.vtt', group: 'Extra' }
+    ];
+    const tracks = [{ mode: 'disabled' }, { mode: 'disabled' }];
+
+    const { getByTestId } = render(VideoPlayer, { src: 'test.mp4', subtitles });
+    const video = getByTestId('video-element') as any;
+
+    // Tracks aren't registered on videoElement.textTracks yet when the
+    // component mounts (matches the real-world race this test guards against).
+    Object.defineProperty(video, 'textTracks', { writable: true, value: [] });
+    await act(() => {});
+
+    // By the time 'loadedmetadata' fires the tracks are registered, same as
+    // real browsers guarantee before that event.
+    Object.defineProperty(video, 'textTracks', { writable: true, value: tracks });
+    await fireEvent.loadedMetadata(video);
+
+    expect(tracks[1].mode).toBe('showing');
+    expect(tracks[0].mode).toBe('disabled');
+  });
+
+  it('keeps subtitles off after the user picks "Desativado", even though a preference match exists', async () => {
+    const subtitles: any = [{ label: 'Português', lang: 'pt', url: 'sub-pt.vtt', group: 'Extra' }];
+    const track = { mode: 'disabled' };
+
+    const { getByLabelText, getByText, getByTestId } = render(VideoPlayer, {
+      src: 'test.mp4',
+      subtitles
+    });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'textTracks', { writable: true, value: [track] });
+
+    await fireEvent.loadedMetadata(video);
+    expect(track.mode).toBe('showing');
+
+    await fireEvent.click(getByLabelText('Menu de Legendas'));
+    await fireEvent.click(getByText('Desativado'));
+    expect(track.mode).toBe('disabled');
+
+    // Re-firing loadedmetadata (e.g. a subsequent metadata event) must not
+    // silently re-enable the subtitle the user just turned off.
+    await fireEvent.loadedMetadata(video);
+    expect(track.mode).toBe('disabled');
+  });
+
   it('displays audio tracks menu and allows selection', async () => {
     const { getByLabelText, getByText, getByTestId } = render(VideoPlayer, { src: 'test.mp4' });
     const video = getByTestId('video-element') as any;
@@ -225,9 +273,9 @@ describe('VideoPlayer component', () => {
     const audioBtn = getByLabelText('Menu de Faixas de Áudio');
     await fireEvent.click(audioBtn);
 
-    expect(getByText('Audio 1')).toBeDefined();
+    expect(getByText('Faixa 1')).toBeDefined();
 
-    await fireEvent.click(getByText('Audio 2'));
+    await fireEvent.click(getByText('Faixa 2'));
     expect(audioTracks[0].enabled).toBe(false);
     expect(audioTracks[1].enabled).toBe(true);
   });

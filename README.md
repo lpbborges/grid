@@ -9,7 +9,8 @@ Grid-Play is a native desktop application built with **Tauri**, **SvelteKit**, *
 - **Localization:** Automatically translates movie and series titles, synopses, and episode names into the user's native system language on the fly.
 - **Cinematic UI:** Beautiful fully-opaque movie/series poster backgrounds with Stremio-style gradients that blend seamlessly with the Evangelion theme.
 - **Torrent Engine Integration:** Seamless streaming powered by the `rqbit` sidecar for both Movies (via YTS) and TV Series (via Torrentio). Includes automatic background-cleanup of previous streams to save bandwidth and disk space.
-- **TV Series Playback:** Full support for season/episode selection, global preferred video quality defaults, and dynamic metadata/subtitle loading.
+- **TV Series Playback:** Full support for season/episode selection and dynamic metadata/subtitle loading.
+- **Global Playback Preferences:** Audio, Subtitle, and Quality preferences set once and remembered across the app (persisted locally). Grid-Play ranks and picks the best matching torrent from YTS + Torrentio behind the scenes and silently enables the right embedded audio/subtitle track when playback starts, resolving the movie/show's real original language instead of guessing.
 - **Frameless Design:** Desktop window with custom controls and a draggable header.
 - **Evangelion Unit-01 Theme:** A unique visual identity built with Tailwind CSS v4 featuring neon glows, digital grid backgrounds, and cyberpunk typography (Orbitron/Rajdhani).
 - **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded (torrent) and Extra (downloaded) subtitles.

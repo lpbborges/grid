@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { getLanguageName } from '$lib/api/subtitles';
   import EmptyState from './EmptyState.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   export interface Episode {
     id: string;
@@ -15,15 +17,16 @@
     episodes = [],
     translatedEpisodes = {},
     selectedSeason = $bindable(),
-    preferredQuality = $bindable(),
-    onPlayEpisode
+    onPlayEpisode,
+    originalLanguage
   } = $props<{
     seriesId: string;
     episodes: Episode[];
     translatedEpisodes: Record<string, string>;
     selectedSeason: number | null;
-    preferredQuality: string;
+
     onPlayEpisode: (episode: Episode) => void;
+    originalLanguage?: string;
   }>();
 
   let availableSeasons = $derived(
@@ -37,6 +40,7 @@
       selectedSeason = availableSeasons[0];
     }
   });
+  let origDisplay = $derived(originalLanguage ? getLanguageName(originalLanguage) : '');
 </script>
 
 {#if episodes && episodes.length > 0}
@@ -71,7 +75,8 @@
         </div>
         <div class="relative w-1/2">
           <select
-            bind:value={preferredQuality}
+            value={settingsStore.quality}
+            onchange={(e) => (settingsStore.quality = e.currentTarget.value)}
             class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
           >
             <option value="4k" class="bg-surface text-main">4K</option>
@@ -81,6 +86,80 @@
           </select>
           <div
             class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
+            >
+          </div>
+        </div>
+      </div>
+      <div class="mt-2 flex items-center gap-2">
+        <div class="relative flex w-1/2 flex-col gap-1">
+          <label
+            for="el-audio-select"
+            class="text-primary/70 text-[10px] font-bold tracking-widest uppercase">Áudio</label
+          >
+          <select
+            id="el-audio-select"
+            value={settingsStore.audio}
+            onchange={(e) => (settingsStore.audio = e.currentTarget.value)}
+            class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
+          >
+            <option value="original" class="bg-surface text-main"
+              >Original{origDisplay ? ` (${origDisplay})` : ''}</option
+            >
+            {#if originalLanguage !== 'pt'}
+              <option value="pt" class="bg-surface text-main">Português BR</option>
+            {/if}
+            {#if originalLanguage !== 'en'}
+              <option value="en" class="bg-surface text-main">Inglês</option>
+            {/if}
+            {#if originalLanguage !== 'es'}
+              <option value="es" class="bg-surface text-main">Espanhol</option>
+            {/if}
+          </select>
+          <div
+            class="text-primary pointer-events-none absolute right-0 bottom-0 flex h-6 items-center pr-2"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
+            >
+          </div>
+        </div>
+        <div class="relative flex w-1/2 flex-col gap-1">
+          <label
+            for="el-subtitle-select"
+            class="text-primary/70 text-[10px] font-bold tracking-widest uppercase">Legenda</label
+          >
+          <select
+            id="el-subtitle-select"
+            value={settingsStore.subtitle}
+            onchange={(e) => (settingsStore.subtitle = e.currentTarget.value)}
+            class="border-primary/50 focus:border-accent-green bg-surface text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
+          >
+            <option value="none" class="bg-surface text-main">Nenhuma</option>
+            <option value="pt" class="bg-surface text-main">Português BR</option>
+            <option value="en" class="bg-surface text-main">Inglês</option>
+            <option value="es" class="bg-surface text-main">Espanhol</option>
+          </select>
+          <div
+            class="text-primary pointer-events-none absolute right-0 bottom-0 flex h-6 items-center pr-2"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"

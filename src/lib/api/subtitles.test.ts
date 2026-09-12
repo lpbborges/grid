@@ -55,7 +55,7 @@ describe('subtitles api', () => {
         id: '123',
         url: 'blob:mock-url-0',
         lang: 'en',
-        label: 'English',
+        label: 'Inglês',
         group: 'Extra'
       });
     });

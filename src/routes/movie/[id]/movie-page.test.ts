@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import MoviePage from './+page.svelte';
 
-const { prepareStreamMock, translateMediaInfoMock, clearTorrentsMock } = vi.hoisted(() => ({
-  prepareStreamMock: vi.fn(),
-  translateMediaInfoMock: vi.fn(),
-  clearTorrentsMock: vi.fn()
-}));
+const { prepareStreamMock, translateMediaInfoMock, clearTorrentsMock, getMovieStreamsMock } =
+  vi.hoisted(() => ({
+    prepareStreamMock: vi.fn(),
+    translateMediaInfoMock: vi.fn(),
+    clearTorrentsMock: vi.fn(),
+    getMovieStreamsMock: vi.fn()
+  }));
 
 vi.mock('$lib/engine/orchestrator', () => ({
   prepareStream: prepareStreamMock
@@ -18,6 +20,10 @@ vi.mock('$lib/api/translate', () => ({
 
 vi.mock('$lib/engine/torrent', () => ({
   clearTorrents: clearTorrentsMock
+}));
+
+vi.mock('$lib/api/torrentio', () => ({
+  getMovieStreams: getMovieStreamsMock
 }));
 
 const movie = {
@@ -38,6 +44,7 @@ describe('Movie page error handling', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     clearTorrentsMock.mockResolvedValue(undefined);
+    getMovieStreamsMock.mockResolvedValue([]);
     translateMediaInfoMock.mockResolvedValue({ title: movie.title, synopsis: movie.summary });
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
     HTMLMediaElement.prototype.pause = vi.fn();
@@ -96,6 +103,7 @@ describe('Movie page integration flow', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     clearTorrentsMock.mockResolvedValue(undefined);
+    getMovieStreamsMock.mockResolvedValue([]);
     translateMediaInfoMock.mockResolvedValue({ title: movie.title, synopsis: movie.summary });
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
     HTMLMediaElement.prototype.pause = vi.fn();
@@ -144,5 +152,41 @@ describe('Movie page integration flow', () => {
     const video = document.querySelector('video');
     expect(video).toBeInTheDocument();
     expect(video?.src).toBe('http://localhost:3000/stream');
+  });
+
+  it('drops the previous movie torrents when navigating to a different movie', async () => {
+    prepareStreamMock.mockResolvedValue({
+      videoSrc: 'http://localhost:3000/stream',
+      subtitles: [],
+      engineStatus: { status: 'downloading', progress: 50, downloadSpeed: 0, seeds: 0, peers: 0 }
+    });
+
+    const movieB = {
+      ...movie,
+      id: 'tt2',
+      title: 'Another Movie',
+      torrents: [
+        { hash: 'xyz', quality: '4k', type: 'web', size: '2GB', seeds: 10, peers: 5, url: 'y' }
+      ]
+    };
+
+    const { rerender } = render(MoviePage, {
+      props: { data: { movieId: 'tt1', movie, error: null } }
+    });
+
+    rerender({ data: { movieId: 'tt2', movie: movieB, error: null } });
+    await new Promise((r) => setTimeout(r, 0));
+
+    const playButton = screen.getByRole('button', { name: /reproduzir/i });
+    await fireEvent.click(playButton);
+
+    expect(prepareStreamMock).toHaveBeenCalledWith(
+      'magnet:?xt=urn:btih:xyz&dn=Another%20Movie',
+      expect.any(Function),
+      'tt2',
+      undefined,
+      undefined,
+      undefined
+    );
   });
 });

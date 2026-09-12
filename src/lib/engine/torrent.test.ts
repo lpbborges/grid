@@ -270,14 +270,14 @@ describe('getTorrentSubtitles', () => {
       id: 'torrent-1',
       url: expect.stringMatching(/^blob:mock-url-/),
       lang: 'en',
-      label: 'English',
+      label: 'Inglês',
       group: 'Embedded'
     });
     expect(subs[1]).toEqual({
       id: 'torrent-2',
       url: expect.stringMatching(/^blob:mock-url-/),
       lang: 'fr',
-      label: 'French',
+      label: 'Francês',
       group: 'Embedded'
     });
     expect(subs[2]).toEqual({

@@ -1,12 +1,14 @@
 <script lang="ts">
   import { logger } from '$lib/logger';
   import { translateMediaInfo } from '$lib/api/translate';
+  import { getMovieStreams } from '$lib/api/torrentio';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   let { data } = $props();
   let movieId = $derived(data.movieId);
@@ -35,6 +37,7 @@
   $effect(() => {
     if (movieId) {
       selectedTorrentHash = '';
+      combinedTorrents = [];
       streamPlayer.stop();
     }
   });
@@ -56,29 +59,122 @@
     }
   });
 
+  let combinedTorrents = $state<any[]>([]);
+
   $effect(() => {
-    if (movie && movie.torrents && movie.torrents.length > 0 && !selectedTorrentHash) {
-      let bestTorrent = movie.torrents.reduce((prev: any, current: any) => {
-        if (current.quality === '1080p' && prev.quality !== '1080p') return current;
-        if (prev.quality === '1080p' && current.quality !== '1080p') return prev;
-        return prev.seeds > current.seeds ? prev : current;
-      });
-      selectedTorrentHash = bestTorrent.hash;
+    if (movie && movie.id) {
+      if (combinedTorrents.length === 0) {
+        combinedTorrents = [...(movie.torrents || [])];
+        getMovieStreams(movie.id.toString()).then((streams) => {
+          const torrentioOptions = streams
+            .map((s) => {
+              const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
+              const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
+
+              let type = 'Torrentio';
+              const titleLower = (s.title || '').toLowerCase();
+              if (
+                titleLower.includes('dublado') ||
+                titleLower.includes('pt-br') ||
+                titleLower.includes('🇧🇷')
+              )
+                type += ' (PT)';
+              else if (titleLower.includes('dual')) type += ' (Dual)';
+
+              const sizeMatch = s.title?.match(/💾\\s*([^⚙]+)/);
+              const size = sizeMatch ? sizeMatch[1].trim() : 'Unknown size';
+
+              return {
+                hash: s.infoHash,
+                quality,
+                type,
+                size,
+                rawStream: s
+              };
+            })
+            .filter((t) => t.hash);
+
+          const existingHashes: Record<string, boolean> = {};
+          for (const t of combinedTorrents) if (t.hash) existingHashes[t.hash] = true;
+          let changed = false;
+          for (const opt of torrentioOptions) {
+            if (opt.hash && !existingHashes[opt.hash]) {
+              combinedTorrents.push(opt);
+              if (opt.hash) existingHashes[opt.hash] = true;
+              changed = true;
+            }
+          }
+          if (changed) reselectBestTorrent();
+        });
+      }
+    }
+  });
+
+  function reselectBestTorrent() {
+    if (combinedTorrents.length > 0) {
+      const getScore = (t: any) => {
+        let score = 0;
+        const text = (
+          (t.rawStream?.title || '') +
+          ' ' +
+          (t.rawStream?.name || '') +
+          ' ' +
+          t.type
+        ).toLowerCase();
+
+        if (t.quality === settingsStore.quality) score += 100;
+
+        const wantPt = settingsStore.audio === 'pt';
+        const wantOriginal = settingsStore.audio === 'original';
+
+        const isDubbedOnly = text.includes('dublado') && !text.includes('dual');
+        const isDual = text.includes('dual audio') || text.includes('multi-audio');
+        const hasPt =
+          isDubbedOnly ||
+          isDual ||
+          text.includes('pt-br') ||
+          text.includes('🇧🇷') ||
+          t.type.includes('(pt)');
+
+        if (wantPt) {
+          if (hasPt) score += 500;
+          else score += 10;
+        } else if (wantOriginal) {
+          if (isDubbedOnly) score -= 500;
+          else score += 500;
+        } else {
+          if (!isDubbedOnly) score += 100;
+        }
+
+        return score + (t.seeds || 0);
+      };
+
+      const sorted = [...combinedTorrents].sort((a, b) => getScore(b) - getScore(a));
+      selectedTorrentHash = sorted[0].hash;
+    }
+  }
+
+  $effect(() => {
+    if (settingsStore.audio || settingsStore.quality) {
+      if (combinedTorrents.length > 0) {
+        reselectBestTorrent();
+      }
     }
   });
 
   async function playMovie() {
-    if (!movie || !movie.torrents || movie.torrents.length === 0) {
+    if (combinedTorrents.length === 0) {
       error = 'Nenhum stream disponível para este título.';
       errorSource = 'load';
       return;
     }
 
     const selectedTorrent =
-      movie.torrents.find((t: any) => t.hash === selectedTorrentHash) || movie.torrents[0];
-    const magnet = `magnet:?xt=urn:btih:${selectedTorrent.hash}&dn=${encodeURIComponent(movie.title)}`;
+      combinedTorrents.find((t) => t.hash === selectedTorrentHash) || combinedTorrents[0];
+    const fileIdx = selectedTorrent.rawStream?.fileIdx;
+    const magnet = `magnet:?xt=urn:btih:${selectedTorrent.hash}&dn=${encodeURIComponent(movie?.title || '')}`;
 
-    const ok = await streamPlayer.play(magnet, { mediaId: movieId });
+    const ok = await streamPlayer.play(magnet, { mediaId: movieId, fileIdx });
     if (!ok) {
       error = streamPlayer.error;
       errorSource = 'play';
@@ -155,7 +251,12 @@
       </div>
 
       {#if !streamPlayer.isPlaying}
-        <PlayerSelection torrents={movie.torrents} bind:selectedTorrentHash onPlay={playMovie} />
+        <PlayerSelection
+          torrents={combinedTorrents}
+          bind:selectedTorrentHash
+          onPlay={playMovie}
+          originalLanguage={movie?.language}
+        />
       {/if}
     </div>
 
@@ -165,6 +266,7 @@
           src={streamPlayer.videoSrc}
           subtitles={streamPlayer.subtitles}
           mediaId={movieId}
+          originalLanguage={movie?.language}
           initialTime={progressStore.get(movieId)?.time || 0}
           onclose={streamPlayer.stop}
           onwatched={() => {

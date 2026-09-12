@@ -1,4 +1,4 @@
-import { render, fireEvent, within } from '@testing-library/svelte';
+import { render, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect, vi } from 'vitest';
 import PlayerSelection from './PlayerSelection.svelte';
 import '@testing-library/jest-dom';
@@ -27,38 +27,6 @@ describe('PlayerSelection component', () => {
 
     expect(getByText(/BluRay/)).toBeInTheDocument();
     expect(getByText(/2\.1 GB/)).toBeInTheDocument();
-  });
-
-  it('disambiguates options that share the same quality but differ in release type', () => {
-    const torrents = [
-      { hash: 'abc', quality: '1080p', type: 'BluRay', size: '2.1 GB' },
-      { hash: 'def', quality: '1080p', type: 'WEBRip', size: '1.6 GB' }
-    ];
-
-    const { getByRole } = render(PlayerSelection, {
-      props: { torrents, selectedTorrentHash: 'abc', onPlay: vi.fn() }
-    });
-
-    const select = getByRole('combobox');
-    const options = within(select).getAllByRole('option');
-
-    expect(options).toHaveLength(2);
-    const labels = options.map((o) => o.textContent?.trim());
-    expect(labels[0]).not.toBe(labels[1]);
-    expect(labels[0]).toContain('BluRay');
-    expect(labels[1]).toContain('WEBRip');
-  });
-
-  it('does not add a disambiguator when qualities are unique', () => {
-    const torrents = [{ hash: 'abc', quality: '1080p', type: 'BluRay', size: '2.1 GB' }];
-
-    const { getByRole } = render(PlayerSelection, {
-      props: { torrents, selectedTorrentHash: 'abc', onPlay: vi.fn() }
-    });
-
-    const select = getByRole('combobox');
-    const option = within(select).getByRole('option');
-    expect(option.textContent?.trim()).toBe('1080p');
   });
 
   it('calls onPlay when the play button is clicked', async () => {

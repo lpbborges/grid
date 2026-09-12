@@ -19,7 +19,7 @@ describe('EpisodeList component', () => {
         episodes,
         translatedEpisodes,
         selectedSeason: 1,
-        preferredQuality: '1080p',
+
         onPlayEpisode
       }
     });
@@ -44,7 +44,7 @@ describe('EpisodeList component', () => {
         episodes: [],
         translatedEpisodes: {},
         selectedSeason: null,
-        preferredQuality: '1080p',
+
         onPlayEpisode: vi.fn()
       }
     });
