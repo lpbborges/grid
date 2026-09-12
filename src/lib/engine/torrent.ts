@@ -1,8 +1,17 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
 import { getLanguageName } from '../api/subtitles';
+import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 
 let ENGINE_URL = 'http://127.0.0.1:3030';
+
+export function isValidInfoHash(value: string): boolean {
+  return /^[a-f0-9]{40}$/i.test(value);
+}
+
+export function isValidFileIdx(value: number): boolean {
+  return Number.isInteger(value) && value >= 0;
+}
 
 export async function startEngine(): Promise<void> {
   try {
@@ -18,7 +27,7 @@ export async function startEngine(): Promise<void> {
 export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<void> {
   for (let i = 0; i < maxRetries; i++) {
     try {
-      const res = await fetch(`${ENGINE_URL}/torrents`);
+      const res = await fetchWithTimeout(`${ENGINE_URL}/torrents`, {}, 3000);
       if (res.ok) {
         return;
       }
@@ -32,11 +41,15 @@ export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<voi
 
 export async function clearTorrents(): Promise<void> {
   try {
-    const res = await fetch(`${ENGINE_URL}/torrents`);
+    const res = await fetchWithTimeout(`${ENGINE_URL}/torrents`, {}, 8000);
     if (!res.ok) return;
     const data = await res.json();
     for (const torrent of data.torrents || []) {
-      await fetch(`${ENGINE_URL}/torrents/${torrent.info_hash}/delete`, { method: 'POST' });
+      await fetchWithTimeout(
+        `${ENGINE_URL}/torrents/${torrent.info_hash}/delete`,
+        { method: 'POST' },
+        8000
+      );
     }
   } catch (error) {
     console.warn('Failed to clear torrents:', error);
@@ -44,13 +57,17 @@ export async function clearTorrents(): Promise<void> {
 }
 
 export async function addTorrent(magnetLink: string): Promise<TorrentEngineDetails> {
-  const res = await fetch(`${ENGINE_URL}/torrents`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/plain'
+  const res = await fetchWithTimeout(
+    `${ENGINE_URL}/torrents`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain'
+      },
+      body: magnetLink
     },
-    body: magnetLink
-  });
+    8000
+  );
 
   if (!res.ok) {
     throw new Error('Failed to add torrent to engine');
@@ -78,6 +95,12 @@ export function getBestVideoFileIndex(files: { name: string; length: number }[])
 }
 
 export function getStreamUrl(infoHash: string, fileIdx: number): string {
+  if (!isValidInfoHash(infoHash)) {
+    throw new Error('Invalid infoHash');
+  }
+  if (!isValidFileIdx(fileIdx)) {
+    throw new Error('Invalid fileIdx');
+  }
   return `${ENGINE_URL}/torrents/${infoHash}/stream/${fileIdx}`;
 }
 
@@ -117,8 +140,11 @@ export function getTorrentSubtitles(
 }
 
 export async function getTorrentStats(infoHash: string): Promise<any> {
+  if (!isValidInfoHash(infoHash)) {
+    return null;
+  }
   try {
-    const res = await fetch(`${ENGINE_URL}/torrents/${infoHash}/stats`);
+    const res = await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/stats`, {}, 8000);
     if (!res.ok) return null;
     return await res.json();
   } catch {

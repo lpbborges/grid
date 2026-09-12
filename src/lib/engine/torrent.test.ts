@@ -7,7 +7,9 @@ import {
   waitForEngine,
   clearTorrents,
   getTorrentSubtitles,
-  getTorrentStats
+  getTorrentStats,
+  isValidInfoHash,
+  isValidFileIdx
 } from './torrent';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -33,8 +35,8 @@ describe('torrent engine', () => {
   });
 
   it('generates correct stream url', () => {
-    const url = getStreamUrl('abc123hash', 2);
-    expect(url).toBe('http://127.0.0.1:3030/torrents/abc123hash/stream/2');
+    const url = getStreamUrl('a'.repeat(40), 2);
+    expect(url).toBe(`http://127.0.0.1:3030/torrents/${'a'.repeat(40)}/stream/2`);
   });
 
   it('calls startEngine tauri invoke and updates URL', async () => {
@@ -42,7 +44,9 @@ describe('torrent engine', () => {
     await startEngine();
     expect(invoke).toHaveBeenCalledWith('start_torrent_engine');
     // We can verify it updated by checking the stream url
-    expect(getStreamUrl('abc', 1)).toBe('http://127.0.0.1:41349/torrents/abc/stream/1');
+    expect(getStreamUrl('b'.repeat(40), 1)).toBe(
+      `http://127.0.0.1:41349/torrents/${'b'.repeat(40)}/stream/1`
+    );
   });
 
   it('handles startEngine failure gracefully', async () => {
@@ -62,13 +66,18 @@ describe('torrent engine', () => {
       .mockResolvedValue({ ok: true });
 
     await clearTorrents();
-    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/torrents'));
-    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/torrents/123/delete'), {
-      method: 'POST'
-    });
-    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/torrents/456/delete'), {
-      method: 'POST'
-    });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/torrents'),
+      expect.objectContaining({ signal: expect.anything() })
+    );
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/torrents/123/delete'),
+      expect.objectContaining({ method: 'POST', signal: expect.anything() })
+    );
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/torrents/456/delete'),
+      expect.objectContaining({ method: 'POST', signal: expect.anything() })
+    );
   });
 
   it('handles clearTorrents failure gracefully', async () => {
@@ -123,25 +132,82 @@ describe('torrent engine', () => {
   });
 
   it('getTorrentStats returns data when successful', async () => {
+    const hash = '1'.repeat(40);
     (globalThis.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ snapshot: { downloaded_and_checked_bytes: 100 } })
     });
-    const stats = await getTorrentStats('123');
-    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/torrents/123/stats'));
+    const stats = await getTorrentStats(hash);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/torrents/${hash}/stats`),
+      expect.objectContaining({ signal: expect.anything() })
+    );
     expect(stats.snapshot.downloaded_and_checked_bytes).toBe(100);
   });
 
   it('getTorrentStats returns null when not ok', async () => {
     (globalThis.fetch as any).mockResolvedValueOnce({ ok: false });
-    const stats = await getTorrentStats('123');
+    const stats = await getTorrentStats('1'.repeat(40));
     expect(stats).toBeNull();
   });
 
   it('getTorrentStats returns null on network error', async () => {
     (globalThis.fetch as any).mockRejectedValueOnce(new Error('Network error'));
-    const stats = await getTorrentStats('123');
+    const stats = await getTorrentStats('1'.repeat(40));
     expect(stats).toBeNull();
+  });
+});
+
+describe('infoHash/fileIdx validation', () => {
+  const validHash = 'a'.repeat(40);
+
+  it('isValidInfoHash accepts a 40-char lowercase hex string', () => {
+    expect(isValidInfoHash(validHash)).toBe(true);
+  });
+
+  it('isValidInfoHash accepts uppercase hex', () => {
+    expect(isValidInfoHash(validHash.toUpperCase())).toBe(true);
+  });
+
+  it('isValidInfoHash rejects wrong length', () => {
+    expect(isValidInfoHash('abc123')).toBe(false);
+  });
+
+  it('isValidInfoHash rejects non-hex characters', () => {
+    expect(isValidInfoHash('g'.repeat(40))).toBe(false);
+  });
+
+  it('isValidInfoHash rejects path traversal attempts', () => {
+    expect(isValidInfoHash('../../etc/passwd')).toBe(false);
+  });
+
+  it('isValidFileIdx accepts non-negative integers', () => {
+    expect(isValidFileIdx(0)).toBe(true);
+    expect(isValidFileIdx(5)).toBe(true);
+  });
+
+  it('isValidFileIdx rejects negative numbers', () => {
+    expect(isValidFileIdx(-1)).toBe(false);
+  });
+
+  it('isValidFileIdx rejects non-integers', () => {
+    expect(isValidFileIdx(1.5)).toBe(false);
+    expect(isValidFileIdx(NaN)).toBe(false);
+  });
+
+  it('getStreamUrl throws on invalid infoHash', () => {
+    expect(() => getStreamUrl('not-a-hash', 0)).toThrow('Invalid infoHash');
+  });
+
+  it('getStreamUrl throws on invalid fileIdx', () => {
+    expect(() => getStreamUrl(validHash, -1)).toThrow('Invalid fileIdx');
+  });
+
+  it('getTorrentStats returns null without calling fetch for an invalid infoHash', async () => {
+    globalThis.fetch = vi.fn();
+    const stats = await getTorrentStats('not-a-hash');
+    expect(stats).toBeNull();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
 
