@@ -141,8 +141,8 @@
     </div>
   {/if}
 
-  <div class="relative z-10 flex flex-col gap-8 md:flex-row">
-    <div class="w-full max-w-sm md:w-1/3">
+  <div class="relative z-10 flex flex-col gap-8 lg:flex-row">
+    <div class="w-full max-w-sm lg:w-1/4">
       <div class="border-primary/30 bg-surface/40 rounded border p-2">
         <img
           src={movie.large_cover_image}
@@ -156,7 +156,7 @@
       {/if}
     </div>
 
-    <div class="w-full md:w-2/3">
+    <div class="w-full lg:w-3/4">
       {#if streamPlayer.isPlaying}
         <VideoPlayer
           src={streamPlayer.videoSrc}
