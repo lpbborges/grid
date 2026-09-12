@@ -1,18 +1,10 @@
 <script lang="ts">
-  import MediaCard from '$lib/components/MediaCard.svelte';
+  import MediaRow from '$lib/components/MediaRow.svelte';
   import type { Movie } from '$lib/types';
   import { searchQuery } from '$lib/stores.svelte';
   import { searchCatalog } from '$lib/api/yts';
 
   let { data } = $props();
-
-  let scrollContainer: any = $state();
-  let canScrollLeft = $state(false);
-  let canScrollRight = $state(false);
-
-  let seriesScrollContainer: any = $state();
-  let canScrollSeriesLeft = $state(false);
-  let canScrollSeriesRight = $state(false);
 
   let searchMovieResults = $state<Movie[]>([]);
   let searchSeriesResults = $state<Movie[]>([]);
@@ -66,46 +58,6 @@
       searchLoading = false;
     }, 300);
   });
-
-  function checkScroll() {
-    if (!scrollContainer) return;
-    canScrollLeft = scrollContainer.scrollLeft > 0;
-    canScrollRight =
-      scrollContainer.scrollLeft < scrollContainer.scrollWidth - scrollContainer.clientWidth - 1;
-  }
-
-  function scrollLeft() {
-    scrollContainer.scrollBy({ left: -800, behavior: 'smooth' });
-  }
-
-  function scrollRight() {
-    scrollContainer.scrollBy({ left: 800, behavior: 'smooth' });
-  }
-
-  function checkSeriesScroll() {
-    if (!seriesScrollContainer) return;
-    canScrollSeriesLeft = seriesScrollContainer.scrollLeft > 0;
-    canScrollSeriesRight =
-      seriesScrollContainer.scrollLeft <
-      seriesScrollContainer.scrollWidth - seriesScrollContainer.clientWidth - 1;
-  }
-
-  function scrollSeriesLeft() {
-    seriesScrollContainer.scrollBy({ left: -800, behavior: 'smooth' });
-  }
-
-  function scrollSeriesRight() {
-    seriesScrollContainer.scrollBy({ left: 800, behavior: 'smooth' });
-  }
-
-  $effect(() => {
-    const movieItems = hasSearchQuery ? searchMovieResults : popularMovies;
-    const seriesItems = hasSearchQuery ? searchSeriesResults : popularSeries;
-    if (movieItems.length || seriesItems.length) {
-      checkScroll();
-      checkSeriesScroll();
-    }
-  });
 </script>
 
 {#snippet loadingIndicator(label: string)}
@@ -141,91 +93,8 @@
     </div>
   {:else}
     <div>
-      {#if searchMovieResults.length > 0}
-        <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
-          <h1
-            class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
-          >
-            <span class="bg-primary inline-block h-5 w-2"></span>
-            Filmes
-          </h1>
-        </div>
-
-        <div class="relative mb-8">
-          {#if canScrollLeft}
-            <button
-              onclick={scrollLeft}
-              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
-              aria-label="Voltar"
-            >
-              &#10094;
-            </button>
-          {/if}
-
-          <div
-            bind:this={scrollContainer}
-            onscroll={checkScroll}
-            class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
-          >
-            {#each searchMovieResults as movie (movie.id)}
-              <MediaCard media={movie} type="movie" />
-            {/each}
-          </div>
-
-          {#if canScrollRight}
-            <button
-              onclick={scrollRight}
-              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
-              aria-label="Avançar"
-            >
-              &#10095;
-            </button>
-          {/if}
-        </div>
-      {/if}
-
-      {#if searchSeriesResults.length > 0}
-        <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
-          <h1
-            class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
-          >
-            <span class="bg-primary inline-block h-5 w-2"></span>
-            Séries
-          </h1>
-        </div>
-
-        <div class="relative">
-          {#if canScrollSeriesLeft}
-            <button
-              onclick={scrollSeriesLeft}
-              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
-              aria-label="Voltar"
-            >
-              &#10094;
-            </button>
-          {/if}
-
-          <div
-            bind:this={seriesScrollContainer}
-            onscroll={checkSeriesScroll}
-            class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
-          >
-            {#each searchSeriesResults as series (series.id)}
-              <MediaCard media={series} type="series" />
-            {/each}
-          </div>
-
-          {#if canScrollSeriesRight}
-            <button
-              onclick={scrollSeriesRight}
-              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
-              aria-label="Avançar"
-            >
-              &#10095;
-            </button>
-          {/if}
-        </div>
-      {/if}
+      <MediaRow heading="Filmes" items={searchMovieResults} type="movie" />
+      <MediaRow heading="Séries" items={searchSeriesResults} type="series" containerClass="" />
     </div>
   {/if}
 {:else if popularLoading}
@@ -240,90 +109,7 @@
   </div>
 {:else}
   <div>
-    {#if popularMovies.length > 0}
-      <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
-        <h1
-          class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
-        >
-          <span class="bg-primary inline-block h-5 w-2"></span>
-          Filmes Populares
-        </h1>
-      </div>
-
-      <div class="relative mb-8">
-        {#if canScrollLeft}
-          <button
-            onclick={scrollLeft}
-            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
-            aria-label="Voltar"
-          >
-            &#10094;
-          </button>
-        {/if}
-
-        <div
-          bind:this={scrollContainer}
-          onscroll={checkScroll}
-          class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
-        >
-          {#each popularMovies as movie (movie.id)}
-            <MediaCard media={movie} type="movie" />
-          {/each}
-        </div>
-
-        {#if canScrollRight}
-          <button
-            onclick={scrollRight}
-            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
-            aria-label="Avançar"
-          >
-            &#10095;
-          </button>
-        {/if}
-      </div>
-    {/if}
-
-    {#if popularSeries.length > 0}
-      <div class="border-primary/30 mb-4 flex items-center justify-between border-b pb-2">
-        <h1
-          class="text-accent-green font-cyber flex items-center gap-2 text-2xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.5)]"
-        >
-          <span class="bg-primary inline-block h-5 w-2"></span>
-          Séries Populares
-        </h1>
-      </div>
-
-      <div class="relative">
-        {#if canScrollSeriesLeft}
-          <button
-            onclick={scrollSeriesLeft}
-            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
-            aria-label="Voltar"
-          >
-            &#10094;
-          </button>
-        {/if}
-
-        <div
-          bind:this={seriesScrollContainer}
-          onscroll={checkSeriesScroll}
-          class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
-        >
-          {#each popularSeries as series (series.id)}
-            <MediaCard media={series} type="series" />
-          {/each}
-        </div>
-
-        {#if canScrollSeriesRight}
-          <button
-            onclick={scrollSeriesRight}
-            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
-            aria-label="Avançar"
-          >
-            &#10095;
-          </button>
-        {/if}
-      </div>
-    {/if}
+    <MediaRow heading="Filmes Populares" items={popularMovies} type="movie" />
+    <MediaRow heading="Séries Populares" items={popularSeries} type="series" containerClass="" />
   </div>
 {/if}
