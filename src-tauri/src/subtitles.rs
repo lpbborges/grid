@@ -26,7 +26,10 @@ pub fn srt_to_vtt(input: &str) -> String {
     let mut i = 0;
     while i < lines.len() {
         let line = lines[i];
-        let is_cue_identifier = cue_id_re.is_match(line)
+        let at_cue_block_start =
+            i == 0 || lines.get(i - 1).is_some_and(|prev| prev.trim().is_empty());
+        let is_cue_identifier = at_cue_block_start
+            && cue_id_re.is_match(line)
             && lines
                 .get(i + 1)
                 .is_some_and(|next| timing_re.is_match(next.trim()));
@@ -129,6 +132,21 @@ mod tests {
         let srt = "1\n00:00:01,000 --> 00:00:02,000\n<i>italic</i> <b>bold</b> <u>underline</u>\n";
         let vtt = srt_to_vtt(srt);
         assert!(vtt.contains("<i>italic</i> <b>bold</b> <u>underline</u>"));
+    }
+
+    #[test]
+    fn does_not_drop_numeric_cue_text_when_the_next_cue_lacks_a_blank_separator() {
+        // A cue whose sole text line is purely numeric ("5") must not be
+        // mistaken for a cue identifier just because the following line
+        // happens to be a timing line for the *next* cue. A real cue
+        // identifier only ever appears at the start of the file or right
+        // after the blank line separating cues.
+        let srt = "00:00:01,000 --> 00:00:02,000\n5\n00:00:03,000 --> 00:00:04,000\nWorld\n";
+        let vtt = srt_to_vtt(srt);
+        assert_eq!(
+            vtt,
+            "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n5\n00:00:03.000 --> 00:00:04.000\nWorld\n"
+        );
     }
 
     #[test]
