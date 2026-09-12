@@ -13,6 +13,8 @@
   let seriesId = $derived(data.seriesId);
   let series = $derived(data.series);
   let error = $state('');
+  let errorSource = $state<'load' | 'play' | null>(null);
+  let lastAttemptedEpisode = $state<any>(null);
 
   let isPlaying = $state(false);
   let videoSrc = $state('');
@@ -30,8 +32,14 @@
   let translatedEpisodes = $state<Record<string, string>>({});
 
   $effect(() => {
-    if (data.error) error = data.error;
-    else if (seriesId) error = '';
+    if (data.error) {
+      console.error('Falha ao carregar série:', data.error);
+      error = 'Não foi possível carregar este título. Tente novamente.';
+      errorSource = 'load';
+    } else if (seriesId) {
+      error = '';
+      errorSource = null;
+    }
   });
 
   $effect(() => {
@@ -79,13 +87,17 @@
   async function playEpisode(episode: any) {
     if (typeof window === 'undefined') return;
 
+    lastAttemptedEpisode = episode;
+
     try {
       error = '';
+      errorSource = null;
       engineStatus = 'Buscando fontes disponíveis...';
       const streams = await getSeriesStreams(seriesId, episode.season, episode.episode);
 
       if (!streams || streams.length === 0) {
         error = 'Nenhuma fonte encontrada para este episódio.';
+        errorSource = 'play';
         engineStatus = '';
         return;
       }
@@ -102,7 +114,8 @@
       }
 
       if (!bestStream || !bestStream.infoHash) {
-        error = 'Fonte incompatível (sem infoHash).';
+        error = 'Fonte incompatível para este episódio.';
+        errorSource = 'play';
         engineStatus = '';
         return;
       }
@@ -128,10 +141,20 @@
       videoSrc = streamData.videoSrc;
       subtitles = streamData.subtitles;
     } catch (e: any) {
-      error = `Erro de reprodução: ${e.message}`;
+      console.error('Erro ao iniciar reprodução:', e);
+      error = 'Não foi possível iniciar a reprodução. Tente novamente.';
+      errorSource = 'play';
       isPlaying = false;
       playerState.isPlaying = false;
       engineStatus = '';
+    }
+  }
+
+  function retry() {
+    if (errorSource === 'load') {
+      window.location.reload();
+    } else if (lastAttemptedEpisode) {
+      playEpisode(lastAttemptedEpisode);
     }
   }
 
@@ -175,8 +198,16 @@
 {/if}
 
 {#if error}
-  <div class="border-accent-orange text-accent-orange bg-surface/80 border-l-4 p-4 font-mono">
-    Erro: {error}
+  <div
+    class="border-accent-orange text-accent-orange bg-surface/80 flex flex-col items-start gap-3 border-l-4 p-4 font-mono"
+  >
+    <span>{error}</span>
+    <button
+      onclick={retry}
+      class="border-accent-orange text-accent-orange hover:bg-accent-orange hover:text-dark w-fit rounded border px-4 py-2 text-xs font-bold tracking-widest uppercase transition-colors"
+    >
+      Tentar novamente
+    </button>
   </div>
 {:else if series}
   {#if series.background_image_original || series.background_image}

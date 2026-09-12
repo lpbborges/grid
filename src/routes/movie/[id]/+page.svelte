@@ -12,10 +12,17 @@
   let movieId = $derived(data.movieId);
   let movie = $derived(data.movie);
   let error = $state('');
+  let errorSource = $state<'load' | 'play' | null>(null);
 
   $effect(() => {
-    if (data.error) error = data.error;
-    else if (movieId) error = '';
+    if (data.error) {
+      console.error('Falha ao carregar filme:', data.error);
+      error = 'Não foi possível carregar este título. Tente novamente.';
+      errorSource = 'load';
+    } else if (movieId) {
+      error = '';
+      errorSource = null;
+    }
   });
 
   let isPlaying = $state(false);
@@ -72,7 +79,8 @@
 
   async function playMovie() {
     if (!movie || !movie.torrents || movie.torrents.length === 0) {
-      error = 'Nenhum stream disponível';
+      error = 'Nenhum stream disponível para este título.';
+      errorSource = null;
       return;
     }
 
@@ -97,10 +105,20 @@
       videoSrc = streamData.videoSrc;
       subtitles = streamData.subtitles;
     } catch (e: any) {
-      error = `Erro de reprodução: ${e.message}`;
+      console.error('Erro ao iniciar reprodução:', e);
+      error = 'Não foi possível iniciar a reprodução. Tente novamente.';
+      errorSource = 'play';
       engineStatus = '';
       isPlaying = false;
       playerState.isPlaying = false;
+    }
+  }
+
+  function retry() {
+    if (errorSource === 'load') {
+      window.location.reload();
+    } else {
+      playMovie();
     }
   }
 
@@ -144,8 +162,16 @@
 {/if}
 
 {#if error}
-  <div class="border-accent-orange text-accent-orange bg-surface/80 border-l-4 p-4 font-mono">
-    Erro: {error}
+  <div
+    class="border-accent-orange text-accent-orange bg-surface/80 flex flex-col items-start gap-3 border-l-4 p-4 font-mono"
+  >
+    <span>{error}</span>
+    <button
+      onclick={retry}
+      class="border-accent-orange text-accent-orange hover:bg-accent-orange hover:text-dark w-fit rounded border px-4 py-2 text-xs font-bold tracking-widest uppercase transition-colors"
+    >
+      Tentar novamente
+    </button>
   </div>
 {:else if movie}
   {#if movie.background_image_original || movie.background_image}
