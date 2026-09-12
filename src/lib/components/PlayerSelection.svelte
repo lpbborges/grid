@@ -12,6 +12,23 @@
   let selectedTorrent = $derived(
     torrents.find((torrent: any) => torrent.hash === selectedTorrentHash)
   );
+
+  // Multiple torrents can share the same quality (e.g. two 1080p releases
+  // with different source/size). The option label must still let users tell
+  // them apart before they pick one, so append the release type only when
+  // its quality is not unique in the list.
+  let qualityCounts = $derived(
+    torrents.reduce((counts: Record<string, number>, torrent: any) => {
+      counts[torrent.quality] = (counts[torrent.quality] || 0) + 1;
+      return counts;
+    }, {})
+  );
+
+  function optionLabel(torrent: any) {
+    return qualityCounts[torrent.quality] > 1
+      ? `${torrent.quality} (${torrent.type})`
+      : torrent.quality;
+  }
 </script>
 
 <div class="mt-6 flex flex-col gap-4">
@@ -27,7 +44,7 @@
       >
         {#each torrents as torrent}
           <option value={torrent.hash} class="bg-surface text-main">
-            {torrent.quality}
+            {optionLabel(torrent)}
           </option>
         {/each}
       </select>

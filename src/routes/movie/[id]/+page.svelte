@@ -80,7 +80,7 @@
   async function playMovie() {
     if (!movie || !movie.torrents || movie.torrents.length === 0) {
       error = 'Nenhum stream disponível para este título.';
-      errorSource = null;
+      errorSource = 'load';
       return;
     }
 
