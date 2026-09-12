@@ -17,7 +17,7 @@
     infoHash?: string;
     totalBytes?: number;
   }>();
-  /* global HTMLVideoElement, HTMLElement, FocusEvent, MouseEvent, Node, VTTCue */
+  /* global HTMLVideoElement, HTMLElement, FocusEvent, MouseEvent, KeyboardEvent, Node, VTTCue */
   let videoElement = $state<HTMLVideoElement | null>(null);
   let containerElement = $state<HTMLElement | null>(null);
   let showMenu = $state(false);
@@ -215,12 +215,35 @@
     const s = Math.floor(seconds % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   }
+
+  const SEEK_STEP_SECONDS = 5;
+
+  function handleSeekKeydown(e: KeyboardEvent) {
+    switch (e.key) {
+      case 'ArrowLeft':
+        e.preventDefault();
+        currentTime = Math.max(0, currentTime - SEEK_STEP_SECONDS);
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        currentTime = Math.min(duration || 0, currentTime + SEEK_STEP_SECONDS);
+        break;
+      case 'Home':
+        e.preventDefault();
+        currentTime = 0;
+        break;
+      case 'End':
+        e.preventDefault();
+        currentTime = duration || 0;
+        break;
+    }
+  }
 </script>
 
 <div
   bind:this={containerElement}
   role="region"
-  aria-label="Video Player"
+  aria-label="Reprodutor de Vídeo"
   class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden bg-black"
   data-testid="video-player-container"
   onmousemove={handleMouseMove}
@@ -231,12 +254,12 @@
   {#if onclose}
     <button
       onclick={onclose}
-      class="hover:text-accent-green hover:bg-main/10 absolute top-6 right-6 z-50 rounded-full p-2 text-white/50 transition-all duration-300 {showControls ||
+      class="hover:text-accent-green hover:bg-main/10 focus-visible:ring-accent-green absolute top-6 right-6 z-50 rounded-full p-2 text-white/50 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {showControls ||
       paused ||
       showMenu
         ? 'opacity-100'
         : 'opacity-0'}"
-      aria-label="Close"
+      aria-label="Fechar"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -323,9 +346,8 @@
       ? 'opacity-100'
       : 'opacity-0'}"
   >
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
-      class="group mb-3 flex w-full cursor-pointer items-center py-2"
+      class="group focus-visible:ring-accent-green mb-3 flex w-full cursor-pointer items-center rounded py-2 focus-visible:ring-2 focus-visible:outline-none"
       onclick={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -345,8 +367,9 @@
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
       }}
+      onkeydown={handleSeekKeydown}
       role="slider"
-      aria-label="Seek"
+      aria-label="Buscar posição"
       aria-valuemin={0}
       aria-valuemax={duration || 100}
       aria-valuenow={currentTime}
@@ -368,8 +391,8 @@
       <div class="flex items-center gap-4">
         <button
           onclick={togglePlay}
-          aria-label={paused ? 'Play' : 'Pause'}
-          class="hover:text-accent-green transition-colors"
+          aria-label={paused ? 'Reproduzir' : 'Pausar'}
+          class="hover:text-accent-green focus-visible:ring-accent-green rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           {#if paused}
             <svg
@@ -404,8 +427,8 @@
         <div class="group relative ml-4 flex items-center gap-2">
           <button
             onclick={() => (volume = volume === 0 ? 1 : 0)}
-            aria-label="Toggle Mute"
-            class="hover:text-accent-green transition-colors"
+            aria-label="Ativar/desativar mudo"
+            class="hover:text-accent-green focus-visible:ring-accent-green rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             {#if volume > 0}
               <svg
@@ -443,7 +466,7 @@
             {/if}
           </button>
           <div
-            class="flex w-0 items-center overflow-hidden transition-all duration-300 group-hover:w-20 group-hover:px-2"
+            class="flex w-0 items-center overflow-hidden transition-all duration-300 group-focus-within:w-20 group-focus-within:px-2 group-hover:w-20 group-hover:px-2"
           >
             <input
               type="range"
@@ -452,7 +475,7 @@
               step="0.05"
               bind:value={volume}
               aria-label="Volume"
-              class="accent-accent-green w-full cursor-pointer"
+              class="accent-accent-green focus-visible:ring-accent-green w-full cursor-pointer rounded focus-visible:ring-2 focus-visible:outline-none"
             />
           </div>
         </div>
@@ -463,8 +486,8 @@
           <div class="relative">
             <button
               onclick={() => (showAudioMenu = !showAudioMenu)}
-              aria-label="Audio Tracks Menu"
-              class="hover:text-accent-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors {showAudioMenu
+              aria-label="Menu de Faixas de Áudio"
+              class="hover:text-accent-green focus-visible:ring-accent-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors focus-visible:ring-2 focus-visible:outline-none {showAudioMenu
                 ? 'text-accent-green'
                 : ''}"
             >
@@ -482,7 +505,7 @@
                 </div>
                 {#each audioTracks as track}
                   <button
-                    class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeAudioIndex ===
+                    class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeAudioIndex ===
                     track.index
                       ? 'bg-primary/30 text-main'
                       : ''}"
@@ -501,8 +524,8 @@
           <div class="relative">
             <button
               onclick={() => (showMenu = !showMenu)}
-              aria-label="Subtitles Menu"
-              class="hover:text-accent-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors {showMenu
+              aria-label="Menu de Legendas"
+              class="hover:text-accent-green focus-visible:ring-accent-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors focus-visible:ring-2 focus-visible:outline-none {showMenu
                 ? 'text-accent-green'
                 : ''}"
             >
@@ -514,7 +537,7 @@
                 class="border-primary/50 bg-surface/95 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
               >
                 <button
-                  class="text-muted hover:bg-main/10 hover:text-main w-full rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
+                  class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
                   -1
                     ? 'bg-main/10 text-main'
                     : ''}"
@@ -532,7 +555,7 @@
                   {#each torrentSubsGrouped as group}
                     {#if group.subs.length === 1}
                       <button
-                        class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
+                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
                         subtitles.indexOf(group.subs[0])
                           ? 'bg-primary/30 text-main'
                           : ''}"
@@ -543,7 +566,7 @@
                       </button>
                     {:else}
                       <button
-                        class="text-muted hover:bg-main/10 hover:text-main flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors"
+                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
                         onclick={() => toggleGroup('Embedded', group.label)}
                       >
                         <span>{group.label}</span>
@@ -555,7 +578,7 @@
                         <div class="border-main/10 my-1 ml-3 border-l pl-3">
                           {#each group.subs as sub, index}
                             <button
-                              class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1 text-left text-xs transition-colors {activeIndex ===
+                              class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
                               subtitles.indexOf(sub)
                                 ? 'bg-primary/30 text-main'
                                 : ''}"
@@ -580,7 +603,7 @@
                   {#each externalSubsGrouped as group}
                     {#if group.subs.length === 1}
                       <button
-                        class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
+                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
                         subtitles.indexOf(group.subs[0])
                           ? 'bg-primary/30 text-main'
                           : ''}"
@@ -591,7 +614,7 @@
                       </button>
                     {:else}
                       <button
-                        class="text-muted hover:bg-main/10 hover:text-main flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors"
+                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
                         onclick={() => toggleGroup('Extra', group.label)}
                       >
                         <span>{group.label}</span>
@@ -603,7 +626,7 @@
                         <div class="border-main/10 my-1 ml-3 border-l pl-3">
                           {#each group.subs as sub, index}
                             <button
-                              class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1 text-left text-xs transition-colors {activeIndex ===
+                              class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
                               subtitles.indexOf(sub)
                                 ? 'bg-primary/30 text-main'
                                 : ''}"
@@ -625,8 +648,8 @@
 
         <button
           onclick={toggleFullscreen}
-          aria-label="Fullscreen"
-          class="hover:text-accent-green ml-2 transition-colors"
+          aria-label="Tela cheia"
+          class="hover:text-accent-green focus-visible:ring-accent-green ml-2 rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

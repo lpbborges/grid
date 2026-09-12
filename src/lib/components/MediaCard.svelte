@@ -6,7 +6,7 @@
 
 <a
   href="/{type}/{media.id}"
-  class="group bg-surface/50 relative flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_0_20px_rgba(107,33,168,0.4)]"
+  class="group bg-surface/50 focus-visible:ring-accent-green relative flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_0_20px_rgba(107,33,168,0.4)] focus-visible:ring-2 focus-visible:outline-none"
   data-testid="media-card"
 >
   <!-- Cyberpunk border effect -->

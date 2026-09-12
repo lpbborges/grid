@@ -155,7 +155,7 @@
           {#if canScrollLeft}
             <button
               onclick={scrollLeft}
-              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
               aria-label="Voltar"
             >
               &#10094;
@@ -175,7 +175,7 @@
           {#if canScrollRight}
             <button
               onclick={scrollRight}
-              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
               aria-label="Avançar"
             >
               &#10095;
@@ -198,7 +198,7 @@
           {#if canScrollSeriesLeft}
             <button
               onclick={scrollSeriesLeft}
-              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
               aria-label="Voltar"
             >
               &#10094;
@@ -218,7 +218,7 @@
           {#if canScrollSeriesRight}
             <button
               onclick={scrollSeriesRight}
-              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+              class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
               aria-label="Avançar"
             >
               &#10095;
@@ -254,7 +254,7 @@
         {#if canScrollLeft}
           <button
             onclick={scrollLeft}
-            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
             aria-label="Voltar"
           >
             &#10094;
@@ -274,7 +274,7 @@
         {#if canScrollRight}
           <button
             onclick={scrollRight}
-            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
             aria-label="Avançar"
           >
             &#10095;
@@ -297,7 +297,7 @@
         {#if canScrollSeriesLeft}
           <button
             onclick={scrollSeriesLeft}
-            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -left-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
             aria-label="Voltar"
           >
             &#10094;
@@ -317,7 +317,7 @@
         {#if canScrollSeriesRight}
           <button
             onclick={scrollSeriesRight}
-            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)]"
+            class="border-primary/50 text-primary hover:bg-primary/20 bg-surface/90 hover:text-accent-green hover:border-accent-green focus-visible:ring-accent-green absolute top-[calc(50%-1.5rem)] -right-5 z-10 flex h-[45px] w-[45px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm border text-xl backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(54,211,83,0.4)] focus-visible:ring-2 focus-visible:outline-none"
             aria-label="Avançar"
           >
             &#10095;

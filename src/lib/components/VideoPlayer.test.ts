@@ -112,7 +112,7 @@ describe('VideoPlayer component', () => {
   it('renders close button when onclose is provided', async () => {
     const oncloseMock = vi.fn();
     const { getByLabelText } = render(VideoPlayer, { src: 'test.mp4', onclose: oncloseMock });
-    const closeBtn = getByLabelText('Close');
+    const closeBtn = getByLabelText('Fechar');
     expect(closeBtn).toBeDefined();
     await fireEvent.click(closeBtn);
     expect(oncloseMock).toHaveBeenCalled();
@@ -125,14 +125,14 @@ describe('VideoPlayer component', () => {
     await fireEvent.click(video);
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
 
-    const playPauseBtn = getByRole('button', { name: /Play|Pause/i });
+    const playPauseBtn = getByRole('button', { name: /Reproduzir|Pausar/i });
     await fireEvent.click(playPauseBtn);
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
   });
 
   it('toggles fullscreen', async () => {
     const { getByLabelText } = render(VideoPlayer, { src: 'test.mp4' });
-    const fullscreenBtn = getByLabelText('Fullscreen');
+    const fullscreenBtn = getByLabelText('Tela cheia');
 
     await fireEvent.click(fullscreenBtn);
     expect(HTMLElement.prototype.requestFullscreen).toHaveBeenCalled();
@@ -168,7 +168,7 @@ describe('VideoPlayer component', () => {
       value: [{ mode: 'disabled' }, { mode: 'disabled' }]
     });
 
-    const ccBtn = getByLabelText('Subtitles Menu');
+    const ccBtn = getByLabelText('Menu de Legendas');
     await fireEvent.click(ccBtn);
 
     expect(getByText('Eng')).toBeDefined();
@@ -195,7 +195,7 @@ describe('VideoPlayer component', () => {
 
     Object.defineProperty(video, 'textTracks', { writable: true, value: [track] });
 
-    await fireEvent.click(getByLabelText('Subtitles Menu'));
+    await fireEvent.click(getByLabelText('Menu de Legendas'));
     await fireEvent.click(getByText('Eng'));
 
     expect(track.mode).toBe('showing');
@@ -222,7 +222,7 @@ describe('VideoPlayer component', () => {
 
     await fireEvent.loadedMetadata(video);
 
-    const audioBtn = getByLabelText('Audio Tracks Menu');
+    const audioBtn = getByLabelText('Menu de Faixas de Áudio');
     await fireEvent.click(audioBtn);
 
     expect(getByText('Audio 1')).toBeDefined();
@@ -235,7 +235,7 @@ describe('VideoPlayer component', () => {
   it('controls volume and mute', async () => {
     const { getByLabelText, getByTestId } = render(VideoPlayer, { src: 'test.mp4' });
     const video = getByTestId('video-element') as HTMLVideoElement;
-    const muteBtn = getByLabelText('Toggle Mute');
+    const muteBtn = getByLabelText('Ativar/desativar mudo');
 
     await fireEvent.click(muteBtn);
     expect(video.volume).toBe(0);
@@ -290,5 +290,61 @@ describe('VideoPlayer component', () => {
       vi.advanceTimersByTime(1100);
     });
     expect(torrentApi.getTorrentStats).not.toHaveBeenCalled();
+  });
+
+  it('seeks with the keyboard via the seek bar', async () => {
+    const { getByLabelText, getByTestId } = render(VideoPlayer, { src: 'test.mp4' });
+    const video = getByTestId('video-element') as HTMLVideoElement;
+    const seekBar = getByLabelText('Buscar posição');
+
+    Object.defineProperty(video, 'duration', { value: 100, configurable: true });
+    await fireEvent(video, new Event('durationchange'));
+
+    await fireEvent.keyDown(seekBar, { key: 'ArrowRight' });
+    expect(video.currentTime).toBe(5);
+
+    await fireEvent.keyDown(seekBar, { key: 'ArrowRight' });
+    expect(video.currentTime).toBe(10);
+
+    await fireEvent.keyDown(seekBar, { key: 'ArrowLeft' });
+    expect(video.currentTime).toBe(5);
+
+    await fireEvent.keyDown(seekBar, { key: 'End' });
+    expect(video.currentTime).toBe(100);
+
+    await fireEvent.keyDown(seekBar, { key: 'Home' });
+    expect(video.currentTime).toBe(0);
+  });
+
+  it('does not seek below zero when pressing ArrowLeft at the start', async () => {
+    const { getByLabelText, getByTestId } = render(VideoPlayer, { src: 'test.mp4' });
+    const video = getByTestId('video-element') as HTMLVideoElement;
+    const seekBar = getByLabelText('Buscar posição');
+
+    await fireEvent.keyDown(seekBar, { key: 'ArrowLeft' });
+    expect(video.currentTime).toBe(0);
+  });
+
+  it('reveals the volume slider on keyboard focus via group-focus-within', () => {
+    const { getByLabelText } = render(VideoPlayer, { src: 'test.mp4' });
+    const volumeSlider = getByLabelText('Volume') as HTMLInputElement;
+    const revealContainer = volumeSlider.closest('div');
+
+    expect(revealContainer?.className).toContain('group-focus-within:w-20');
+  });
+
+  it('applies focus-visible ring styling to key interactive controls', () => {
+    const { getByLabelText, getByRole } = render(VideoPlayer, {
+      src: 'test.mp4',
+      onclose: vi.fn()
+    });
+
+    expect(getByLabelText('Fechar').className).toContain('focus-visible:ring-2');
+    expect(getByRole('button', { name: /Reproduzir|Pausar/i }).className).toContain(
+      'focus-visible:ring-2'
+    );
+    expect(getByLabelText('Tela cheia').className).toContain('focus-visible:ring-2');
+    expect(getByLabelText('Ativar/desativar mudo').className).toContain('focus-visible:ring-2');
+    expect(getByLabelText('Buscar posição').className).toContain('focus-visible:ring-2');
   });
 });

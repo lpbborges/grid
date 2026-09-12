@@ -42,8 +42,8 @@
     <div class="flex h-full">
       <button
         onclick={minimize}
-        class="hover:bg-surface text-muted hover:text-main flex h-full w-12 items-center justify-center transition-colors"
-        aria-label="Minimize"
+        class="hover:bg-surface text-muted hover:text-main focus-visible:ring-accent-green flex h-full w-12 items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        aria-label="Minimizar"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -59,8 +59,8 @@
       </button>
       <button
         onclick={toggleMaximize}
-        class="hover:bg-surface text-muted hover:text-main flex h-full w-12 items-center justify-center transition-colors"
-        aria-label="Maximize"
+        class="hover:bg-surface text-muted hover:text-main focus-visible:ring-accent-green flex h-full w-12 items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        aria-label="Maximizar"
       >
         {#if isMaximized}
           <svg
@@ -93,8 +93,8 @@
       </button>
       <button
         onclick={close}
-        class="text-muted flex h-full w-12 items-center justify-center transition-colors hover:bg-red-600 hover:text-white"
-        aria-label="Close"
+        class="text-muted focus-visible:ring-accent-green flex h-full w-12 items-center justify-center transition-colors hover:bg-red-600 hover:text-white focus-visible:ring-2 focus-visible:outline-none"
+        aria-label="Fechar"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
