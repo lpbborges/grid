@@ -1,18 +1,17 @@
 <script lang="ts">
-  import { prepareStream } from '$lib/engine/orchestrator';
   import { translateMediaInfo } from '$lib/api/translate';
-  import { clearTorrents } from '$lib/engine/torrent';
-  import type { SubtitleTrack } from '$lib/api/subtitles';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
-  import { playerState } from '$lib/stores.svelte';
+  import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
 
   let { data } = $props();
   let movieId = $derived(data.movieId);
   let movie = $derived(data.movie);
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
+
+  const streamPlayer = useStreamPlayer();
 
   $effect(() => {
     if (data.error) {
@@ -25,27 +24,15 @@
     }
   });
 
-  let isPlaying = $state(false);
-  let videoSrc = $state('');
-  let subtitles = $state<SubtitleTrack[]>([]);
-  let engineStatus = $state('');
   let selectedTorrentHash = $state('');
-  let selectedInfoHash = $state('');
-  let selectedTotalBytes = $state(0);
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
 
   $effect(() => {
     if (movieId) {
-      isPlaying = false;
-      playerState.isPlaying = false;
-      videoSrc = '';
-      selectedInfoHash = '';
-      selectedTotalBytes = 0;
-      engineStatus = '';
       selectedTorrentHash = '';
-      clearTorrents().catch(console.error);
+      streamPlayer.stop();
     }
   });
 
@@ -88,29 +75,10 @@
       movie.torrents.find((t: any) => t.hash === selectedTorrentHash) || movie.torrents[0];
     const magnet = `magnet:?xt=urn:btih:${selectedTorrent.hash}&dn=${encodeURIComponent(movie.title)}`;
 
-    isPlaying = true;
-    playerState.isPlaying = true;
-
-    try {
-      const streamData = await prepareStream(
-        magnet,
-        (status) => {
-          engineStatus = status;
-        },
-        movieId
-      );
-
-      selectedInfoHash = streamData.infoHash;
-      selectedTotalBytes = streamData.totalBytes;
-      videoSrc = streamData.videoSrc;
-      subtitles = streamData.subtitles;
-    } catch (e: any) {
-      console.error('Erro ao iniciar reprodução:', e);
-      error = 'Não foi possível iniciar a reprodução. Tente novamente.';
+    const ok = await streamPlayer.play(magnet, { mediaId: movieId });
+    if (!ok) {
+      error = streamPlayer.error;
       errorSource = 'play';
-      engineStatus = '';
-      isPlaying = false;
-      playerState.isPlaying = false;
     }
   }
 
@@ -121,22 +89,9 @@
       playMovie();
     }
   }
-
-  async function stopPlaying() {
-    isPlaying = false;
-    playerState.isPlaying = false;
-    videoSrc = '';
-    selectedInfoHash = '';
-    selectedTotalBytes = 0;
-    try {
-      await clearTorrents();
-    } catch (e) {
-      console.error('Erro ao limpar torrents', e);
-    }
-  }
 </script>
 
-{#if !isPlaying}
+{#if !streamPlayer.isPlaying}
   <div class="relative z-20 mb-8">
     <a
       href="/"
@@ -196,20 +151,20 @@
         />
       </div>
 
-      {#if !isPlaying}
+      {#if !streamPlayer.isPlaying}
         <PlayerSelection torrents={movie.torrents} bind:selectedTorrentHash onPlay={playMovie} />
       {/if}
     </div>
 
     <div class="w-full md:w-2/3">
-      {#if isPlaying}
+      {#if streamPlayer.isPlaying}
         <VideoPlayer
-          src={videoSrc}
-          {subtitles}
-          onclose={stopPlaying}
-          {engineStatus}
-          infoHash={selectedInfoHash}
-          totalBytes={selectedTotalBytes}
+          src={streamPlayer.videoSrc}
+          subtitles={streamPlayer.subtitles}
+          onclose={streamPlayer.stop}
+          engineStatus={streamPlayer.engineStatus}
+          infoHash={streamPlayer.infoHash}
+          totalBytes={streamPlayer.totalBytes}
         />
       {:else}
         <MediaInfo

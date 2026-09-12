@@ -1,13 +1,10 @@
 <script lang="ts">
-  import { prepareStream } from '$lib/engine/orchestrator';
   import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
   import { getSeriesStreams } from '$lib/api/torrentio';
-  import { clearTorrents } from '$lib/engine/torrent';
-  import type { SubtitleTrack } from '$lib/api/subtitles';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
-  import { playerState } from '$lib/stores.svelte';
+  import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
@@ -16,14 +13,9 @@
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<any>(null);
 
-  let isPlaying = $state(false);
-  let videoSrc = $state('');
-  let subtitles = $state<SubtitleTrack[]>([]);
-  let engineStatus = $state('');
-  let preferredQuality = $state('1080p');
+  const streamPlayer = useStreamPlayer();
 
-  let selectedInfoHash = $state('');
-  let selectedTotalBytes = $state(0);
+  let preferredQuality = $state('1080p');
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
@@ -44,15 +36,9 @@
 
   $effect(() => {
     if (seriesId) {
-      isPlaying = false;
-      playerState.isPlaying = false;
-      videoSrc = '';
-      selectedInfoHash = '';
-      selectedTotalBytes = 0;
-      engineStatus = '';
       selectedSeason = null;
       translatedEpisodes = {};
-      clearTorrents().catch(console.error);
+      streamPlayer.stop();
     }
   });
 
@@ -89,16 +75,15 @@
 
     lastAttemptedEpisode = episode;
 
+    error = '';
+    errorSource = null;
+
     try {
-      error = '';
-      errorSource = null;
-      engineStatus = 'Buscando fontes disponíveis...';
       const streams = await getSeriesStreams(seriesId, episode.season, episode.episode);
 
       if (!streams || streams.length === 0) {
         error = 'Nenhuma fonte encontrada para este episódio.';
         errorSource = 'play';
-        engineStatus = '';
         return;
       }
 
@@ -116,37 +101,26 @@
       if (!bestStream || !bestStream.infoHash) {
         error = 'Fonte incompatível para este episódio.';
         errorSource = 'play';
-        engineStatus = '';
         return;
       }
 
       const magnet = `magnet:?xt=urn:btih:${bestStream.infoHash}&dn=${encodeURIComponent(`${series.title} S${episode.season}E${episode.episode}`)}`;
 
-      isPlaying = true;
-      playerState.isPlaying = true;
+      const ok = await streamPlayer.play(magnet, {
+        mediaId: seriesId,
+        season: episode.season,
+        episode: episode.episode,
+        fileIdx: bestStream.fileIdx
+      });
 
-      const streamData = await prepareStream(
-        magnet,
-        (status) => {
-          engineStatus = status;
-        },
-        seriesId,
-        episode.season,
-        episode.episode,
-        bestStream.fileIdx
-      );
-
-      selectedInfoHash = streamData.infoHash;
-      selectedTotalBytes = streamData.totalBytes;
-      videoSrc = streamData.videoSrc;
-      subtitles = streamData.subtitles;
+      if (!ok) {
+        error = streamPlayer.error;
+        errorSource = 'play';
+      }
     } catch (e: any) {
-      console.error('Erro ao iniciar reprodução:', e);
+      console.error('Erro ao buscar fontes do episódio:', e);
       error = 'Não foi possível iniciar a reprodução. Tente novamente.';
       errorSource = 'play';
-      isPlaying = false;
-      playerState.isPlaying = false;
-      engineStatus = '';
     }
   }
 
@@ -157,22 +131,9 @@
       playEpisode(lastAttemptedEpisode);
     }
   }
-
-  async function stopPlaying() {
-    isPlaying = false;
-    playerState.isPlaying = false;
-    videoSrc = '';
-    selectedInfoHash = '';
-    selectedTotalBytes = 0;
-    try {
-      await clearTorrents();
-    } catch (e) {
-      console.error('Erro ao limpar torrents', e);
-    }
-  }
 </script>
 
-{#if !isPlaying}
+{#if !streamPlayer.isPlaying}
   <div class="relative z-20 mb-8">
     <a
       href="/"
@@ -234,14 +195,14 @@
     </div>
 
     <div class="w-full lg:w-1/2">
-      {#if isPlaying}
+      {#if streamPlayer.isPlaying}
         <VideoPlayer
-          src={videoSrc}
-          {subtitles}
-          onclose={stopPlaying}
-          {engineStatus}
-          infoHash={selectedInfoHash}
-          totalBytes={selectedTotalBytes}
+          src={streamPlayer.videoSrc}
+          subtitles={streamPlayer.subtitles}
+          onclose={streamPlayer.stop}
+          engineStatus={streamPlayer.engineStatus}
+          infoHash={streamPlayer.infoHash}
+          totalBytes={streamPlayer.totalBytes}
         />
       {:else}
         <MediaInfo
@@ -257,7 +218,7 @@
 
     <!-- Episodes Right Column -->
     <div class="w-full lg:w-1/4">
-      {#if !isPlaying}
+      {#if !streamPlayer.isPlaying}
         <EpisodeList
           episodes={series.videos}
           {translatedEpisodes}
