@@ -103,13 +103,23 @@ describe('useStreamPlayer', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('stop(): resets all fields and calls finalizeStream with the current infoHash/isCacheable', async () => {
+  it('stop(): resets all fields and calls finalizeStream with the current stream and its cache entry', async () => {
+    const cacheEntry = {
+      infoHash: 'abc',
+      magnet: 'magnet:?xt=urn:btih:abc',
+      fileName: 'abc/movie.mkv',
+      totalBytes: 1234,
+      downloadedBytes: 0,
+      complete: false,
+      lastAccessedAt: 1
+    };
     prepareStreamMock.mockResolvedValue({
       infoHash: 'abc',
       totalBytes: 1234,
       videoSrc: 'http://stream/abc',
       subtitles: [],
-      isCacheable: true
+      isCacheable: true,
+      cacheEntry
     });
 
     const streamPlayer = await mount();
@@ -126,7 +136,11 @@ describe('useStreamPlayer', () => {
     expect(streamPlayer.infoHash).toBe('');
     expect(streamPlayer.totalBytes).toBe(0);
     expect(streamPlayer.engineStatus).toBe('');
-    expect(finalizeStreamMock).toHaveBeenCalledWith('abc', true);
+    expect(finalizeStreamMock).toHaveBeenCalledWith({
+      infoHash: 'abc',
+      isCacheable: true,
+      cacheEntry
+    });
   });
 
   it('stop() where finalizeStream() rejects: does not throw, logs via console.error', async () => {

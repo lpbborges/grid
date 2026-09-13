@@ -28,7 +28,10 @@ export interface StreamDetails {
   videoSrc: string;
   subtitles: SubtitleTrack[];
   isCacheable: boolean;
+  cacheEntry?: CacheEntry;
 }
+
+export type FinishedStream = Pick<StreamDetails, 'infoHash' | 'isCacheable' | 'cacheEntry'>;
 
 // Blob URLs created for the subtitles of the most recently prepared stream.
 // Tracked so they can be revoked when a new stream is prepared, otherwise
@@ -107,13 +110,14 @@ export async function prepareStream(
   // deleted (not forgotten) by finalizeStream when the stream ends.
   const cacheLimitBytes = settingsStore.cacheLimitBytes;
   const isCacheable = totalBytes > 0 && totalBytes <= cacheLimitBytes;
+  let cacheEntry: CacheEntry | undefined;
 
   if (isCacheable) {
     const alreadyHave = existingEntry?.downloadedBytes ?? 0;
     const neededBytes = Math.max(totalBytes - alreadyHave, 0);
     await evictForSpace(infoHash, neededBytes, cacheLimitBytes);
 
-    const entry: CacheEntry = {
+    cacheEntry = {
       infoHash,
       magnet,
       mediaId,
@@ -127,7 +131,7 @@ export async function prepareStream(
       complete: existingEntry?.complete ?? false,
       lastAccessedAt: Date.now()
     };
-    await upsertCacheEntry(entry);
+    await upsertCacheEntry(cacheEntry);
   }
 
   onStatus('Baixando legendas...');
@@ -158,7 +162,8 @@ export async function prepareStream(
     totalBytes,
     videoSrc,
     subtitles,
-    isCacheable
+    isCacheable,
+    cacheEntry
   };
 }
 
@@ -167,7 +172,11 @@ export async function prepareStream(
 // but leaves the files on disk) after recording its latest downloaded-bytes
 // count in the manifest; a non-cacheable (oversized) stream is deleted
 // outright, matching the old clearTorrents() behavior for that one torrent.
-export async function finalizeStream(infoHash: string, isCacheable: boolean): Promise<void> {
+export async function finalizeStream({
+  infoHash,
+  isCacheable,
+  cacheEntry
+}: FinishedStream): Promise<void> {
   if (!infoHash) return;
 
   if (!isCacheable) {
@@ -175,23 +184,21 @@ export async function finalizeStream(infoHash: string, isCacheable: boolean): Pr
     return;
   }
 
-  try {
-    const stats = await getTorrentStats(infoHash);
-    const downloadedBytes = stats?.snapshot?.downloaded_and_checked_bytes;
-    if (downloadedBytes !== undefined) {
-      const manifest = await getCacheManifest();
-      const entry = manifest.find((e) => e.infoHash === infoHash);
-      if (entry) {
+  if (cacheEntry) {
+    try {
+      const stats = await getTorrentStats(infoHash);
+      const downloadedBytes = stats?.snapshot?.downloaded_and_checked_bytes;
+      if (downloadedBytes !== undefined) {
         await upsertCacheEntry({
-          ...entry,
+          ...cacheEntry,
           downloadedBytes,
-          complete: downloadedBytes >= entry.totalBytes,
+          complete: downloadedBytes >= cacheEntry.totalBytes,
           lastAccessedAt: Date.now()
         });
       }
+    } catch (error) {
+      logger.warn('Failed to update cache entry before finalizing stream:', error);
     }
-  } catch (error) {
-    logger.warn('Failed to update cache entry before finalizing stream:', error);
   }
 
   await forgetTorrent(infoHash);

@@ -98,10 +98,17 @@ describe('prepareStream', () => {
     );
   });
 
+  it('returns the upserted cache entry so finalizeStream does not need to re-read the manifest', async () => {
+    const result = await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
+
+    expect(result.cacheEntry).toEqual(vi.mocked(cacheApi.upsertCacheEntry).mock.calls[0][0]);
+  });
+
   it('marks a video larger than the cache limit as not cacheable and skips manifest/eviction calls', async () => {
     settingsStore.cacheLimitBytes = 100; // smaller than the 200-byte selected file
     const result = await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
 
+    expect(result.cacheEntry).toBeUndefined();
     expect(result.isCacheable).toBe(false);
     expect(cacheApi.evictForSpace).not.toHaveBeenCalled();
     expect(cacheApi.upsertCacheEntry).not.toHaveBeenCalled();
@@ -256,6 +263,16 @@ describe('prepareStream', () => {
 });
 
 describe('finalizeStream', () => {
+  const cachedEntry = {
+    infoHash: 'abc',
+    magnet: 'magnet:?xt=urn:btih:abc',
+    fileName: 'movie.mkv',
+    totalBytes: 200,
+    downloadedBytes: 50,
+    complete: false,
+    lastAccessedAt: 1
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(torrentApi.forgetTorrent).mockResolvedValue(undefined);
@@ -266,35 +283,25 @@ describe('finalizeStream', () => {
   });
 
   it('does nothing when infoHash is empty', async () => {
-    await finalizeStream('', true);
+    await finalizeStream({ infoHash: '', isCacheable: true });
     expect(torrentApi.forgetTorrent).not.toHaveBeenCalled();
     expect(torrentApi.deleteTorrent).not.toHaveBeenCalled();
   });
 
   it('deletes (does not forget) a non-cacheable stream', async () => {
-    await finalizeStream('abc', false);
+    await finalizeStream({ infoHash: 'abc', isCacheable: false });
     expect(torrentApi.deleteTorrent).toHaveBeenCalledWith('abc');
     expect(torrentApi.forgetTorrent).not.toHaveBeenCalled();
   });
 
-  it('updates the manifest entry with fresh stats then forgets a cacheable stream', async () => {
+  it('updates the cache entry with fresh stats without re-reading the manifest, then forgets the stream', async () => {
     vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({
       snapshot: { downloaded_and_checked_bytes: 150 }
     });
-    vi.mocked(cacheApi.getCacheManifest).mockResolvedValue([
-      {
-        infoHash: 'abc',
-        magnet: 'magnet:?xt=urn:btih:abc',
-        fileName: 'movie.mkv',
-        totalBytes: 200,
-        downloadedBytes: 50,
-        complete: false,
-        lastAccessedAt: 1
-      }
-    ]);
 
-    await finalizeStream('abc', true);
+    await finalizeStream({ infoHash: 'abc', isCacheable: true, cacheEntry: cachedEntry });
 
+    expect(cacheApi.getCacheManifest).not.toHaveBeenCalled();
     expect(cacheApi.upsertCacheEntry).toHaveBeenCalledWith(
       expect.objectContaining({ infoHash: 'abc', downloadedBytes: 150, complete: false })
     );
@@ -305,28 +312,29 @@ describe('finalizeStream', () => {
     vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({
       snapshot: { downloaded_and_checked_bytes: 200 }
     });
-    vi.mocked(cacheApi.getCacheManifest).mockResolvedValue([
-      {
-        infoHash: 'abc',
-        magnet: 'magnet:?xt=urn:btih:abc',
-        fileName: 'movie.mkv',
-        totalBytes: 200,
-        downloadedBytes: 50,
-        complete: false,
-        lastAccessedAt: 1
-      }
-    ]);
 
-    await finalizeStream('abc', true);
+    await finalizeStream({ infoHash: 'abc', isCacheable: true, cacheEntry: cachedEntry });
 
     expect(cacheApi.upsertCacheEntry).toHaveBeenCalledWith(
       expect.objectContaining({ complete: true })
     );
   });
 
-  it('still forgets the torrent even if stats/manifest lookup fails', async () => {
+  it('forgets a cacheable stream without touching the cache when it has no entry', async () => {
+    vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({
+      snapshot: { downloaded_and_checked_bytes: 200 }
+    });
+
+    await finalizeStream({ infoHash: 'abc', isCacheable: true });
+
+    expect(torrentApi.getTorrentStats).not.toHaveBeenCalled();
+    expect(cacheApi.upsertCacheEntry).not.toHaveBeenCalled();
+    expect(torrentApi.forgetTorrent).toHaveBeenCalledWith('abc');
+  });
+
+  it('still forgets the torrent even if the stats lookup fails', async () => {
     vi.mocked(torrentApi.getTorrentStats).mockRejectedValue(new Error('engine down'));
-    await finalizeStream('abc', true);
+    await finalizeStream({ infoHash: 'abc', isCacheable: true, cacheEntry: cachedEntry });
     expect(torrentApi.forgetTorrent).toHaveBeenCalledWith('abc');
   });
 });
