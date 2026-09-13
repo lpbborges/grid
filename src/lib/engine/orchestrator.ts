@@ -3,7 +3,7 @@ import {
   startEngine,
   waitForEngine,
   addTorrent,
-  getBestVideoFileIndex,
+  getWantedFileIndices,
   getStreamUrl,
   getTorrentSubtitles,
   updateOnlyFiles,
@@ -20,7 +20,6 @@ import {
   type CacheEntry
 } from '$lib/engine/cache';
 import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
-import type { TorrentEngineDetails } from '$lib/types';
 import { settingsStore } from '$lib/stores/settings.svelte';
 
 export interface StreamDetails {
@@ -84,32 +83,23 @@ export async function prepareStream(
   const parsedInfoHash = parseInfoHashFromMagnet(magnet);
   const existingEntry = manifest.find((e) => e.infoHash === parsedInfoHash);
 
-  const details = await addTorrent(magnet, parsedInfoHash ?? undefined);
+  // Add torrent with a regex filter so rqbit never starts downloading junk
+  // files (images, NFO, txt). Only video and subtitle files are selected.
+  const details = await addTorrent(magnet, parsedInfoHash ?? undefined, {
+    onlyFilesRegex: '\\.(mp4|mkv|webm|avi|srt|vtt)$'
+  });
   const infoHash = details.info_hash;
 
-  let bestFileIdx = preferredFileIdx;
-  if (bestFileIdx === undefined || bestFileIdx < 0) {
-    bestFileIdx = getBestVideoFileIndex(details.files);
-  }
+  // From the filtered set, pick just the main video + subtitle files and
+  // tell rqbit to drop any remaining unwanted video files (e.g. samples).
+  const wantedIndices = getWantedFileIndices(details.files, preferredFileIdx);
+  const bestFileIdx = wantedIndices[0];
+
+  await updateOnlyFiles(infoHash, wantedIndices).catch((error) => {
+    logger.warn('Failed to restrict torrent file selection, continuing anyway:', error);
+  });
 
   const totalBytes = details.files[bestFileIdx]?.length ?? 0;
-
-  // A multi-file torrent (a season pack, a movie bundled with samples/extras)
-  // otherwise has every file selected for download by rqbit, competing for
-  // bandwidth/piece-selection with the one file we're about to stream — the
-  // torrent's overall progress can look healthy while that specific file
-  // barely downloads. Restrict the selection to just what we need (the video
-  // plus any embedded .srt/.vtt subtitle files getTorrentSubtitles reads
-  // below). Best-effort: if it fails, the stream can still work, just slower.
-  const subtitleFileIndices = details.files
-    .map((f: TorrentEngineDetails['files'][number], idx: number) => ({ f, idx }))
-    .filter(({ f }) => f.name.endsWith('.srt') || f.name.endsWith('.vtt'))
-    .map(({ idx }) => idx);
-  await updateOnlyFiles(infoHash, [...new Set([bestFileIdx, ...subtitleFileIndices])]).catch(
-    (error) => {
-      logger.warn('Failed to restrict torrent file selection, continuing anyway:', error);
-    }
-  );
 
   // rqbit can only ever cache/evict a torrent as a whole (no per-piece
   // deletion), so a video whose total size alone exceeds the limit is

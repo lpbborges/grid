@@ -150,12 +150,68 @@ describe('torrent engine', () => {
     expect(details.info_hash).toBe('123');
   });
 
+  it('adds a torrent with onlyFilesRegex option', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ details: { info_hash: '123', files: [] } })
+    });
+
+    await torrent.addTorrent('magnet:?xt=test', undefined, { onlyFilesRegex: '\\.(mp4)$' });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:3030/torrents?only_files_regex=%5C.%28mp4%29%24',
+      expect.objectContaining({ method: 'POST', body: 'magnet:?xt=test' })
+    );
+  });
+
   it('throws an error if adding torrent fails', async () => {
     (globalThis.fetch as any).mockResolvedValueOnce({
       ok: false
     });
 
     await expect(torrent.addTorrent('magnet:')).rejects.toThrow('Failed to add torrent to engine');
+  });
+
+  describe('getWantedFileIndices', () => {
+    it('returns the best video file index and subtitle indices', async () => {
+      const files = [
+        { name: 'movie.mp4', length: 1000 },
+        { name: 'sample.mp4', length: 10 },
+        { name: 'movie.srt', length: 100 },
+        { name: 'movie.vtt', length: 100 }
+      ];
+      const indices = torrent.getWantedFileIndices(files);
+      expect(indices).toEqual([0, 2, 3]);
+    });
+
+    it('uses preferredFileIdx when provided', async () => {
+      const files = [
+        { name: 'movie1.mp4', length: 1000 },
+        { name: 'movie2.mp4', length: 1200 },
+        { name: 'movie1.srt', length: 100 }
+      ];
+      const indices = torrent.getWantedFileIndices(files, 0);
+      expect(indices).toEqual([0, 2]);
+    });
+
+    it('falls back to best video file index when preferredFileIdx is negative', async () => {
+      const files = [
+        { name: 'movie1.mp4', length: 1000 },
+        { name: 'movie2.mp4', length: 1200 },
+        { name: 'movie2.srt', length: 100 }
+      ];
+      const indices = torrent.getWantedFileIndices(files, -1);
+      expect(indices).toEqual([1, 2]); // 1 is the larger mp4
+    });
+
+    it('deduplicates indices if preferred file is a subtitle', async () => {
+      const files = [
+        { name: 'movie.mp4', length: 1000 },
+        { name: 'movie.srt', length: 100 }
+      ];
+      const indices = torrent.getWantedFileIndices(files, 1);
+      expect(indices).toEqual([1]); // preferred is 1, and 1 is also subtitle. Best file idx first.
+    });
   });
 
   it('restricts the torrent to the given file indices', async () => {

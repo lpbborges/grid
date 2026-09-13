@@ -9,7 +9,7 @@ vi.mock('./torrent', () => ({
   startEngine: vi.fn(),
   waitForEngine: vi.fn(),
   addTorrent: vi.fn(),
-  getBestVideoFileIndex: vi.fn(),
+  getWantedFileIndices: vi.fn(),
   getStreamUrl: vi.fn(),
   getTorrentSubtitles: vi.fn(),
   updateOnlyFiles: vi.fn(),
@@ -57,16 +57,18 @@ describe('prepareStream', () => {
     vi.mocked(cacheApi.upsertCacheEntry).mockResolvedValue(undefined);
     vi.mocked(cacheApi.evictForSpace).mockResolvedValue([]);
     vi.mocked(cacheApi.parseInfoHashFromMagnet).mockReturnValue('1'.repeat(40));
-    vi.mocked(torrentApi.getBestVideoFileIndex).mockReturnValue(1);
+    vi.mocked(torrentApi.getWantedFileIndices).mockReturnValue([1]);
     vi.mocked(torrentApi.getTorrentSubtitles).mockResolvedValue([]);
     vi.mocked(subtitlesApi.getExternalSubtitles).mockResolvedValue([]);
     vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails() as any);
   });
 
-  it('adds the torrent with sub_folder set to the parsed info hash', async () => {
+  it('adds the torrent with sub_folder set to the parsed info hash and onlyFilesRegex', async () => {
     await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
-    expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test', '1'.repeat(40));
+    expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test', '1'.repeat(40), {
+      onlyFilesRegex: '\\.(mp4|mkv|webm|avi|srt|vtt)$'
+    });
   });
 
   it('marks a video within the cache limit as cacheable, evicts for space, and upserts the manifest', async () => {
@@ -142,7 +144,7 @@ describe('prepareStream', () => {
 
   it('orchestrates stream preparation correctly', async () => {
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails({ info_hash: '12345' }) as any);
-    vi.mocked(torrentApi.getBestVideoFileIndex).mockReturnValue(1);
+    vi.mocked(torrentApi.getWantedFileIndices).mockReturnValue([1]);
     vi.mocked(torrentApi.getTorrentSubtitles).mockResolvedValue([
       { id: 't-1', url: 't-sub', lang: 'en', label: 'T-Sub', group: 'Embedded' }
     ]);
@@ -156,19 +158,21 @@ describe('prepareStream', () => {
 
     expect(torrentApi.startEngine).toHaveBeenCalled();
     expect(torrentApi.waitForEngine).toHaveBeenCalled();
-    expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test', '1'.repeat(40));
+    expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test', '1'.repeat(40), {
+      onlyFilesRegex: '\\.(mp4|mkv|webm|avi|srt|vtt)$'
+    });
+    expect(torrentApi.updateOnlyFiles).toHaveBeenCalledWith('12345', [1]);
 
     expect(result.infoHash).toBe('12345');
     expect(result.totalBytes).toBe(200);
     expect(result.videoSrc).toBe('http://localhost/stream');
     expect(result.subtitles).toHaveLength(2);
     expect(statusCb).toHaveBeenCalledWith('Carregando vídeo...');
-    expect(torrentApi.updateOnlyFiles).toHaveBeenCalledWith('12345', [1]);
   });
 
   it('degrades gracefully when torrent subtitle fetching fails, without blocking playback', async () => {
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails({ info_hash: '12345' }) as any);
-    vi.mocked(torrentApi.getBestVideoFileIndex).mockReturnValue(1);
+    vi.mocked(torrentApi.getWantedFileIndices).mockReturnValue([1]);
     vi.mocked(torrentApi.getTorrentSubtitles).mockRejectedValue(new Error('engine unavailable'));
     vi.mocked(subtitlesApi.getExternalSubtitles).mockResolvedValue([
       { id: 'e-1', url: 'e-sub', lang: 'en', label: 'E-Sub', group: 'Extra' }
@@ -185,7 +189,7 @@ describe('prepareStream', () => {
 
   it('degrades gracefully when external subtitle fetching fails, without blocking playback', async () => {
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails({ info_hash: '12345' }) as any);
-    vi.mocked(torrentApi.getBestVideoFileIndex).mockReturnValue(1);
+    vi.mocked(torrentApi.getWantedFileIndices).mockReturnValue([1]);
     vi.mocked(torrentApi.getTorrentSubtitles).mockResolvedValue([
       { id: 't-1', url: 't-sub', lang: 'en', label: 'T-Sub', group: 'Embedded' }
     ]);
@@ -202,7 +206,7 @@ describe('prepareStream', () => {
 
   it('revokes the previous session blob URLs when a new stream is prepared', async () => {
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails({ info_hash: '12345' }) as any);
-    vi.mocked(torrentApi.getBestVideoFileIndex).mockReturnValue(1);
+    vi.mocked(torrentApi.getWantedFileIndices).mockReturnValue([1]);
     vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
 
     vi.mocked(torrentApi.getTorrentSubtitles).mockResolvedValueOnce([

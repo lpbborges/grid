@@ -70,11 +70,20 @@ export async function deleteTorrent(infoHash: string): Promise<void> {
 
 export async function addTorrent(
   magnetLink: string,
-  subFolder?: string
+  subFolder?: string,
+  options?: { onlyFilesRegex?: string }
 ): Promise<TorrentEngineDetails> {
-  const url = subFolder
-    ? `${ENGINE_URL}/torrents?sub_folder=${encodeURIComponent(subFolder)}`
-    : `${ENGINE_URL}/torrents`;
+  const params = new URLSearchParams();
+  if (subFolder) {
+    params.set('sub_folder', subFolder);
+  }
+  if (options?.onlyFilesRegex) {
+    params.set('only_files_regex', options.onlyFilesRegex);
+  }
+
+  const qs = params.toString();
+  const url = qs ? `${ENGINE_URL}/torrents?${qs}` : `${ENGINE_URL}/torrents`;
+
   const res = await fetchWithTimeout(
     url,
     {
@@ -93,6 +102,23 @@ export async function addTorrent(
 
   const data = await res.json();
   return data.details as TorrentEngineDetails;
+}
+
+export function getWantedFileIndices(
+  files: { name: string; length: number }[],
+  preferredFileIdx?: number
+): number[] {
+  let bestFileIdx = preferredFileIdx;
+  if (bestFileIdx === undefined || bestFileIdx < 0) {
+    bestFileIdx = getBestVideoFileIndex(files);
+  }
+
+  const subtitleFileIndices = files
+    .map((f, idx) => ({ f, idx }))
+    .filter(({ f }) => f.name.endsWith('.srt') || f.name.endsWith('.vtt'))
+    .map(({ idx }) => idx);
+
+  return [...new Set([bestFileIdx, ...subtitleFileIndices])];
 }
 
 // rqbit selects every file in a torrent for download by default. For a
