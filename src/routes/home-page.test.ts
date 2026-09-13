@@ -66,8 +66,8 @@ describe('Home page search', () => {
 
     await act(async () => {});
 
-    expect(screen.getByText('Popular Movie')).toBeTruthy();
-    expect(screen.getByText('Popular Series')).toBeTruthy();
+    expect(screen.getAllByText('Popular Movie')[0]).toBeTruthy();
+    expect(screen.getAllByText('Popular Series')[0]).toBeTruthy();
   });
 
   it('does not call the api immediately and only searches after the debounce', async () => {
@@ -97,7 +97,7 @@ describe('Home page search', () => {
     });
 
     expect(searchCatalogMock).toHaveBeenCalledWith('inception');
-    expect(screen.getByText('Searched Movie')).toBeTruthy();
+    expect(screen.getAllByText('Searched Movie')[0]).toBeTruthy();
   });
 
   it('searches both movies and series through the catalog', async () => {
@@ -117,8 +117,8 @@ describe('Home page search', () => {
     });
 
     expect(searchCatalogMock).toHaveBeenCalledWith('searched');
-    expect(screen.getByText('Searched Movie')).toBeTruthy();
-    expect(screen.getByText('Searched Series')).toBeTruthy();
+    expect(screen.getAllByText('Searched Movie')[0]).toBeTruthy();
+    expect(screen.getAllByText('Searched Series')[0]).toBeTruthy();
   });
 
   it('shows a no-results message when nothing matches', async () => {
@@ -163,14 +163,14 @@ describe('Home page search', () => {
       vi.advanceTimersByTime(300);
     });
 
-    expect(screen.getByText('Newer Result')).toBeTruthy();
+    expect(screen.getAllByText('Newer Result')[0]).toBeTruthy();
 
     await act(async () => {
       resolveFirst({ movies: [makeMovie('tt6', 'Stale Result')], series: [] });
     });
 
     expect(screen.queryByText('Stale Result')).toBeNull();
-    expect(screen.getByText('Newer Result')).toBeTruthy();
+    expect(screen.getAllByText('Newer Result')[0]).toBeTruthy();
   });
 
   it('returns to popular lists when the query is cleared', async () => {
@@ -193,7 +193,7 @@ describe('Home page search', () => {
     await act(async () => {
       vi.advanceTimersByTime(300);
     });
-    expect(screen.getByText('Searched Movie')).toBeTruthy();
+    expect(screen.getAllByText('Searched Movie')[0]).toBeTruthy();
 
     await act(() => {
       searchQuery.value = '';
@@ -203,8 +203,8 @@ describe('Home page search', () => {
     });
 
     expect(screen.queryByText('Searched Movie')).toBeNull();
-    expect(screen.getByText('Popular Movie')).toBeTruthy();
-    expect(screen.getByText('Popular Series')).toBeTruthy();
+    expect(screen.getAllByText('Popular Movie')[0]).toBeTruthy();
+    expect(screen.getAllByText('Popular Series')[0]).toBeTruthy();
   });
 
   it('shows a loading skeleton while the popular catalog is still resolving', async () => {
@@ -224,7 +224,7 @@ describe('Home page search', () => {
     });
 
     expect(screen.queryByText('Carregando...')).toBeNull();
-    expect(screen.getByText('Popular Movie')).toBeTruthy();
+    expect(screen.getAllByText('Popular Movie')[0]).toBeTruthy();
   });
 
   it('shows the error/empty state when the catalog resolves with nothing', async () => {

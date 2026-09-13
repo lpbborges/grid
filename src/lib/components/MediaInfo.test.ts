@@ -5,7 +5,7 @@ import '@testing-library/jest-dom';
 
 describe('MediaInfo component', () => {
   it('renders media details correctly', () => {
-    const { getByText } = render(MediaInfo, {
+    const { getAllByText } = render(MediaInfo, {
       props: {
         id: '123',
         title: 'Test Movie',
@@ -17,13 +17,13 @@ describe('MediaInfo component', () => {
       }
     });
 
-    expect(getByText('Test Movie')).toBeInTheDocument();
-    expect(getByText('ANO: 2023')).toBeInTheDocument();
-    expect(getByText('DIRETOR: John Doe')).toBeInTheDocument();
-    expect(getByText(/IMDB:\s*8.5/)).toBeInTheDocument();
-    expect(getByText('This is a test synopsis.')).toBeInTheDocument();
-    expect(getByText('Actor 1')).toBeInTheDocument();
-    expect(getByText('Char 1')).toBeInTheDocument();
+    expect(getAllByText('Test Movie')[0]).toBeInTheDocument();
+    expect(getAllByText('ANO: 2023')[0]).toBeInTheDocument();
+    expect(getAllByText('DIRETOR: John Doe')[0]).toBeInTheDocument();
+    expect(getAllByText(/IMDB:\s*8.5/)[0]).toBeInTheDocument();
+    expect(getAllByText('This is a test synopsis.')[0]).toBeInTheDocument();
+    expect(getAllByText('Actor 1')[0]).toBeInTheDocument();
+    expect(getAllByText('Char 1')[0]).toBeInTheDocument();
   });
 
   it('renders without director and cast', () => {

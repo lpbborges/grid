@@ -119,7 +119,9 @@ export async function prepareStream(
       mediaId,
       season,
       episode,
-      fileName: details.files[bestFileIdx].name,
+      fileName: parsedInfoHash
+        ? `${parsedInfoHash}/${details.files[bestFileIdx].name}`
+        : details.files[bestFileIdx].name,
       totalBytes,
       downloadedBytes: alreadyHave,
       complete: existingEntry?.complete ?? false,
@@ -150,6 +152,17 @@ export async function prepareStream(
   revokeBlobUrls(activeBlobUrls);
   activeBlobUrls = subtitles.map((s) => s.url);
   const videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
+
+  onStatus('Preparando vídeo, aguarde um momento...');
+  for (let i = 0; i < 60; i++) {
+    try {
+      const res = await fetch(videoSrc, { headers: { Range: 'bytes=0-0' } });
+      if (res.ok || res.status === 206) break;
+    } catch {
+      // ignore network errors during polling
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 
   return {
     infoHash,

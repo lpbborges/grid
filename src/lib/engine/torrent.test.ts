@@ -69,7 +69,7 @@ describe('torrent engine', () => {
     await torrent.addTorrent('magnet:?xt=test', 'abc123hash');
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:3030/torrents?sub_folder=abc123hash',
+      'http://127.0.0.1:3030/torrents?overwrite=true&sub_folder=abc123hash',
       expect.objectContaining({ method: 'POST', body: 'magnet:?xt=test' })
     );
   });
@@ -83,7 +83,7 @@ describe('torrent engine', () => {
     await torrent.addTorrent('magnet:?xt=test');
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:3030/torrents',
+      'http://127.0.0.1:3030/torrents?overwrite=true',
       expect.objectContaining({ method: 'POST', body: 'magnet:?xt=test' })
     );
   });
@@ -159,15 +159,18 @@ describe('torrent engine', () => {
     await torrent.addTorrent('magnet:?xt=test', undefined, { onlyFilesRegex: '\\.(mp4)$' });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:3030/torrents?only_files_regex=%5C.%28mp4%29%24',
+      'http://127.0.0.1:3030/torrents?overwrite=true&only_files_regex=%5C.%28mp4%29%24',
       expect.objectContaining({ method: 'POST', body: 'magnet:?xt=test' })
     );
   });
 
   it('throws an error if adding torrent fails', async () => {
-    (globalThis.fetch as any).mockResolvedValueOnce({
-      ok: false
-    });
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      text: async () => 'mock error message'
+    } as any);
 
     await expect(torrent.addTorrent('magnet:')).rejects.toThrow('Failed to add torrent to engine');
   });

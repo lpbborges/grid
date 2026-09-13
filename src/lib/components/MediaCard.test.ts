@@ -17,22 +17,22 @@ const mockMovie: Movie = {
 
 describe('MediaCard component', () => {
   it('renders media title and details for movie', () => {
-    const { getByText, getByAltText } = render(MediaCard, { media: mockMovie, type: 'movie' });
+    const { getAllByText, getByAltText } = render(MediaCard, { media: mockMovie, type: 'movie' });
 
-    expect(getByText('Test Evangelion')).toBeDefined();
+    expect(getAllByText('Test Evangelion')[0]).toBeDefined();
     expect(getByAltText('Test Evangelion')).toBeDefined();
 
-    const link = getByText('Test Evangelion').closest('a');
+    const link = getAllByText('Test Evangelion')[0].closest('a');
     expect(link?.getAttribute('href')).toBe('/movie/123');
   });
 
   it('renders media title and details for series', () => {
-    const { getByText, getByAltText } = render(MediaCard, { media: mockMovie, type: 'series' });
+    const { getAllByText, getByAltText } = render(MediaCard, { media: mockMovie, type: 'series' });
 
-    expect(getByText('Test Evangelion')).toBeDefined();
+    expect(getAllByText('Test Evangelion')[0]).toBeDefined();
     expect(getByAltText('Test Evangelion')).toBeDefined();
 
-    const link = getByText('Test Evangelion').closest('a');
+    const link = getAllByText('Test Evangelion')[0].closest('a');
     expect(link?.getAttribute('href')).toBe('/series/123');
   });
 });

@@ -58,7 +58,7 @@
     <!-- Hover expanded overlay that doesn't affect card height -->
     <div
       aria-hidden="true"
-      class="bg-surface/95 border-primary pointer-events-none absolute top-[-1px] left-[-1px] right-[-1px] z-30 border px-3 py-[11px] opacity-0 shadow-[0_10px_30px_rgba(0,0,0,0.9)] transition-opacity duration-300 group-hover:opacity-100"
+      class="bg-surface/95 border-primary pointer-events-none absolute top-[-1px] right-[-1px] left-[-1px] z-30 border px-3 py-[11px] opacity-0 shadow-[0_10px_30px_rgba(0,0,0,0.9)] transition-opacity duration-300 group-hover:opacity-100"
     >
       <div
         class="border-accent-green pointer-events-none absolute -right-[1px] -bottom-[1px] z-40 h-2 w-2 border-r-2 border-b-2"

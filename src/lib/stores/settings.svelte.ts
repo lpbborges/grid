@@ -4,7 +4,7 @@ class SettingsStore {
   #audio = $state('pt');
   #subtitle = $state('pt');
   #quality = $state('1080p');
-  #cacheLimitBytes = $state(2 * 1024 * 1024 * 1024);
+  #cacheLimitBytes = $state(3 * 1024 * 1024 * 1024);
 
   constructor() {
     if (browser) {

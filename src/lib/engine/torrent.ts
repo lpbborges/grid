@@ -42,7 +42,7 @@ export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<voi
 
 export async function getLoadedTorrentInfoHashes(): Promise<string[]> {
   try {
-    const res = await fetchWithTimeout(`${ENGINE_URL}/torrents`, {}, 8000);
+    const res = await fetchWithTimeout(`${ENGINE_URL}/torrents`, {}, 30000);
     if (!res.ok) return [];
     const data = await res.json();
     return (data.torrents || []).map((t: { info_hash: string }) => t.info_hash);
@@ -74,6 +74,7 @@ export async function addTorrent(
   options?: { onlyFilesRegex?: string }
 ): Promise<TorrentEngineDetails> {
   const params = new URLSearchParams();
+  params.set('overwrite', 'true'); // Required for rqbit to hash-check and resume existing files
   if (subFolder) {
     params.set('sub_folder', subFolder);
   }
@@ -93,11 +94,14 @@ export async function addTorrent(
       },
       body: magnetLink
     },
-    8000
+    300000
   );
 
   if (!res.ok) {
-    throw new Error('Failed to add torrent to engine');
+    const errorText = await res.text().catch(() => 'No response body');
+    throw new Error(
+      `Failed to add torrent to engine: ${res.status} ${res.statusText} - ${errorText}`
+    );
   }
 
   const data = await res.json();

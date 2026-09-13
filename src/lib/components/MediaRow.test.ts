@@ -25,9 +25,9 @@ describe('MediaRow component', () => {
       type: 'movie'
     });
 
-    expect(screen.getByText('Filmes Populares')).toBeTruthy();
-    expect(screen.getByText('Alpha')).toBeTruthy();
-    expect(screen.getByText('Beta')).toBeTruthy();
+    expect(screen.getAllByText('Filmes Populares')[0]).toBeTruthy();
+    expect(screen.getAllByText('Alpha')[0]).toBeTruthy();
+    expect(screen.getAllByText('Beta')[0]).toBeTruthy();
   });
 
   it('links items to the correct route for the given type', () => {
@@ -37,7 +37,7 @@ describe('MediaRow component', () => {
       type: 'series'
     });
 
-    const link = screen.getByText('Gamma').closest('a');
+    const link = screen.getAllByText('Gamma')[0].closest('a');
     expect(link?.getAttribute('href')).toBe('/series/tt3');
   });
 

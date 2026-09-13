@@ -30,7 +30,7 @@ vi.mock('$lib/api/subtitles', () => ({
   getExternalSubtitles: vi.fn()
 }));
 
-const DEFAULT_LIMIT = 2 * 1024 * 1024 * 1024;
+const DEFAULT_LIMIT = 3 * 1024 * 1024 * 1024;
 
 function mockDetails(
   overrides: Partial<{ info_hash: string; files: { name: string; length: number }[] }> = {}
@@ -53,6 +53,16 @@ describe('prepareStream', () => {
     vi.mocked(torrentApi.getLoadedTorrentInfoHashes).mockResolvedValue([]);
     vi.mocked(torrentApi.forgetTorrent).mockResolvedValue(undefined);
     vi.mocked(torrentApi.deleteTorrent).mockResolvedValue(undefined);
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('/subtitles')) {
+        return { ok: true, blob: async () => new Blob() } as any;
+      }
+      if (String(url).includes('/stream/')) {
+        return { ok: true, status: 206 } as any;
+      }
+      return { ok: true } as any;
+    });
     vi.mocked(cacheApi.getCacheManifest).mockResolvedValue([]);
     vi.mocked(cacheApi.upsertCacheEntry).mockResolvedValue(undefined);
     vi.mocked(cacheApi.evictForSpace).mockResolvedValue([]);
@@ -83,7 +93,7 @@ describe('prepareStream', () => {
         mediaId: 'media-123',
         season: 2,
         episode: 5,
-        fileName: 'movie.mkv',
+        fileName: `${'1'.repeat(40)}/movie.mkv`,
         totalBytes: 200,
         downloadedBytes: 0,
         complete: false

@@ -15,7 +15,7 @@ export interface CacheEntry {
 
 export function parseInfoHashFromMagnet(magnet: string): string | null {
   const match = magnet.match(/xt=urn:btih:([a-fA-F0-9]{64}|[a-fA-F0-9]{40})/);
-  return match ? match[1] : null;
+  return match ? match[1].toLowerCase() : null;
 }
 
 export async function getCacheManifest(): Promise<CacheEntry[]> {

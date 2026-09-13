@@ -6,10 +6,12 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 describe('parseInfoHashFromMagnet', () => {
-  it('extracts a 40-char hex info hash', async () => {
+  it('extracts a 40-char hex info hash and converts to lowercase', async () => {
     const { parseInfoHashFromMagnet } = await import('./cache');
     const hash = 'a'.repeat(40);
-    expect(parseInfoHashFromMagnet(`magnet:?xt=urn:btih:${hash}&dn=Movie`)).toBe(hash);
+    expect(parseInfoHashFromMagnet(`magnet:?xt=urn:btih:${hash.toUpperCase()}&dn=Movie`)).toBe(
+      hash
+    );
   });
 
   it('extracts a 64-char hex info hash', async () => {
@@ -56,11 +58,12 @@ describe('cache manifest client', () => {
   it('evictForSpace invokes evict_for_space with the right params and returns evicted hashes', async () => {
     const { evictForSpace } = await import('./cache');
     (invoke as any).mockResolvedValueOnce(['old1', 'old2']);
-    const result = await evictForSpace('current', 1000, 2000000000);
+    const result = await evictForSpace('current', 1000, 3000000000);
+
     expect(invoke).toHaveBeenCalledWith('evict_for_space', {
       excludeInfoHash: 'current',
       neededBytes: 1000,
-      limitBytes: 2000000000
+      limitBytes: 3000000000
     });
     expect(result).toEqual(['old1', 'old2']);
   });

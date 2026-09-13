@@ -5,10 +5,10 @@ describe('settingsStore.cacheLimitBytes', () => {
     localStorage.clear();
   });
 
-  it('defaults to 2GB when nothing is stored', async () => {
+  it('defaults to 3GB when nothing is stored', async () => {
     vi.resetModules();
     const { settingsStore } = await import('./settings.svelte');
-    expect(settingsStore.cacheLimitBytes).toBe(2 * 1024 * 1024 * 1024);
+    expect(settingsStore.cacheLimitBytes).toBe(3 * 1024 * 1024 * 1024);
   });
 
   it('loads a previously persisted value', async () => {
@@ -22,7 +22,7 @@ describe('settingsStore.cacheLimitBytes', () => {
     localStorage.setItem('grid-play-cache-limit-bytes', 'not-a-number');
     vi.resetModules();
     const { settingsStore } = await import('./settings.svelte');
-    expect(settingsStore.cacheLimitBytes).toBe(2 * 1024 * 1024 * 1024);
+    expect(settingsStore.cacheLimitBytes).toBe(3 * 1024 * 1024 * 1024);
   });
 
   it('setting a new value persists it to localStorage', async () => {
