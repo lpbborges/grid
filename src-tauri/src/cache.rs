@@ -45,7 +45,13 @@ pub fn write_manifest(path: &Path, manifest: &Manifest) -> std::io::Result<()> {
     }
     let json = serde_json::to_string_pretty(manifest)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    std::fs::write(path, json)
+    let tmp_path = path.with_extension("json.tmp");
+    {
+        let mut file = std::fs::File::create(&tmp_path)?;
+        std::io::Write::write_all(&mut file, json.as_bytes())?;
+        file.sync_all()?;
+    }
+    std::fs::rename(&tmp_path, path)
 }
 
 pub fn upsert_entry(manifest: &mut Manifest, entry: CacheEntry) {
@@ -190,6 +196,25 @@ mod tests {
         assert_eq!(reloaded.entries.len(), 1);
         assert_eq!(reloaded.entries[0].info_hash, "abc123");
         assert_eq!(reloaded.entries[0].downloaded_bytes, 500);
+    }
+
+    #[test]
+    fn write_manifest_leaves_no_temp_file_behind() {
+        let dir = unique_test_dir("atomic-no-tmp");
+        let path = manifest_path(&dir);
+        let mut manifest = Manifest { entries: vec![] };
+        upsert_entry(&mut manifest, entry("first", 100, 1));
+        write_manifest(&path, &manifest).unwrap();
+        upsert_entry(&mut manifest, entry("second", 200, 2));
+        write_manifest(&path, &manifest).unwrap();
+
+        let names: Vec<String> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .collect();
+        assert_eq!(names, vec!["manifest.json".to_string()]);
+        assert_eq!(read_manifest(&path).entries.len(), 2);
     }
 
     #[test]
