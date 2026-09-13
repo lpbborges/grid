@@ -5,7 +5,7 @@ import '@testing-library/jest-dom';
 
 describe('PlayerSelection component', () => {
   it('shows only the quality as the primary option label', () => {
-    const torrents = [{ hash: 'abc', quality: '1080p', type: 'web', size: '1GB' }];
+    const torrents = [{ hash: 'abc', quality: '1080p', type: 'web' }];
 
     const { getByText, queryByText } = render(PlayerSelection, {
       props: { torrents, selectedTorrentHash: 'abc', onPlay: vi.fn() }
@@ -17,7 +17,7 @@ describe('PlayerSelection component', () => {
 
   it('calls onPlay when the play button is clicked', async () => {
     const onPlay = vi.fn();
-    const torrents = [{ hash: 'abc', quality: '1080p', type: 'web', size: '1GB' }];
+    const torrents = [{ hash: 'abc', quality: '1080p', type: 'web' }];
 
     const { getByRole } = render(PlayerSelection, {
       props: { torrents, selectedTorrentHash: 'abc', onPlay }
@@ -38,7 +38,7 @@ describe('PlayerSelection component', () => {
   });
 
   it('renders the "Original" audio option in the same format as EpisodeList (via the shared PreferenceSelectors)', () => {
-    const torrents = [{ hash: 'abc', quality: '1080p', type: 'web', size: '1GB' }];
+    const torrents = [{ hash: 'abc', quality: '1080p', type: 'web' }];
 
     const { getByText } = render(PlayerSelection, {
       props: { torrents, selectedTorrentHash: 'abc', onPlay: vi.fn(), originalLanguage: 'en' }

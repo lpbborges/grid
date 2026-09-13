@@ -72,7 +72,6 @@
     hash: string;
     quality: string;
     type: string;
-    size: string;
     seeds?: number;
     peers?: number;
     url?: string;
@@ -104,14 +103,10 @@
                   type += ' (PT)';
                 else if (titleLower.includes('dual')) type += ' (Dual)';
 
-                const sizeMatch = s.title?.match(/💾\\s*([^⚙]+)/);
-                const size = sizeMatch ? sizeMatch[1].trim() : 'Unknown size';
-
                 return {
                   hash: s.infoHash ?? '',
                   quality,
                   type,
-                  size,
                   seeds: parseSeedCount(s.title),
                   rawStream: s
                 };

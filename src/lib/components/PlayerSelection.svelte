@@ -10,7 +10,6 @@
     hash: string;
     quality: string;
     type: string;
-    size: string;
   }
 
   let {
