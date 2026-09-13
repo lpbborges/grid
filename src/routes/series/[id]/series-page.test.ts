@@ -28,7 +28,8 @@ vi.mock('$lib/api/translate', () => ({
   translateEpisodesList: translateEpisodesListMock
 }));
 
-vi.mock('$lib/api/torrentio', () => ({
+vi.mock('$lib/api/torrentio', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/api/torrentio')>()),
   getSeriesStreams: getSeriesStreamsMock
 }));
 

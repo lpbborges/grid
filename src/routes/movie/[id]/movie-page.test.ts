@@ -29,7 +29,8 @@ vi.mock('$lib/engine/torrent', () => ({
   clearTorrents: clearTorrentsMock
 }));
 
-vi.mock('$lib/api/torrentio', () => ({
+vi.mock('$lib/api/torrentio', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/api/torrentio')>()),
   getMovieStreams: getMovieStreamsMock
 }));
 

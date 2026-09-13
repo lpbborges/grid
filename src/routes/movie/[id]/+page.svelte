@@ -1,7 +1,7 @@
 <script lang="ts">
   import { logger } from '$lib/logger';
   import { translateMediaInfo } from '$lib/api/translate';
-  import { getMovieStreams } from '$lib/api/torrentio';
+  import { getMovieStreams, parseSeedCount } from '$lib/api/torrentio';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
@@ -112,6 +112,7 @@
                   quality,
                   type,
                   size,
+                  seeds: parseSeedCount(s.title),
                   rawStream: s
                 };
               })

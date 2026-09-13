@@ -1,7 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getSeriesStreams, getMovieStreams } from './torrentio';
+import { getSeriesStreams, getMovieStreams, parseSeedCount } from './torrentio';
 
 globalThis.fetch = vi.fn() as any;
+
+describe('parseSeedCount', () => {
+  it('reads the seed count from a Torrentio stream title', () => {
+    expect(parseSeedCount('Movie.2020.1080p.WEB\n👤 142 💾 2.1 GB ⚙️ ThePirateBay')).toBe(142);
+  });
+
+  it('reads the seed count when it is the only marker on the line', () => {
+    expect(parseSeedCount('Movie.2020.720p\n👤 7')).toBe(7);
+  });
+
+  it('returns 0 when the title has no seed marker', () => {
+    expect(parseSeedCount('Movie.2020.1080p.WEB\n💾 2.1 GB')).toBe(0);
+  });
+
+  it('returns 0 when the title is missing', () => {
+    expect(parseSeedCount(undefined)).toBe(0);
+  });
+});
 
 describe('torrentio api', () => {
   beforeEach(() => {

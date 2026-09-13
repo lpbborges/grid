@@ -10,6 +10,12 @@ export interface Stream {
   behaviorHints?: any;
 }
 
+/** Reads the seed count Torrentio embeds in a stream title as `👤 N`, or 0 when absent. */
+export function parseSeedCount(title: string | undefined): number {
+  const match = title?.match(/👤\s*(\d+)/u);
+  return match ? Number(match[1]) : 0;
+}
+
 async function fetchTorrentioStreams(path: string): Promise<Stream[]> {
   try {
     const res = await fetchWithTimeout(`https://torrentio.strem.fun/stream/${path}.json`);

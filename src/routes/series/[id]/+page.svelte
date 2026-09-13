@@ -1,7 +1,7 @@
 <script lang="ts">
   import { logger } from '$lib/logger';
   import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
-  import { getSeriesStreams } from '$lib/api/torrentio';
+  import { getSeriesStreams, parseSeedCount } from '$lib/api/torrentio';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
@@ -106,7 +106,7 @@
           const text = ((s.title || '') + ' ' + (s.name || '')).toLowerCase();
           const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
           const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
-          return { quality, text, seeds: 0 };
+          return { quality, text, seeds: parseSeedCount(s.title) };
         },
         { quality: settingsStore.quality, audioPreference: settingsStore.audio }
       );

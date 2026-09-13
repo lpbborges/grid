@@ -25,7 +25,7 @@ export interface StreamRankingInput {
   quality: string;
   /** Lower-cased blob of all searchable text for this option (title + name + any type label), used for the dubbed/dual/original-language heuristics. */
   text: string;
-  /** Seed count, used only as a tiebreaker. */
+  /** Seed count, used only as a tiebreaker between options with equal scores (not part of the score). */
   seeds: number;
 }
 
@@ -77,22 +77,26 @@ export function scoreStreamOption(
     if (!isDubbedOnly) score += 100;
   }
 
-  return score + (input.seeds || 0);
+  return score;
 }
 
 /**
  * Ranks `options` best-first according to `params`, without mutating the
  * input array. `toRankingInput` adapts a page's own option shape (torrent,
  * torrentio stream, etc.) into the generic `StreamRankingInput` the scoring
- * function understands.
+ * function understands. Options with equal scores are ordered by seed count,
+ * and options tied on both keep their input order.
  */
 export function rankStreamOptions<T>(
   options: T[],
   toRankingInput: (option: T) => StreamRankingInput,
   params: RankStreamOptionsParams
 ): T[] {
-  return [...options].sort(
-    (a, b) =>
-      scoreStreamOption(toRankingInput(b), params) - scoreStreamOption(toRankingInput(a), params)
-  );
+  return options
+    .map((option) => {
+      const input = toRankingInput(option);
+      return { option, score: scoreStreamOption(input, params), seeds: input.seeds || 0 };
+    })
+    .sort((a, b) => b.score - a.score || b.seeds - a.seeds)
+    .map(({ option }) => option);
 }

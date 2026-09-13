@@ -75,9 +75,9 @@ describe('scoreStreamOption', () => {
     expect(dubbedScore).toBeLessThan(neutralScore);
   });
 
-  it('uses seed count as a tiebreaker between otherwise identical options', () => {
+  it('does not add seed count to the score', () => {
     const lowSeeds: StreamRankingInput = { quality: '1080p', text: 'plain release', seeds: 5 };
-    const highSeeds: StreamRankingInput = { quality: '1080p', text: 'plain release', seeds: 50 };
+    const highSeeds: StreamRankingInput = { quality: '1080p', text: 'plain release', seeds: 5000 };
 
     const lowScore = scoreStreamOption(lowSeeds, { quality: '1080p', audioPreference: 'original' });
     const highScore = scoreStreamOption(highSeeds, {
@@ -85,7 +85,7 @@ describe('scoreStreamOption', () => {
       audioPreference: 'original'
     });
 
-    expect(highScore).toBeGreaterThan(lowScore);
+    expect(highScore).toBe(lowScore);
   });
 });
 
@@ -111,6 +111,64 @@ describe('rankStreamOptions', () => {
     );
 
     expect(ranked.map((o) => o.id)).toEqual(['high-seeds', 'low-seeds', 'wrong-quality']);
+  });
+
+  it('ranks a preferred-quality zero-seed option above a lower-quality high-seed option', () => {
+    const options = [
+      { id: 'wrong-quality-popular', quality: '720p', text: 'plain release', seeds: 5000 },
+      { id: 'preferred-quality', quality: '1080p', text: 'plain release', seeds: 0 }
+    ];
+
+    const ranked = rankStreamOptions(options, (o) => o, {
+      quality: '1080p',
+      audioPreference: 'original'
+    });
+
+    expect(ranked.map((o) => o.id)).toEqual(['preferred-quality', 'wrong-quality-popular']);
+  });
+
+  it('ranks a preferred-audio option above a wrong-audio option with many more seeds', () => {
+    const options = [
+      { id: 'dubbed-popular', quality: '1080p', text: 'dublado 1080p', seeds: 5000 },
+      { id: 'original', quality: '1080p', text: 'plain release', seeds: 1 }
+    ];
+
+    const ranked = rankStreamOptions(options, (o) => o, {
+      quality: '1080p',
+      audioPreference: 'original'
+    });
+
+    expect(ranked.map((o) => o.id)).toEqual(['original', 'dubbed-popular']);
+  });
+
+  it('orders equal-score options by seed count', () => {
+    const options = [
+      { id: 'few', quality: '1080p', text: 'plain release', seeds: 3 },
+      { id: 'many', quality: '1080p', text: 'plain release', seeds: 300 },
+      { id: 'some', quality: '1080p', text: 'plain release', seeds: 30 }
+    ];
+
+    const ranked = rankStreamOptions(options, (o) => o, {
+      quality: '1080p',
+      audioPreference: 'original'
+    });
+
+    expect(ranked.map((o) => o.id)).toEqual(['many', 'some', 'few']);
+  });
+
+  it('keeps the original order for options tied on score and seeds', () => {
+    const options = [
+      { id: 'first', quality: '1080p', text: 'plain release', seeds: 0 },
+      { id: 'second', quality: '1080p', text: 'plain release', seeds: 0 },
+      { id: 'third', quality: '1080p', text: 'plain release', seeds: 0 }
+    ];
+
+    const ranked = rankStreamOptions(options, (o) => o, {
+      quality: '1080p',
+      audioPreference: 'original'
+    });
+
+    expect(ranked.map((o) => o.id)).toEqual(['first', 'second', 'third']);
   });
 
   it('does not mutate the input array', () => {
