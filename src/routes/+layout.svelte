@@ -1,6 +1,6 @@
 <script lang="ts">
   import '../app.css';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import Titlebar from '$lib/components/Titlebar.svelte';
   import { searchQuery } from '$lib/stores.svelte';
   let { children } = $props();
@@ -8,7 +8,7 @@
 
 <div class="text-main bg-dark flex h-screen flex-col overflow-hidden">
   <Titlebar />
-  {#if !$page.url.pathname.startsWith('/movie') && !$page.url.pathname.startsWith('/series')}
+  {#if !page.url.pathname.startsWith('/movie') && !page.url.pathname.startsWith('/series')}
     <!-- Top navigation bar -->
     <header class="bg-dark/80 flex items-center justify-between p-4 backdrop-blur">
       <!-- Left: Logo -->
