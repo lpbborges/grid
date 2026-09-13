@@ -605,6 +605,33 @@ mod tests {
             Some(std::path::Path::new("/usr/bin/sleep"))
         ));
     }
+
+    fn csp_directive_sources(directive: &str) -> Vec<String> {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("tauri.conf.json is valid JSON");
+        let csp = config["app"]["security"]["csp"]
+            .as_str()
+            .expect("app.security.csp is a string");
+        csp.split(';')
+            .map(str::split_whitespace)
+            .find_map(|mut parts| {
+                (parts.next() == Some(directive)).then(|| parts.map(String::from).collect())
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn csp_allows_blob_media_for_subtitle_tracks() {
+        // Subtitles are rendered as <track src="blob:..."> (getTorrentSubtitles /
+        // getExternalSubtitles). WebKit checks <track> URLs against media-src, so
+        // without blob: every subtitle silently fails to load.
+        assert!(csp_directive_sources("media-src").contains(&"blob:".to_string()));
+    }
+
+    #[test]
+    fn csp_still_allows_local_engine_stream_media() {
+        assert!(csp_directive_sources("media-src").contains(&"http://127.0.0.1:*".to_string()));
+    }
 }
 
 #[test]

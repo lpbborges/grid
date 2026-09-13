@@ -19,7 +19,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; media-src 'self' http://127.0.0.1:*; connect-src 'self' http://127.0.0.1:* https://v3-cinemeta.strem.io https://movies-api.accel.li https://torrentio.strem.fun https://opensubtitles-v3.strem.io https://subs5.strem.io https://*.strem.io https://translate.googleapis.com https://lingva.ml https://api.mymemory.translated.net; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: https:; font-src 'self' data:;"
+      "csp": "default-src 'self'; media-src 'self' blob: http://127.0.0.1:*; connect-src 'self' http://127.0.0.1:* https://v3-cinemeta.strem.io https://movies-api.accel.li https://torrentio.strem.fun https://opensubtitles-v3.strem.io https://subs5.strem.io https://*.strem.io https://translate.googleapis.com https://lingva.ml https://api.mymemory.translated.net; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: https:; font-src 'self' data:;"
     }
   },
   "bundle": {
