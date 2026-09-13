@@ -3,7 +3,7 @@
   import EmptyState from '$lib/components/EmptyState.svelte';
   import type { Movie } from '$lib/types';
   import { searchQuery } from '$lib/stores.svelte';
-  import { searchCatalog } from '$lib/api/yts';
+  import { searchCatalog } from '$lib/api/cinemeta';
 
   let { data } = $props();
 

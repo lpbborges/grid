@@ -1,5 +1,5 @@
 import type { PageLoad } from './$types';
-import { getMovieDetails } from '$lib/api/yts';
+import { getMovieDetails } from '$lib/api/cinemeta';
 
 export const load: PageLoad = async ({ params }) => {
   const movieId = params.id;

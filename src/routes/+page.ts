@@ -1,5 +1,5 @@
 import type { PageLoad } from './$types';
-import { getPopularMovies, getPopularSeries } from '$lib/api/yts';
+import { getPopularMovies, getPopularSeries } from '$lib/api/cinemeta';
 
 // Deliberately not awaited: leaving these as promises lets the page mount
 // immediately and show its own loading skeleton (see +page.svelte) instead

@@ -7,7 +7,7 @@ import {
   searchMovies,
   searchSeries,
   searchCatalog
-} from './yts';
+} from './cinemeta';
 
 const mockMovie = {
   id: 1,

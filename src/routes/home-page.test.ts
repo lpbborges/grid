@@ -8,7 +8,7 @@ const { searchCatalogMock } = vi.hoisted(() => ({
   searchCatalogMock: vi.fn()
 }));
 
-vi.mock('$lib/api/yts', () => ({
+vi.mock('$lib/api/cinemeta', () => ({
   searchCatalog: searchCatalogMock
 }));
 
