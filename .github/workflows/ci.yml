@@ -5,13 +5,24 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -20,15 +31,15 @@ jobs:
       - run: npx prettier --check .
       - run: npm run check
       - run: npm run test:frontend
-      - run: npm audit --audit-level=high
 
   rust:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: src-tauri
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
@@ -55,12 +66,16 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src-tauri
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm audit --audit-level=high
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
       - run: cargo audit
+        working-directory: src-tauri
