@@ -1,6 +1,7 @@
 import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { getCached, setCached } from '../stores/translation-cache';
+import type { Episode } from '../types';
 
 const TRANSLATE_TIMEOUT_MS = 6000;
 
@@ -40,9 +41,9 @@ async function runTranslationCascade(text: string, targetLang: string): Promise<
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
     const res = await fetchWithTimeout(url, {}, TRANSLATE_TIMEOUT_MS);
     if (res.ok) {
-      const data = await res.json();
-      if (data && data[0]) {
-        return data[0].map((item: any) => item[0]).join('');
+      const data: unknown = await res.json();
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        return (data[0] as unknown[][]).map((segment) => String(segment[0] ?? '')).join('');
       }
     }
   } catch (e) {
@@ -98,7 +99,9 @@ export async function translateMediaInfo(title: string, synopsis: string) {
   };
 }
 
-export async function translateEpisodesList(episodes: any[]): Promise<Record<string, string>> {
+export async function translateEpisodesList(
+  episodes: Pick<Episode, 'id' | 'name'>[]
+): Promise<Record<string, string>> {
   const targetLang = getUserLanguage();
   if (targetLang === 'en' || !episodes || episodes.length === 0) return {};
 

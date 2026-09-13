@@ -13,7 +13,7 @@ describe('MediaInfo component', () => {
         director: ['John Doe'],
         rating: 8.5,
         synopsis: 'This is a test synopsis.',
-        cast: [{ name: 'Actor 1', character_name: 'Char 1' }]
+        cast: [{ name: 'Actor 1', character_name: 'Char 1', url_small_image: null, imdb_code: '' }]
       }
     });
 

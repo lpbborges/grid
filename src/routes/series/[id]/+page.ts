@@ -10,11 +10,11 @@ export const load: PageLoad = async ({ params }) => {
       series,
       error: null
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       seriesId,
       series: null,
-      error: e.message || 'Erro ao carregar série'
+      error: (e instanceof Error && e.message) || 'Erro ao carregar série'
     };
   }
 };

@@ -10,13 +10,14 @@
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
+  import type { Episode } from '$lib/types';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
   let series = $derived(data.series);
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
-  let lastAttemptedEpisode = $state<any>(null);
+  let lastAttemptedEpisode = $state<Episode | null>(null);
 
   const streamPlayer = useStreamPlayer();
 
@@ -72,7 +73,7 @@
 
   $effect(() => {
     if (series && series.videos && series.videos.length > 0) {
-      const episodesToTranslate = series.videos.filter((v: any) => v.season === selectedSeason);
+      const episodesToTranslate = series.videos.filter((v) => v.season === selectedSeason);
       if (episodesToTranslate.length > 0) {
         translateEpisodesList(episodesToTranslate).then((res) => {
           translatedEpisodes = { ...translatedEpisodes, ...res };
@@ -81,8 +82,8 @@
     }
   });
 
-  async function playEpisode(episode: any) {
-    if (typeof window === 'undefined') return;
+  async function playEpisode(episode: Episode) {
+    if (typeof window === 'undefined' || !series) return;
 
     lastAttemptedEpisode = episode;
 
@@ -132,7 +133,7 @@
         error = streamPlayer.error;
         errorSource = 'play';
       }
-    } catch (e: any) {
+    } catch (e) {
       logger.error('Erro ao buscar fontes do episódio:', e);
       error = 'Não foi possível iniciar a reprodução. Tente novamente.';
       errorSource = 'play';

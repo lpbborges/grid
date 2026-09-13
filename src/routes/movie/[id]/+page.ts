@@ -10,11 +10,11 @@ export const load: PageLoad = async ({ params }) => {
       movie,
       error: null
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       movieId,
       movie: null,
-      error: e.message || 'Erro ao carregar filme'
+      error: (e instanceof Error && e.message) || 'Erro ao carregar filme'
     };
   }
 };

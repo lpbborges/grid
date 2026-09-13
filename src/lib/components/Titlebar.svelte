@@ -18,7 +18,7 @@
     });
 
     return () => {
-      unlisten.then((f: any) => f());
+      unlisten.then((stopListening) => stopListening());
     };
   });
 

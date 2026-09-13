@@ -9,8 +9,7 @@
  * behavior.
  */
 
-/** A user's audio preference, as stored in `settingsStore.audio`. */
-export type AudioPreference = 'pt' | 'original' | string;
+import type { AudioPreference } from '$lib/types';
 
 /** The minimal, page-agnostic shape a stream option needs to be ranked. */
 export interface StreamRankingInput {

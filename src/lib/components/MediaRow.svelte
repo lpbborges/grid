@@ -14,7 +14,7 @@
     containerClass?: string;
   } = $props();
 
-  let scrollContainer: any = $state();
+  let scrollContainer = $state<HTMLDivElement>();
   let canScrollLeft = $state(false);
   let canScrollRight = $state(false);
 
@@ -26,11 +26,11 @@
   }
 
   function scrollLeft() {
-    scrollContainer.scrollBy({ left: -800, behavior: 'smooth' });
+    scrollContainer?.scrollBy({ left: -800, behavior: 'smooth' });
   }
 
   function scrollRight() {
-    scrollContainer.scrollBy({ left: 800, behavior: 'smooth' });
+    scrollContainer?.scrollBy({ left: 800, behavior: 'smooth' });
   }
 
   $effect(() => {

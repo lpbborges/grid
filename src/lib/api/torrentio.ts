@@ -7,7 +7,7 @@ export interface Stream {
   infoHash?: string;
   fileIdx?: number;
   url?: string;
-  behaviorHints?: any;
+  behaviorHints?: Record<string, unknown>;
 }
 
 /** Reads the seed count Torrentio embeds in a stream title as `👤 N`, or 0 when absent. */

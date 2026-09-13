@@ -1,5 +1,6 @@
 <script lang="ts">
   import { watchedStore } from '$lib/stores/watched.svelte';
+  import type { CastMember } from '$lib/types';
 
   let { id, title, year, director, rating, synopsis, cast } = $props<{
     id: string | number;
@@ -8,7 +9,7 @@
     director?: string[];
     rating: number;
     synopsis: string;
-    cast?: any[];
+    cast?: CastMember[];
   }>();
 </script>
 

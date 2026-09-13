@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getLanguageName } from '$lib/api/subtitles';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { isAudioPreference } from '$lib/types';
 
   // Shared by PlayerSelection (movie) and EpisodeList (series/episode) so the
   // audio/subtitle preference dropdowns can't drift between the two screens
@@ -60,7 +61,9 @@
   <select
     id={audioSelectId}
     value={audioSelectValue}
-    onchange={(e) => (settingsStore.audio = e.currentTarget.value)}
+    onchange={(e) => {
+      if (isAudioPreference(e.currentTarget.value)) settingsStore.audio = e.currentTarget.value;
+    }}
     class={selectClass}
   >
     <option value="original" class="bg-surface text-main">{originalLabel}</option>

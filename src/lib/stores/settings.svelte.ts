@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { isAudioPreference, type AudioPreference } from '$lib/types';
 
 export const MAX_CACHE_LIMIT_BYTES = 50 * 1024 * 1024 * 1024;
 
@@ -8,7 +9,7 @@ function normalizeCacheLimit(value: number): number | null {
 }
 
 class SettingsStore {
-  #audio = $state('pt');
+  #audio = $state<AudioPreference>('pt');
   #subtitle = $state('pt');
   #quality = $state('1080p');
   #cacheLimitBytes = $state(3 * 1024 * 1024 * 1024);
@@ -16,7 +17,7 @@ class SettingsStore {
   constructor() {
     if (browser) {
       const storedAudio = localStorage.getItem('grid-play-audio');
-      if (storedAudio) this.#audio = storedAudio;
+      if (storedAudio && isAudioPreference(storedAudio)) this.#audio = storedAudio;
 
       const storedSub = localStorage.getItem('grid-play-subtitle');
       if (storedSub) this.#subtitle = storedSub;
@@ -37,7 +38,7 @@ class SettingsStore {
   get audio() {
     return this.#audio;
   }
-  set audio(value: string) {
+  set audio(value: AudioPreference) {
     this.#audio = value;
     this.persist('grid-play-audio', value);
   }

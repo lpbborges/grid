@@ -1,6 +1,6 @@
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-export type LogContext = any;
+export type LogContext = unknown;
 
 class Logger {
   private level: LogLevel = 'info';
@@ -11,7 +11,7 @@ class Logger {
     }
   }
 
-  private log(level: LogLevel, message: any, context?: LogContext) {
+  private log(level: LogLevel, message: unknown, context?: LogContext) {
     if (level === 'error') {
       if (context) console.error(message, context);
       else console.error(message);
@@ -29,19 +29,19 @@ class Logger {
     }
   }
 
-  debug(message: any, context?: LogContext) {
+  debug(message: unknown, context?: LogContext) {
     this.log('debug', message, context);
   }
 
-  info(message: any, context?: LogContext) {
+  info(message: unknown, context?: LogContext) {
     this.log('info', message, context);
   }
 
-  warn(message: any, context?: LogContext) {
+  warn(message: unknown, context?: LogContext) {
     this.log('warn', message, context);
   }
 
-  error(message: any, context?: LogContext) {
+  error(message: unknown, context?: LogContext) {
     this.log('error', message, context);
   }
 }

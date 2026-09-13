@@ -1,7 +1,21 @@
 import { getLanguageName } from '$lib/api/subtitles';
 import { resolvePreferredAudioTrack, type ParsedAudioTrack } from '$lib/utils/audioTrack';
 
-/* global HTMLVideoElement */
+interface NativeAudioTrack {
+  id: string;
+  label: string;
+  language: string;
+  enabled: boolean;
+}
+
+interface NativeAudioTrackList extends ArrayLike<NativeAudioTrack> {
+  onchange: (() => void) | null;
+}
+
+function nativeAudioTracks(videoElement: HTMLVideoElement | null) {
+  return (videoElement as (HTMLVideoElement & { audioTracks?: NativeAudioTrackList }) | null)
+    ?.audioTracks;
+}
 
 /**
  * Encapsulates VideoPlayer's audio-track detection/selection: parsing the
@@ -20,7 +34,7 @@ export function useAudioTrackSelection() {
     audioPreference: string | undefined,
     originalLanguage?: string
   ) {
-    const tracks = (videoElement as any)?.audioTracks;
+    const tracks = nativeAudioTracks(videoElement);
     if (!tracks) return;
 
     const parsed: ParsedAudioTrack[] = [];
@@ -80,7 +94,7 @@ export function useAudioTrackSelection() {
   }
 
   function selectAudioTrack(videoElement: HTMLVideoElement | null, index: number) {
-    const tracks = (videoElement as any)?.audioTracks;
+    const tracks = nativeAudioTracks(videoElement);
     if (tracks) {
       for (let i = 0; i < tracks.length; i++) {
         tracks[i].enabled = i === index;

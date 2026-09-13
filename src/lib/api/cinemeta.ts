@@ -1,15 +1,15 @@
 import { logger } from '$lib/logger';
-import type { Movie } from '../types';
+import type { CinemetaMeta, Movie, Series } from '../types';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 
 const BASE_URL = 'https://movies-api.accel.li/api/v2';
 
-function mapCinemetaMeta(m: any): Movie {
+function mapCinemetaMeta(m: CinemetaMeta): Movie {
   return {
-    id: m.imdb_id || m.id,
+    id: m.imdb_id || m.id || '',
     title: m.name,
-    year: parseInt(m.year || m.releaseInfo) || 0,
-    rating: parseFloat(m.imdbRating) || 0,
+    year: parseInt(m.year || m.releaseInfo || '') || 0,
+    rating: parseFloat(m.imdbRating || '') || 0,
     medium_cover_image: m.poster,
     large_cover_image: m.poster,
     background_image_original: m.background,
@@ -181,7 +181,7 @@ function mapCountryToLanguage(country: string | undefined): string {
   return 'en'; // fallback
 }
 
-export async function getSeriesDetails(seriesId: string): Promise<any> {
+export async function getSeriesDetails(seriesId: string): Promise<Series> {
   const res = await fetchWithTimeout(`https://v3-cinemeta.strem.io/meta/series/${seriesId}.json`);
   if (!res.ok) {
     throw new Error(`Failed to fetch series details: ${res.statusText}`);
@@ -191,18 +191,18 @@ export async function getSeriesDetails(seriesId: string): Promise<any> {
     throw new Error('API returned an error');
   }
 
-  const meta = data.meta;
+  const meta: CinemetaMeta = data.meta;
   return {
-    id: meta.imdb_id || meta.id,
+    id: meta.imdb_id || meta.id || seriesId,
     title: meta.name,
-    year: parseInt(meta.year) || 0,
-    rating: parseFloat(meta.imdbRating) || 0,
+    year: parseInt(meta.year || '') || 0,
+    rating: parseFloat(meta.imdbRating || '') || 0,
     medium_cover_image: meta.poster,
     large_cover_image: meta.poster,
     background_image_original: meta.background,
     summary: meta.description || '',
     description_full: meta.description || '',
-    cast: (meta.cast || []).map((c: string) => ({
+    cast: (meta.cast || []).map((c) => ({
       name: c,
       character_name: '',
       url_small_image: null,

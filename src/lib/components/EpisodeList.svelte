@@ -3,14 +3,7 @@
   import PreferenceSelectors from './PreferenceSelectors.svelte';
   import QualitySelector from './QualitySelector.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
-
-  export interface Episode {
-    id: string;
-    season: number;
-    episode: number;
-    name?: string;
-    firstAired?: string;
-  }
+  import type { Episode } from '$lib/types';
 
   let {
     seriesId,
