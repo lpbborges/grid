@@ -36,4 +36,14 @@ describe('PlayerSelection component', () => {
 
     expect(getByText('Nenhuma opção de reprodução disponível')).toBeInTheDocument();
   });
+
+  it('renders the "Original" audio option in the same format as EpisodeList (via the shared PreferenceSelectors)', () => {
+    const torrents = [{ hash: 'abc', quality: '1080p', type: 'web', size: '1GB' }];
+
+    const { getByText } = render(PlayerSelection, {
+      props: { torrents, selectedTorrentHash: 'abc', onPlay: vi.fn(), originalLanguage: 'en' }
+    });
+
+    expect(getByText('Original (Inglês)')).toBeInTheDocument();
+  });
 });

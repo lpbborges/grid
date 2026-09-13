@@ -51,4 +51,21 @@ describe('EpisodeList component', () => {
 
     expect(getByText('Nenhuma opção de reprodução disponível')).toBeInTheDocument();
   });
+
+  it('renders the "Original" audio option in the same format as PlayerSelection (via the shared PreferenceSelectors)', () => {
+    const episodes = [{ id: '1', season: 1, episode: 1, name: 'Ep 1' }];
+
+    const { getByText } = render(EpisodeList, {
+      props: {
+        seriesId: 'series-123',
+        episodes,
+        translatedEpisodes: {},
+        selectedSeason: 1,
+        onPlayEpisode: vi.fn(),
+        originalLanguage: 'en'
+      }
+    });
+
+    expect(getByText('Original (Inglês)')).toBeInTheDocument();
+  });
 });

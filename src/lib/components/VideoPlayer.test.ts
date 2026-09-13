@@ -286,6 +286,89 @@ describe('VideoPlayer component', () => {
     }
   });
 
+  it('shifts cue positioning further up while the subtitle menu is open', async () => {
+    const subtitles: any = [{ label: 'Eng', lang: 'en', url: 'sub.vtt', group: 'Extra' }];
+    const cues: any[] = [{ snapToLines: true, line: -1 }];
+    const track = { mode: 'disabled', cues, oncuechange: null };
+
+    const { getByLabelText, getByText, getByTestId } = render(VideoPlayer, {
+      src: 'test.mp4',
+      subtitles
+    });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'textTracks', { writable: true, value: [track] });
+
+    await fireEvent.click(getByLabelText('Menu de Legendas'));
+    await fireEvent.click(getByText('Eng'));
+    expect(cues[0].line).toBe(80);
+
+    // Re-opening the CC menu should push the cue further up so it doesn't
+    // overlap the dropdown sitting right above the controls bar.
+    await fireEvent.click(getByLabelText('Menu de Legendas'));
+    expect(cues[0].line).toBe(70);
+  });
+
+  it('shifts cue positioning further up while the audio menu is open', async () => {
+    const subtitles: any = [{ label: 'Eng', lang: 'en', url: 'sub.vtt', group: 'Extra' }];
+    const cues: any[] = [{ snapToLines: true, line: -1 }];
+    const track = { mode: 'disabled', cues, oncuechange: null };
+
+    const { getByLabelText, getByText, getByTestId } = render(VideoPlayer, {
+      src: 'test.mp4',
+      subtitles
+    });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'textTracks', { writable: true, value: [track] });
+    Object.defineProperty(video, 'audioTracks', {
+      writable: true,
+      value: [
+        { id: 'a1', label: 'Audio 1', enabled: true },
+        { id: 'a2', label: 'Audio 2', enabled: false }
+      ]
+    });
+    await fireEvent.loadedMetadata(video);
+
+    await fireEvent.click(getByLabelText('Menu de Legendas'));
+    await fireEvent.click(getByText('Eng'));
+    expect(cues[0].line).toBe(80);
+
+    await fireEvent.click(getByLabelText('Menu de Faixas de Áudio'));
+    expect(cues[0].line).toBe(70);
+  });
+
+  it('re-applies cue layout after the engine overrides track mode via syncTrackModes', async () => {
+    const subtitles: any = [{ label: 'Eng', lang: 'en', url: 'sub.vtt', group: 'Extra' }];
+    const cues: any[] = [{ snapToLines: true, line: -1 }];
+    const listeners: Record<string, () => void> = {};
+    const track: any = { mode: 'disabled', cues, oncuechange: null };
+    const tracks: any = [track];
+    tracks.addEventListener = (type: string, fn: () => void) => (listeners[type] = fn);
+    tracks.removeEventListener = vi.fn();
+
+    const { getByLabelText, getByText, getByTestId } = render(VideoPlayer, {
+      src: 'test.mp4',
+      subtitles
+    });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'textTracks', { writable: true, value: tracks });
+
+    await fireEvent.click(getByLabelText('Menu de Legendas'));
+    await fireEvent.click(getByText('Eng'));
+    expect(cues[0].line).toBe(80);
+
+    // Simulate the webview's own automatic track-selection logic momentarily
+    // overriding both the mode and the cue's line/snapToLines back to the
+    // browser default, then firing 'change' on the TextTrackList.
+    track.mode = 'disabled';
+    cues[0].line = -1;
+    cues[0].snapToLines = true;
+    listeners.change?.();
+
+    expect(track.mode).toBe('showing');
+    expect(cues[0].snapToLines).toBe(false);
+    expect(cues[0].line).toBe(80);
+  });
+
   it('auto-selects the subtitle matching the stored preference once tracks are ready', async () => {
     const subtitles: any = [
       { label: 'Inglês', lang: 'en', url: 'sub-en.vtt', group: 'Extra' },

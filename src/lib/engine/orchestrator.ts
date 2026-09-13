@@ -64,6 +64,41 @@ async function reconcileLoadedTorrents(manifestInfoHashes: string[]): Promise<vo
   }
 }
 
+// Video-readiness polling tuning: capped exponential backoff instead of a
+// fixed 1s delay, so a slow-starting stream still gets up to
+// MAX_VIDEO_READY_ATTEMPTS chances while a stream that will never come up
+// doesn't burn the full worst case waiting on a fixed cadence.
+const MAX_VIDEO_READY_ATTEMPTS = 12;
+const VIDEO_READY_BASE_DELAY_MS = 250;
+const VIDEO_READY_MAX_DELAY_MS = 2000;
+
+/**
+ * Polls `videoSrc` with a ranged GET until the stream responds successfully
+ * (200/206), a non-transient client error (4xx) is returned — retrying a
+ * 404 from a bad fileIdx identically won't ever succeed, so this stops
+ * early instead of exhausting every attempt — or attempts are exhausted.
+ * Resolves in every case (never throws/hangs): playback is handed off to
+ * the video element regardless, matching prior behavior of proceeding even
+ * after the readiness probe never succeeded.
+ */
+export async function waitForVideoReady(
+  videoSrc: string,
+  maxAttempts: number = MAX_VIDEO_READY_ATTEMPTS
+): Promise<void> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const res = await fetch(videoSrc, { headers: { Range: 'bytes=0-0' } });
+      if (res.ok || res.status === 206) return;
+      if (res.status >= 400 && res.status < 500) return;
+    } catch {
+      // Network error while polling; treat as transient and retry.
+    }
+    if (attempt === maxAttempts - 1) break;
+    const delay = Math.min(VIDEO_READY_BASE_DELAY_MS * 2 ** attempt, VIDEO_READY_MAX_DELAY_MS);
+    await new Promise((r) => setTimeout(r, delay));
+  }
+}
+
 export async function prepareStream(
   magnet: string,
   onStatus: (status: string) => void,
@@ -154,15 +189,7 @@ export async function prepareStream(
   const videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
 
   onStatus('Preparando vídeo, aguarde um momento...');
-  for (let i = 0; i < 60; i++) {
-    try {
-      const res = await fetch(videoSrc, { headers: { Range: 'bytes=0-0' } });
-      if (res.ok || res.status === 206) break;
-    } catch {
-      // ignore network errors during polling
-    }
-    await new Promise((r) => setTimeout(r, 1000));
-  }
+  await waitForVideoReady(videoSrc);
 
   return {
     infoHash,

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { prepareStream, finalizeStream } from './orchestrator';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { prepareStream, finalizeStream, waitForVideoReady } from './orchestrator';
 import * as torrentApi from './torrent';
 import * as cacheApi from './cache';
 import * as subtitlesApi from '$lib/api/subtitles';
@@ -318,5 +318,66 @@ describe('finalizeStream', () => {
     vi.mocked(torrentApi.getTorrentStats).mockRejectedValue(new Error('engine down'));
     await finalizeStream('abc', true);
     expect(torrentApi.forgetTorrent).toHaveBeenCalledWith('abc');
+  });
+});
+
+describe('waitForVideoReady', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('resolves as soon as the stream responds ok, without waiting out remaining attempts', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await waitForVideoReady('http://localhost/stream', 10);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves as soon as the stream responds 206 partial content', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 206 }));
+
+    await waitForVideoReady('http://localhost/stream', 10);
+  });
+
+  it('retries transient failures (network errors / 5xx) with backoff, then succeeds', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const promise = waitForVideoReady('http://localhost/stream', 10);
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('short-circuits on a non-transient 4xx status instead of retrying', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await waitForVideoReady('http://localhost/stream', 10);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves cleanly (does not hang or throw) once every attempt is exhausted', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const promise = waitForVideoReady('http://localhost/stream', 4);
+    await vi.runAllTimersAsync();
+    await expect(promise).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });

@@ -4,7 +4,10 @@
   import type { SubtitleTrack } from '$lib/api/subtitles';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { findPreferredSubtitleIndex, getLanguageName } from '$lib/api/subtitles';
+  import { useAudioTrackSelection } from '$lib/composables/useAudioTrackSelection.svelte';
+  import { useSubtitleSelection } from '$lib/composables/useSubtitleSelection.svelte';
+  import AudioMenu from './AudioMenu.svelte';
+  import SubtitleMenu from './SubtitleMenu.svelte';
 
   let {
     src,
@@ -33,11 +36,9 @@
     originalLanguage?: string;
     initialTime?: number;
   }>();
-  /* global HTMLVideoElement, HTMLElement, HTMLInputElement, FocusEvent, MouseEvent, KeyboardEvent, Node, VTTCue, TextTrackList */
+  /* global HTMLVideoElement, HTMLElement, HTMLInputElement, FocusEvent, MouseEvent, KeyboardEvent, Node */
   let videoElement = $state<HTMLVideoElement | null>(null);
   let containerElement = $state<HTMLElement | null>(null);
-  let showMenu = $state(false);
-  let activeIndex = $state(-1);
 
   let paused = $state(false);
   let currentTime = $state(0);
@@ -46,9 +47,13 @@
   let showControls = $state(true);
   let controlsTimeout: ReturnType<typeof setTimeout>;
 
-  let audioTracks = $state<{ index: number; id: string; label: string; enabled: boolean }[]>([]);
-  let showAudioMenu = $state(false);
-  let activeAudioIndex = $state(0);
+  const audioSelection = useAudioTrackSelection();
+  const subtitleSelection = useSubtitleSelection({
+    getVideoElement: () => videoElement,
+    getSubtitles: () => subtitles,
+    getControlsVisible: () => controlsVisible,
+    getAudioMenuOpen: () => audioSelection.showAudioMenu
+  });
 
   let downloadPercent = $state<number>(0);
   let isVideoPlaying = $state(false);
@@ -105,49 +110,8 @@
 
   let torrentSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Embedded'));
   let externalSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Extra'));
-
-  let expandedGroups = $state<Record<string, boolean>>({});
-
-  function toggleGroup(group: string, label: string) {
-    const key = `${group}-${label}`;
-    expandedGroups[key] = !expandedGroups[key];
-  }
-
-  function groupByLanguage(subs: SubtitleTrack[]) {
-    const groups: Record<string, SubtitleTrack[]> = {};
-    for (const sub of subs) {
-      if (!groups[sub.label]) groups[sub.label] = [];
-      groups[sub.label].push(sub);
-    }
-    return Object.keys(groups)
-      .sort()
-      .map((label) => ({ label, subs: groups[label] }));
-  }
-
-  let torrentSubsGrouped = $derived(groupByLanguage(torrentSubs));
-  let externalSubsGrouped = $derived(groupByLanguage(externalSubs));
-
-  // Tracks whether the initial preference-based subtitle pick has already run,
-  // independent of `activeIndex`: `activeIndex === -1` also means "user chose
-  // Desativado", and reusing it here would make that explicit choice get
-  // silently re-applied every time this re-runs.
-  let subtitleAutoApplied = $state(false);
-
-  function applyDefaultSubtitle() {
-    if (
-      !videoElement ||
-      subtitleAutoApplied ||
-      settingsStore.subtitle === 'none' ||
-      subtitles.length === 0 ||
-      videoElement.textTracks.length < subtitles.length
-    ) {
-      return;
-    }
-    subtitleAutoApplied = true;
-
-    const idx = findPreferredSubtitleIndex(subtitles, settingsStore.subtitle);
-    if (idx !== -1) selectTrack(idx);
-  }
+  let torrentSubsGrouped = $derived(subtitleSelection.groupByLanguage(torrentSubs));
+  let externalSubsGrouped = $derived(subtitleSelection.groupByLanguage(externalSubs));
 
   // Two different "the browser will tell us when tracks are ready" signals
   // ('loadedmetadata', then the TextTrackList's 'addtrack' event) both proved
@@ -157,15 +121,19 @@
   // sync), polling actual readiness sidesteps needing to know which signal
   // (if any) this platform actually honors.
   $effect(() => {
-    if (subtitles.length === 0 || subtitleAutoApplied || settingsStore.subtitle === 'none') {
+    if (
+      subtitles.length === 0 ||
+      subtitleSelection.subtitleAutoApplied ||
+      settingsStore.subtitle === 'none'
+    ) {
       return;
     }
-    applyDefaultSubtitle();
-    if (subtitleAutoApplied) return;
+    subtitleSelection.applyDefaultSubtitle();
+    if (subtitleSelection.subtitleAutoApplied) return;
 
     const interval = window.setInterval(() => {
-      applyDefaultSubtitle();
-      if (subtitleAutoApplied) window.clearInterval(interval);
+      subtitleSelection.applyDefaultSubtitle();
+      if (subtitleSelection.subtitleAutoApplied) window.clearInterval(interval);
     }, 200);
     const giveUpAfter = window.setTimeout(() => window.clearInterval(interval), 10000);
 
@@ -204,221 +172,38 @@
     };
   });
 
-  let controlsVisible = $derived(showControls || paused || showMenu || showAudioMenu);
-
-  function applyCueLayout() {
-    if (!videoElement) return;
-    for (const textTrack of videoElement.textTracks) {
-      if (textTrack.mode !== 'showing' || !textTrack.cues) continue;
-      for (let i = 0; i < textTrack.cues.length; i++) {
-        const cue = textTrack.cues[i] as VTTCue;
-        const targetLine = controlsVisible ? 80 : 92;
-        if (cue.snapToLines !== false || cue.line !== targetLine) {
-          cue.snapToLines = false;
-          cue.line = targetLine;
-        }
-      }
-    }
-  }
+  let controlsVisible = $derived(
+    showControls || paused || subtitleSelection.showMenu || audioSelection.showAudioMenu
+  );
 
   $effect(() => {
-    // Re-apply layout when controls visibility changes
-    if (controlsVisible !== undefined) {
-      applyCueLayout();
+    // Re-apply layout when controls visibility or menu state changes
+    if (
+      controlsVisible !== undefined ||
+      subtitleSelection.showMenu ||
+      audioSelection.showAudioMenu
+    ) {
+      subtitleSelection.applyCueLayout();
     }
   });
-
-  // Every webview runs its own automatic text track selection after <track>s
-  // are added, and it overrides the mode set here:
-  // - WebKit (WebKitGTK on Linux; WKWebView on macOS, following the system
-  //   caption setting) defaults to "forced only" and disables the chosen,
-  //   non-forced subtitle track.
-  // - Chromium (WebView2 on Windows) enables an extra track matching the
-  //   system language, stacking two subtitles.
-  // `activeIndex` is the source of truth: re-apply it whenever the engine
-  // reports a mode change.
-  function syncTrackModes() {
-    if (!videoElement) return;
-    const list = videoElement.textTracks;
-    for (let i = 0; i < list.length; i++) {
-      const wanted = i === activeIndex ? 'showing' : 'disabled';
-      if (list[i].mode !== wanted) list[i].mode = wanted;
-    }
-  }
-
-  let listenedTrackList: TextTrackList | null = null;
-
-  function ensureTrackListListener() {
-    const list = videoElement?.textTracks;
-    if (!list || list === listenedTrackList || typeof list.addEventListener !== 'function') return;
-    listenedTrackList?.removeEventListener('change', syncTrackModes);
-    list.addEventListener('change', syncTrackModes);
-    listenedTrackList = list;
-  }
 
   $effect(() => {
     return () => {
-      listenedTrackList?.removeEventListener('change', syncTrackModes);
-      listenedTrackList = null;
+      subtitleSelection.disposeTrackListListener();
     };
   });
 
-  function selectTrack(index: number) {
-    if (!videoElement) return;
-    ensureTrackListListener();
-    for (let i = 0; i < videoElement.textTracks.length; i++) {
-      videoElement.textTracks[i].mode = 'disabled';
-    }
-    if (index >= 0) {
-      const track = videoElement.textTracks[index];
-      track.mode = 'showing';
-      track.oncuechange = () => applyCueLayout();
-      applyCueLayout();
-    }
-    activeIndex = index;
-    subtitleError = '';
-    showMenu = false;
-  }
-
-  // Indexes (into `subtitles`) whose <track> failed to load. The browser only
-  // fetches a track once its mode leaves 'disabled', so a failure (CSP block,
-  // revoked blob URL, unparseable VTT) surfaces right after selection. Without
-  // this the menu kept showing the track as selected while nothing rendered.
-  let failedTrackIndexes = $state<number[]>([]);
-  let subtitleError = $state('');
-
+  // Resets per-track load-failure state whenever the set of subtitles
+  // changes (a new stream/episode), so a failure from a previous stream
+  // doesn't linger and disable an unrelated track by coincidence of index.
   $effect(() => {
     void subtitles;
-    failedTrackIndexes = [];
-    subtitleError = '';
+    subtitleSelection.resetTrackErrorState();
   });
 
-  function handleTrackError(index: number) {
-    logger.warn('Subtitle track failed to load:', subtitles[index]?.label);
-    if (!failedTrackIndexes.includes(index)) failedTrackIndexes.push(index);
-    if (index !== activeIndex) return;
-    const track = videoElement?.textTracks[index];
-    if (track) track.mode = 'disabled';
-    activeIndex = -1;
-    subtitleError = 'Não foi possível carregar a legenda.';
-  }
-
   function handleLoadedMetadata() {
-    if (videoElement && (videoElement as any).audioTracks) {
-      const tracks = (videoElement as any).audioTracks;
-      let parsed = [];
-      const seenLanguages: Record<string, boolean> = {};
-
-      for (let i = 0; i < tracks.length; i++) {
-        let label =
-          getLanguageName(tracks[i].label, true) ||
-          getLanguageName(tracks[i].language, true) ||
-          `Faixa ${i + 1}`;
-
-        if (seenLanguages[label]) {
-          tracks[i].enabled = false;
-          continue;
-        }
-        seenLanguages[label] = true;
-
-        parsed.push({
-          index: i,
-          id: tracks[i].id,
-          label: label,
-          enabled: tracks[i].enabled
-        });
-      }
-
-      let preferredAudioIdx = -1;
-      if (settingsStore.audio && settingsStore.audio !== 'none') {
-        if (settingsStore.audio === 'original') {
-          if (originalLanguage) {
-            const originalName = getLanguageName(originalLanguage, true);
-            if (originalName) {
-              preferredAudioIdx = parsed.findIndex((t) =>
-                t.label.toLowerCase().includes(originalName.toLowerCase())
-              );
-            }
-          }
-          if (preferredAudioIdx === -1) {
-            preferredAudioIdx = parsed.findIndex((t) => t.label.toLowerCase().includes('orig'));
-          }
-          if (preferredAudioIdx === -1 && parsed.length > 1) {
-            const origLangs = ['ingl', 'eng', 'japon', 'jpn', 'corean', 'kor'];
-            for (const lang of origLangs) {
-              preferredAudioIdx = parsed.findIndex((t: any) =>
-                t.label.toLowerCase().includes(lang)
-              );
-              if (preferredAudioIdx !== -1) break;
-            }
-            if (preferredAudioIdx === -1) {
-              preferredAudioIdx = parsed.findIndex(
-                (t: any) => !t.label.toLowerCase().includes('portug')
-              );
-            }
-          }
-        } else if (settingsStore.audio === 'pt') {
-          preferredAudioIdx = parsed.findIndex(
-            (t: any) =>
-              t.label.toLowerCase().includes('portug') || t.label.toLowerCase().includes('pt')
-          );
-        } else if (settingsStore.audio === 'en') {
-          preferredAudioIdx = parsed.findIndex(
-            (t: any) =>
-              t.label.toLowerCase().includes('ingl') || t.label.toLowerCase().includes('eng')
-          );
-        } else if (settingsStore.audio === 'es') {
-          preferredAudioIdx = parsed.findIndex(
-            (t: any) =>
-              t.label.toLowerCase().includes('espanh') || t.label.toLowerCase().includes('spa')
-          );
-        }
-      }
-
-      if (preferredAudioIdx !== -1) {
-        // the index in 'parsed' is preferredAudioIdx, but we need the native tracks index
-        const nativeIndex = parsed[preferredAudioIdx].index;
-        activeAudioIndex = nativeIndex;
-        for (let i = 0; i < tracks.length; i++) {
-          tracks[i].enabled = i === nativeIndex;
-        }
-        for (let i = 0; i < parsed.length; i++) {
-          parsed[i].enabled = i === preferredAudioIdx;
-        }
-      } else {
-        for (let i = 0; i < tracks.length; i++) {
-          if (tracks[i].enabled) activeAudioIndex = i;
-        }
-        for (let i = 0; i < parsed.length; i++) {
-          if (parsed[i].index === activeAudioIndex) parsed[i].enabled = true;
-          else parsed[i].enabled = false;
-        }
-      }
-
-      audioTracks = parsed;
-
-      tracks.onchange = () => {
-        for (let i = 0; i < tracks.length; i++) {
-          if (tracks[i].enabled) {
-            activeAudioIndex = i;
-            break;
-          }
-        }
-      };
-    }
-
-    applyDefaultSubtitle();
-  }
-
-  function selectAudioTrack(index: number) {
-    if (videoElement && (videoElement as any).audioTracks) {
-      const tracks = (videoElement as any).audioTracks;
-      for (let i = 0; i < tracks.length; i++) {
-        tracks[i].enabled = i === index;
-      }
-      activeAudioIndex = index;
-    }
-    showAudioMenu = false;
+    audioSelection.handleLoadedMetadata(videoElement, settingsStore.audio, originalLanguage);
+    subtitleSelection.applyDefaultSubtitle();
   }
 
   let isFocused = $state(false);
@@ -453,9 +238,9 @@
   }
 
   function togglePlay() {
-    if (showMenu || showAudioMenu) {
-      showMenu = false;
-      showAudioMenu = false;
+    if (subtitleSelection.showMenu || audioSelection.showAudioMenu) {
+      subtitleSelection.showMenu = false;
+      audioSelection.showAudioMenu = false;
       return;
     }
     if (paused) videoElement?.play();
@@ -540,11 +325,11 @@
     }
   }
   function handleGlobalClick(e: MouseEvent) {
-    if (!showMenu && !showAudioMenu) return;
+    if (!subtitleSelection.showMenu && !audioSelection.showAudioMenu) return;
     const target = e.target as HTMLElement;
     if (target.closest('[data-menu-element]')) return;
-    showMenu = false;
-    showAudioMenu = false;
+    subtitleSelection.showMenu = false;
+    audioSelection.showAudioMenu = false;
   }
 </script>
 
@@ -564,9 +349,9 @@
   {#if onclose}
     <button
       onclick={onclose}
-      class="hover:text-accent-green hover:bg-main/10 focus-visible:ring-accent-green absolute top-6 right-6 z-50 rounded-full p-2 text-white/50 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {showControls ||
+      class="hover:text-green hover:bg-main/10 focus-visible:ring-green absolute top-6 right-6 z-50 rounded-full p-2 text-white/50 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {showControls ||
       paused ||
-      showMenu
+      subtitleSelection.showMenu
         ? 'opacity-100'
         : 'opacity-0'}"
       aria-label="Fechar"
@@ -609,24 +394,24 @@
       {:else}
         <div class="relative mb-6 h-16 w-16" data-testid="loading-spinner">
           <div
-            class="border-t-accent-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
+            class="border-t-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
           ></div>
           <div
-            class="border-l-primary border-r-accent-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
+            class="border-l-primary border-r-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
           ></div>
         </div>
       {/if}
       <div
         class="font-cyber mb-2 text-xl tracking-widest uppercase {playbackError
           ? 'text-red-500 [text-shadow:0_0_10px_rgba(239,68,68,0.8)]'
-          : 'text-accent-green [text-shadow:0_0_10px_rgba(54,211,83,0.8)]'}"
+          : 'text-green [text-shadow:0_0_10px_rgba(54,211,83,0.8)]'}"
       >
         {playbackError || engineStatus || 'Carregando...'}
       </div>
       {#if !playbackError && infoHash && downloadPercent > 0}
         <div class="bg-dark border-primary/30 mb-2 h-2 w-full max-w-md rounded-full border">
           <div
-            class="bg-accent-green h-2 rounded-full transition-all duration-300"
+            class="bg-green h-2 rounded-full transition-all duration-300"
             style="width: {downloadPercent}%"
           ></div>
         </div>
@@ -683,7 +468,7 @@
         src={sub.url}
         srclang={sub.lang}
         label={sub.label}
-        onerror={() => handleTrackError(index)}
+        onerror={() => subtitleSelection.handleTrackError(index)}
       />
     {/each}
   </video>
@@ -692,12 +477,12 @@
   <div
     class="absolute right-0 bottom-0 left-0 bg-gradient-to-t from-black to-transparent p-4 transition-opacity duration-300 {showControls ||
     paused ||
-    showMenu
+    subtitleSelection.showMenu
       ? 'opacity-100'
       : 'opacity-0'}"
   >
     <div
-      class="group focus-visible:ring-accent-green mb-3 flex w-full cursor-pointer items-center rounded py-2 focus-visible:ring-2 focus-visible:outline-none"
+      class="group focus-visible:ring-green mb-3 flex w-full cursor-pointer items-center rounded py-2 focus-visible:ring-2 focus-visible:outline-none"
       onclick={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -733,11 +518,11 @@
     >
       <div class="relative h-1 w-full rounded-full bg-white/25 transition-all group-hover:h-2">
         <div
-          class="bg-accent-green absolute top-0 left-0 h-full rounded-full"
+          class="bg-green absolute top-0 left-0 h-full rounded-full"
           style="width: {duration ? (currentTime / duration) * 100 : 0}%"
         ></div>
         <div
-          class="bg-accent-green absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 shadow-[0_0_6px_rgba(54,211,83,0.6)] transition-opacity group-hover:h-4 group-hover:w-4 group-hover:opacity-100"
+          class="bg-green absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 shadow-[0_0_6px_rgba(54,211,83,0.6)] transition-opacity group-hover:h-4 group-hover:w-4 group-hover:opacity-100"
           style="left: {duration ? (currentTime / duration) * 100 : 0}%"
         ></div>
       </div>
@@ -748,7 +533,7 @@
         <button
           onclick={togglePlay}
           aria-label={paused ? 'Reproduzir' : 'Pausar'}
-          class="hover:text-accent-green focus-visible:ring-accent-green rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          class="hover:text-green focus-visible:ring-green rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           {#if paused}
             <svg
@@ -784,7 +569,7 @@
           <button
             onclick={() => (volume = volume === 0 ? 1 : 0)}
             aria-label="Ativar/desativar mudo"
-            class="hover:text-accent-green focus-visible:ring-accent-green rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            class="hover:text-green focus-visible:ring-green rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             {#if volume > 0}
               <svg
@@ -831,192 +616,39 @@
               step="0.05"
               bind:value={volume}
               aria-label="Volume"
-              class="accent-accent-green focus-visible:ring-accent-green w-full cursor-pointer rounded focus-visible:ring-2 focus-visible:outline-none"
+              class="accent-green focus-visible:ring-green w-full cursor-pointer rounded focus-visible:ring-2 focus-visible:outline-none"
             />
           </div>
         </div>
       </div>
 
       <div class="relative flex items-center gap-4">
-        {#if audioTracks.length > 1}
-          <div class="relative">
-            <button
-              data-menu-element
-              onclick={() => (showAudioMenu = !showAudioMenu)}
-              aria-label="Menu de Faixas de Áudio"
-              class="hover:text-accent-green focus-visible:ring-accent-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors focus-visible:ring-2 focus-visible:outline-none {showAudioMenu
-                ? 'text-accent-green'
-                : ''}"
-            >
-              ÁUDIO
-            </button>
+        <AudioMenu
+          audioTracks={audioSelection.audioTracks}
+          activeAudioIndex={audioSelection.activeAudioIndex}
+          showAudioMenu={audioSelection.showAudioMenu}
+          ontoggle={() => (audioSelection.showAudioMenu = !audioSelection.showAudioMenu)}
+          onselect={(index) => audioSelection.selectAudioTrack(videoElement, index)}
+        />
 
-            {#if showAudioMenu}
-              <div
-                data-menu-element
-                class="border-primary/50 bg-surface/95 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
-              >
-                <div
-                  class="text-primary border-main/10 mt-1 mb-1 border-b px-3 pb-1 text-xs font-bold tracking-widest uppercase"
-                >
-                  Faixa de Áudio
-                </div>
-                {#each audioTracks as track}
-                  <button
-                    class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeAudioIndex ===
-                    track.index
-                      ? 'bg-primary/30 text-main'
-                      : ''}"
-                    title={track.label}
-                    onclick={() => selectAudioTrack(track.index)}
-                  >
-                    {track.label}
-                  </button>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        {/if}
-
-        {#if subtitles.length > 0}
-          {#if subtitleError}
-            <span role="status" class="text-xs text-red-500">{subtitleError}</span>
-          {/if}
-          <div class="relative">
-            <button
-              data-menu-element
-              onclick={() => (showMenu = !showMenu)}
-              aria-label="Menu de Legendas"
-              class="hover:text-accent-green focus-visible:ring-accent-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors focus-visible:ring-2 focus-visible:outline-none {showMenu
-                ? 'text-accent-green'
-                : ''}"
-            >
-              CC
-            </button>
-
-            {#if showMenu}
-              <div
-                data-menu-element
-                class="border-primary/50 bg-surface/95 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
-              >
-                <button
-                  class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
-                  -1
-                    ? 'bg-main/10 text-main'
-                    : ''}"
-                  onclick={() => selectTrack(-1)}
-                >
-                  Desativado
-                </button>
-
-                {#if torrentSubsGrouped.length > 0}
-                  <div
-                    class="text-primary border-main/10 mt-3 mb-1 border-b px-3 pb-1 text-xs font-bold tracking-widest uppercase"
-                  >
-                    Embutida
-                  </div>
-                  {#each torrentSubsGrouped as group}
-                    {#if group.subs.length === 1}
-                      <button
-                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
-                        subtitles.indexOf(group.subs[0])
-                          ? 'bg-primary/30 text-main'
-                          : ''}"
-                        title={group.label}
-                        disabled={failedTrackIndexes.includes(subtitles.indexOf(group.subs[0]))}
-                        onclick={() => selectTrack(subtitles.indexOf(group.subs[0]))}
-                      >
-                        {group.label}
-                      </button>
-                    {:else}
-                      <button
-                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                        onclick={() => toggleGroup('Embedded', group.label)}
-                      >
-                        <span>{group.label}</span>
-                        <span class="flex items-center text-[10px] opacity-70"
-                          >{expandedGroups[`Embedded-${group.label}`] ? '▼' : '▶'}</span
-                        >
-                      </button>
-                      {#if expandedGroups[`Embedded-${group.label}`]}
-                        <div class="border-main/10 my-1 ml-3 border-l pl-3">
-                          {#each group.subs as sub, index}
-                            <button
-                              class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
-                              subtitles.indexOf(sub)
-                                ? 'bg-primary/30 text-main'
-                                : ''}"
-                              title={`Opção ${index + 1}`}
-                              disabled={failedTrackIndexes.includes(subtitles.indexOf(sub))}
-                              onclick={() => selectTrack(subtitles.indexOf(sub))}
-                            >
-                              Opção {index + 1}
-                            </button>
-                          {/each}
-                        </div>
-                      {/if}
-                    {/if}
-                  {/each}
-                {/if}
-
-                {#if externalSubsGrouped.length > 0}
-                  <div
-                    class="text-primary border-main/10 mt-3 mb-1 border-b px-3 pb-1 text-xs font-bold tracking-widest uppercase"
-                  >
-                    Externa
-                  </div>
-                  {#each externalSubsGrouped as group}
-                    {#if group.subs.length === 1}
-                      <button
-                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
-                        subtitles.indexOf(group.subs[0])
-                          ? 'bg-primary/30 text-main'
-                          : ''}"
-                        title={group.label}
-                        disabled={failedTrackIndexes.includes(subtitles.indexOf(group.subs[0]))}
-                        onclick={() => selectTrack(subtitles.indexOf(group.subs[0]))}
-                      >
-                        {group.label}
-                      </button>
-                    {:else}
-                      <button
-                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                        onclick={() => toggleGroup('Extra', group.label)}
-                      >
-                        <span>{group.label}</span>
-                        <span class="flex items-center text-[10px] opacity-70"
-                          >{expandedGroups[`Extra-${group.label}`] ? '▼' : '▶'}</span
-                        >
-                      </button>
-                      {#if expandedGroups[`Extra-${group.label}`]}
-                        <div class="border-main/10 my-1 ml-3 border-l pl-3">
-                          {#each group.subs as sub, index}
-                            <button
-                              class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
-                              subtitles.indexOf(sub)
-                                ? 'bg-primary/30 text-main'
-                                : ''}"
-                              title={`Opção ${index + 1}`}
-                              disabled={failedTrackIndexes.includes(subtitles.indexOf(sub))}
-                              onclick={() => selectTrack(subtitles.indexOf(sub))}
-                            >
-                              Opção {index + 1}
-                            </button>
-                          {/each}
-                        </div>
-                      {/if}
-                    {/if}
-                  {/each}
-                {/if}
-              </div>
-            {/if}
-          </div>
-        {/if}
+        <SubtitleMenu
+          {subtitles}
+          {torrentSubsGrouped}
+          {externalSubsGrouped}
+          activeIndex={subtitleSelection.activeIndex}
+          failedTrackIndexes={subtitleSelection.failedTrackIndexes}
+          expandedGroups={subtitleSelection.expandedGroups}
+          subtitleError={subtitleSelection.subtitleError}
+          showMenu={subtitleSelection.showMenu}
+          ontoggle={() => (subtitleSelection.showMenu = !subtitleSelection.showMenu)}
+          onselect={(index) => subtitleSelection.selectTrack(index)}
+          ontogglegroup={(groupKey, label) => subtitleSelection.toggleGroup(groupKey, label)}
+        />
 
         <button
           onclick={toggleFullscreen}
           aria-label="Tela cheia"
-          class="hover:text-accent-green focus-visible:ring-accent-green ml-2 rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          class="hover:text-green focus-visible:ring-green ml-2 rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
