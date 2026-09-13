@@ -36,7 +36,6 @@
     originalLanguage?: string;
     initialTime?: number;
   }>();
-  /* global HTMLVideoElement, HTMLElement, HTMLInputElement, FocusEvent, MouseEvent, KeyboardEvent, Node */
   let videoElement = $state<HTMLVideoElement | null>(null);
   let containerElement = $state<HTMLElement | null>(null);
 

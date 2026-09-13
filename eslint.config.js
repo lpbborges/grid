@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import ts from 'typescript-eslint';
 import svelte from 'eslint-plugin-svelte';
+import globals from 'globals';
 
 // Raw Tailwind color utilities (e.g. `text-red-500`, `bg-black`, `hover:text-white`) that
 // bypass the app's CSS-variable theme tokens (primary/green/orange/error/dark/surface/main/muted
@@ -22,14 +23,7 @@ export default [
   {
     languageOptions: {
       globals: {
-        window: 'readonly',
-        document: 'readonly',
-        console: 'readonly',
-        fetch: 'readonly',
-        globalThis: 'readonly',
-        setTimeout: 'readonly',
-        AbortController: 'readonly',
-        clearTimeout: 'readonly'
+        ...globals.browser
       }
     },
     rules: {
