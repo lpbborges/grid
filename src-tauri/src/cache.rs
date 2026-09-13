@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CacheEntry {
@@ -17,18 +16,15 @@ pub struct CacheEntry {
     pub last_accessed_at: i64,
 }
 
-#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct Manifest {
     pub entries: Vec<CacheEntry>,
 }
 
-#[allow(dead_code)]
 pub fn downloads_dir(app_data_dir: &Path) -> PathBuf {
     app_data_dir.join("downloads")
 }
 
-#[allow(dead_code)]
 pub fn manifest_path(app_data_dir: &Path) -> PathBuf {
     downloads_dir(app_data_dir).join("manifest.json")
 }
@@ -36,7 +32,6 @@ pub fn manifest_path(app_data_dir: &Path) -> PathBuf {
 /// Never fails: a missing or corrupt manifest file is treated as an empty
 /// cache rather than an error, since losing the manifest should degrade to
 /// "re-download everything," not break the app.
-#[allow(dead_code)]
 pub fn read_manifest(path: &Path) -> Manifest {
     std::fs::read_to_string(path)
         .ok()
@@ -44,7 +39,6 @@ pub fn read_manifest(path: &Path) -> Manifest {
         .unwrap_or_default()
 }
 
-#[allow(dead_code)]
 pub fn write_manifest(path: &Path, manifest: &Manifest) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -54,7 +48,6 @@ pub fn write_manifest(path: &Path, manifest: &Manifest) -> std::io::Result<()> {
     std::fs::write(path, json)
 }
 
-#[allow(dead_code)]
 pub fn upsert_entry(manifest: &mut Manifest, entry: CacheEntry) {
     if let Some(existing) = manifest
         .entries
@@ -67,7 +60,6 @@ pub fn upsert_entry(manifest: &mut Manifest, entry: CacheEntry) {
     }
 }
 
-#[allow(dead_code)]
 pub fn remove_entry(manifest: &mut Manifest, info_hash: &str) -> Option<CacheEntry> {
     let pos = manifest
         .entries
@@ -81,7 +73,6 @@ pub fn total_usage(manifest: &Manifest) -> u64 {
     manifest.entries.iter().map(|e| e.downloaded_bytes).sum()
 }
 
-#[allow(dead_code)]
 pub fn pick_eviction_candidates(
     manifest: &Manifest,
     exclude_info_hash: &str,
@@ -134,7 +125,6 @@ pub fn find_orphan_top_level_names(downloads_dir: &Path, manifest: &Manifest) ->
         .collect()
 }
 
-#[allow(dead_code)]
 pub fn remove_path_best_effort(path: &Path) {
     if path.is_dir() {
         let _ = std::fs::remove_dir_all(path);
