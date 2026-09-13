@@ -27,7 +27,7 @@ export default [
       }
     },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
       'svelte/no-navigation-without-resolve': 'off',
       'svelte/require-each-key': 'off',
       'no-restricted-syntax': [
@@ -38,6 +38,12 @@ export default [
             'Raw Tailwind color utility bypasses the theme tokens in app.css (--color-primary/green/orange/error/dark/surface/main/muted). Use a token class instead, or if this is intentionally off-palette (e.g. a true-black video backdrop), suppress with a targeted eslint-disable-next-line comment explaining why.'
         }
       ]
+    }
+  },
+  {
+    files: ['**/*.test.ts', 'src/setupTests.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off'
     }
   },
   {
