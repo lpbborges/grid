@@ -22,6 +22,14 @@ struct SubtitleRateLimit {
 
 const SUBTITLE_RATE_LIMIT_PER_MINUTE: u32 = 30;
 
+/// Hard cap on how many bytes of a subtitle response we'll buffer into
+/// memory. Real subtitle files are at most a few hundred KB; this is
+/// generous headroom while still making it impossible for a
+/// mis-resolved/attacker-influenced `file_idx` (or a malicious external
+/// host) to force multi-gigabyte buffering, as defense in depth on top of
+/// the subtitle-file-name check in `fetch_torrent_subtitle`.
+const MAX_SUBTITLE_RESPONSE_BYTES: usize = 5 * 1024 * 1024;
+
 fn check_subtitle_rate_limit(state: &SubtitleRateLimit, key: &str) -> bool {
     let mut counts = state.counts.lock().unwrap();
     let now = Instant::now();
@@ -44,17 +52,40 @@ async fn fetch_torrent_subtitle(
     state: State<'_, EngineState>,
     rate_limit: State<'_, SubtitleRateLimit>,
 ) -> Result<String, String> {
-    if !check_subtitle_rate_limit(&rate_limit, "torrent") {
+    let port = {
+        let port_guard = state.port.lock().unwrap();
+        port_guard.ok_or_else(|| "Engine not running".to_string())?
+    };
+    fetch_torrent_subtitle_impl(info_hash, file_idx, port, &rate_limit).await
+}
+
+/// The actual logic behind the `fetch_torrent_subtitle` command, factored
+/// out so it can be exercised in tests without needing a real `tauri::State`
+/// (whose only public constructor requires a live `AppHandle`/`Manager`).
+async fn fetch_torrent_subtitle_impl(
+    info_hash: String,
+    file_idx: i64,
+    port: u16,
+    rate_limit: &SubtitleRateLimit,
+) -> Result<String, String> {
+    if !check_subtitle_rate_limit(rate_limit, "torrent") {
         return Err("Too many requests".to_string());
     }
     if !subtitles::is_valid_info_hash(&info_hash) || !subtitles::is_valid_file_idx(file_idx) {
         return Err("Invalid parameters".to_string());
     }
 
-    let port = {
-        let port_guard = state.port.lock().unwrap();
-        port_guard.ok_or_else(|| "Engine not running".to_string())?
-    };
+    // `file_idx` is caller-supplied and only format-validated above — it is
+    // NOT yet checked against this torrent's actual file list. Resolve the
+    // real file name from the torrent engine and reject anything that isn't
+    // a subtitle file (e.g. the main video) before fetching its content,
+    // which would otherwise buffer a potentially multi-gigabyte file into
+    // memory (see fetch_and_convert).
+    let file_name = resolve_torrent_file_name(port, &info_hash, file_idx).await?;
+    if !subtitles::is_subtitle_file_name(&file_name) {
+        return Err("Requested file is not a subtitle".to_string());
+    }
+
     // Matches getStreamUrl in src/lib/engine/torrent.ts:
     // `${ENGINE_URL}/torrents/${infoHash}/stream/${fileIdx}`
     let target_url = format!(
@@ -63,6 +94,53 @@ async fn fetch_torrent_subtitle(
     );
 
     fetch_and_convert(&target_url).await
+}
+
+#[derive(serde::Deserialize)]
+struct TorrentDetailsFile {
+    name: String,
+}
+
+#[derive(serde::Deserialize)]
+struct TorrentDetailsResponse {
+    #[serde(default)]
+    files: Option<Vec<TorrentDetailsFile>>,
+}
+
+/// Queries the local torrent engine for `info_hash`'s file listing and
+/// returns the name of the file at `file_idx`, so callers can validate it
+/// server-side before treating it as a subtitle (see `fetch_torrent_subtitle`).
+async fn resolve_torrent_file_name(
+    port: u16,
+    info_hash: &str,
+    file_idx: i64,
+) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(8000))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let details_url = format!("http://127.0.0.1:{}/torrents/{}", port, info_hash);
+    let res = client
+        .get(&details_url)
+        .send()
+        .await
+        .map_err(|e| format!("Error fetching torrent details: {}", e))?;
+
+    if !res.status().is_success() {
+        return Err("Failed to fetch torrent details".to_string());
+    }
+
+    let details: TorrentDetailsResponse = res.json().await.map_err(|e| e.to_string())?;
+    let files = details
+        .files
+        .ok_or_else(|| "Torrent has no file listing".to_string())?;
+
+    let idx = usize::try_from(file_idx).map_err(|_| "Invalid file index".to_string())?;
+    files
+        .get(idx)
+        .map(|f| f.name.clone())
+        .ok_or_else(|| "File index out of range".to_string())
 }
 
 #[tauri::command]
@@ -114,12 +192,41 @@ async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
         return Err("Failed to fetch subtitle".to_string());
     }
 
-    let text = res.text().await.map_err(|e| e.to_string())?;
+    let text = read_capped_body_as_string(res, MAX_SUBTITLE_RESPONSE_BYTES).await?;
     if text.trim_start().starts_with("WEBVTT") {
         Ok(text)
     } else {
         Ok(subtitles::srt_to_vtt(&text))
     }
+}
+
+/// Reads `res`'s body as a UTF-8 string, streaming it in chunks and
+/// aborting with an error as soon as more than `max_bytes` have been read.
+/// This is defense in depth on top of the subtitle-file-name validation in
+/// `fetch_torrent_subtitle`: even if a non-subtitle (e.g. multi-gigabyte
+/// video) file were ever reached here, this keeps memory use bounded
+/// instead of buffering the whole response via `Response::text()`.
+async fn read_capped_body_as_string(
+    res: reqwest::Response,
+    max_bytes: usize,
+) -> Result<String, String> {
+    use futures_util::StreamExt;
+
+    let mut stream = res.bytes_stream();
+    let mut buf: Vec<u8> = Vec::new();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Error reading response body: {}", e))?;
+        if buf.len() + chunk.len() > max_bytes {
+            return Err(format!(
+                "Response body exceeded the {}-byte limit",
+                max_bytes
+            ));
+        }
+        buf.extend_from_slice(&chunk);
+    }
+
+    String::from_utf8(buf).map_err(|e| format!("Response body was not valid UTF-8: {}", e))
 }
 
 #[tauri::command]
@@ -631,6 +738,154 @@ mod tests {
     #[test]
     fn csp_still_allows_local_engine_stream_media() {
         assert!(csp_directive_sources("media-src").contains(&"http://127.0.0.1:*".to_string()));
+    }
+
+    // --- fetch_torrent_subtitle file-idx validation (P0-1) ---
+
+    /// A minimal mock of the rqbit engine HTTP API: serves a fixed JSON
+    /// response for `GET /torrents/{hash}` (the file-listing/"details"
+    /// endpoint) and a fixed plain-text body for
+    /// `GET /torrents/{hash}/stream/{idx}` (the raw file-content endpoint),
+    /// for however many requests are made against it. Returns the server's
+    /// base URL port.
+    async fn spawn_mock_engine_server(details_json: String, stream_body: String) -> u16 {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    break;
+                };
+                let details_json = details_json.clone();
+                let stream_body = stream_body.clone();
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 4096];
+                    let n = match socket.read(&mut buf).await {
+                        Ok(n) => n,
+                        Err(_) => return,
+                    };
+                    let request = String::from_utf8_lossy(&buf[..n]);
+                    let path = request
+                        .lines()
+                        .next()
+                        .and_then(|line| line.split_whitespace().nth(1))
+                        .unwrap_or("");
+
+                    let (content_type, body) = if path.contains("/stream/") {
+                        ("text/plain", stream_body.as_str())
+                    } else {
+                        ("application/json", details_json.as_str())
+                    };
+
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        content_type,
+                        body.len(),
+                        body
+                    );
+                    let _ = socket.write_all(response.as_bytes()).await;
+                    let _ = socket.shutdown().await;
+                });
+            }
+        });
+
+        port
+    }
+
+    fn test_rate_limit_state() -> SubtitleRateLimit {
+        SubtitleRateLimit {
+            counts: Mutex::new(HashMap::new()),
+        }
+    }
+
+    #[tokio::test]
+    async fn fetch_torrent_subtitle_rejects_a_file_idx_that_resolves_to_a_non_subtitle_file() {
+        // The torrent's file 0 is the main video, not a subtitle. Even
+        // though `file_idx: 0` passes the plain format check
+        // (is_valid_file_idx), it must be rejected once resolved against
+        // the torrent's real file listing — this is the regression case for
+        // the "unbounded read of an attacker-influenceable file index" bug.
+        let details_json =
+            r#"{"info_hash":"deadbeef","files":[{"name":"movie.mkv"},{"name":"subs/en.srt"}]}"#
+                .to_string();
+        let port = spawn_mock_engine_server(details_json, "unused".to_string()).await;
+
+        let rate_limit = test_rate_limit_state();
+
+        let result = fetch_torrent_subtitle_impl("a".repeat(40), 0, port, &rate_limit).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Requested file is not a subtitle");
+    }
+
+    #[tokio::test]
+    async fn fetch_torrent_subtitle_accepts_a_file_idx_that_resolves_to_a_subtitle_file() {
+        let details_json =
+            r#"{"info_hash":"deadbeef","files":[{"name":"movie.mkv"},{"name":"subs/en.srt"}]}"#
+                .to_string();
+        let srt_body = "1\n00:00:01,000 --> 00:00:02,000\nHello\n".to_string();
+        let port = spawn_mock_engine_server(details_json, srt_body).await;
+
+        let rate_limit = test_rate_limit_state();
+
+        let result = fetch_torrent_subtitle_impl("a".repeat(40), 1, port, &rate_limit).await;
+
+        let vtt = result.expect("subtitle file idx should be accepted");
+        assert!(vtt.starts_with("WEBVTT"));
+        assert!(vtt.contains("Hello"));
+    }
+
+    #[tokio::test]
+    async fn fetch_torrent_subtitle_rejects_an_out_of_range_file_idx() {
+        let details_json = r#"{"info_hash":"deadbeef","files":[{"name":"movie.mkv"}]}"#.to_string();
+        let port = spawn_mock_engine_server(details_json, "unused".to_string()).await;
+
+        let rate_limit = test_rate_limit_state();
+
+        let result = fetch_torrent_subtitle_impl("a".repeat(40), 99, port, &rate_limit).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "File index out of range");
+    }
+
+    #[tokio::test]
+    async fn read_capped_body_as_string_rejects_a_response_over_the_limit() {
+        let big_body = "x".repeat(100);
+        // Reuse the mock engine server's plain-body path (anything not
+        // containing "/stream/" would serve JSON; here we just hit the
+        // details path directly since content doesn't matter for this test).
+        let port = spawn_mock_engine_server(big_body.clone(), big_body.clone()).await;
+
+        let client = reqwest::Client::new();
+        let res = client
+            .get(format!("http://127.0.0.1:{}/torrents/x", port))
+            .send()
+            .await
+            .unwrap();
+
+        let result = read_capped_body_as_string(res, 10).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("exceeded"));
+    }
+
+    #[tokio::test]
+    async fn read_capped_body_as_string_accepts_a_response_under_the_limit() {
+        let body = "hello".to_string();
+        let port = spawn_mock_engine_server(body.clone(), body.clone()).await;
+
+        let client = reqwest::Client::new();
+        let res = client
+            .get(format!("http://127.0.0.1:{}/torrents/x", port))
+            .send()
+            .await
+            .unwrap();
+
+        let result = read_capped_body_as_string(res, MAX_SUBTITLE_RESPONSE_BYTES).await;
+        assert_eq!(result.unwrap(), "hello");
     }
 }
 

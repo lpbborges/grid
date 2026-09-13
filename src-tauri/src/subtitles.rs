@@ -56,6 +56,15 @@ pub fn is_valid_file_idx(value: i64) -> bool {
     value >= 0
 }
 
+/// Whether `name` (a torrent file's path/name, as reported by the torrent
+/// engine) looks like a subtitle file. Used to reject `file_idx` values that
+/// resolve to a non-subtitle file (e.g. the main video) before we ever fetch
+/// its contents — the file could be multiple gigabytes.
+pub fn is_subtitle_file_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    lower.ends_with(".srt") || lower.ends_with(".vtt")
+}
+
 pub fn is_allowed_subtitle_url(raw_url: &str) -> bool {
     match reqwest::Url::parse(raw_url) {
         Ok(parsed) => {
@@ -199,6 +208,22 @@ mod tests {
     #[test]
     fn rejects_negative_file_idx() {
         assert!(!is_valid_file_idx(-1));
+    }
+
+    #[test]
+    fn accepts_srt_and_vtt_file_names_case_insensitively() {
+        assert!(is_subtitle_file_name("movie.srt"));
+        assert!(is_subtitle_file_name("subs/en.VTT"));
+        assert!(is_subtitle_file_name("Some.Show.S01E01.PT-BR.Srt"));
+    }
+
+    #[test]
+    fn rejects_non_subtitle_file_names() {
+        assert!(!is_subtitle_file_name("movie.mkv"));
+        assert!(!is_subtitle_file_name("movie.mp4"));
+        assert!(!is_subtitle_file_name("readme.txt"));
+        assert!(!is_subtitle_file_name("srt")); // no extension, just contains the substring
+        assert!(!is_subtitle_file_name(""));
     }
 
     #[test]
