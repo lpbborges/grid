@@ -179,6 +179,86 @@ describe('VideoPlayer component', () => {
     expect(video.textTracks[1].mode).toBe('disabled');
   });
 
+  it('turns off and flags a selected subtitle whose track fails to load', async () => {
+    const subtitles: any = [
+      { label: 'Eng', lang: 'en', url: 'sub.vtt', group: 'Extra' },
+      { label: 'Por', lang: 'pt', url: 'sub2.vtt', group: 'Embedded' }
+    ];
+    const tracks = [{ mode: 'disabled' }, { mode: 'disabled' }];
+
+    const { container, getByLabelText, getByText, getByTestId, queryByText } = render(VideoPlayer, {
+      src: 'test.mp4',
+      subtitles
+    });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'textTracks', { writable: true, value: tracks });
+
+    await fireEvent.click(getByLabelText('Menu de Legendas'));
+    await fireEvent.click(getByText('Eng'));
+    expect(tracks[0].mode).toBe('showing');
+    expect(queryByText('Não foi possível carregar a legenda.')).toBeNull();
+
+    // e.g. blocked by CSP, revoked blob URL, or unparseable VTT
+    await fireEvent.error(container.querySelectorAll('track')[0]);
+
+    expect(tracks[0].mode).toBe('disabled');
+    expect(getByText('Não foi possível carregar a legenda.')).toBeDefined();
+
+    await fireEvent.click(getByLabelText('Menu de Legendas'));
+    const failedOption = getByText('Eng').closest('button') as HTMLButtonElement;
+    expect(failedOption.disabled).toBe(true);
+    expect(getByText('Desativado').closest('button')?.className.split(/\s+/)).toContain(
+      'bg-main/10'
+    );
+  });
+
+  it('keeps the chosen subtitle showing when the engine switches it off on its own', async () => {
+    // WebKitGTK defaults to the "forced only" caption mode: its deferred
+    // automatic track selection disables any showing, non-forced subtitle track
+    // and fires 'change' on the TextTrackList. The menu then showed the track as
+    // selected while nothing rendered.
+    const subtitles: any = [
+      { label: 'Eng', lang: 'en', url: 'sub.vtt', group: 'Extra' },
+      { label: 'Por', lang: 'pt', url: 'sub2.vtt', group: 'Embedded' }
+    ];
+    const listeners: Record<string, () => void> = {};
+    const tracks: any = [{ mode: 'disabled' }, { mode: 'disabled' }];
+    tracks.addEventListener = (type: string, fn: () => void) => (listeners[type] = fn);
+    tracks.removeEventListener = vi.fn();
+
+    const { getByLabelText, getByText, getByTestId } = render(VideoPlayer, {
+      src: 'test.mp4',
+      subtitles
+    });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'textTracks', { writable: true, value: tracks });
+
+    await fireEvent.click(getByLabelText('Menu de Legendas'));
+    await fireEvent.click(getByText('Eng'));
+    expect(tracks[0].mode).toBe('showing');
+
+    // WebKit (Linux/macOS): the chosen track gets disabled.
+    tracks[0].mode = 'disabled';
+    listeners.change?.();
+    expect(tracks[0].mode).toBe('showing');
+    expect(tracks[1].mode).toBe('disabled');
+
+    // Chromium (WebView2 on Windows): a track in the system language gets
+    // enabled alongside the chosen one, stacking two subtitles.
+    tracks[1].mode = 'showing';
+    listeners.change?.();
+    expect(tracks[0].mode).toBe('showing');
+    expect(tracks[1].mode).toBe('disabled');
+
+    // An explicit "Desativado" must stay off through later engine changes.
+    await fireEvent.click(getByLabelText('Menu de Legendas'));
+    await fireEvent.click(getByText('Desativado'));
+    tracks[1].mode = 'showing';
+    listeners.change?.();
+    expect(tracks[0].mode).toBe('disabled');
+    expect(tracks[1].mode).toBe('disabled');
+  });
+
   it('repositions active subtitle cues when a track is selected', async () => {
     const subtitles: any = [{ label: 'Eng', lang: 'en', url: 'sub.vtt', group: 'Extra' }];
     const cues: any[] = [

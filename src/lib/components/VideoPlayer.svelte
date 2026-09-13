@@ -4,7 +4,7 @@
   import type { SubtitleTrack } from '$lib/api/subtitles';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { getLanguageName } from '$lib/api/subtitles';
+  import { findPreferredSubtitleIndex, getLanguageName } from '$lib/api/subtitles';
 
   let {
     src,
@@ -33,7 +33,7 @@
     originalLanguage?: string;
     initialTime?: number;
   }>();
-  /* global HTMLVideoElement, HTMLElement, HTMLInputElement, FocusEvent, MouseEvent, KeyboardEvent, Node, VTTCue */
+  /* global HTMLVideoElement, HTMLElement, HTMLInputElement, FocusEvent, MouseEvent, KeyboardEvent, Node, VTTCue, TextTrackList */
   let videoElement = $state<HTMLVideoElement | null>(null);
   let containerElement = $state<HTMLElement | null>(null);
   let showMenu = $state(false);
@@ -145,22 +145,7 @@
     }
     subtitleAutoApplied = true;
 
-    let idx = -1;
-    if (settingsStore.subtitle === 'pt') {
-      idx = subtitles.findIndex(
-        (s: any) => s.label.toLowerCase().includes('portug') || s.label.toLowerCase().includes('pt')
-      );
-    } else if (settingsStore.subtitle === 'en') {
-      idx = subtitles.findIndex(
-        (s: any) => s.label.toLowerCase().includes('ingl') || s.label.toLowerCase().includes('eng')
-      );
-    } else if (settingsStore.subtitle === 'es') {
-      idx = subtitles.findIndex(
-        (s: any) =>
-          s.label.toLowerCase().includes('espanh') || s.label.toLowerCase().includes('spa')
-      );
-    }
-
+    const idx = findPreferredSubtitleIndex(subtitles, settingsStore.subtitle);
     if (idx !== -1) selectTrack(idx);
   }
 
@@ -233,8 +218,44 @@
     }
   }
 
+  // Every webview runs its own automatic text track selection after <track>s
+  // are added, and it overrides the mode set here:
+  // - WebKit (WebKitGTK on Linux; WKWebView on macOS, following the system
+  //   caption setting) defaults to "forced only" and disables the chosen,
+  //   non-forced subtitle track.
+  // - Chromium (WebView2 on Windows) enables an extra track matching the
+  //   system language, stacking two subtitles.
+  // `activeIndex` is the source of truth: re-apply it whenever the engine
+  // reports a mode change.
+  function syncTrackModes() {
+    if (!videoElement) return;
+    const list = videoElement.textTracks;
+    for (let i = 0; i < list.length; i++) {
+      const wanted = i === activeIndex ? 'showing' : 'disabled';
+      if (list[i].mode !== wanted) list[i].mode = wanted;
+    }
+  }
+
+  let listenedTrackList: TextTrackList | null = null;
+
+  function ensureTrackListListener() {
+    const list = videoElement?.textTracks;
+    if (!list || list === listenedTrackList || typeof list.addEventListener !== 'function') return;
+    listenedTrackList?.removeEventListener('change', syncTrackModes);
+    list.addEventListener('change', syncTrackModes);
+    listenedTrackList = list;
+  }
+
+  $effect(() => {
+    return () => {
+      listenedTrackList?.removeEventListener('change', syncTrackModes);
+      listenedTrackList = null;
+    };
+  });
+
   function selectTrack(index: number) {
     if (!videoElement) return;
+    ensureTrackListListener();
     for (let i = 0; i < videoElement.textTracks.length; i++) {
       videoElement.textTracks[i].mode = 'disabled';
     }
@@ -245,7 +266,31 @@
       applyCueLayout();
     }
     activeIndex = index;
+    subtitleError = '';
     showMenu = false;
+  }
+
+  // Indexes (into `subtitles`) whose <track> failed to load. The browser only
+  // fetches a track once its mode leaves 'disabled', so a failure (CSP block,
+  // revoked blob URL, unparseable VTT) surfaces right after selection. Without
+  // this the menu kept showing the track as selected while nothing rendered.
+  let failedTrackIndexes = $state<number[]>([]);
+  let subtitleError = $state('');
+
+  $effect(() => {
+    void subtitles;
+    failedTrackIndexes = [];
+    subtitleError = '';
+  });
+
+  function handleTrackError(index: number) {
+    logger.warn('Subtitle track failed to load:', subtitles[index]?.label);
+    if (!failedTrackIndexes.includes(index)) failedTrackIndexes.push(index);
+    if (index !== activeIndex) return;
+    const track = videoElement?.textTracks[index];
+    if (track) track.mode = 'disabled';
+    activeIndex = -1;
+    subtitleError = 'Não foi possível carregar a legenda.';
   }
 
   function handleLoadedMetadata() {
@@ -622,8 +667,14 @@
       }
     }}
   >
-    {#each subtitles as sub}
-      <track kind="subtitles" src={sub.url} srclang={sub.lang} label={sub.label} />
+    {#each subtitles as sub, index}
+      <track
+        kind="subtitles"
+        src={sub.url}
+        srclang={sub.lang}
+        label={sub.label}
+        onerror={() => handleTrackError(index)}
+      />
     {/each}
   </video>
 
@@ -818,6 +869,9 @@
         {/if}
 
         {#if subtitles.length > 0}
+          {#if subtitleError}
+            <span role="status" class="text-xs text-red-500">{subtitleError}</span>
+          {/if}
           <div class="relative">
             <button
               data-menu-element
@@ -854,11 +908,12 @@
                   {#each torrentSubsGrouped as group}
                     {#if group.subs.length === 1}
                       <button
-                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
+                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
                         subtitles.indexOf(group.subs[0])
                           ? 'bg-primary/30 text-main'
                           : ''}"
                         title={group.label}
+                        disabled={failedTrackIndexes.includes(subtitles.indexOf(group.subs[0]))}
                         onclick={() => selectTrack(subtitles.indexOf(group.subs[0]))}
                       >
                         {group.label}
@@ -877,11 +932,12 @@
                         <div class="border-main/10 my-1 ml-3 border-l pl-3">
                           {#each group.subs as sub, index}
                             <button
-                              class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
+                              class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
                               subtitles.indexOf(sub)
                                 ? 'bg-primary/30 text-main'
                                 : ''}"
                               title={`Opção ${index + 1}`}
+                              disabled={failedTrackIndexes.includes(subtitles.indexOf(sub))}
                               onclick={() => selectTrack(subtitles.indexOf(sub))}
                             >
                               Opção {index + 1}
@@ -902,11 +958,12 @@
                   {#each externalSubsGrouped as group}
                     {#if group.subs.length === 1}
                       <button
-                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
+                        class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
                         subtitles.indexOf(group.subs[0])
                           ? 'bg-primary/30 text-main'
                           : ''}"
                         title={group.label}
+                        disabled={failedTrackIndexes.includes(subtitles.indexOf(group.subs[0]))}
                         onclick={() => selectTrack(subtitles.indexOf(group.subs[0]))}
                       >
                         {group.label}
@@ -925,11 +982,12 @@
                         <div class="border-main/10 my-1 ml-3 border-l pl-3">
                           {#each group.subs as sub, index}
                             <button
-                              class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
+                              class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-accent-green w-full truncate rounded px-3 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
                               subtitles.indexOf(sub)
                                 ? 'bg-primary/30 text-main'
                                 : ''}"
                               title={`Opção ${index + 1}`}
+                              disabled={failedTrackIndexes.includes(subtitles.indexOf(sub))}
                               onclick={() => selectTrack(subtitles.indexOf(sub))}
                             >
                               Opção {index + 1}
