@@ -248,10 +248,3 @@ export async function getExternalSubtitles(
     return [];
   }
 }
-
-export function srtToVtt(srtContent: string): string {
-  let vtt = 'WEBVTT\n\n';
-  // Replace all timestamp commas with dots
-  vtt += srtContent.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
-  return vtt;
-}

@@ -2,8 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   clearExternalSubtitleCache,
   findPreferredSubtitleIndex,
-  getExternalSubtitles,
-  srtToVtt
+  getExternalSubtitles
 } from './subtitles';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -155,20 +154,6 @@ describe('subtitles api', () => {
       await getExternalSubtitles('tt1', 1, 1, 'pt');
 
       expect(invoke).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('srtToVtt', () => {
-    it('converts basic SRT to VTT', () => {
-      const srt = `1
-00:01:51,822 --> 00:01:53,790
-Hello World`;
-      const expected = `WEBVTT
-
-1
-00:01:51.822 --> 00:01:53.790
-Hello World`;
-      expect(srtToVtt(srt)).toBe(expected);
     });
   });
 
