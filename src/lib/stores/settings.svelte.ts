@@ -1,5 +1,12 @@
 import { browser } from '$app/environment';
 
+export const MAX_CACHE_LIMIT_BYTES = 50 * 1024 * 1024 * 1024;
+
+function normalizeCacheLimit(value: number): number | null {
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return Math.min(value, MAX_CACHE_LIMIT_BYTES);
+}
+
 class SettingsStore {
   #audio = $state('pt');
   #subtitle = $state('pt');
@@ -18,8 +25,10 @@ class SettingsStore {
       if (storedQuality) this.#quality = storedQuality;
 
       const storedCacheLimit = localStorage.getItem('grid-play-cache-limit-bytes');
-      const parsedCacheLimit = storedCacheLimit ? Number(storedCacheLimit) : NaN;
-      if (Number.isFinite(parsedCacheLimit) && parsedCacheLimit > 0) {
+      const parsedCacheLimit = normalizeCacheLimit(
+        storedCacheLimit ? Number(storedCacheLimit) : NaN
+      );
+      if (parsedCacheLimit !== null) {
         this.#cacheLimitBytes = parsedCacheLimit;
       }
     }
@@ -53,8 +62,10 @@ class SettingsStore {
     return this.#cacheLimitBytes;
   }
   set cacheLimitBytes(value: number) {
-    this.#cacheLimitBytes = value;
-    this.persist('grid-play-cache-limit-bytes', String(value));
+    const normalized = normalizeCacheLimit(value);
+    if (normalized === null) return;
+    this.#cacheLimitBytes = normalized;
+    this.persist('grid-play-cache-limit-bytes', String(normalized));
   }
 
   private persist(key: string, value: string) {
