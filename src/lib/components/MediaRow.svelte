@@ -64,7 +64,7 @@
     <div
       bind:this={scrollContainer}
       onscroll={checkScroll}
-      class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-6"
+      class="scrollbar-hide flex gap-5 overflow-x-auto scroll-smooth px-4 pt-4 pb-12"
     >
       {#each items as item (item.id)}
         <MediaCard media={item} {type} />
