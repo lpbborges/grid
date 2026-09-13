@@ -199,3 +199,55 @@ describe('Movie page integration flow', () => {
     );
   });
 });
+
+describe('Movie page dubbed-audio heuristic (reselectBestTorrent)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearTorrentsMock.mockResolvedValue(undefined);
+    finalizeStreamMock.mockResolvedValue(undefined);
+    translateMediaInfoMock.mockResolvedValue({ title: movie.title, synopsis: movie.summary });
+    HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
+    HTMLMediaElement.prototype.pause = vi.fn();
+  });
+
+  it('prefers a dubbed (PT) torrentio stream over the original-audio YTS torrent when the default PT audio preference is active', async () => {
+    // Regression test for the bug where `t.type.includes('(pt)')` was
+    // compared against uppercase `t.type` and could never match. With the
+    // fix, a release whose title marks it as dubbed ("Dublado") must
+    // out-score a same-quality original-audio release once the settings
+    // default (audio: 'pt') is applied.
+    prepareStreamMock.mockResolvedValue({
+      videoSrc: 'http://localhost:3000/stream',
+      subtitles: [],
+      engineStatus: { status: 'downloading', progress: 0, downloadSpeed: 0, seeds: 0, peers: 0 }
+    });
+    getMovieStreamsMock.mockResolvedValue([
+      {
+        infoHash: 'ptstreamhash0000000000000000000000000000',
+        name: '1080p',
+        title: 'Some Movie Dublado 1080p WEB 💾 2GB',
+        fileIdx: 0
+      }
+    ]);
+
+    render(MoviePage, {
+      props: { data: { movieId: 'tt1', movie, error: null } }
+    });
+
+    // Let the async getMovieStreams effect resolve and reselectBestTorrent run.
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    const playButton = screen.getByRole('button', { name: /reproduzir/i });
+    await fireEvent.click(playButton);
+
+    expect(prepareStreamMock).toHaveBeenCalledWith(
+      expect.stringContaining('ptstreamhash0000000000000000000000000000'),
+      expect.any(Function),
+      'tt1',
+      undefined,
+      undefined,
+      0
+    );
+  });
+});

@@ -9,6 +9,7 @@
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { rankStreamOptions } from '$lib/engine/ranking';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
@@ -97,29 +98,20 @@
         return;
       }
 
-      const getScore = (s: any) => {
-        if (!s.infoHash) return -1;
-        let score = 0;
-        const text = (s.title || '').toLowerCase() + ' ' + (s.name || '').toLowerCase();
+      const rankableStreams = streams.filter((s) => s.infoHash);
 
-        if (text.includes(settingsStore.quality)) score += 100;
-        score += 50;
+      const sorted = rankStreamOptions(
+        rankableStreams,
+        (s) => {
+          const text = ((s.title || '') + ' ' + (s.name || '')).toLowerCase();
+          const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
+          const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
+          return { quality, text, seeds: 0 };
+        },
+        { quality: settingsStore.quality, audioPreference: settingsStore.audio }
+      );
 
-        const wantPt = settingsStore.audio === 'pt';
-        const isPt =
-          text.includes('dublado') ||
-          text.includes('dual audio') ||
-          text.includes('multi-audio') ||
-          text.includes('pt-br') ||
-          text.includes('🇧🇷');
-
-        if (wantPt && isPt) score += 500;
-        if (!wantPt && !isPt) score += 100;
-
-        return score;
-      };
-
-      let bestStream = streams.sort((a, b) => getScore(b) - getScore(a))[0];
+      const bestStream = sorted[0];
 
       if (!bestStream || !bestStream.infoHash) {
         error = 'Fonte incompatível para este episódio.';

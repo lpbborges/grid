@@ -8,7 +8,7 @@
 
 <a
   href="/{type}/{media.id}"
-  class="group bg-surface/50 focus-visible:ring-accent-green relative flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_0_20px_rgba(107,33,168,0.4)] focus-visible:ring-2 focus-visible:outline-none"
+  class="group bg-surface/50 focus-visible:ring-accent-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 will-change-transform hover:-translate-y-2 hover:shadow-[0_0_20px_rgba(107,33,168,0.4)] focus-visible:ring-2 focus-visible:outline-none"
   data-testid="media-card"
 >
   <!-- Cyberpunk border effect -->
@@ -32,14 +32,14 @@
     ></div>
     {#if watchedStore.watchedIds.includes(String(media.id))}
       <div
-        class="bg-accent-green text-dark absolute top-2 right-2 z-20 rounded px-2 py-0.5 text-xs font-bold tracking-wider uppercase shadow-[0_0_10px_rgba(54,211,83,0.8)]"
+        class="bg-accent-green text-dark absolute top-2 right-2 z-20 rounded px-2 py-0.5 text-xs font-bold tracking-wider uppercase shadow-[0_0_10px_rgba(54,211,83,0.8)] will-change-transform"
       >
         Assistido
       </div>
     {/if}
     {#if !watchedStore.watchedIds.includes(String(media.id)) && progressStore.get(media.id)}
       <div
-        class="bg-accent-green absolute bottom-0 left-0 h-1 shadow-[0_0_8px_rgba(54,211,83,0.8)]"
+        class="bg-accent-green absolute bottom-0 left-0 z-20 h-1 shadow-[0_0_8px_rgba(54,211,83,0.8)] will-change-transform"
         style="width: {(progressStore.get(media.id)!.time / progressStore.get(media.id)!.duration) *
           100}%"
       ></div>

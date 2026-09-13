@@ -9,6 +9,7 @@
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { rankStreamOptions } from '$lib/engine/ranking';
 
   let { data } = $props();
   let movieId = $derived(data.movieId);
@@ -67,7 +68,18 @@
     }
   });
 
-  let combinedTorrents = $state<any[]>([]);
+  interface CombinedStreamOption {
+    hash: string;
+    quality: string;
+    type: string;
+    size: string;
+    seeds?: number;
+    peers?: number;
+    url?: string;
+    rawStream?: { title?: string; name?: string; fileIdx?: number; infoHash?: string };
+  }
+
+  let combinedTorrents = $state<CombinedStreamOption[]>([]);
 
   $effect(() => {
     if (movie && movie.id) {
@@ -93,7 +105,7 @@
               const size = sizeMatch ? sizeMatch[1].trim() : 'Unknown size';
 
               return {
-                hash: s.infoHash,
+                hash: s.infoHash ?? '',
                 quality,
                 type,
                 size,
@@ -120,44 +132,21 @@
 
   function reselectBestTorrent() {
     if (combinedTorrents.length > 0) {
-      const getScore = (t: any) => {
-        let score = 0;
-        const text = (
-          (t.rawStream?.title || '') +
-          ' ' +
-          (t.rawStream?.name || '') +
-          ' ' +
-          t.type
-        ).toLowerCase();
-
-        if (t.quality === settingsStore.quality) score += 100;
-
-        const wantPt = settingsStore.audio === 'pt';
-        const wantOriginal = settingsStore.audio === 'original';
-
-        const isDubbedOnly = text.includes('dublado') && !text.includes('dual');
-        const isDual = text.includes('dual audio') || text.includes('multi-audio');
-        const hasPt =
-          isDubbedOnly ||
-          isDual ||
-          text.includes('pt-br') ||
-          text.includes('🇧🇷') ||
-          t.type.includes('(pt)');
-
-        if (wantPt) {
-          if (hasPt) score += 500;
-          else score += 10;
-        } else if (wantOriginal) {
-          if (isDubbedOnly) score -= 500;
-          else score += 500;
-        } else {
-          if (!isDubbedOnly) score += 100;
-        }
-
-        return score + (t.seeds || 0);
-      };
-
-      const sorted = [...combinedTorrents].sort((a, b) => getScore(b) - getScore(a));
+      const sorted = rankStreamOptions(
+        combinedTorrents,
+        (t) => ({
+          quality: t.quality,
+          text: (
+            (t.rawStream?.title || '') +
+            ' ' +
+            (t.rawStream?.name || '') +
+            ' ' +
+            t.type
+          ).toLowerCase(),
+          seeds: t.seeds || 0
+        }),
+        { quality: settingsStore.quality, audioPreference: settingsStore.audio }
+      );
       selectedTorrentHash = sorted[0].hash;
     }
   }
