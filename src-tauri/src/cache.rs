@@ -100,7 +100,6 @@ pub fn pick_eviction_candidates(
     evicted
 }
 
-#[allow(dead_code)]
 pub fn find_orphan_top_level_names(downloads_dir: &Path, manifest: &Manifest) -> Vec<String> {
     let known: std::collections::HashSet<String> = manifest
         .entries

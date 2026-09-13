@@ -294,9 +294,17 @@ async fn start_torrent_engine(
         return Ok("Engine already running".to_string());
     }
 
-    let output_folder = std::env::temp_dir().join("grid-play-downloads");
-    let _ = std::fs::remove_dir_all(&output_folder); // cleanup previous sessions
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let output_folder = cache::downloads_dir(&app_data_dir);
     let _ = std::fs::create_dir_all(&output_folder);
+
+    // The downloads folder now persists across restarts (it backs the video
+    // cache), so instead of wiping it we only remove state inconsistent with
+    // the manifest: entries the manifest no longer knows about.
+    let manifest = cache::read_manifest(&cache::manifest_path(&app_data_dir));
+    for orphan_name in cache::find_orphan_top_level_names(&output_folder, &manifest) {
+        cache::remove_path_best_effort(&output_folder.join(orphan_name));
+    }
 
     // Find free ephemeral ports for HTTP API and peer listener
     let port = std::net::TcpListener::bind("127.0.0.1:0")
