@@ -204,19 +204,29 @@
     };
   });
 
+  let controlsVisible = $derived(showControls || paused || showMenu || showAudioMenu);
+
   function applyCueLayout() {
     if (!videoElement) return;
     for (const textTrack of videoElement.textTracks) {
       if (textTrack.mode !== 'showing' || !textTrack.cues) continue;
       for (let i = 0; i < textTrack.cues.length; i++) {
         const cue = textTrack.cues[i] as VTTCue;
-        if (cue.snapToLines) {
+        const targetLine = controlsVisible ? 80 : 92;
+        if (cue.snapToLines !== false || cue.line !== targetLine) {
           cue.snapToLines = false;
-          cue.line = 90;
+          cue.line = targetLine;
         }
       }
     }
   }
+
+  $effect(() => {
+    // Re-apply layout when controls visibility changes
+    if (controlsVisible !== undefined) {
+      applyCueLayout();
+    }
+  });
 
   // Every webview runs its own automatic text track selection after <track>s
   // are added, and it overrides the mode set here:

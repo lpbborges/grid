@@ -282,7 +282,7 @@ describe('VideoPlayer component', () => {
     expect(typeof track.oncuechange).toBe('function');
     for (const cue of cues) {
       expect(cue.snapToLines).toBe(false);
-      expect(cue.line).toBe(90);
+      expect(cue.line).toBe(80); // Controls are initially visible
     }
   });
 
