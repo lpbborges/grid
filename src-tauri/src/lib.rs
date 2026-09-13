@@ -510,7 +510,6 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_opener::init())
         .manage(EngineState {
             child: Mutex::new(None),
             pid: Mutex::new(None),
