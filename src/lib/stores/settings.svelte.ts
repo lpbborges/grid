@@ -4,6 +4,7 @@ class SettingsStore {
   #audio = $state('pt');
   #subtitle = $state('pt');
   #quality = $state('1080p');
+  #cacheLimitBytes = $state(2 * 1024 * 1024 * 1024);
 
   constructor() {
     if (browser) {
@@ -15,6 +16,12 @@ class SettingsStore {
 
       const storedQuality = localStorage.getItem('grid-play-quality');
       if (storedQuality) this.#quality = storedQuality;
+
+      const storedCacheLimit = localStorage.getItem('grid-play-cache-limit-bytes');
+      const parsedCacheLimit = storedCacheLimit ? Number(storedCacheLimit) : NaN;
+      if (Number.isFinite(parsedCacheLimit) && parsedCacheLimit > 0) {
+        this.#cacheLimitBytes = parsedCacheLimit;
+      }
     }
   }
 
@@ -40,6 +47,14 @@ class SettingsStore {
   set quality(value: string) {
     this.#quality = value;
     this.persist('grid-play-quality', value);
+  }
+
+  get cacheLimitBytes() {
+    return this.#cacheLimitBytes;
+  }
+  set cacheLimitBytes(value: number) {
+    this.#cacheLimitBytes = value;
+    this.persist('grid-play-cache-limit-bytes', String(value));
   }
 
   private persist(key: string, value: string) {
