@@ -18,14 +18,22 @@ export function isValidFileIdx(value: number): boolean {
   return Number.isInteger(value) && value >= 0;
 }
 
+export class EngineStartError extends Error {
+  constructor(cause: unknown) {
+    super('Failed to start torrent engine', { cause });
+    this.name = 'EngineStartError';
+  }
+}
+
 export async function startEngine(): Promise<void> {
+  let url: string;
   try {
-    const url = await invoke<string>('start_torrent_engine');
-    if (url && url.startsWith('http')) {
-      ENGINE_URL = url;
-    }
+    url = await invoke<string>('start_torrent_engine');
   } catch (error) {
-    logger.warn('Failed to start torrent engine:', error);
+    throw new EngineStartError(error);
+  }
+  if (url && url.startsWith('http')) {
+    ENGINE_URL = url;
   }
 }
 

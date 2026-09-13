@@ -2,19 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import MoviePage from './+page.svelte';
 
-const {
-  prepareStreamMock,
-  finalizeStreamMock,
-  translateMediaInfoMock,
-  clearTorrentsMock,
-  getMovieStreamsMock
-} = vi.hoisted(() => ({
-  prepareStreamMock: vi.fn(),
-  finalizeStreamMock: vi.fn(),
-  translateMediaInfoMock: vi.fn(),
-  clearTorrentsMock: vi.fn(),
-  getMovieStreamsMock: vi.fn()
-}));
+const { prepareStreamMock, finalizeStreamMock, translateMediaInfoMock, getMovieStreamsMock } =
+  vi.hoisted(() => ({
+    prepareStreamMock: vi.fn(),
+    finalizeStreamMock: vi.fn(),
+    translateMediaInfoMock: vi.fn(),
+    getMovieStreamsMock: vi.fn()
+  }));
 
 vi.mock('$lib/engine/orchestrator', () => ({
   prepareStream: prepareStreamMock,
@@ -23,10 +17,6 @@ vi.mock('$lib/engine/orchestrator', () => ({
 
 vi.mock('$lib/api/translate', () => ({
   translateMediaInfo: translateMediaInfoMock
-}));
-
-vi.mock('$lib/engine/torrent', () => ({
-  clearTorrents: clearTorrentsMock
 }));
 
 vi.mock('$lib/api/torrentio', async (importOriginal) => ({
@@ -51,7 +41,6 @@ const movie = {
 describe('Movie page error handling', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    clearTorrentsMock.mockResolvedValue(undefined);
     finalizeStreamMock.mockResolvedValue(undefined);
     getMovieStreamsMock.mockResolvedValue([]);
     translateMediaInfoMock.mockResolvedValue({ title: movie.title, synopsis: movie.summary });
@@ -111,7 +100,6 @@ describe('Movie page error handling', () => {
 describe('Movie page integration flow', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    clearTorrentsMock.mockResolvedValue(undefined);
     finalizeStreamMock.mockResolvedValue(undefined);
     getMovieStreamsMock.mockResolvedValue([]);
     translateMediaInfoMock.mockResolvedValue({ title: movie.title, synopsis: movie.summary });
@@ -282,7 +270,6 @@ describe('Movie page integration flow', () => {
 describe('Movie page dubbed-audio heuristic (reselectBestTorrent)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    clearTorrentsMock.mockResolvedValue(undefined);
     finalizeStreamMock.mockResolvedValue(undefined);
     translateMediaInfoMock.mockResolvedValue({ title: movie.title, synopsis: movie.summary });
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());

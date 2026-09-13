@@ -1,5 +1,6 @@
 import { logger } from '$lib/logger';
 import { prepareStream, finalizeStream } from '$lib/engine/orchestrator';
+import { EngineStartError } from '$lib/engine/torrent';
 import type { SubtitleTrack } from '$lib/api/subtitles';
 import { playerState } from '$lib/stores.svelte';
 
@@ -44,7 +45,10 @@ export function useStreamPlayer() {
       return true;
     } catch (e) {
       logger.error('Erro ao iniciar reprodução:', e);
-      error = 'Não foi possível iniciar a reprodução. Tente novamente.';
+      error =
+        e instanceof EngineStartError
+          ? 'Não foi possível iniciar o player. Feche e abra o aplicativo novamente.'
+          : 'Não foi possível iniciar a reprodução. Tente novamente.';
       engineStatus = '';
       isPlaying = false;
       playerState.isPlaying = false;

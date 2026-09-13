@@ -3,6 +3,7 @@ import { render } from '@testing-library/svelte';
 import StreamPlayerHarness from './__fixtures__/StreamPlayerHarness.svelte';
 import type { useStreamPlayer } from './useStreamPlayer.svelte';
 import { playerState } from '$lib/stores.svelte';
+import { EngineStartError } from '$lib/engine/torrent';
 
 const { prepareStreamMock, finalizeStreamMock } = vi.hoisted(() => ({
   prepareStreamMock: vi.fn(),
@@ -81,6 +82,23 @@ describe('useStreamPlayer', () => {
     expect(playerState.isPlaying).toBe(false);
     expect(streamPlayer.error).not.toContain('ECONNREFUSED');
     expect(consoleErrorSpy).toHaveBeenCalledWith('Erro ao iniciar reprodução:', rawError);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('play() engine start failure: sets the specific pt-BR engine error', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    prepareStreamMock.mockRejectedValue(new EngineStartError('Sidecar spawn error'));
+
+    const streamPlayer = await mount();
+
+    const ok = await streamPlayer.play('magnet:?xt=urn:btih:abc');
+
+    expect(ok).toBe(false);
+    expect(streamPlayer.error).toBe(
+      'Não foi possível iniciar o player. Feche e abra o aplicativo novamente.'
+    );
+    expect(streamPlayer.isPlaying).toBe(false);
 
     consoleErrorSpy.mockRestore();
   });

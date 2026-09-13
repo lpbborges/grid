@@ -7,14 +7,12 @@ const {
   finalizeStreamMock,
   translateMediaInfoMock,
   translateEpisodesListMock,
-  clearTorrentsMock,
   getSeriesStreamsMock
 } = vi.hoisted(() => ({
   prepareStreamMock: vi.fn(),
   finalizeStreamMock: vi.fn(),
   translateMediaInfoMock: vi.fn(),
   translateEpisodesListMock: vi.fn(),
-  clearTorrentsMock: vi.fn(),
   getSeriesStreamsMock: vi.fn()
 }));
 
@@ -33,10 +31,6 @@ vi.mock('$lib/api/torrentio', async (importOriginal) => ({
   getSeriesStreams: getSeriesStreamsMock
 }));
 
-vi.mock('$lib/engine/torrent', () => ({
-  clearTorrents: clearTorrentsMock
-}));
-
 const series = {
   title: 'Some Series',
   year: 2024,
@@ -50,7 +44,6 @@ const series = {
 describe('Series page error handling', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    clearTorrentsMock.mockResolvedValue(undefined);
     finalizeStreamMock.mockResolvedValue(undefined);
     translateMediaInfoMock.mockResolvedValue({ title: series.title, synopsis: series.summary });
     translateEpisodesListMock.mockResolvedValue({});
@@ -111,7 +104,6 @@ describe('Series page error handling', () => {
 describe('Series page integration flow', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    clearTorrentsMock.mockResolvedValue(undefined);
     finalizeStreamMock.mockResolvedValue(undefined);
     translateMediaInfoMock.mockResolvedValue({ title: series.title, synopsis: series.summary });
     translateEpisodesListMock.mockResolvedValue({});

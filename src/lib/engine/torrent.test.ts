@@ -54,9 +54,11 @@ describe('torrent engine', () => {
     expect(url).toBe(`http://127.0.0.1:3030/torrents/${'c'.repeat(40)}/stream/0`);
   });
 
-  it('handles startEngine failure gracefully', async () => {
-    (invoke as any).mockRejectedValueOnce('Error starting');
-    await torrent.startEngine(); // Should just warn and not throw
+  it('rethrows a startEngine failure as an EngineStartError carrying the cause', async () => {
+    (invoke as any).mockRejectedValueOnce('Sidecar spawn error');
+    const failure = torrent.startEngine();
+    await expect(failure).rejects.toBeInstanceOf(torrent.EngineStartError);
+    await expect(failure).rejects.toMatchObject({ cause: 'Sidecar spawn error' });
     expect(invoke).toHaveBeenCalledWith('start_torrent_engine');
   });
 
