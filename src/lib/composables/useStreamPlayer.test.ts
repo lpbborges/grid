@@ -4,17 +4,14 @@ import StreamPlayerHarness from './__fixtures__/StreamPlayerHarness.svelte';
 import type { useStreamPlayer } from './useStreamPlayer.svelte';
 import { playerState } from '$lib/stores.svelte';
 
-const { prepareStreamMock, clearTorrentsMock } = vi.hoisted(() => ({
+const { prepareStreamMock, finalizeStreamMock } = vi.hoisted(() => ({
   prepareStreamMock: vi.fn(),
-  clearTorrentsMock: vi.fn()
+  finalizeStreamMock: vi.fn()
 }));
 
 vi.mock('$lib/engine/orchestrator', () => ({
-  prepareStream: prepareStreamMock
-}));
-
-vi.mock('$lib/engine/torrent', () => ({
-  clearTorrents: clearTorrentsMock
+  prepareStream: prepareStreamMock,
+  finalizeStream: finalizeStreamMock
 }));
 
 function mount(): Promise<ReturnType<typeof useStreamPlayer>> {
@@ -26,7 +23,7 @@ function mount(): Promise<ReturnType<typeof useStreamPlayer>> {
 describe('useStreamPlayer', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    clearTorrentsMock.mockResolvedValue(undefined);
+    finalizeStreamMock.mockResolvedValue(undefined);
     playerState.isPlaying = false;
   });
 
@@ -88,12 +85,13 @@ describe('useStreamPlayer', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('stop(): resets all fields and calls clearTorrents()', async () => {
+  it('stop(): resets all fields and calls finalizeStream with the current infoHash/isCacheable', async () => {
     prepareStreamMock.mockResolvedValue({
       infoHash: 'abc',
       totalBytes: 1234,
       videoSrc: 'http://stream/abc',
-      subtitles: []
+      subtitles: [],
+      isCacheable: true
     });
 
     const streamPlayer = await mount();
@@ -101,7 +99,7 @@ describe('useStreamPlayer', () => {
 
     expect(streamPlayer.isPlaying).toBe(true);
 
-    clearTorrentsMock.mockClear();
+    finalizeStreamMock.mockClear();
     await streamPlayer.stop();
 
     expect(streamPlayer.isPlaying).toBe(false);
@@ -110,12 +108,12 @@ describe('useStreamPlayer', () => {
     expect(streamPlayer.infoHash).toBe('');
     expect(streamPlayer.totalBytes).toBe(0);
     expect(streamPlayer.engineStatus).toBe('');
-    expect(clearTorrentsMock).toHaveBeenCalledTimes(1);
+    expect(finalizeStreamMock).toHaveBeenCalledWith('abc', true);
   });
 
-  it('stop() where clearTorrents() rejects: does not throw, logs via console.error', async () => {
+  it('stop() where finalizeStream() rejects: does not throw, logs via console.error', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    clearTorrentsMock.mockRejectedValue(new Error('cleanup failed'));
+    finalizeStreamMock.mockRejectedValue(new Error('cleanup failed'));
 
     const streamPlayer = await mount();
 
@@ -125,7 +123,7 @@ describe('useStreamPlayer', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('unmount cleanup: unmounting the harness calls clearTorrents() even without stop() ever being called', async () => {
+  it('unmount cleanup: unmounting the harness calls finalizeStream() even without stop() ever being called', async () => {
     let resolveOnReady: (sp: ReturnType<typeof useStreamPlayer>) => void = () => {};
     const readyPromise = new Promise<ReturnType<typeof useStreamPlayer>>((resolve) => {
       resolveOnReady = resolve;
@@ -134,11 +132,11 @@ describe('useStreamPlayer', () => {
     const { unmount } = render(StreamPlayerHarness, { props: { onReady: resolveOnReady } });
     await readyPromise;
 
-    expect(clearTorrentsMock).not.toHaveBeenCalled();
+    expect(finalizeStreamMock).not.toHaveBeenCalled();
 
     unmount();
 
-    expect(clearTorrentsMock).toHaveBeenCalledTimes(1);
+    expect(finalizeStreamMock).toHaveBeenCalledTimes(1);
   });
 
   it('engineStatus updates as the onStatus callback fires during play()', async () => {
