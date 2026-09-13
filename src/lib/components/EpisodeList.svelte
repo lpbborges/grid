@@ -1,8 +1,8 @@
 <script lang="ts">
   import EmptyState from './EmptyState.svelte';
   import PreferenceSelectors from './PreferenceSelectors.svelte';
+  import QualitySelector from './QualitySelector.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
-  import { settingsStore } from '$lib/stores/settings.svelte';
 
   export interface Episode {
     id: string;
@@ -72,33 +72,7 @@
             >
           </div>
         </div>
-        <div class="relative w-1/2">
-          <select
-            value={settingsStore.quality}
-            onchange={(e) => (settingsStore.quality = e.currentTarget.value)}
-            class="border-primary/50 focus:border-green bg-surface text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
-          >
-            <option value="4k" class="bg-surface text-main">4K</option>
-            <option value="1080p" class="bg-surface text-main">1080p</option>
-            <option value="720p" class="bg-surface text-main">720p</option>
-            <option value="480p" class="bg-surface text-main">480p</option>
-          </select>
-          <div
-            class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
-            >
-          </div>
-        </div>
+        <QualitySelector size="compact" showLabel={false} wrapperClass="w-1/2" />
       </div>
       <div class="mt-2 flex items-center gap-2">
         <PreferenceSelectors {originalLanguage} size="compact" />
@@ -110,7 +84,7 @@
     >
       {#each filteredEpisodes as episode}
         <button
-          class="group hover:border-green border-primary/30 bg-surface/40 hover:bg-surface/80 relative flex items-center justify-between rounded-sm border p-3 text-left transition-all duration-300 hover:-translate-x-1 hover:shadow-[0_0_15px_rgba(91,255,59,0.3)]"
+          class="group hover:border-green border-primary/30 bg-surface/40 hover:bg-surface/80 relative flex items-center justify-between rounded-sm border p-3 text-left transition-all duration-300 hover:-translate-x-1 hover:shadow-[0_0_15px_rgba(54,211,83,0.3)]"
           onclick={() => onPlayEpisode(episode)}
         >
           <!-- Cyberpunk inner border left -->

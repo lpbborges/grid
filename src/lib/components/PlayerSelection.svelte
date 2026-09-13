@@ -1,7 +1,7 @@
 <script lang="ts">
   import EmptyState from './EmptyState.svelte';
   import PreferenceSelectors from './PreferenceSelectors.svelte';
-  import { settingsStore } from '$lib/stores/settings.svelte';
+  import QualitySelector from './QualitySelector.svelte';
 
   // Mirrors the subset of `Torrent` (see $lib/types) that this component
   // actually reads. A full `Torrent[]` (e.g. movie.torrents) is assignable
@@ -36,38 +36,7 @@
     <div class="flex flex-col gap-2">
       <div class="grid grid-cols-2 gap-2">
         <PreferenceSelectors {originalLanguage} />
-        <div class="relative col-span-2 flex w-full flex-col gap-1">
-          <label
-            for="ps-quality-select"
-            class="text-primary/70 text-[10px] font-bold tracking-widest uppercase">Qualidade</label
-          >
-          <select
-            id="ps-quality-select"
-            value={settingsStore.quality}
-            onchange={(e) => (settingsStore.quality = e.currentTarget.value)}
-            class="border-primary/50 focus:border-green bg-surface text-main w-full appearance-none rounded border py-2 pr-6 pl-2 font-mono text-xs focus:outline-none"
-          >
-            <option value="4k" class="bg-surface text-main">4K</option>
-            <option value="1080p" class="bg-surface text-main">1080p</option>
-            <option value="720p" class="bg-surface text-main">720p</option>
-            <option value="480p" class="bg-surface text-main">480p</option>
-          </select>
-          <div
-            class="text-primary pointer-events-none absolute right-0 bottom-0 flex h-8 items-center pr-2"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
-            >
-          </div>
-        </div>
+        <QualitySelector wrapperClass="col-span-2" />
       </div>
     </div>
 

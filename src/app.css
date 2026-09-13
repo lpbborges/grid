@@ -35,6 +35,14 @@
   --text-muted: #9ca3af;
 }
 
+/*
+ * Border-radius scale: use exactly one of these two utilities everywhere.
+ * - `rounded-sm` for buttons, icon-buttons, and badges/pills.
+ * - `rounded`    for containers: panels, dropdowns, inputs/selects, chips, images.
+ * Anything with hard corners (cyberpunk corner-bracket accents) is a
+ * deliberate exception to this scale, not an omission.
+ */
+
 body {
   @apply bg-dark text-main;
   font-family: 'Rajdhani', sans-serif;

@@ -32,7 +32,7 @@
     ></div>
     {#if watchedStore.watchedIds.includes(String(media.id))}
       <div
-        class="bg-green text-dark absolute top-2 right-2 z-20 rounded px-2 py-0.5 text-xs font-bold tracking-wider uppercase shadow-[0_0_10px_rgba(54,211,83,0.8)] will-change-transform"
+        class="bg-green text-dark absolute top-2 right-2 z-20 rounded-sm px-2 py-0.5 text-xs font-bold tracking-wider uppercase shadow-[0_0_10px_rgba(54,211,83,0.8)] will-change-transform"
       >
         Assistido
       </div>
