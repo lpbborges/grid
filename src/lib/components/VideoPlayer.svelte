@@ -526,6 +526,7 @@
       aria-valuemin={0}
       aria-valuemax={duration || 100}
       aria-valuenow={currentTime}
+      aria-valuetext={formatTime(currentTime)}
       tabindex={0}
     >
       <div class="bg-main/25 relative h-1 w-full rounded-full transition-all group-hover:h-2">
@@ -581,7 +582,7 @@
           <button
             onclick={() => (volume = volume === 0 ? 1 : 0)}
             aria-label="Ativar/desativar mudo"
-            class="hover:text-green focus-visible:ring-green rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            class="hover:text-green focus-visible:ring-green rounded p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             {#if volume > 0}
               <svg
@@ -660,7 +661,7 @@
         <button
           onclick={toggleFullscreen}
           aria-label="Tela cheia"
-          class="hover:text-green focus-visible:ring-green ml-2 rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          class="hover:text-green focus-visible:ring-green ml-2 rounded p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

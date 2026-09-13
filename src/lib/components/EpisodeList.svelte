@@ -83,60 +83,34 @@
       class="scrollbar-thumb-primary/50 flex max-h-[600px] scrollbar-thin flex-col gap-3 overflow-y-auto pr-2"
     >
       {#each filteredEpisodes as episode}
-        <button
-          class="group hover:border-green border-primary/30 bg-surface/40 hover:bg-surface/80 relative flex items-center justify-between rounded-sm border p-3 text-left transition-all duration-300 hover:-translate-x-1 hover:shadow-[0_0_15px_rgba(54,211,83,0.3)]"
-          onclick={() => onPlayEpisode(episode)}
+        <div
+          class="group hover:border-green border-primary/30 bg-surface/40 hover:bg-surface/80 relative flex items-center justify-between rounded-sm border p-3 transition-all duration-300 hover:-translate-x-1 hover:shadow-[0_0_15px_rgba(54,211,83,0.3)]"
         >
           <!-- Cyberpunk inner border left -->
           <div
             class="bg-primary group-hover:bg-green absolute top-0 bottom-0 left-0 w-1 transition-colors duration-300"
           ></div>
 
-          <div class="flex flex-col pl-2">
-            <span
-              class="text-main font-cyber group-hover:text-green text-sm tracking-wider uppercase transition-colors duration-300"
-            >
-              {episode.episode}. {translatedEpisodes[episode.id] ||
-                episode.name ||
-                `Episódio ${episode.episode}`}
-            </span>
-            {#if episode.firstAired}
-              <span class="text-muted font-mono text-xs opacity-70">
-                LANÇADO EM: {new Date(episode.firstAired).toLocaleDateString('pt-BR')}
-              </span>
-            {/if}
-          </div>
-          <div class="flex items-center gap-2">
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_interactive_supports_focus -->
-            <div
-              role="button"
-              class="border-primary/50 group-hover:bg-primary/20 hover:text-green hover:border-green text-primary rounded-sm border p-2 transition-all duration-300 {watchedStore.watchedIds.includes(
-                seriesId + '-S' + episode.season + 'E' + episode.episode
-              )
-                ? 'bg-green text-dark border-green shadow-[0_0_10px_rgba(54,211,83,0.8)]'
-                : ''}"
-              title="Marcar como assistido"
-              onclick={(e) => {
-                e.stopPropagation();
-                watchedStore.toggle(seriesId, episode.season, episode.episode);
-              }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+          <button
+            class="flex flex-1 items-center justify-between gap-2 text-left"
+            onclick={() => onPlayEpisode(episode)}
+          >
+            <div class="flex flex-col pl-2">
+              <span
+                class="text-main font-cyber group-hover:text-green text-sm tracking-wider uppercase transition-colors duration-300"
               >
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
+                {episode.episode}. {translatedEpisodes[episode.id] ||
+                  episode.name ||
+                  `Episódio ${episode.episode}`}
+              </span>
+              {#if episode.firstAired}
+                <span class="text-muted font-mono text-xs opacity-70">
+                  LANÇADO EM: {new Date(episode.firstAired).toLocaleDateString('pt-BR')}
+                </span>
+              {/if}
             </div>
             <div
+              aria-hidden="true"
               class="border-primary/50 group-hover:bg-green group-hover:text-dark text-primary rounded-sm border p-2 transition-all duration-300"
             >
               <svg
@@ -153,8 +127,31 @@
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
             </div>
-          </div>
-        </button>
+          </button>
+          <button
+            class="border-primary/50 group-hover:bg-primary/20 hover:text-green hover:border-green text-primary ml-2 rounded-sm border p-2 transition-all duration-300 {watchedStore.watchedIds.includes(
+              seriesId + '-S' + episode.season + 'E' + episode.episode
+            )
+              ? 'bg-green text-dark border-green shadow-[0_0_10px_rgba(54,211,83,0.8)]'
+              : ''}"
+            title="Marcar como assistido"
+            onclick={() => watchedStore.toggle(seriesId, episode.season, episode.episode)}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </button>
+        </div>
       {/each}
     </div>
   </div>

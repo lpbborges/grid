@@ -43,6 +43,7 @@
     {#each groups as group}
       {#if group.subs.length === 1}
         <button
+          role="menuitem"
           class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-green w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
           subtitles.indexOf(group.subs[0])
             ? 'bg-primary/30 text-main'
@@ -55,6 +56,8 @@
         </button>
       {:else}
         <button
+          aria-haspopup="true"
+          aria-expanded={expandedGroups[`${groupKey}-${group.label}`] ?? false}
           class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-green flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
           onclick={() => ontogglegroup(groupKey, group.label)}
         >
@@ -67,6 +70,7 @@
           <div class="border-main/10 my-1 ml-3 border-l pl-3">
             {#each group.subs as sub, index}
               <button
+                role="menuitem"
                 class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-green w-full truncate rounded px-3 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
                 subtitles.indexOf(sub)
                   ? 'bg-primary/30 text-main'
@@ -94,6 +98,8 @@
       data-menu-element
       onclick={ontoggle}
       aria-label="Menu de Legendas"
+      aria-haspopup="menu"
+      aria-expanded={showMenu}
       class="hover:text-green focus-visible:ring-green rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors focus-visible:ring-2 focus-visible:outline-none {showMenu
         ? 'text-green'
         : ''}"
@@ -104,9 +110,12 @@
     {#if showMenu}
       <div
         data-menu-element
+        role="menu"
+        aria-label="Legendas"
         class="border-primary/50 bg-surface/95 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
       >
         <button
+          role="menuitem"
           class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-green w-full rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
           -1
             ? 'bg-main/10 text-main'

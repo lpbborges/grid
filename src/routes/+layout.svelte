@@ -38,27 +38,29 @@
 
       <!-- Center: Search -->
       <div class="flex flex-1 justify-center">
-        <div class="relative flex items-center justify-center">
-          <input
-            type="text"
-            placeholder="PROCURAR..."
-            bind:value={searchQuery.value}
-            class="border-primary/50 text-main focus:border-green bg-surface/50 placeholder-muted font-cyber focus:bg-surface w-[300px] rounded border px-4 py-2 text-sm tracking-wider transition-all duration-300 outline-none focus:w-[450px] focus:shadow-[0_0_15px_rgba(54,211,83,0.3)]"
-          />
-          <div class="text-primary/50 absolute top-1/2 right-3 -translate-y-1/2">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"
-              ></line></svg
-            >
+        <div class="relative h-[38px] w-[300px]">
+          <div class="absolute top-0 left-1/2 flex -translate-x-1/2 items-center">
+            <input
+              type="text"
+              placeholder="PROCURAR..."
+              bind:value={searchQuery.value}
+              class="border-primary/50 text-main focus:border-green bg-surface/50 placeholder-muted font-cyber focus:bg-surface w-[300px] rounded border px-4 py-2 text-sm tracking-wider transition-all duration-300 outline-none focus:w-[450px] focus:shadow-[0_0_15px_rgba(54,211,83,0.3)]"
+            />
+            <div class="text-primary/50 absolute top-1/2 right-3 -translate-y-1/2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"
+                ></line></svg
+              >
+            </div>
           </div>
         </div>
       </div>
