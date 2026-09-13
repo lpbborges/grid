@@ -77,7 +77,7 @@ describe('prepareStream', () => {
   it('adds the torrent with sub_folder set to the parsed info hash and onlyFilesRegex', async () => {
     await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
     expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test', '1'.repeat(40), {
-      onlyFilesRegex: '\\.(mp4|mkv|webm|avi|srt|vtt)$'
+      onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$'
     });
   });
 
@@ -169,7 +169,7 @@ describe('prepareStream', () => {
     expect(torrentApi.startEngine).toHaveBeenCalled();
     expect(torrentApi.waitForEngine).toHaveBeenCalled();
     expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test', '1'.repeat(40), {
-      onlyFilesRegex: '\\.(mp4|mkv|webm|avi|srt|vtt)$'
+      onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$'
     });
     expect(torrentApi.updateOnlyFiles).toHaveBeenCalledWith('12345', [1]);
 

@@ -3,6 +3,10 @@ import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
 import { getLanguageName } from '../api/subtitles';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+import { hasExtension } from '../utils/fileExtension';
+
+const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm'];
+const SUBTITLE_EXTENSIONS = ['.srt', '.vtt'];
 
 let ENGINE_URL = 'http://127.0.0.1:3030';
 
@@ -119,7 +123,7 @@ export function getWantedFileIndices(
 
   const subtitleFileIndices = files
     .map((f, idx) => ({ f, idx }))
-    .filter(({ f }) => f.name.endsWith('.srt') || f.name.endsWith('.vtt'))
+    .filter(({ f }) => hasExtension(f.name, SUBTITLE_EXTENSIONS))
     .map(({ idx }) => idx);
 
   return [...new Set([bestFileIdx, ...subtitleFileIndices])];
@@ -154,10 +158,7 @@ export function getBestVideoFileIndex(files: { name: string; length: number }[])
   let maxSize = 0;
 
   files.forEach((f, idx) => {
-    if (
-      (f.name.endsWith('.mp4') || f.name.endsWith('.mkv') || f.name.endsWith('.webm')) &&
-      f.length > maxSize
-    ) {
+    if (hasExtension(f.name, VIDEO_EXTENSIONS) && f.length > maxSize) {
       maxSize = f.length;
       bestFileIdx = idx;
     }
@@ -187,7 +188,7 @@ export async function getTorrentSubtitles(
     name: string;
   }[] = [];
   files.forEach((f, idx) => {
-    if (f.name.endsWith('.srt') || f.name.endsWith('.vtt')) {
+    if (hasExtension(f.name, SUBTITLE_EXTENSIONS)) {
       candidates.push({ idx, name: f.name });
     }
   });

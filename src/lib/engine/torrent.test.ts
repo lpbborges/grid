@@ -175,7 +175,26 @@ describe('torrent engine', () => {
     await expect(torrent.addTorrent('magnet:')).rejects.toThrow('Failed to add torrent to engine');
   });
 
+  it('selects an uppercase-extension video file', () => {
+    const files = [
+      { name: 'Subs.PT.SRT', length: 100 },
+      { name: 'sample.mp4', length: 10 },
+      { name: 'Movie.MKV', length: 5000 }
+    ];
+
+    expect(torrent.getBestVideoFileIndex(files)).toBe(2);
+  });
+
   describe('getWantedFileIndices', () => {
+    it('includes uppercase-extension video and subtitle files', async () => {
+      const files = [
+        { name: 'Movie.MKV', length: 5000 },
+        { name: 'readme.txt', length: 10 },
+        { name: 'Subs.PT.SRT', length: 100 }
+      ];
+      expect(torrent.getWantedFileIndices(files)).toEqual([0, 2]);
+    });
+
     it('returns the best video file index and subtitle indices', async () => {
       const files = [
         { name: 'movie.mp4', length: 1000 },
@@ -415,6 +434,23 @@ describe('getTorrentSubtitles', () => {
       label: 'weird-name',
       group: 'Embedded'
     });
+  });
+
+  it('treats uppercase subtitle extensions as subtitles', async () => {
+    const { getTorrentSubtitles } = await import('./torrent');
+    const files = [
+      { name: 'Movie.MKV', length: 1000 },
+      { name: 'Subs.PT.SRT', length: 100 }
+    ];
+
+    const subs = await getTorrentSubtitles('dummyHash', files);
+
+    expect(invoke).toHaveBeenCalledWith('fetch_torrent_subtitle', {
+      infoHash: 'dummyHash',
+      fileIdx: 1
+    });
+    expect(subs).toHaveLength(1);
+    expect(subs[0]).toEqual(expect.objectContaining({ id: 'torrent-1', lang: 'PT' }));
   });
 
   it('keeps subtitles that succeed when another fileIdx fetch fails', async () => {
