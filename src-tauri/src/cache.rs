@@ -68,7 +68,6 @@ pub fn remove_entry(manifest: &mut Manifest, info_hash: &str) -> Option<CacheEnt
     Some(manifest.entries.remove(pos))
 }
 
-#[allow(dead_code)]
 pub fn total_usage(manifest: &Manifest) -> u64 {
     manifest.entries.iter().map(|e| e.downloaded_bytes).sum()
 }
@@ -105,9 +104,10 @@ pub fn find_orphan_top_level_names(downloads_dir: &Path, manifest: &Manifest) ->
         .entries
         .iter()
         .map(|e| {
-            e.file_name
-                .split('/')
+            std::path::Path::new(&e.file_name)
+                .components()
                 .next()
+                .and_then(|c| c.as_os_str().to_str())
                 .unwrap_or(&e.file_name)
                 .to_string()
         })

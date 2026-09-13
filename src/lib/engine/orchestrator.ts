@@ -121,9 +121,7 @@ export async function prepareStream(
   if (isCacheable) {
     const alreadyHave = existingEntry?.downloadedBytes ?? 0;
     const neededBytes = Math.max(totalBytes - alreadyHave, 0);
-    await evictForSpace(infoHash, neededBytes, cacheLimitBytes).catch((error) => {
-      logger.warn('Failed to evict cache entries for space, continuing without eviction:', error);
-    });
+    await evictForSpace(infoHash, neededBytes, cacheLimitBytes);
 
     const entry: CacheEntry = {
       infoHash,
@@ -137,9 +135,7 @@ export async function prepareStream(
       complete: existingEntry?.complete ?? false,
       lastAccessedAt: Date.now()
     };
-    await upsertCacheEntry(entry).catch((error) => {
-      logger.warn('Failed to persist cache entry, continuing without caching:', error);
-    });
+    await upsertCacheEntry(entry);
   }
 
   onStatus('Baixando legendas...');

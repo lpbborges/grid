@@ -154,12 +154,34 @@ fn evict_for_space(
 
     for info_hash in &to_evict {
         if let Some(entry) = cache::remove_entry(&mut manifest, info_hash) {
+            let mut is_safe = true;
+            for component in std::path::Path::new(&entry.file_name).components() {
+                if matches!(
+                    component,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                ) {
+                    is_safe = false;
+                    break;
+                }
+            }
+            if !is_safe {
+                continue;
+            }
+
             let entry_path = downloads_dir.join(&entry.file_name);
             cache::remove_path_best_effort(&entry_path);
-            if let Some(parent) = entry_path.parent() {
-                if parent != downloads_dir {
-                    let _ = std::fs::remove_dir(parent); // best-effort, fails silently if not empty
+
+            let mut current = entry_path.parent();
+            while let Some(parent) = current {
+                if parent == downloads_dir {
+                    break;
                 }
+                if std::fs::remove_dir(parent).is_err() {
+                    break;
+                }
+                current = parent.parent();
             }
         }
     }
