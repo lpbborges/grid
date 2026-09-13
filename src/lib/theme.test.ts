@@ -92,6 +92,8 @@ describe('Tailwind Theme & CSS Variables Validation', () => {
     const rootBlock = rootMatch![1];
     expect(rootBlock).not.toContain('--accent-error');
     expect(rootBlock).toContain('--error:');
+    expect(rootBlock).toContain('--accent:');
+    expect(rootBlock).toContain('--secondary:');
     expect(rootBlock).toContain('--green:');
     expect(rootBlock).toContain('--orange:');
   });

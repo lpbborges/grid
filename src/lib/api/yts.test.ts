@@ -100,7 +100,7 @@ describe('yts api', () => {
     expect(movie.id).toBe('tt9999999');
   });
 
-  it('returns empty array when cinemeta api fails', async () => {
+  it('throws when cinemeta api fails to fetch popular movies', async () => {
     (globalThis.fetch as any).mockResolvedValueOnce({
       ok: false,
       statusText: 'Not Found'
@@ -110,8 +110,9 @@ describe('yts api', () => {
     const originalConsoleError = console.error;
     console.error = vi.fn();
 
-    const movies = await getPopularMovies();
-    expect(movies).toEqual([]);
+    await expect(getPopularMovies()).rejects.toThrow(
+      'Failed to fetch popular movies from cinemeta: Not Found'
+    );
 
     console.error = originalConsoleError;
   });

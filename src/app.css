@@ -2,6 +2,8 @@
 
 @theme {
   --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --color-secondary: var(--secondary);
   --color-green: var(--green);
   --color-orange: var(--orange);
   --color-dark: var(--bg-dark);
@@ -15,8 +17,10 @@
 :root {
   /* Evangelion Unit-01 Palette */
   --primary: #6b21a8;
-  --green: #36d353;
-  --orange: #f97316;
+  --accent: #36d353;
+  --secondary: #f97316;
+  --green: var(--accent);
+  --orange: var(--secondary);
 
   /* Status / Feedback */
   --error: #ef4444;

@@ -31,7 +31,7 @@ export async function getPopularMovies(limit = 24): Promise<Movie[]> {
     return metas.slice(0, limit).map(mapCinemetaMeta);
   } catch (error) {
     logger.error(error);
-    return [];
+    throw error;
   }
 }
 
@@ -48,7 +48,7 @@ export async function getPopularSeries(limit = 24): Promise<Movie[]> {
     return metas.slice(0, limit).map(mapCinemetaMeta);
   } catch (error) {
     logger.error(error);
-    return [];
+    throw error;
   }
 }
 

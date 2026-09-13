@@ -227,8 +227,21 @@ describe('Home page search', () => {
     expect(screen.getAllByText('Popular Movie')[0]).toBeTruthy();
   });
 
-  it('shows the error/empty state when the catalog resolves with nothing', async () => {
+  it('shows a neutral empty state when the catalog resolves with nothing', async () => {
     render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    expect(screen.getByText('Nenhum título disponível no momento')).toBeTruthy();
+    expect(screen.queryByText('Erro ao carregar dados')).toBeNull();
+  });
+
+  it('shows an error message when both popular fetches fail', async () => {
+    render(HomePage, {
+      data: {
+        popularMovies: Promise.reject(new Error('network down')),
+        popularSeries: Promise.reject(new Error('network down'))
+      }
+    });
     await act(async () => {});
 
     expect(screen.getByText('Erro ao carregar dados')).toBeTruthy();

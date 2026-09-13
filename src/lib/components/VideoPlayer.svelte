@@ -540,7 +540,7 @@
       </div>
     </div>
 
-    <div class="text-primary flex items-center justify-between font-mono">
+    <div class="text-main flex items-center justify-between font-mono">
       <div class="flex items-center gap-4">
         <button
           onclick={togglePlay}

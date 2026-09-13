@@ -1,5 +1,6 @@
 <script lang="ts">
   import MediaRow from '$lib/components/MediaRow.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
   import type { Movie } from '$lib/types';
   import { searchQuery } from '$lib/stores.svelte';
   import { searchCatalog } from '$lib/api/yts';
@@ -13,6 +14,7 @@
   let popularMovies = $state<Movie[]>([]);
   let popularSeries = $state<Movie[]>([]);
   let popularLoading = $state(true);
+  let popularError = $state(false);
 
   let hasSearchQuery = $derived(searchQuery.value.trim().length > 0);
 
@@ -24,11 +26,13 @@
     let cancelled = false;
 
     popularLoading = true;
+    popularError = false;
 
-    Promise.all([moviesPromise, seriesPromise]).then(([movies, series]) => {
+    Promise.allSettled([moviesPromise, seriesPromise]).then(([moviesResult, seriesResult]) => {
       if (cancelled) return;
-      popularMovies = movies;
-      popularSeries = series;
+      popularMovies = moviesResult.status === 'fulfilled' ? moviesResult.value : [];
+      popularSeries = seriesResult.status === 'fulfilled' ? seriesResult.value : [];
+      popularError = moviesResult.status === 'rejected' && seriesResult.status === 'rejected';
       popularLoading = false;
     });
 
@@ -85,11 +89,7 @@
     {@render loadingIndicator('Pesquisando...')}
   {:else if searchMovieResults.length === 0 && searchSeriesResults.length === 0}
     <div class="flex h-full min-h-[400px] items-center justify-center">
-      <div class="flex flex-col items-center gap-4">
-        <div class="text-muted font-cyber text-xl tracking-[0.3em] uppercase">
-          Nenhum resultado para "{searchQuery.value}"
-        </div>
-      </div>
+      <EmptyState message={`Nenhum resultado para "${searchQuery.value}"`} />
     </div>
   {:else}
     <div>
@@ -101,11 +101,9 @@
   {@render loadingIndicator('Carregando...')}
 {:else if !popularMovies.length && !popularSeries.length}
   <div class="flex h-full min-h-[400px] items-center justify-center">
-    <div class="flex flex-col items-center gap-4">
-      <div class="text-muted font-cyber text-xl tracking-[0.3em] uppercase">
-        Erro ao carregar dados
-      </div>
-    </div>
+    <EmptyState
+      message={popularError ? 'Erro ao carregar dados' : 'Nenhum título disponível no momento'}
+    />
   </div>
 {:else}
   <div>
