@@ -1,4 +1,12 @@
 use regex::Regex;
+use std::sync::LazyLock;
+
+static CUE_ID_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d+\s*$").unwrap());
+static TIMING_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}").unwrap()
+});
+static COMMA_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(\d{2}:\d{2}:\d{2}),(\d{3})").unwrap());
 
 /// Converts SRT subtitle content to WebVTT.
 ///
@@ -16,11 +24,6 @@ use regex::Regex;
 pub fn srt_to_vtt(input: &str) -> String {
     let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
 
-    let cue_id_re = Regex::new(r"^\d+\s*$").unwrap();
-    let timing_re =
-        Regex::new(r"^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}").unwrap();
-    let comma_re = Regex::new(r"(\d{2}:\d{2}:\d{2}),(\d{3})").unwrap();
-
     let lines: Vec<&str> = normalized.lines().collect();
     let mut out_lines: Vec<&str> = Vec::with_capacity(lines.len());
     let mut i = 0;
@@ -29,10 +32,10 @@ pub fn srt_to_vtt(input: &str) -> String {
         let at_cue_block_start =
             i == 0 || lines.get(i - 1).is_some_and(|prev| prev.trim().is_empty());
         let is_cue_identifier = at_cue_block_start
-            && cue_id_re.is_match(line)
+            && CUE_ID_RE.is_match(line)
             && lines
                 .get(i + 1)
-                .is_some_and(|next| timing_re.is_match(next.trim()));
+                .is_some_and(|next| TIMING_RE.is_match(next.trim()));
         if !is_cue_identifier {
             out_lines.push(line);
         }
@@ -43,7 +46,7 @@ pub fn srt_to_vtt(input: &str) -> String {
     if normalized.ends_with('\n') && !normalized.is_empty() {
         joined.push('\n');
     }
-    let converted = comma_re.replace_all(&joined, "$1.$2");
+    let converted = COMMA_RE.replace_all(&joined, "$1.$2");
     format!("WEBVTT\n\n{}", converted)
 }
 
