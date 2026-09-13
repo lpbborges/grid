@@ -56,14 +56,34 @@ describe('translateText', () => {
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await translateText('Uncached text', 'pt');
-    expect(globalThis.fetch).toHaveBeenCalledTimes(3); // google, lingva, mymemory all tried
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
 
     await translateText('Uncached text', 'pt');
-    // second call should hit the network cascade again, not a cache hit, since
-    // nothing was ever successfully cached.
-    expect(globalThis.fetch).toHaveBeenCalledTimes(6);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4);
 
     consoleSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
+  });
+
+  it('falls back to MyMemory with an explicit English source language', async () => {
+    const { translateText } = await freshTranslateModule();
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (globalThis.fetch as any)
+      .mockRejectedValueOnce(new Error('Google down'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ responseStatus: 200, responseData: { translatedText: 'Olá' } })
+      });
+
+    const result = await translateText('Hello', 'pt');
+
+    expect(result).toBe('Olá');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    const myMemoryUrl = (globalThis.fetch as any).mock.calls[1][0] as string;
+    expect(myMemoryUrl).toContain('https://api.mymemory.translated.net/get');
+    expect(myMemoryUrl).toContain('langpair=en|pt');
+    expect(myMemoryUrl).not.toContain('auto');
+
     consoleWarnSpy.mockRestore();
   });
 

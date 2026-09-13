@@ -15,7 +15,7 @@ Grid-Play is a native desktop application built with **Tauri**, **SvelteKit**, *
 - **Evangelion Unit-01 Theme:** A unique visual identity built with Tailwind CSS v4 featuring neon glows, digital grid backgrounds, and cyberpunk typography (Orbitron/Rajdhani).
 - **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded (torrent) and Extra (downloaded) subtitles.
 - **Test-Driven:** Comprehensive Vitest and Svelte Testing Library setup with 100% test coverage for frontend modules, plus backend Rust unit tests.
-- **Robust Error Handling:** Resilient polling for engine startup, dynamic port allocation to prevent address conflicts, and graceful API fallbacks.
+- **Robust Error Handling:** Resilient polling for engine startup, dynamic port allocation to prevent address conflicts, and timeouts on external API calls. Metadata translation tries Google Translate first and MyMemory as a backup; if both fail, the original English text is shown.
 
 ## Recommended IDE Setup
 

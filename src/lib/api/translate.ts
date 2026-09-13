@@ -46,26 +46,11 @@ async function runTranslationCascade(text: string, targetLang: string): Promise<
       }
     }
   } catch (e) {
-    logger.warn('Google Translation error, trying Lingva fallback:', e);
+    logger.warn('Google Translation error, trying MyMemory fallback:', e);
   }
 
-  // Fallback 1: Lingva API (Google Translate proxy)
   try {
-    const lingvaUrl = `https://lingva.ml/api/v1/auto/${targetLang}/${encodeURIComponent(text)}`;
-    const lingvaRes = await fetchWithTimeout(lingvaUrl, {}, TRANSLATE_TIMEOUT_MS);
-    if (lingvaRes.ok) {
-      const lingvaData = await lingvaRes.json();
-      if (lingvaData && lingvaData.translation) {
-        return lingvaData.translation;
-      }
-    }
-  } catch (e) {
-    logger.warn('Lingva fallback error, trying MyMemory fallback:', e);
-  }
-
-  // Fallback 2: MyMemory API
-  try {
-    const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=auto|${targetLang}`;
+    const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetLang}`;
     const myMemoryRes = await fetchWithTimeout(myMemoryUrl, {}, TRANSLATE_TIMEOUT_MS);
     if (myMemoryRes.ok) {
       const myMemoryData = await myMemoryRes.json();
