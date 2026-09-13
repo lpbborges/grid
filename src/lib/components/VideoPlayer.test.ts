@@ -41,7 +41,7 @@ describe('VideoPlayer component', () => {
   });
 
   it('hides loading overlay when playback events fire', async () => {
-    const { getByText, queryByText, getByTestId } = render(VideoPlayer, {
+    const { getByText, queryByText, queryByTestId, getByTestId } = render(VideoPlayer, {
       src: 'test.mp4',
       engineStatus: 'Loading...'
     });
@@ -54,41 +54,45 @@ describe('VideoPlayer component', () => {
     // playing hides loading
     await fireEvent.playing(video);
     expect(queryByText('Loading...')).toBeNull();
+    expect(queryByTestId('buffering-overlay')).toBeNull();
 
-    // waiting shows loading, but only after it persists (avoids flashing on brief resume blips)
+    // waiting after playback has started shows the lightweight buffering
+    // overlay (spinner over the still-visible video), not the status text,
+    // but only after it persists (avoids flashing on brief resume blips)
     await fireEvent.waiting(video);
-    expect(queryByText('Loading...')).toBeNull();
+    expect(queryByTestId('buffering-overlay')).toBeNull();
     await vi.advanceTimersByTimeAsync(250);
-    expect(getByText('Loading...')).toBeDefined();
+    expect(queryByTestId('buffering-overlay')).toBeDefined();
+    expect(queryByText('Loading...')).toBeNull();
 
-    // canplay hides loading
+    // canplay hides the overlay
     await fireEvent(video, new Event('canplay'));
-    expect(queryByText('Loading...')).toBeNull();
+    expect(queryByTestId('buffering-overlay')).toBeNull();
 
     // waiting again
     await fireEvent.waiting(video);
     await vi.advanceTimersByTimeAsync(250);
-    expect(getByText('Loading...')).toBeDefined();
+    expect(queryByTestId('buffering-overlay')).toBeDefined();
 
-    // seeked hides loading
+    // seeked hides the overlay
     await fireEvent(video, new Event('seeked'));
-    expect(queryByText('Loading...')).toBeNull();
+    expect(queryByTestId('buffering-overlay')).toBeNull();
 
     // waiting again
     await fireEvent.waiting(video);
     await vi.advanceTimersByTimeAsync(250);
-    expect(getByText('Loading...')).toBeDefined();
+    expect(queryByTestId('buffering-overlay')).toBeDefined();
 
-    // timeupdate hides loading
+    // timeupdate hides the overlay
     Object.defineProperty(video, 'paused', { value: false });
     // we also need to fire play event for Svelte's bind:paused to update
     await fireEvent.play(video);
     await fireEvent(video, new Event('timeupdate'));
-    expect(queryByText('Loading...')).toBeNull();
+    expect(queryByTestId('buffering-overlay')).toBeNull();
   });
 
-  it('does not flash loading overlay on a brief waiting blip after resuming play', async () => {
-    const { queryByText, getByTestId } = render(VideoPlayer, {
+  it('does not flash buffering overlay on a brief waiting blip after resuming play', async () => {
+    const { queryByTestId, getByTestId } = render(VideoPlayer, {
       src: 'test.mp4',
       engineStatus: 'Loading...'
     });
@@ -96,17 +100,17 @@ describe('VideoPlayer component', () => {
     const video = getByTestId('video-element');
 
     await fireEvent.playing(video);
-    expect(queryByText('Loading...')).toBeNull();
+    expect(queryByTestId('buffering-overlay')).toBeNull();
 
     // Simulate the brief 'waiting' event browsers fire right after resuming from pause,
     // which resolves quickly because there's already playable video buffered.
     await fireEvent.waiting(video);
     await vi.advanceTimersByTimeAsync(50);
-    expect(queryByText('Loading...')).toBeNull();
+    expect(queryByTestId('buffering-overlay')).toBeNull();
 
     await fireEvent.playing(video);
     await vi.advanceTimersByTimeAsync(250);
-    expect(queryByText('Loading...')).toBeNull();
+    expect(queryByTestId('buffering-overlay')).toBeNull();
   });
 
   it('renders close button when onclose is provided', async () => {

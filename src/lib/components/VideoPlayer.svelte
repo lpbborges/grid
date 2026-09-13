@@ -57,6 +57,11 @@
 
   let downloadPercent = $state<number>(0);
   let isVideoPlaying = $state(false);
+  // Once true, playback has shown at least one real frame. Kept true through
+  // later rebuffering ('waiting' events) so a mid-playback stall shows a
+  // lightweight overlay on top of the still-visible video instead of the
+  // opaque first-load screen re-covering it.
+  let hasStartedPlaying = $state(false);
   let statsInterval: ReturnType<typeof window.setInterval>;
   let waitingTimeout: ReturnType<typeof setTimeout>;
   let watchedTriggered = $state(false);
@@ -65,6 +70,7 @@
   function markPlaying() {
     window.clearTimeout(waitingTimeout);
     isVideoPlaying = true;
+    hasStartedPlaying = true;
     playbackError = '';
   }
 
@@ -375,7 +381,11 @@
 
   {#if !isVideoPlaying}
     <div
-      class="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black px-4 text-center select-none"
+      class="absolute inset-0 z-40 flex flex-col items-center justify-center px-4 text-center select-none {hasStartedPlaying &&
+      !playbackError
+        ? 'bg-black/60'
+        : 'bg-black'}"
+      data-testid={hasStartedPlaying && !playbackError ? 'buffering-overlay' : 'loading-overlay'}
     >
       {#if playbackError}
         <svg
@@ -401,13 +411,15 @@
           ></div>
         </div>
       {/if}
-      <div
-        class="font-cyber mb-2 text-xl tracking-widest uppercase {playbackError
-          ? 'text-red-500 [text-shadow:0_0_10px_rgba(239,68,68,0.8)]'
-          : 'text-green [text-shadow:0_0_10px_rgba(54,211,83,0.8)]'}"
-      >
-        {playbackError || engineStatus || 'Carregando...'}
-      </div>
+      {#if playbackError || !hasStartedPlaying}
+        <div
+          class="font-cyber mb-2 text-xl tracking-widest uppercase {playbackError
+            ? 'text-red-500 [text-shadow:0_0_10px_rgba(239,68,68,0.8)]'
+            : 'text-green [text-shadow:0_0_10px_rgba(54,211,83,0.8)]'}"
+        >
+          {playbackError || engineStatus || 'Carregando...'}
+        </div>
+      {/if}
       {#if !playbackError && infoHash && downloadPercent > 0}
         <div class="bg-dark border-primary/30 mb-2 h-2 w-full max-w-md rounded-full border">
           <div
@@ -440,7 +452,7 @@
     bind:volume
     {src}
     autoplay
-    class="h-full w-full cursor-pointer object-contain {isVideoPlaying
+    class="h-full w-full cursor-pointer object-contain {hasStartedPlaying
       ? 'opacity-100'
       : 'opacity-0'}"
     data-testid="video-element"
