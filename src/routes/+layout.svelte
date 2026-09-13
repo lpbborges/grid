@@ -31,7 +31,7 @@
           </div>
           <span
             class="text-main font-cyber group-hover:text-primary text-xl tracking-[0.2em] uppercase transition-colors duration-300"
-            >GridPlay</span
+            >Grid Play</span
           >
         </a>
       </div>
