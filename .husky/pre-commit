@@ -1,6 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 echo "Running Prettier & ESLint..."
 npx lint-staged
 
@@ -13,5 +10,5 @@ npm run test:backend
 echo "Running Rustfmt & Clippy..."
 cd src-tauri
 cargo fmt -- --check
-cargo clippy -- -D warnings
+cargo clippy --all-targets -- -D warnings
 cd ..
