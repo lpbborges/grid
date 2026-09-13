@@ -363,9 +363,19 @@ fn cleanup_stale_engine(pid_path: &Path) {
         return;
     };
 
-    let mut sys = sysinfo::System::new_all();
-    sys.refresh_all();
     let sys_pid = sysinfo::Pid::from_u32(pid);
+    let pids = [sys_pid];
+    let refresh_kind =
+        sysinfo::ProcessRefreshKind::nothing().with_exe(sysinfo::UpdateKind::OnlyIfNotSet);
+    let mut sys = sysinfo::System::new();
+    let refresh = |sys: &mut sysinfo::System| {
+        sys.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&pids),
+            true,
+            refresh_kind,
+        );
+    };
+    refresh(&mut sys);
 
     if let Some(process) = sys.process(sys_pid) {
         let name = process.name().to_string_lossy().to_string();
@@ -375,7 +385,7 @@ fn cleanup_stale_engine(pid_path: &Path) {
             let mut died = false;
             for _ in 0..30 {
                 std::thread::sleep(std::time::Duration::from_millis(100));
-                sys.refresh_all();
+                refresh(&mut sys);
                 if sys.process(sys_pid).is_none() {
                     died = true;
                     break;
@@ -428,7 +438,10 @@ async fn start_torrent_engine(
         eprintln!("Failed to create app cache dir for engine PID file: {}", e);
     }
     let pid_path = pid_file_path(&app_cache_dir);
-    cleanup_stale_engine(&pid_path);
+    let cleanup_pid_path = pid_path.clone();
+    tauri::async_runtime::spawn_blocking(move || cleanup_stale_engine(&cleanup_pid_path))
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut child_guard = state.child.lock().unwrap();
     let mut pid_guard = state.pid.lock().unwrap();
@@ -733,6 +746,30 @@ mod tests {
             "sleep",
             Some(std::path::Path::new("/usr/bin/sleep"))
         ));
+    }
+
+    #[test]
+    fn cleanup_stale_engine_leaves_an_unrelated_live_process_alone_and_removes_the_pid_file() {
+        let path = unique_test_pid_path("cleanup-unrelated");
+        write_pid_file(&path, std::process::id()).unwrap();
+        cleanup_stale_engine(&path);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn cleanup_stale_engine_removes_the_pid_file_when_the_process_is_gone() {
+        let path = unique_test_pid_path("cleanup-gone");
+        write_pid_file(&path, u32::MAX - 1).unwrap();
+        cleanup_stale_engine(&path);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn cleanup_stale_engine_is_a_no_op_without_a_pid_file() {
+        let path = unique_test_pid_path("cleanup-missing");
+        let _ = std::fs::remove_file(&path);
+        cleanup_stale_engine(&path);
+        assert!(!path.exists());
     }
 
     fn csp_directive_sources(directive: &str) -> Vec<String> {
