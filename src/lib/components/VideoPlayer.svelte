@@ -345,7 +345,7 @@
   bind:this={containerElement}
   role="region"
   aria-label="Reprodutor de Vídeo"
-  class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden bg-black"
+  class="bg-backdrop fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden"
   data-testid="video-player-container"
   onmousemove={handleMouseMove}
   onmouseleave={handleMouseLeave}
@@ -355,7 +355,7 @@
   {#if onclose}
     <button
       onclick={onclose}
-      class="hover:text-green hover:bg-main/10 focus-visible:ring-green absolute top-6 right-6 z-50 rounded-full p-2 text-white/50 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {showControls ||
+      class="hover:text-green hover:bg-main/10 focus-visible:ring-green text-muted absolute top-6 right-6 z-50 rounded-full p-2 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {showControls ||
       paused ||
       subtitleSelection.showMenu
         ? 'opacity-100'
@@ -383,13 +383,13 @@
     <div
       class="absolute inset-0 z-40 flex flex-col items-center justify-center px-4 text-center select-none {hasStartedPlaying &&
       !playbackError
-        ? 'bg-black/60'
-        : 'bg-black'}"
+        ? 'bg-backdrop/60'
+        : 'bg-backdrop'}"
       data-testid={hasStartedPlaying && !playbackError ? 'buffering-overlay' : 'loading-overlay'}
     >
       {#if playbackError}
         <svg
-          class="mb-6 h-16 w-16 text-red-500 [filter:drop-shadow(0_0_10px_rgba(239,68,68,0.8))]"
+          class="text-error mb-6 h-16 w-16 [filter:drop-shadow(0_0_10px_rgba(239,68,68,0.8))]"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -414,7 +414,7 @@
       {#if playbackError || !hasStartedPlaying}
         <div
           class="font-cyber mb-2 text-xl tracking-widest uppercase {playbackError
-            ? 'text-red-500 [text-shadow:0_0_10px_rgba(239,68,68,0.8)]'
+            ? 'text-error [text-shadow:0_0_10px_rgba(239,68,68,0.8)]'
             : 'text-green [text-shadow:0_0_10px_rgba(54,211,83,0.8)]'}"
         >
           {playbackError || engineStatus || 'Carregando...'}
@@ -487,7 +487,7 @@
 
   <!-- Custom Controls Bar -->
   <div
-    class="absolute right-0 bottom-0 left-0 bg-gradient-to-t from-black to-transparent p-4 transition-opacity duration-300 {showControls ||
+    class="from-backdrop absolute right-0 bottom-0 left-0 bg-gradient-to-t to-transparent p-4 transition-opacity duration-300 {showControls ||
     paused ||
     subtitleSelection.showMenu
       ? 'opacity-100'
@@ -528,7 +528,7 @@
       aria-valuenow={currentTime}
       tabindex={0}
     >
-      <div class="relative h-1 w-full rounded-full bg-white/25 transition-all group-hover:h-2">
+      <div class="bg-main/25 relative h-1 w-full rounded-full transition-all group-hover:h-2">
         <div
           class="bg-green absolute top-0 left-0 h-full rounded-full"
           style="width: {duration ? (currentTime / duration) * 100 : 0}%"

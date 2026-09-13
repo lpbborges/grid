@@ -87,7 +87,7 @@
 
 {#if subtitles.length > 0}
   {#if subtitleError}
-    <span role="status" class="text-xs text-red-500">{subtitleError}</span>
+    <span role="status" class="text-error text-xs">{subtitleError}</span>
   {/if}
   <div class="relative">
     <button

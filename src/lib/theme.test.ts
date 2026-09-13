@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+// @ts-expect-error type error without @types/node package
+import * as fs from 'node:fs';
+// @ts-expect-error type error without @types/node package
+import * as path from 'node:path';
 
 describe('Tailwind Theme & CSS Variables Validation', () => {
-  const appCssPath = path.resolve(__dirname, '../app.css');
+  const appCssPath = path.resolve('src/app.css');
   const appCss = fs.readFileSync(appCssPath, 'utf-8');
-
   // Property context prefixes that Tailwind prepends to color utility classes.
   // Including these prefixes in @theme --color-* names causes duplicated class names
   // such as text-text-main, bg-bg-dark, accent-accent-green, border-border-default, etc.
@@ -53,35 +54,22 @@ describe('Tailwind Theme & CSS Variables Validation', () => {
   });
 
   it('disallows duplicated utility prefixes in source files (e.g. text-text, accent-accent, bg-bg)', () => {
-    const srcDir = path.resolve(__dirname, '..');
-    const filesToScan: string[] = [];
-
-    function collectFiles(dir: string) {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          collectFiles(fullPath);
-        } else if (/\.(svelte|ts|js|html)$/.test(entry.name) && !entry.name.endsWith('.test.ts')) {
-          filesToScan.push(fullPath);
-        }
-      }
-    }
-
-    collectFiles(srcDir);
+    const sourceFiles = import.meta.glob<string>(
+      ['../*.{svelte,ts,js,html}', '../**/*.{svelte,ts,js,html}', '!**/*.test.ts'],
+      { query: '?raw', import: 'default', eager: true }
+    );
 
     const duplicatedClassRegex =
       /\b(text-text|bg-bg|accent-accent|border-border|ring-ring)-[a-zA-Z0-9_-]+/g;
     const violations: { file: string; line: number; match: string }[] = [];
 
-    for (const file of filesToScan) {
-      const content = fs.readFileSync(file, 'utf-8');
+    for (const [file, content] of Object.entries(sourceFiles)) {
       const lines = content.split('\n');
-      lines.forEach((line, lineIndex) => {
+      lines.forEach((line: string, lineIndex: number) => {
         let m: RegExpExecArray | null;
         while ((m = duplicatedClassRegex.exec(line)) !== null) {
           violations.push({
-            file: path.relative(srcDir, file),
+            file,
             line: lineIndex + 1,
             match: m[0]
           });
@@ -95,5 +83,16 @@ describe('Tailwind Theme & CSS Variables Validation', () => {
         violations.map((v) => `  ${v.file}:${v.line} -> ${v.match}`).join('\n') +
         `\nUse clean utility classes (e.g. 'accent-green' instead of 'accent-accent-green').`
     ).toEqual([]);
+  });
+
+  it('uses clean semantic tokens in :root and disallows --accent-error', () => {
+    const rootMatch = appCss.match(/:root\s*\{([^}]+)\}/);
+    expect(rootMatch).toBeTruthy();
+
+    const rootBlock = rootMatch![1];
+    expect(rootBlock).not.toContain('--accent-error');
+    expect(rootBlock).toContain('--error:');
+    expect(rootBlock).toContain('--green:');
+    expect(rootBlock).toContain('--orange:');
   });
 });

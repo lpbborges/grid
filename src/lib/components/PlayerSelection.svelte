@@ -77,10 +77,10 @@
     >
       <!-- Cyberpunk border effect -->
       <div
-        class="border-green absolute -top-[1px] -left-[1px] h-3 w-3 border-t-2 border-l-2 transition-colors duration-300 group-hover:border-white"
+        class="border-green group-hover:border-main absolute -top-[1px] -left-[1px] h-3 w-3 border-t-2 border-l-2 transition-colors duration-300"
       ></div>
       <div
-        class="border-green absolute -right-[1px] -bottom-[1px] h-3 w-3 border-r-2 border-b-2 transition-colors duration-300 group-hover:border-white"
+        class="border-green group-hover:border-main absolute -right-[1px] -bottom-[1px] h-3 w-3 border-r-2 border-b-2 transition-colors duration-300"
       ></div>
 
       <svg

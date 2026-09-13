@@ -2,22 +2,31 @@
 
 @theme {
   --color-primary: var(--primary);
-  --color-green: var(--accent-green);
-  --color-orange: var(--accent-orange);
+  --color-green: var(--green);
+  --color-orange: var(--orange);
   --color-dark: var(--bg-dark);
   --color-surface: var(--surface);
   --color-main: var(--text-main);
   --color-muted: var(--text-muted);
+  --color-error: var(--error);
+  --color-backdrop: var(--video-backdrop);
 }
 
 :root {
+  /* Evangelion Unit-01 Palette */
   --primary: #6b21a8;
   --green: #36d353;
   --orange: #f97316;
-  --accent-green: #36d353;
-  --accent-orange: #f97316;
+
+  /* Status / Feedback */
+  --error: #ef4444;
+
+  /* Surfaces & Backgrounds */
+  --video-backdrop: #000000;
   --bg-dark: #0f0f15;
   --surface: #1a1a24;
+
+  /* Typography */
   --text-main: #f4f4f5;
   --text-muted: #9ca3af;
 }

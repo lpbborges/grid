@@ -93,7 +93,7 @@
       </button>
       <button
         onclick={close}
-        class="text-muted focus-visible:ring-green flex h-full w-12 items-center justify-center transition-colors hover:bg-red-600 hover:text-white focus-visible:ring-2 focus-visible:outline-none"
+        class="text-muted focus-visible:ring-green hover:bg-error/20 hover:text-error flex h-full w-12 items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none"
         aria-label="Fechar"
       >
         <svg
