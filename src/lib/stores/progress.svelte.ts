@@ -7,8 +7,11 @@ export type ProgressData = {
   updatedAt: number;
 };
 
+export const PROGRESS_PERSIST_INTERVAL_MS = 5000;
+
 class ProgressStore {
   progress = $state<Record<string, ProgressData>>({});
+  #persistTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     if (browser) {
@@ -23,13 +26,21 @@ class ProgressStore {
           console.error('Failed to load progress state', e);
         }
       }
+      window.addEventListener('pagehide', () => this.persistNow());
     }
   }
 
-  private save() {
+  private persistNow() {
+    clearTimeout(this.#persistTimer);
+    this.#persistTimer = undefined;
     if (browser) {
       localStorage.setItem('grid-play-progress', JSON.stringify(this.progress));
     }
+  }
+
+  private schedulePersist() {
+    if (this.#persistTimer !== undefined) return;
+    this.#persistTimer = setTimeout(() => this.persistNow(), PROGRESS_PERSIST_INTERVAL_MS);
   }
 
   private getKey(id: string | number, season?: number, episode?: number): string {
@@ -57,7 +68,7 @@ class ProgressStore {
     if (time / duration >= 0.95) {
       if (key in this.progress) {
         delete this.progress[key];
-        this.save();
+        this.persistNow();
       }
       watchedStore.add(id, season, episode);
       if (season !== undefined && episode !== undefined) {
@@ -69,7 +80,7 @@ class ProgressStore {
         duration,
         updatedAt: Date.now()
       };
-      this.save();
+      this.schedulePersist();
     }
   }
 }
