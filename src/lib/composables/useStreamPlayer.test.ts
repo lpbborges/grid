@@ -57,14 +57,14 @@ describe('useStreamPlayer', () => {
     expect(streamPlayer.subtitles).toEqual([{ label: 'en', url: 'blob:1' }]);
     expect(streamPlayer.infoHash).toBe('abc');
     expect(streamPlayer.totalBytes).toBe(1234);
-    expect(prepareStreamMock).toHaveBeenCalledWith(
-      'magnet:?xt=urn:btih:abc',
-      expect.any(Function),
-      'tt1',
-      undefined,
-      undefined,
-      undefined
-    );
+    expect(prepareStreamMock).toHaveBeenCalledWith({
+      magnet: 'magnet:?xt=urn:btih:abc',
+      onStatus: expect.any(Function),
+      mediaId: 'tt1',
+      season: undefined,
+      episode: undefined,
+      preferredFileIdx: undefined
+    });
   });
 
   it('play() failure: sets the generic pt-BR error, resets isPlaying, logs raw error, never rendered', async () => {
@@ -173,7 +173,7 @@ describe('useStreamPlayer', () => {
 
   it('engineStatus updates as the onStatus callback fires during play()', async () => {
     prepareStreamMock.mockImplementation(
-      (_magnet: string, onStatus: (status: string) => void) =>
+      ({ onStatus }: { onStatus: (status: string) => void }) =>
         new Promise((resolve) => {
           onStatus('Iniciando player...');
           onStatus('Preparando stream...');

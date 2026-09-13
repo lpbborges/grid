@@ -32,6 +32,9 @@ vi.mock('$lib/api/torrentio', async (importOriginal) => ({
 }));
 
 const series = {
+  id: 'tt1',
+  medium_cover_image: 'img.jpg',
+  torrents: [],
   title: 'Some Series',
   year: 2024,
   rating: 8,
@@ -135,13 +138,13 @@ describe('Series page integration flow', () => {
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(prepareStreamMock).toHaveBeenCalledWith(
-      'magnet:?xt=urn:btih:def&dn=Some%20Series%20S1E1',
-      expect.any(Function),
-      'tt1',
-      1,
-      1,
-      0
-    );
+    expect(prepareStreamMock).toHaveBeenCalledWith({
+      magnet: 'magnet:?xt=urn:btih:def&dn=Some%20Series%20S1E1',
+      onStatus: expect.any(Function),
+      mediaId: 'tt1',
+      season: 1,
+      episode: 1,
+      preferredFileIdx: 0
+    });
   });
 });

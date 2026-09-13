@@ -132,14 +132,14 @@ describe('Movie page integration flow', () => {
     await fireEvent.click(playButton);
 
     // Verify prepareStream was called with the correct magnet
-    expect(prepareStreamMock).toHaveBeenCalledWith(
-      'magnet:?xt=urn:btih:abc&dn=Some%20Movie',
-      expect.any(Function),
-      'tt1',
-      undefined,
-      undefined,
-      undefined
-    );
+    expect(prepareStreamMock).toHaveBeenCalledWith({
+      magnet: 'magnet:?xt=urn:btih:abc&dn=Some%20Movie',
+      onStatus: expect.any(Function),
+      mediaId: 'tt1',
+      season: undefined,
+      episode: undefined,
+      preferredFileIdx: undefined
+    });
 
     // Eventually the video player should be shown (represented by finding the "Voltar" or Titlebar, but we can check if VideoPlayer is rendered by checking for video controls)
     // Wait for the video element to be present
@@ -178,14 +178,14 @@ describe('Movie page integration flow', () => {
     const playButton = screen.getByRole('button', { name: /reproduzir/i });
     await fireEvent.click(playButton);
 
-    expect(prepareStreamMock).toHaveBeenCalledWith(
-      'magnet:?xt=urn:btih:xyz&dn=Another%20Movie',
-      expect.any(Function),
-      'tt2',
-      undefined,
-      undefined,
-      undefined
-    );
+    expect(prepareStreamMock).toHaveBeenCalledWith({
+      magnet: 'magnet:?xt=urn:btih:xyz&dn=Another%20Movie',
+      onStatus: expect.any(Function),
+      mediaId: 'tt2',
+      season: undefined,
+      episode: undefined,
+      preferredFileIdx: undefined
+    });
   });
 
   it('ignores a stale Torrentio response for the previous movie after navigating', async () => {
@@ -240,15 +240,15 @@ describe('Movie page integration flow', () => {
     await fireEvent.click(screen.getByRole('button', { name: /reproduzir/i }));
 
     expect(prepareStreamMock).toHaveBeenCalledTimes(1);
-    expect(prepareStreamMock.mock.calls[0][0]).not.toContain(staleHash);
-    expect(prepareStreamMock).toHaveBeenCalledWith(
-      'magnet:?xt=urn:btih:xyz&dn=Another%20Movie',
-      expect.any(Function),
-      'tt2',
-      undefined,
-      undefined,
-      undefined
-    );
+    expect(prepareStreamMock.mock.calls[0][0].magnet).not.toContain(staleHash);
+    expect(prepareStreamMock).toHaveBeenCalledWith({
+      magnet: 'magnet:?xt=urn:btih:xyz&dn=Another%20Movie',
+      onStatus: expect.any(Function),
+      mediaId: 'tt2',
+      season: undefined,
+      episode: undefined,
+      preferredFileIdx: undefined
+    });
   });
 
   it('logs a failed Torrentio request instead of leaving the rejection unhandled', async () => {
@@ -307,13 +307,13 @@ describe('Movie page dubbed-audio heuristic (reselectBestTorrent)', () => {
     const playButton = screen.getByRole('button', { name: /reproduzir/i });
     await fireEvent.click(playButton);
 
-    expect(prepareStreamMock).toHaveBeenCalledWith(
-      expect.stringContaining('ptstreamhash0000000000000000000000000000'),
-      expect.any(Function),
-      'tt1',
-      undefined,
-      undefined,
-      0
-    );
+    expect(prepareStreamMock).toHaveBeenCalledWith({
+      magnet: expect.stringContaining('ptstreamhash0000000000000000000000000000'),
+      onStatus: expect.any(Function),
+      mediaId: 'tt1',
+      season: undefined,
+      episode: undefined,
+      preferredFileIdx: 0
+    });
   });
 });

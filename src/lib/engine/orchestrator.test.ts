@@ -72,14 +72,20 @@ describe('prepareStream', () => {
   });
 
   it('adds the torrent with sub_folder set to the parsed info hash and onlyFilesRegex', async () => {
-    await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' });
     expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test', '1'.repeat(40), {
       onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$'
     });
   });
 
   it('marks a video within the cache limit as cacheable, evicts for space, and upserts the manifest', async () => {
-    const result = await prepareStream('magnet:?xt=test', vi.fn(), 'media-123', 2, 5);
+    const result = await prepareStream({
+      magnet: 'magnet:?xt=test',
+      onStatus: vi.fn(),
+      mediaId: 'media-123',
+      season: 2,
+      episode: 5
+    });
 
     expect(result.isCacheable).toBe(true);
     expect(cacheApi.evictForSpace).toHaveBeenCalledWith('1'.repeat(40), 200, DEFAULT_LIMIT);
@@ -99,14 +105,22 @@ describe('prepareStream', () => {
   });
 
   it('returns the upserted cache entry so finalizeStream does not need to re-read the manifest', async () => {
-    const result = await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
+    const result = await prepareStream({
+      magnet: 'magnet:?xt=test',
+      onStatus: vi.fn(),
+      mediaId: 'media-123'
+    });
 
     expect(result.cacheEntry).toEqual(vi.mocked(cacheApi.upsertCacheEntry).mock.calls[0][0]);
   });
 
   it('marks a video larger than the cache limit as not cacheable and skips manifest/eviction calls', async () => {
     settingsStore.cacheLimitBytes = 100; // smaller than the 200-byte selected file
-    const result = await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
+    const result = await prepareStream({
+      magnet: 'magnet:?xt=test',
+      onStatus: vi.fn(),
+      mediaId: 'media-123'
+    });
 
     expect(result.cacheEntry).toBeUndefined();
     expect(result.isCacheable).toBe(false);
@@ -127,7 +141,7 @@ describe('prepareStream', () => {
       }
     ]);
 
-    await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' });
 
     // neededBytes = totalBytes(200) - alreadyHave(120) = 80
     expect(cacheApi.evictForSpace).toHaveBeenCalledWith('1'.repeat(40), 80, DEFAULT_LIMIT);
@@ -150,7 +164,7 @@ describe('prepareStream', () => {
       }
     ]);
 
-    await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' });
 
     expect(torrentApi.forgetTorrent).toHaveBeenCalledWith('tracked');
     expect(torrentApi.deleteTorrent).toHaveBeenCalledWith('untracked');
@@ -168,7 +182,11 @@ describe('prepareStream', () => {
     vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
 
     const statusCb = vi.fn();
-    const result = await prepareStream('magnet:?xt=test', statusCb, 'media-123');
+    const result = await prepareStream({
+      magnet: 'magnet:?xt=test',
+      onStatus: statusCb,
+      mediaId: 'media-123'
+    });
 
     expect(torrentApi.startEngine).toHaveBeenCalled();
     expect(torrentApi.waitForEngine).toHaveBeenCalled();
@@ -188,7 +206,11 @@ describe('prepareStream', () => {
     vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
 
     const statusCb = vi.fn();
-    const result = await prepareStream('magnet:?xt=test', statusCb, 'media-123');
+    const result = await prepareStream({
+      magnet: 'magnet:?xt=test',
+      onStatus: statusCb,
+      mediaId: 'media-123'
+    });
 
     const requestedUrls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
     expect(requestedUrls).not.toContain('http://localhost/stream');
@@ -206,7 +228,11 @@ describe('prepareStream', () => {
     ]);
     vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
 
-    const result = await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
+    const result = await prepareStream({
+      magnet: 'magnet:?xt=test',
+      onStatus: vi.fn(),
+      mediaId: 'media-123'
+    });
 
     expect(result.videoSrc).toBe('http://localhost/stream');
     expect(result.subtitles).toEqual([
@@ -223,7 +249,11 @@ describe('prepareStream', () => {
     vi.mocked(subtitlesApi.getExternalSubtitles).mockRejectedValue(new Error('rate limited'));
     vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
 
-    const result = await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
+    const result = await prepareStream({
+      magnet: 'magnet:?xt=test',
+      onStatus: vi.fn(),
+      mediaId: 'media-123'
+    });
 
     expect(result.videoSrc).toBe('http://localhost/stream');
     expect(result.subtitles).toEqual([
@@ -246,7 +276,7 @@ describe('prepareStream', () => {
     const revokeSpy = vi.fn();
     globalThis.URL.revokeObjectURL = revokeSpy;
 
-    await prepareStream('magnet:?xt=test', vi.fn(), 'media-123');
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' });
     expect(revokeSpy).not.toHaveBeenCalled();
 
     vi.mocked(torrentApi.getTorrentSubtitles).mockResolvedValueOnce([
@@ -254,7 +284,7 @@ describe('prepareStream', () => {
     ]);
     vi.mocked(subtitlesApi.getExternalSubtitles).mockResolvedValueOnce([]);
 
-    await prepareStream('magnet:?xt=test2', vi.fn(), 'media-456');
+    await prepareStream({ magnet: 'magnet:?xt=test2', onStatus: vi.fn(), mediaId: 'media-456' });
 
     expect(revokeSpy).toHaveBeenCalledWith('blob:mock-url-1');
     expect(revokeSpy).toHaveBeenCalledWith('blob:mock-url-2');

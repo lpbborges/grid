@@ -29,16 +29,16 @@ export function useStreamPlayer() {
     playerState.isPlaying = true;
 
     try {
-      const streamData = await prepareStream(
+      const streamData = await prepareStream({
         magnet,
-        (status) => {
+        onStatus: (status) => {
           engineStatus = status;
         },
-        options.mediaId,
-        options.season,
-        options.episode,
-        options.fileIdx
-      );
+        mediaId: options.mediaId,
+        season: options.season,
+        episode: options.episode,
+        preferredFileIdx: options.fileIdx
+      });
       infoHash = streamData.infoHash;
       totalBytes = streamData.totalBytes;
       videoSrc = streamData.videoSrc;

@@ -67,14 +67,23 @@ async function reconcileLoadedTorrents(manifestInfoHashes: string[]): Promise<vo
   }
 }
 
-export async function prepareStream(
-  magnet: string,
-  onStatus: (status: string) => void,
-  mediaId?: string,
-  season?: number,
-  episode?: number,
-  preferredFileIdx?: number
-): Promise<StreamDetails> {
+export interface PrepareStreamOptions {
+  magnet: string;
+  onStatus: (status: string) => void;
+  mediaId?: string;
+  season?: number;
+  episode?: number;
+  preferredFileIdx?: number;
+}
+
+export async function prepareStream({
+  magnet,
+  onStatus,
+  mediaId,
+  season,
+  episode,
+  preferredFileIdx
+}: PrepareStreamOptions): Promise<StreamDetails> {
   onStatus('Iniciando player...');
   await startEngine();
   await waitForEngine();
