@@ -109,6 +109,40 @@ pub fn pick_eviction_candidates(
     evicted
 }
 
+#[allow(dead_code)]
+pub fn find_orphan_top_level_names(downloads_dir: &Path, manifest: &Manifest) -> Vec<String> {
+    let known: std::collections::HashSet<String> = manifest
+        .entries
+        .iter()
+        .map(|e| {
+            e.file_name
+                .split('/')
+                .next()
+                .unwrap_or(&e.file_name)
+                .to_string()
+        })
+        .collect();
+
+    let Ok(read_dir) = std::fs::read_dir(downloads_dir) else {
+        return Vec::new();
+    };
+
+    read_dir
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name != "manifest.json" && !known.contains(name))
+        .collect()
+}
+
+#[allow(dead_code)]
+pub fn remove_path_best_effort(path: &Path) {
+    if path.is_dir() {
+        let _ = std::fs::remove_dir_all(path);
+    } else {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,5 +272,67 @@ mod tests {
             manifest_path(&app_data),
             app_data.join("downloads").join("manifest.json")
         );
+    }
+
+    #[test]
+    fn find_orphan_top_level_names_ignores_manifest_json() {
+        let dir = unique_test_dir("orphan-manifest-json");
+        std::fs::write(dir.join("manifest.json"), "{}").unwrap();
+        let manifest = Manifest { entries: vec![] };
+        let orphans = find_orphan_top_level_names(&dir, &manifest);
+        assert!(!orphans.contains(&"manifest.json".to_string()));
+    }
+
+    #[test]
+    fn find_orphan_top_level_names_flags_untracked_top_level_file() {
+        let dir = unique_test_dir("orphan-untracked-file");
+        std::fs::write(dir.join("leftover.mkv"), "data").unwrap();
+        let manifest = Manifest { entries: vec![] };
+        let orphans = find_orphan_top_level_names(&dir, &manifest);
+        assert_eq!(orphans, vec!["leftover.mkv".to_string()]);
+    }
+
+    #[test]
+    fn find_orphan_top_level_names_does_not_flag_tracked_flat_file() {
+        let dir = unique_test_dir("orphan-tracked-flat");
+        std::fs::write(dir.join("movie.mkv"), "data").unwrap();
+        let mut manifest = Manifest { entries: vec![] };
+        upsert_entry(&mut manifest, entry("hash1", 4, 1));
+        manifest.entries[0].file_name = "movie.mkv".to_string();
+        let orphans = find_orphan_top_level_names(&dir, &manifest);
+        assert!(orphans.is_empty());
+    }
+
+    #[test]
+    fn find_orphan_top_level_names_does_not_flag_tracked_subfolder() {
+        let dir = unique_test_dir("orphan-tracked-subfolder");
+        std::fs::create_dir_all(dir.join("hash1")).unwrap();
+        std::fs::write(dir.join("hash1").join("movie.mkv"), "data").unwrap();
+        let mut manifest = Manifest { entries: vec![] };
+        upsert_entry(&mut manifest, entry("hash1", 4, 1));
+        manifest.entries[0].file_name = "hash1/movie.mkv".to_string();
+        let orphans = find_orphan_top_level_names(&dir, &manifest);
+        assert!(orphans.is_empty());
+    }
+
+    #[test]
+    fn remove_path_best_effort_deletes_file_and_directory() {
+        let dir = unique_test_dir("remove-best-effort");
+        let file = dir.join("a.txt");
+        std::fs::write(&file, "x").unwrap();
+        remove_path_best_effort(&file);
+        assert!(!file.exists());
+
+        let subdir = dir.join("sub");
+        std::fs::create_dir_all(&subdir).unwrap();
+        std::fs::write(subdir.join("b.txt"), "x").unwrap();
+        remove_path_best_effort(&subdir);
+        assert!(!subdir.exists());
+    }
+
+    #[test]
+    fn remove_path_best_effort_does_not_panic_on_missing_path() {
+        let dir = unique_test_dir("remove-best-effort-missing");
+        remove_path_best_effort(&dir.join("does-not-exist"));
     }
 }
