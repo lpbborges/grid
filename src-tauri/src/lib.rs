@@ -311,9 +311,9 @@ fn evict_for_space_blocking(
 }
 
 /// Path to the PID file tracking the currently-running (or most recently
-/// running) rqbit sidecar process.
-fn pid_file_path() -> PathBuf {
-    std::env::temp_dir().join("grid-play-engine.pid")
+/// running) rqbit sidecar process, inside the app's own cache directory.
+fn pid_file_path(app_cache_dir: &Path) -> PathBuf {
+    app_cache_dir.join("grid-play-engine.pid")
 }
 
 /// Reads and parses a PID from `path`. Returns `None` on any error: missing
@@ -423,7 +423,12 @@ async fn start_torrent_engine(
     // Identity-validated cleanup of any orphaned rqbit process from a
     // previous run, tracked via the PID file (see cleanup_stale_engine).
     // Deliberately run with no EngineState locks held (see comment above).
-    cleanup_stale_engine(&pid_file_path());
+    let app_cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    if let Err(e) = std::fs::create_dir_all(&app_cache_dir) {
+        eprintln!("Failed to create app cache dir for engine PID file: {}", e);
+    }
+    let pid_path = pid_file_path(&app_cache_dir);
+    cleanup_stale_engine(&pid_path);
 
     let mut child_guard = state.child.lock().unwrap();
     let mut pid_guard = state.pid.lock().unwrap();
@@ -484,7 +489,7 @@ async fn start_torrent_engine(
     })?;
 
     let pid = child.pid();
-    if let Err(e) = write_pid_file(&pid_file_path(), pid) {
+    if let Err(e) = write_pid_file(&pid_path, pid) {
         eprintln!("Failed to write engine PID file: {}", e);
     }
 
@@ -554,7 +559,9 @@ pub fn run() {
                         }
                         *state.pid.lock().unwrap() = None;
                         *state.port.lock().unwrap() = None;
-                        remove_pid_file(&pid_file_path());
+                        if let Ok(app_cache_dir) = app_handle.path().app_cache_dir() {
+                            remove_pid_file(&pid_file_path(&app_cache_dir));
+                        }
                     }
                 });
             }
@@ -659,9 +666,12 @@ mod tests {
     }
 
     #[test]
-    fn pid_file_path_is_under_temp_dir_with_expected_name() {
-        let path = pid_file_path();
-        assert_eq!(path, std::env::temp_dir().join("grid-play-engine.pid"));
+    fn pid_file_path_is_under_the_given_cache_dir_with_expected_name() {
+        let cache_dir = PathBuf::from("/home/user/.cache/com.lp01.grid-play");
+        assert_eq!(
+            pid_file_path(&cache_dir),
+            cache_dir.join("grid-play-engine.pid")
+        );
     }
 
     #[test]
