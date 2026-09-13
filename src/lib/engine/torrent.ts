@@ -40,26 +40,43 @@ export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<voi
   throw new Error('Torrent engine failed to become ready in time');
 }
 
-export async function clearTorrents(): Promise<void> {
+export async function getLoadedTorrentInfoHashes(): Promise<string[]> {
   try {
     const res = await fetchWithTimeout(`${ENGINE_URL}/torrents`, {}, 8000);
-    if (!res.ok) return;
+    if (!res.ok) return [];
     const data = await res.json();
-    for (const torrent of data.torrents || []) {
-      await fetchWithTimeout(
-        `${ENGINE_URL}/torrents/${torrent.info_hash}/delete`,
-        { method: 'POST' },
-        8000
-      );
-    }
+    return (data.torrents || []).map((t: { info_hash: string }) => t.info_hash);
   } catch (error) {
-    logger.warn('Failed to clear torrents:', error);
+    logger.warn('Failed to list loaded torrents:', error);
+    return [];
   }
 }
 
-export async function addTorrent(magnetLink: string): Promise<TorrentEngineDetails> {
+export async function forgetTorrent(infoHash: string): Promise<void> {
+  try {
+    await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/forget`, { method: 'POST' }, 8000);
+  } catch (error) {
+    logger.warn('Failed to forget torrent:', error);
+  }
+}
+
+export async function deleteTorrent(infoHash: string): Promise<void> {
+  try {
+    await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/delete`, { method: 'POST' }, 8000);
+  } catch (error) {
+    logger.warn('Failed to delete torrent:', error);
+  }
+}
+
+export async function addTorrent(
+  magnetLink: string,
+  subFolder?: string
+): Promise<TorrentEngineDetails> {
+  const url = subFolder
+    ? `${ENGINE_URL}/torrents?sub_folder=${encodeURIComponent(subFolder)}`
+    : `${ENGINE_URL}/torrents`;
   const res = await fetchWithTimeout(
-    `${ENGINE_URL}/torrents`,
+    url,
     {
       method: 'POST',
       headers: {
