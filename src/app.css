@@ -17,10 +17,10 @@
 :root {
   /* Evangelion Unit-01 Palette */
   --primary: #6b21a8;
-  --accent: #36d353;
-  --secondary: #f97316;
-  --green: var(--accent);
-  --orange: var(--secondary);
+  --green: #36d353;
+  --orange: #f97316;
+  --accent: var(--green);
+  --secondary: var(--orange);
 
   /* Status / Feedback */
   --error: #ef4444;
