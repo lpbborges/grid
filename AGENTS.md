@@ -48,6 +48,7 @@ This document serves as a living repository of the core architectural decisions,
 
 ## 7. User Experience & Terminology
 
+- **UI Language is pt-BR:** All user-facing copy (labels, status messages, errors, empty states, date formatting) is written in Brazilian Portuguese, and `src/app.html` declares `lang="pt-BR"`. There is no i18n layer, so hardcode new strings in pt-BR. Only Cinemeta metadata (titles, synopses, episode names) is translated at runtime into the system language. Code, identifiers, logs, comments, and docs stay in English.
 - **User-Friendly Language:** The app should function like Netflix for non-technical users. NEVER mention technical terms like "torrent", "magnet", "seeders", or "peers" in the UI. Use simple, familiar terms like "Stream", "Play", "Loading", "Quality", etc., instead.
 
 ---
