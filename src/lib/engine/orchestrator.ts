@@ -140,7 +140,7 @@ export async function prepareStream(
       return [];
     }),
     mediaId
-      ? getExternalSubtitles(mediaId, season, episode).catch((error) => {
+      ? getExternalSubtitles(mediaId, season, episode, settingsStore.subtitle).catch((error) => {
           logger.warn('Failed to fetch external subtitles, continuing without them:', error);
           return [];
         })

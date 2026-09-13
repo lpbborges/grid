@@ -32,6 +32,13 @@ export interface Movie {
   language?: string;
 }
 
+/** One entry of the OpenSubtitles (strem.io) addon's `subtitles` response array. */
+export interface ExternalSubtitleEntry {
+  id: string;
+  url: string;
+  lang: string;
+}
+
 export interface TorrentEngineDetails {
   info_hash: string;
   files: {

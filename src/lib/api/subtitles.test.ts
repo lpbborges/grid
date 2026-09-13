@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getExternalSubtitles, srtToVtt } from './subtitles';
+import {
+  clearExternalSubtitleCache,
+  findPreferredSubtitleIndex,
+  getExternalSubtitles,
+  srtToVtt
+} from './subtitles';
 import { invoke } from '@tauri-apps/api/core';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -11,6 +16,7 @@ globalThis.fetch = vi.fn() as any;
 describe('subtitles api', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    clearExternalSubtitleCache();
     (invoke as any).mockResolvedValue('WEBVTT\n\nHello');
     let counter = 0;
     globalThis.URL.createObjectURL = vi.fn(() => `blob:mock-url-${counter++}`);
@@ -89,6 +95,67 @@ describe('subtitles api', () => {
       expect(subs).toHaveLength(1);
       expect(subs[0].id).toBe('ok');
     });
+
+    // The Rust command allows 30 fetches per minute; popular titles list ~100
+    // subtitles with Portuguese near the end, so fetching everything in API
+    // order silently dropped exactly the language the user asked for.
+    const mockList = (entries: { id: string; lang: string }[]) => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            subtitles: entries.map((e) => ({ ...e, url: `https://subs5.strem.io/${e.id}.srt` }))
+          })
+      });
+    };
+
+    it('fetches the preferred language first and stays under the fetch limit', async () => {
+      const entries = [
+        ...Array.from({ length: 40 }, (_, i) => ({ id: `eng-${i}`, lang: 'eng' })),
+        ...Array.from({ length: 50 }, (_, i) => ({ id: `other-${i}`, lang: `x${i}` })),
+        { id: 'pob-late', lang: 'pob' }
+      ];
+      mockList(entries);
+
+      const subs = await getExternalSubtitles('tt12042730', undefined, undefined, 'pt');
+
+      expect((invoke as any).mock.calls.length).toBeLessThanOrEqual(25);
+      expect(subs[0].id).toBe('pob-late');
+    });
+
+    it('fetches at most two subtitles per language', async () => {
+      mockList([
+        { id: 'eng-0', lang: 'eng' },
+        { id: 'eng-1', lang: 'eng' },
+        { id: 'eng-2', lang: 'eng' },
+        { id: 'spa-0', lang: 'spa' }
+      ]);
+
+      const subs = await getExternalSubtitles('tt1');
+
+      expect(subs.map((s) => s.id)).toEqual(['eng-0', 'eng-1', 'spa-0']);
+    });
+
+    it('treats language codes case-insensitively for the per-language cap', async () => {
+      mockList([
+        { id: 'eng-0', lang: 'eng' },
+        { id: 'eng-1', lang: 'ENG' },
+        { id: 'eng-2', lang: 'Eng' }
+      ]);
+
+      const subs = await getExternalSubtitles('tt1');
+
+      expect(subs.map((s) => s.id)).toEqual(['eng-0', 'eng-1']);
+    });
+
+    it('reuses already-fetched subtitle content instead of fetching it again', async () => {
+      mockList([{ id: 'pob-0', lang: 'pob' }]);
+
+      await getExternalSubtitles('tt1', 1, 1, 'pt');
+      await getExternalSubtitles('tt1', 1, 1, 'pt');
+
+      expect(invoke).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('srtToVtt', () => {
@@ -102,6 +169,41 @@ Hello World`;
 00:01:51.822 --> 00:01:53.790
 Hello World`;
       expect(srtToVtt(srt)).toBe(expected);
+    });
+  });
+
+  describe('findPreferredSubtitleIndex', () => {
+    const sub = (lang: string, label: string) =>
+      ({ id: label, url: `blob:${label}`, lang, label, group: 'Extra' }) as const;
+
+    it('matches Portuguese by language code, preferring Brazilian variants', () => {
+      const subs = [sub('eng', 'Inglês'), sub('por', 'Português'), sub('pob', 'Português BR')];
+      expect(findPreferredSubtitleIndex(subs, 'pt')).toBe(2);
+    });
+
+    it('falls back to European Portuguese when no Brazilian track exists', () => {
+      const subs = [sub('eng', 'Inglês'), sub('por', 'Português')];
+      expect(findPreferredSubtitleIndex(subs, 'pt')).toBe(1);
+    });
+
+    it('matches English and Spanish by 2- or 3-letter codes, case-insensitively', () => {
+      const subs = [sub('POR', 'Português'), sub('EN', 'Inglês'), sub('spa', 'Espanhol')];
+      expect(findPreferredSubtitleIndex(subs, 'en')).toBe(1);
+      expect(findPreferredSubtitleIndex(subs, 'es')).toBe(2);
+    });
+
+    it('does not match on label substrings of unknown-language torrent files', () => {
+      // Torrent files without a language suffix get lang "Unknown" and their
+      // filename as label; "Adapted" / "Spanglish" must not be mistaken for pt/es.
+      const subs = [sub('Unknown', 'Adapted.2002.1080p'), sub('Unknown', 'Spanglish.Commentary')];
+      expect(findPreferredSubtitleIndex(subs, 'pt')).toBe(-1);
+      expect(findPreferredSubtitleIndex(subs, 'es')).toBe(-1);
+    });
+
+    it('returns -1 for "none" or an unsupported preference', () => {
+      const subs = [sub('pob', 'Português BR')];
+      expect(findPreferredSubtitleIndex(subs, 'none')).toBe(-1);
+      expect(findPreferredSubtitleIndex(subs, 'fr')).toBe(-1);
     });
   });
 });
