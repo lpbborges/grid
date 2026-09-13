@@ -4,12 +4,14 @@ import SeriesPage from './+page.svelte';
 
 const {
   prepareStreamMock,
+  finalizeStreamMock,
   translateMediaInfoMock,
   translateEpisodesListMock,
   clearTorrentsMock,
   getSeriesStreamsMock
 } = vi.hoisted(() => ({
   prepareStreamMock: vi.fn(),
+  finalizeStreamMock: vi.fn(),
   translateMediaInfoMock: vi.fn(),
   translateEpisodesListMock: vi.fn(),
   clearTorrentsMock: vi.fn(),
@@ -17,7 +19,8 @@ const {
 }));
 
 vi.mock('$lib/engine/orchestrator', () => ({
-  prepareStream: prepareStreamMock
+  prepareStream: prepareStreamMock,
+  finalizeStream: finalizeStreamMock
 }));
 
 vi.mock('$lib/api/translate', () => ({
@@ -47,6 +50,7 @@ describe('Series page error handling', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     clearTorrentsMock.mockResolvedValue(undefined);
+    finalizeStreamMock.mockResolvedValue(undefined);
     translateMediaInfoMock.mockResolvedValue({ title: series.title, synopsis: series.summary });
     translateEpisodesListMock.mockResolvedValue({});
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
@@ -107,6 +111,7 @@ describe('Series page integration flow', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     clearTorrentsMock.mockResolvedValue(undefined);
+    finalizeStreamMock.mockResolvedValue(undefined);
     translateMediaInfoMock.mockResolvedValue({ title: series.title, synopsis: series.summary });
     translateEpisodesListMock.mockResolvedValue({});
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());

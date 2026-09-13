@@ -2,21 +2,33 @@ import { logger } from '$lib/logger';
 import {
   startEngine,
   waitForEngine,
-  clearTorrents,
   addTorrent,
   getBestVideoFileIndex,
   getStreamUrl,
   getTorrentSubtitles,
-  updateOnlyFiles
+  updateOnlyFiles,
+  getLoadedTorrentInfoHashes,
+  forgetTorrent,
+  deleteTorrent,
+  getTorrentStats
 } from '$lib/engine/torrent';
+import {
+  getCacheManifest,
+  upsertCacheEntry,
+  evictForSpace,
+  parseInfoHashFromMagnet,
+  type CacheEntry
+} from '$lib/engine/cache';
 import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
 import type { TorrentEngineDetails } from '$lib/types';
+import { settingsStore } from '$lib/stores/settings.svelte';
 
 export interface StreamDetails {
   infoHash: string;
   totalBytes: number;
   videoSrc: string;
   subtitles: SubtitleTrack[];
+  isCacheable: boolean;
 }
 
 // Blob URLs created for the subtitles of the most recently prepared stream.
@@ -36,6 +48,23 @@ function revokeBlobUrls(urls: string[]): void {
   }
 }
 
+// Only one torrent is ever meant to be actively loaded in rqbit at a time,
+// but a crash or a missed cleanup can leave stragglers. Before adding a new
+// one: any loaded torrent the manifest still tracks is forgotten (its files
+// stay cached), and anything else (an oversized "no-cache" leftover) is
+// deleted outright.
+async function reconcileLoadedTorrents(manifestInfoHashes: string[]): Promise<void> {
+  const known = new Set(manifestInfoHashes);
+  const loaded = await getLoadedTorrentInfoHashes();
+  for (const infoHash of loaded) {
+    if (known.has(infoHash)) {
+      await forgetTorrent(infoHash);
+    } else {
+      await deleteTorrent(infoHash);
+    }
+  }
+}
+
 export async function prepareStream(
   magnet: string,
   onStatus: (status: string) => void,
@@ -49,9 +78,13 @@ export async function prepareStream(
   await waitForEngine();
 
   onStatus('Preparando stream...');
-  await clearTorrents();
-  const details = await addTorrent(magnet);
+  const manifest = await getCacheManifest();
+  await reconcileLoadedTorrents(manifest.map((e) => e.infoHash));
 
+  const parsedInfoHash = parseInfoHashFromMagnet(magnet);
+  const existingEntry = manifest.find((e) => e.infoHash === parsedInfoHash);
+
+  const details = await addTorrent(magnet, parsedInfoHash ?? undefined);
   const infoHash = details.info_hash;
 
   let bestFileIdx = preferredFileIdx;
@@ -77,6 +110,33 @@ export async function prepareStream(
       logger.warn('Failed to restrict torrent file selection, continuing anyway:', error);
     }
   );
+
+  // rqbit can only ever cache/evict a torrent as a whole (no per-piece
+  // deletion), so a video whose total size alone exceeds the limit is
+  // simply never written to the manifest — it streams normally and is
+  // deleted (not forgotten) by finalizeStream when the stream ends.
+  const cacheLimitBytes = settingsStore.cacheLimitBytes;
+  const isCacheable = totalBytes > 0 && totalBytes <= cacheLimitBytes;
+
+  if (isCacheable) {
+    const alreadyHave = existingEntry?.downloadedBytes ?? 0;
+    const neededBytes = Math.max(totalBytes - alreadyHave, 0);
+    await evictForSpace(infoHash, neededBytes, cacheLimitBytes);
+
+    const entry: CacheEntry = {
+      infoHash,
+      magnet,
+      mediaId,
+      season,
+      episode,
+      fileName: details.files[bestFileIdx].name,
+      totalBytes,
+      downloadedBytes: alreadyHave,
+      complete: existingEntry?.complete ?? false,
+      lastAccessedAt: Date.now()
+    };
+    await upsertCacheEntry(entry);
+  }
 
   onStatus('Baixando legendas...');
   // Subtitle failures must never block video playback, which does not
@@ -105,6 +165,42 @@ export async function prepareStream(
     infoHash,
     totalBytes,
     videoSrc,
-    subtitles
+    subtitles,
+    isCacheable
   };
+}
+
+// Called when a stream ends (stopped explicitly or on component unmount).
+// A cacheable stream is "forgotten" (rqbit drops it from its active session
+// but leaves the files on disk) after recording its latest downloaded-bytes
+// count in the manifest; a non-cacheable (oversized) stream is deleted
+// outright, matching the old clearTorrents() behavior for that one torrent.
+export async function finalizeStream(infoHash: string, isCacheable: boolean): Promise<void> {
+  if (!infoHash) return;
+
+  if (!isCacheable) {
+    await deleteTorrent(infoHash);
+    return;
+  }
+
+  try {
+    const stats = await getTorrentStats(infoHash);
+    const downloadedBytes = stats?.snapshot?.downloaded_and_checked_bytes;
+    if (downloadedBytes !== undefined) {
+      const manifest = await getCacheManifest();
+      const entry = manifest.find((e) => e.infoHash === infoHash);
+      if (entry) {
+        await upsertCacheEntry({
+          ...entry,
+          downloadedBytes,
+          complete: downloadedBytes >= entry.totalBytes,
+          lastAccessedAt: Date.now()
+        });
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to update cache entry before finalizing stream:', error);
+  }
+
+  await forgetTorrent(infoHash);
 }

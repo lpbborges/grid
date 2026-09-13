@@ -1,4 +1,5 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod cache;
 mod subtitles;
 
 use std::collections::HashMap;
@@ -119,6 +120,74 @@ async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
     } else {
         Ok(subtitles::srt_to_vtt(&text))
     }
+}
+
+#[tauri::command]
+fn get_cache_manifest(app: tauri::AppHandle) -> Result<Vec<cache::CacheEntry>, String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    Ok(cache::read_manifest(&cache::manifest_path(&app_data_dir)).entries)
+}
+
+#[tauri::command]
+fn upsert_cache_entry(app: tauri::AppHandle, entry: cache::CacheEntry) -> Result<(), String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let path = cache::manifest_path(&app_data_dir);
+    let mut manifest = cache::read_manifest(&path);
+    cache::upsert_entry(&mut manifest, entry);
+    cache::write_manifest(&path, &manifest).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn evict_for_space(
+    app: tauri::AppHandle,
+    exclude_info_hash: String,
+    needed_bytes: u64,
+    limit_bytes: u64,
+) -> Result<Vec<String>, String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let downloads_dir = cache::downloads_dir(&app_data_dir);
+    let path = cache::manifest_path(&app_data_dir);
+    let mut manifest = cache::read_manifest(&path);
+
+    let to_evict =
+        cache::pick_eviction_candidates(&manifest, &exclude_info_hash, needed_bytes, limit_bytes);
+
+    for info_hash in &to_evict {
+        if let Some(entry) = cache::remove_entry(&mut manifest, info_hash) {
+            let mut is_safe = true;
+            for component in std::path::Path::new(&entry.file_name).components() {
+                if matches!(
+                    component,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                ) {
+                    is_safe = false;
+                    break;
+                }
+            }
+            if !is_safe {
+                continue;
+            }
+
+            let entry_path = downloads_dir.join(&entry.file_name);
+            cache::remove_path_best_effort(&entry_path);
+
+            let mut current = entry_path.parent();
+            while let Some(parent) = current {
+                if parent == downloads_dir {
+                    break;
+                }
+                if std::fs::remove_dir(parent).is_err() {
+                    break;
+                }
+                current = parent.parent();
+            }
+        }
+    }
+
+    cache::write_manifest(&path, &manifest).map_err(|e| e.to_string())?;
+    Ok(to_evict)
 }
 
 /// Path to the PID file tracking the currently-running (or most recently
@@ -247,9 +316,17 @@ async fn start_torrent_engine(
         return Ok("Engine already running".to_string());
     }
 
-    let output_folder = std::env::temp_dir().join("grid-play-downloads");
-    let _ = std::fs::remove_dir_all(&output_folder); // cleanup previous sessions
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let output_folder = cache::downloads_dir(&app_data_dir);
     let _ = std::fs::create_dir_all(&output_folder);
+
+    // The downloads folder now persists across restarts (it backs the video
+    // cache), so instead of wiping it we only remove state inconsistent with
+    // the manifest: entries the manifest no longer knows about.
+    let manifest = cache::read_manifest(&cache::manifest_path(&app_data_dir));
+    for orphan_name in cache::find_orphan_top_level_names(&output_folder, &manifest) {
+        cache::remove_path_best_effort(&output_folder.join(orphan_name));
+    }
 
     // Find free ephemeral ports for HTTP API and peer listener
     let port = std::net::TcpListener::bind("127.0.0.1:0")
@@ -338,7 +415,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_torrent_engine,
             fetch_torrent_subtitle,
-            fetch_external_subtitle
+            fetch_external_subtitle,
+            get_cache_manifest,
+            upsert_cache_entry,
+            evict_for_space
         ])
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {

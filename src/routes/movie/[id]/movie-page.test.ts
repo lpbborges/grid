@@ -2,16 +2,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import MoviePage from './+page.svelte';
 
-const { prepareStreamMock, translateMediaInfoMock, clearTorrentsMock, getMovieStreamsMock } =
-  vi.hoisted(() => ({
-    prepareStreamMock: vi.fn(),
-    translateMediaInfoMock: vi.fn(),
-    clearTorrentsMock: vi.fn(),
-    getMovieStreamsMock: vi.fn()
-  }));
+const {
+  prepareStreamMock,
+  finalizeStreamMock,
+  translateMediaInfoMock,
+  clearTorrentsMock,
+  getMovieStreamsMock
+} = vi.hoisted(() => ({
+  prepareStreamMock: vi.fn(),
+  finalizeStreamMock: vi.fn(),
+  translateMediaInfoMock: vi.fn(),
+  clearTorrentsMock: vi.fn(),
+  getMovieStreamsMock: vi.fn()
+}));
 
 vi.mock('$lib/engine/orchestrator', () => ({
-  prepareStream: prepareStreamMock
+  prepareStream: prepareStreamMock,
+  finalizeStream: finalizeStreamMock
 }));
 
 vi.mock('$lib/api/translate', () => ({
@@ -44,6 +51,7 @@ describe('Movie page error handling', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     clearTorrentsMock.mockResolvedValue(undefined);
+    finalizeStreamMock.mockResolvedValue(undefined);
     getMovieStreamsMock.mockResolvedValue([]);
     translateMediaInfoMock.mockResolvedValue({ title: movie.title, synopsis: movie.summary });
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
@@ -103,6 +111,7 @@ describe('Movie page integration flow', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     clearTorrentsMock.mockResolvedValue(undefined);
+    finalizeStreamMock.mockResolvedValue(undefined);
     getMovieStreamsMock.mockResolvedValue([]);
     translateMediaInfoMock.mockResolvedValue({ title: movie.title, synopsis: movie.summary });
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());

@@ -34,11 +34,19 @@
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
 
+  // Only stop an in-progress stream when movieId actually changes (navigating
+  // to a different movie) — not on the initial mount, when there is nothing
+  // to stop yet. Calling stop() unconditionally on mount let this effect race
+  // with an immediate play() click (see the video-cache feature's Task 9).
+  let hasMountedTorrentEffect = false;
   $effect(() => {
     if (movieId) {
       selectedTorrentHash = '';
       combinedTorrents = [];
-      streamPlayer.stop();
+      if (hasMountedTorrentEffect) {
+        streamPlayer.stop();
+      }
+      hasMountedTorrentEffect = true;
     }
   });
 

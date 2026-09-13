@@ -60,34 +60,75 @@ describe('torrent engine', () => {
     expect(invoke).toHaveBeenCalledWith('start_torrent_engine');
   });
 
-  it('clears torrents successfully', async () => {
-    (globalThis.fetch as any)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          torrents: [{ info_hash: '123' }, { info_hash: '456' }]
-        })
-      })
-      .mockResolvedValue({ ok: true });
+  it('adds a torrent with a sub_folder query param when provided', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ details: { info_hash: '123', files: [] } })
+    });
 
-    await torrent.clearTorrents();
+    await torrent.addTorrent('magnet:?xt=test', 'abc123hash');
+
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/torrents'),
-      expect.objectContaining({ signal: expect.anything() })
-    );
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/torrents/123/delete'),
-      expect.objectContaining({ method: 'POST', signal: expect.anything() })
-    );
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/torrents/456/delete'),
-      expect.objectContaining({ method: 'POST', signal: expect.anything() })
+      'http://127.0.0.1:3030/torrents?sub_folder=abc123hash',
+      expect.objectContaining({ method: 'POST', body: 'magnet:?xt=test' })
     );
   });
 
-  it('handles clearTorrents failure gracefully', async () => {
-    (globalThis.fetch as any).mockRejectedValueOnce(new Error('Clear error'));
-    await torrent.clearTorrents(); // Should warn, not throw
+  it('adds a torrent without a sub_folder query param when omitted', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ details: { info_hash: '123', files: [] } })
+    });
+
+    await torrent.addTorrent('magnet:?xt=test');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:3030/torrents',
+      expect.objectContaining({ method: 'POST', body: 'magnet:?xt=test' })
+    );
+  });
+
+  it('forgetTorrent posts to the forget endpoint', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ ok: true });
+    await torrent.forgetTorrent('a'.repeat(40));
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/torrents/${'a'.repeat(40)}/forget`),
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('forgetTorrent does not throw when the request fails', async () => {
+    (globalThis.fetch as any).mockRejectedValueOnce(new Error('network error'));
+    await expect(torrent.forgetTorrent('a'.repeat(40))).resolves.toBeUndefined();
+  });
+
+  it('deleteTorrent posts to the delete endpoint', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ ok: true });
+    await torrent.deleteTorrent('a'.repeat(40));
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/torrents/${'a'.repeat(40)}/delete`),
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('deleteTorrent does not throw when the request fails', async () => {
+    (globalThis.fetch as any).mockRejectedValueOnce(new Error('network error'));
+    await expect(torrent.deleteTorrent('a'.repeat(40))).resolves.toBeUndefined();
+  });
+
+  it('getLoadedTorrentInfoHashes returns the info hashes of loaded torrents', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ torrents: [{ info_hash: '123' }, { info_hash: '456' }] })
+    });
+    const hashes = await torrent.getLoadedTorrentInfoHashes();
+    expect(hashes).toEqual(['123', '456']);
+  });
+
+  it('getLoadedTorrentInfoHashes returns an empty array on failure', async () => {
+    (globalThis.fetch as any).mockRejectedValueOnce(new Error('network error'));
+    const hashes = await torrent.getLoadedTorrentInfoHashes();
+    expect(hashes).toEqual([]);
   });
 
   it('adds a torrent successfully', async () => {

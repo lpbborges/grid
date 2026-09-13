@@ -36,11 +36,19 @@
     }
   });
 
+  // Only stop an in-progress stream when seriesId actually changes (navigating
+  // to a different series) — not on the initial mount, when there is nothing
+  // to stop yet. Calling stop() unconditionally on mount let this effect race
+  // with an immediate play() click (see the video-cache feature's Task 9).
+  let hasMountedTorrentEffect = false;
   $effect(() => {
     if (seriesId) {
       selectedSeason = null;
       translatedEpisodes = {};
-      streamPlayer.stop();
+      if (hasMountedTorrentEffect) {
+        streamPlayer.stop();
+      }
+      hasMountedTorrentEffect = true;
     }
   });
 

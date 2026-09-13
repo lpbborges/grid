@@ -1,6 +1,5 @@
 import { logger } from '$lib/logger';
-import { prepareStream } from '$lib/engine/orchestrator';
-import { clearTorrents } from '$lib/engine/torrent';
+import { prepareStream, finalizeStream } from '$lib/engine/orchestrator';
 import type { SubtitleTrack } from '$lib/api/subtitles';
 import { playerState } from '$lib/stores.svelte';
 
@@ -19,6 +18,7 @@ export function useStreamPlayer() {
   let error = $state('');
   let infoHash = $state('');
   let totalBytes = $state(0);
+  let isCacheable = $state(false);
 
   async function play(magnet: string, options: PlayOptions = {}): Promise<boolean> {
     error = '';
@@ -40,6 +40,7 @@ export function useStreamPlayer() {
       totalBytes = streamData.totalBytes;
       videoSrc = streamData.videoSrc;
       subtitles = streamData.subtitles;
+      isCacheable = streamData.isCacheable;
       return true;
     } catch (e) {
       logger.error('Erro ao iniciar reprodução:', e);
@@ -52,6 +53,8 @@ export function useStreamPlayer() {
   }
 
   async function stop(): Promise<void> {
+    const finishedInfoHash = infoHash;
+    const finishedIsCacheable = isCacheable;
     isPlaying = false;
     playerState.isPlaying = false;
     videoSrc = '';
@@ -59,7 +62,7 @@ export function useStreamPlayer() {
     totalBytes = 0;
     engineStatus = '';
     try {
-      await clearTorrents();
+      await finalizeStream(finishedInfoHash, finishedIsCacheable);
     } catch (e) {
       logger.error('Erro ao limpar torrents', e);
     }
@@ -70,7 +73,9 @@ export function useStreamPlayer() {
   // on mediaId change.
   $effect(() => {
     return () => {
-      clearTorrents().catch((e) => logger.error('Erro ao limpar torrents no unmount', e));
+      finalizeStream(infoHash, isCacheable).catch((e) =>
+        logger.error('Erro ao limpar torrents no unmount', e)
+      );
     };
   });
 
