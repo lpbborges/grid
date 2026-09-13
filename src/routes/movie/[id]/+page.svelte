@@ -85,47 +85,54 @@
     if (movie && movie.id) {
       if (combinedTorrents.length === 0) {
         combinedTorrents = [...(movie.torrents || [])];
-        getMovieStreams(movie.id.toString()).then((streams) => {
-          const torrentioOptions = streams
-            .map((s) => {
-              const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
-              const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
+        const requestedId = movie.id;
+        getMovieStreams(requestedId.toString())
+          .then((streams) => {
+            if (movie?.id !== requestedId) return;
+            const torrentioOptions = streams
+              .map((s) => {
+                const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
+                const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
 
-              let type = 'Torrentio';
-              const titleLower = (s.title || '').toLowerCase();
-              if (
-                titleLower.includes('dublado') ||
-                titleLower.includes('pt-br') ||
-                titleLower.includes('🇧🇷')
-              )
-                type += ' (PT)';
-              else if (titleLower.includes('dual')) type += ' (Dual)';
+                let type = 'Torrentio';
+                const titleLower = (s.title || '').toLowerCase();
+                if (
+                  titleLower.includes('dublado') ||
+                  titleLower.includes('pt-br') ||
+                  titleLower.includes('🇧🇷')
+                )
+                  type += ' (PT)';
+                else if (titleLower.includes('dual')) type += ' (Dual)';
 
-              const sizeMatch = s.title?.match(/💾\\s*([^⚙]+)/);
-              const size = sizeMatch ? sizeMatch[1].trim() : 'Unknown size';
+                const sizeMatch = s.title?.match(/💾\\s*([^⚙]+)/);
+                const size = sizeMatch ? sizeMatch[1].trim() : 'Unknown size';
 
-              return {
-                hash: s.infoHash ?? '',
-                quality,
-                type,
-                size,
-                rawStream: s
-              };
-            })
-            .filter((t) => t.hash);
+                return {
+                  hash: s.infoHash ?? '',
+                  quality,
+                  type,
+                  size,
+                  rawStream: s
+                };
+              })
+              .filter((t) => t.hash);
 
-          const existingHashes: Record<string, boolean> = {};
-          for (const t of combinedTorrents) if (t.hash) existingHashes[t.hash] = true;
-          let changed = false;
-          for (const opt of torrentioOptions) {
-            if (opt.hash && !existingHashes[opt.hash]) {
-              combinedTorrents.push(opt);
-              if (opt.hash) existingHashes[opt.hash] = true;
-              changed = true;
+            const existingHashes: Record<string, boolean> = {};
+            for (const t of combinedTorrents) if (t.hash) existingHashes[t.hash] = true;
+            let changed = false;
+            for (const opt of torrentioOptions) {
+              if (opt.hash && !existingHashes[opt.hash]) {
+                combinedTorrents.push(opt);
+                if (opt.hash) existingHashes[opt.hash] = true;
+                changed = true;
+              }
             }
-          }
-          if (changed) reselectBestTorrent();
-        });
+            if (changed) reselectBestTorrent();
+          })
+          .catch((e) => {
+            if (movie?.id !== requestedId) return;
+            logger.error('Falha ao buscar streams do Torrentio:', e);
+          });
       }
     }
   });

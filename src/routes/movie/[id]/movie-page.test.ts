@@ -198,6 +198,84 @@ describe('Movie page integration flow', () => {
       undefined
     );
   });
+
+  it('ignores a stale Torrentio response for the previous movie after navigating', async () => {
+    prepareStreamMock.mockResolvedValue({
+      videoSrc: 'http://localhost:3000/stream',
+      subtitles: [],
+      engineStatus: { status: 'downloading', progress: 0, downloadSpeed: 0, seeds: 0, peers: 0 }
+    });
+
+    const staleHash = 'staleastreamhash000000000000000000000000';
+    const movieB = {
+      ...movie,
+      id: 'tt2',
+      title: 'Another Movie',
+      torrents: [
+        { hash: 'xyz', quality: '1080p', type: 'web', size: '2GB', seeds: 10, peers: 5, url: 'y' }
+      ]
+    };
+
+    let resolveA: (streams: unknown[]) => void = () => {};
+    let resolveB: (streams: unknown[]) => void = () => {};
+    getMovieStreamsMock.mockImplementation(
+      (id: string) =>
+        new Promise((resolve) => {
+          if (id === 'tt1') resolveA = resolve;
+          else resolveB = resolve;
+        })
+    );
+
+    const { rerender } = render(MoviePage, {
+      props: { data: { movieId: 'tt1', movie, error: null } }
+    });
+    expect(getMovieStreamsMock).toHaveBeenCalledWith('tt1');
+
+    await rerender({ data: { movieId: 'tt2', movie: movieB, error: null } });
+    expect(getMovieStreamsMock).toHaveBeenCalledWith('tt2');
+
+    resolveB([]);
+    await new Promise((r) => setTimeout(r, 0));
+
+    resolveA([
+      {
+        infoHash: staleHash,
+        name: '1080p',
+        title: 'Some Movie Dublado 1080p WEB 💾 2GB',
+        fileIdx: 3
+      }
+    ]);
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    await fireEvent.click(screen.getByRole('button', { name: /reproduzir/i }));
+
+    expect(prepareStreamMock).toHaveBeenCalledTimes(1);
+    expect(prepareStreamMock.mock.calls[0][0]).not.toContain(staleHash);
+    expect(prepareStreamMock).toHaveBeenCalledWith(
+      'magnet:?xt=urn:btih:xyz&dn=Another%20Movie',
+      expect.any(Function),
+      'tt2',
+      undefined,
+      undefined,
+      undefined
+    );
+  });
+
+  it('logs a failed Torrentio request instead of leaving the rejection unhandled', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failure = new Error('torrentio down');
+    getMovieStreamsMock.mockRejectedValue(failure);
+
+    render(MoviePage, {
+      props: { data: { movieId: 'tt1', movie, error: null } }
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.any(String), failure);
+    expect(screen.getByRole('button', { name: /reproduzir/i })).toBeInTheDocument();
+    consoleErrorSpy.mockRestore();
+  });
 });
 
 describe('Movie page dubbed-audio heuristic (reselectBestTorrent)', () => {
