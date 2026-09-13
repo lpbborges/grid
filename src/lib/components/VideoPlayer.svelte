@@ -44,7 +44,7 @@
   let duration = $state(0);
   let volume = $state(1);
   let showControls = $state(true);
-  let controlsTimeout: ReturnType<typeof setTimeout>;
+  let controlsTimeout: number | undefined;
 
   const audioSelection = useAudioTrackSelection();
   const subtitleSelection = useSubtitleSelection({
@@ -61,8 +61,8 @@
   // lightweight overlay on top of the still-visible video instead of the
   // opaque first-load screen re-covering it.
   let hasStartedPlaying = $state(false);
-  let statsInterval: ReturnType<typeof window.setInterval>;
-  let waitingTimeout: ReturnType<typeof setTimeout>;
+  let statsInterval: number | undefined;
+  let waitingTimeout: number | undefined;
   let watchedTriggered = $state(false);
   let playbackError = $state('');
 

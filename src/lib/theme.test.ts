@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-// @ts-expect-error type error without @types/node package
 import * as fs from 'node:fs';
-// @ts-expect-error type error without @types/node package
 import * as path from 'node:path';
 
 describe('Tailwind Theme & CSS Variables Validation', () => {
