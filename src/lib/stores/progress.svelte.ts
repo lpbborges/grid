@@ -54,6 +54,17 @@ class ProgressStore {
     return this.progress[this.getKey(id, season, episode)];
   }
 
+  latestFor(id: string | number): ProgressData | undefined {
+    const baseKey = String(id);
+    const episodePrefix = `${baseKey}-S`;
+    let latest: ProgressData | undefined;
+    for (const [key, entry] of Object.entries(this.progress)) {
+      if (key !== baseKey && !key.startsWith(episodePrefix)) continue;
+      if (!latest || entry.updatedAt > latest.updatedAt) latest = entry;
+    }
+    return latest;
+  }
+
   update(
     id: string | number,
     season: number | undefined,

@@ -4,6 +4,7 @@
   import { progressStore } from '$lib/stores/progress.svelte';
 
   let { media, type = 'movie' } = $props<{ media: Movie; type?: 'movie' | 'series' }>();
+  let latestProgress = $derived(progressStore.latestFor(media.id));
 </script>
 
 <a
@@ -37,11 +38,11 @@
         Assistido
       </div>
     {/if}
-    {#if !watchedStore.watchedIds.includes(String(media.id)) && progressStore.get(media.id)}
+    {#if !watchedStore.watchedIds.includes(String(media.id)) && latestProgress}
       <div
         class="bg-green absolute bottom-0 left-0 z-20 h-1 shadow-[0_0_8px_rgba(54,211,83,0.8)] will-change-transform"
-        style="width: {(progressStore.get(media.id)!.time / progressStore.get(media.id)!.duration) *
-          100}%"
+        data-testid="media-card-progress"
+        style="width: {(latestProgress.time / latestProgress.duration) * 100}%"
       ></div>
     {/if}
   </div>
