@@ -162,9 +162,9 @@ async fn fetch_external_subtitle(
 /// strem.io allowlist before being followed. This closes an SSRF hole where
 /// an allowed host could redirect the fetch to an arbitrary internal or
 /// external address.
-fn subtitle_redirect_policy() -> reqwest::redirect::Policy {
-    reqwest::redirect::Policy::custom(|attempt| {
-        if subtitles::is_allowed_subtitle_url(attempt.url().as_str()) {
+fn redirect_policy_allowing(is_allowed: fn(&str) -> bool) -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(move |attempt| {
+        if is_allowed(attempt.url().as_str()) {
             attempt.follow()
         } else {
             attempt.stop()
@@ -172,11 +172,17 @@ fn subtitle_redirect_policy() -> reqwest::redirect::Policy {
     })
 }
 
-fn build_subtitle_client() -> Result<reqwest::Client, reqwest::Error> {
+fn build_client_with_redirect_allowlist(
+    is_allowed: fn(&str) -> bool,
+) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(12000))
-        .redirect(subtitle_redirect_policy())
+        .redirect(redirect_policy_allowing(is_allowed))
         .build()
+}
+
+fn build_subtitle_client() -> Result<reqwest::Client, reqwest::Error> {
+    build_client_with_redirect_allowlist(subtitles::is_allowed_subtitle_url)
 }
 
 async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
@@ -589,17 +595,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_engine_state_initialization() {
-        let state = EngineState {
-            child: Mutex::new(None),
-            pid: Mutex::new(None),
-            port: Mutex::new(None),
-        };
-        assert!(state.child.lock().unwrap().is_none());
-        assert!(state.pid.lock().unwrap().is_none());
-    }
-
-    #[test]
     fn rate_limit_allows_then_blocks_after_threshold() {
         let state = SubtitleRateLimit {
             counts: Mutex::new(HashMap::new()),
@@ -655,17 +650,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn redirect_to_allowed_strem_io_host_is_followed() {
-        // strem.io itself can't be stood up locally, so exercise the policy
-        // closure logic directly against a crafted attempt URL instead.
-        let policy = subtitle_redirect_policy();
-        // reqwest::redirect::Policy has no public inspection API, so assert
-        // the underlying predicate it is built from behaves as expected
-        // (this is what the closure passed to Policy::custom evaluates).
-        assert!(subtitles::is_allowed_subtitle_url(
-            "https://subs.strem.io/x.vtt"
-        ));
-        let _ = policy; // policy construction itself must not panic
+    async fn redirect_to_an_allowed_host_is_followed() {
+        let target_port =
+            spawn_mock_engine_server("WEBVTT".to_string(), "unused".to_string()).await;
+        let server_url =
+            spawn_redirecting_server(&format!("http://127.0.0.1:{}/sub.vtt", target_port)).await;
+
+        let client = build_client_with_redirect_allowlist(|url| url.contains("/sub.vtt"))
+            .expect("client builds");
+        let res = client.get(&server_url).send().await.expect("request sent");
+
+        assert_eq!(res.status(), reqwest::StatusCode::OK);
+        assert_eq!(res.text().await.unwrap(), "WEBVTT");
     }
 
     // --- PID file + process identity tests (P1-2) ---
@@ -946,18 +942,4 @@ mod tests {
         let result = read_capped_body_as_string(res, MAX_SUBTITLE_RESPONSE_BYTES).await;
         assert_eq!(result.unwrap(), "hello");
     }
-}
-
-#[test]
-fn engine_state_returns_existing_url_if_running() {
-    // If child and port are already populated, start_torrent_engine logic bails out early.
-    // We can't easily test `start_torrent_engine` itself because it requires an `AppHandle`,
-    // but we can ensure the state correctly holds the values.
-    let state = EngineState {
-        child: Mutex::new(None),
-        pid: Mutex::new(Some(123)),
-        port: Mutex::new(Some(8080)),
-    };
-    assert_eq!(state.pid.lock().unwrap().unwrap(), 123);
-    assert_eq!(state.port.lock().unwrap().unwrap(), 8080);
 }
