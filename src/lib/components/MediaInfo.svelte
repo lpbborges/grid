@@ -21,10 +21,10 @@
   </h1>
   <button
     onclick={() => watchedStore.toggle(id)}
-    class="focus-visible:ring-accent-green shrink-0 border px-4 py-2 text-sm font-bold tracking-widest uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none {watchedStore.watchedIds.includes(
+    class="focus-visible:ring-green shrink-0 border px-4 py-2 text-sm font-bold tracking-widest uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none {watchedStore.watchedIds.includes(
       String(id)
     )
-      ? 'bg-accent-green text-dark border-accent-green shadow-[0_0_10px_rgba(54,211,83,0.8)]'
+      ? 'bg-green text-dark border-green shadow-[0_0_10px_rgba(54,211,83,0.8)]'
       : 'border-primary/50 text-main bg-surface hover:bg-primary/20'}"
   >
     {watchedStore.watchedIds.includes(String(id)) ? 'Assistido' : 'Marcar como Assistido'}
@@ -45,7 +45,7 @@
 
 <div class="prose prose-invert text-muted mb-8 max-w-none leading-relaxed">
   <h3
-    class="text-accent-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
+    class="text-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
   >
     Sinopse
   </h3>
@@ -93,7 +93,7 @@
           <span class="text-main text-sm leading-tight font-bold" title={actor.name}
             >{actor.name}</span
           >
-          <span class="text-accent-green mt-1 text-xs leading-tight" title={actor.character_name}
+          <span class="text-green mt-1 text-xs leading-tight" title={actor.character_name}
             >{actor.character_name}</span
           >
         </div>

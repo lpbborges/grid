@@ -58,7 +58,7 @@ describe('Titlebar Component', () => {
     for (const name of ['Minimizar', 'Maximizar', 'Fechar']) {
       const btn = screen.getByRole('button', { name });
       expect(btn.className).toContain('focus-visible:ring-2');
-      expect(btn.className).toContain('focus-visible:ring-accent-green');
+      expect(btn.className).toContain('focus-visible:ring-green');
     }
   });
 });

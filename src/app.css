@@ -2,8 +2,8 @@
 
 @theme {
   --color-primary: var(--primary);
-  --color-accent-green: var(--accent-green);
-  --color-accent-orange: var(--accent-orange);
+  --color-green: var(--accent-green);
+  --color-orange: var(--accent-orange);
   --color-dark: var(--bg-dark);
   --color-surface: var(--surface);
   --color-main: var(--text-main);
@@ -12,6 +12,8 @@
 
 :root {
   --primary: #6b21a8;
+  --green: #36d353;
+  --orange: #f97316;
   --accent-green: #36d353;
   --accent-orange: #f97316;
   --bg-dark: #0f0f15;

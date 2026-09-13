@@ -152,7 +152,7 @@
   <div class="relative z-20 mb-8">
     <a
       href="/"
-      class="group hover:text-accent-green text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
+      class="group hover:text-green text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
       style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
     >
       <svg
@@ -165,7 +165,7 @@
         stroke-width="2"
         stroke-linecap="round"
         stroke-linejoin="round"
-        class="text-primary group-hover:text-accent-green transition-colors"
+        class="text-primary group-hover:text-green transition-colors"
         ><path d="m15 18-6-6 6-6" /></svg
       >
       Voltar ao Catálogo
@@ -175,12 +175,12 @@
 
 {#if error}
   <div
-    class="border-accent-orange text-accent-orange bg-surface/80 flex flex-col items-start gap-3 border-l-4 p-4 font-mono"
+    class="border-orange text-orange bg-surface/80 flex flex-col items-start gap-3 border-l-4 p-4 font-mono"
   >
     <span>{error}</span>
     <button
       onclick={retry}
-      class="border-accent-orange text-accent-orange hover:bg-accent-orange hover:text-dark w-fit rounded border px-4 py-2 text-xs font-bold tracking-widest uppercase transition-colors"
+      class="border-orange text-orange hover:bg-orange hover:text-dark w-fit rounded border px-4 py-2 text-xs font-bold tracking-widest uppercase transition-colors"
     >
       Tentar novamente
     </button>

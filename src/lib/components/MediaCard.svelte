@@ -8,7 +8,7 @@
 
 <a
   href="/{type}/{media.id}"
-  class="group bg-surface/50 focus-visible:ring-accent-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 will-change-transform hover:-translate-y-2 hover:shadow-[0_0_20px_rgba(107,33,168,0.4)] focus-visible:ring-2 focus-visible:outline-none"
+  class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 will-change-transform hover:-translate-y-2 hover:shadow-[0_0_20px_rgba(107,33,168,0.4)] focus-visible:ring-2 focus-visible:outline-none"
   data-testid="media-card"
 >
   <!-- Cyberpunk border effect -->
@@ -16,7 +16,7 @@
     class="border-primary/20 group-hover:border-primary/80 pointer-events-none absolute inset-0 border transition-colors duration-300"
   ></div>
   <div
-    class="group-hover:border-accent-green pointer-events-none absolute -top-[1px] -left-[1px] z-40 h-2 w-2 border-t-2 border-l-2 border-transparent transition-colors duration-300"
+    class="group-hover:border-green pointer-events-none absolute -top-[1px] -left-[1px] z-40 h-2 w-2 border-t-2 border-l-2 border-transparent transition-colors duration-300"
   ></div>
 
   <div class="relative h-[270px] w-full overflow-hidden">
@@ -32,14 +32,14 @@
     ></div>
     {#if watchedStore.watchedIds.includes(String(media.id))}
       <div
-        class="bg-accent-green text-dark absolute top-2 right-2 z-20 rounded px-2 py-0.5 text-xs font-bold tracking-wider uppercase shadow-[0_0_10px_rgba(54,211,83,0.8)] will-change-transform"
+        class="bg-green text-dark absolute top-2 right-2 z-20 rounded px-2 py-0.5 text-xs font-bold tracking-wider uppercase shadow-[0_0_10px_rgba(54,211,83,0.8)] will-change-transform"
       >
         Assistido
       </div>
     {/if}
     {#if !watchedStore.watchedIds.includes(String(media.id)) && progressStore.get(media.id)}
       <div
-        class="bg-accent-green absolute bottom-0 left-0 z-20 h-1 shadow-[0_0_8px_rgba(54,211,83,0.8)] will-change-transform"
+        class="bg-green absolute bottom-0 left-0 z-20 h-1 shadow-[0_0_8px_rgba(54,211,83,0.8)] will-change-transform"
         style="width: {(progressStore.get(media.id)!.time / progressStore.get(media.id)!.duration) *
           100}%"
       ></div>
@@ -50,7 +50,7 @@
     class="bg-surface/80 border-primary/20 group-hover:border-primary relative h-[45px] border-t p-3 transition-colors duration-300"
   >
     <div
-      class="text-main font-cyber group-hover:text-accent-green w-full truncate text-center text-sm tracking-wider uppercase transition-colors duration-300"
+      class="text-main font-cyber group-hover:text-green w-full truncate text-center text-sm tracking-wider uppercase transition-colors duration-300"
     >
       {media.title}
     </div>
@@ -61,10 +61,10 @@
       class="bg-surface/95 border-primary pointer-events-none absolute top-[-1px] right-[-1px] left-[-1px] z-30 border px-3 py-[11px] opacity-0 shadow-[0_10px_30px_rgba(0,0,0,0.9)] transition-opacity duration-300 group-hover:opacity-100"
     >
       <div
-        class="border-accent-green pointer-events-none absolute -right-[1px] -bottom-[1px] z-40 h-2 w-2 border-r-2 border-b-2"
+        class="border-green pointer-events-none absolute -right-[1px] -bottom-[1px] z-40 h-2 w-2 border-r-2 border-b-2"
       ></div>
       <div
-        class="font-cyber text-accent-green w-full text-center text-sm tracking-wider break-words uppercase"
+        class="font-cyber text-green w-full text-center text-sm tracking-wider break-words uppercase"
       >
         {media.title}
       </div>
