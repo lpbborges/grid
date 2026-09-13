@@ -230,13 +230,13 @@ async fn read_capped_body_as_string(
 }
 
 #[tauri::command]
-fn get_cache_manifest(app: tauri::AppHandle) -> Result<Vec<cache::CacheEntry>, String> {
+async fn get_cache_manifest(app: tauri::AppHandle) -> Result<Vec<cache::CacheEntry>, String> {
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     Ok(cache::read_manifest(&cache::manifest_path(&app_data_dir)).entries)
 }
 
 #[tauri::command]
-fn upsert_cache_entry(app: tauri::AppHandle, entry: cache::CacheEntry) -> Result<(), String> {
+async fn upsert_cache_entry(app: tauri::AppHandle, entry: cache::CacheEntry) -> Result<(), String> {
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let path = cache::manifest_path(&app_data_dir);
     let mut manifest = cache::read_manifest(&path);
@@ -245,19 +245,32 @@ fn upsert_cache_entry(app: tauri::AppHandle, entry: cache::CacheEntry) -> Result
 }
 
 #[tauri::command]
-fn evict_for_space(
+async fn evict_for_space(
     app: tauri::AppHandle,
     exclude_info_hash: String,
     needed_bytes: u64,
     limit_bytes: u64,
 ) -> Result<Vec<String>, String> {
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let downloads_dir = cache::downloads_dir(&app_data_dir);
-    let path = cache::manifest_path(&app_data_dir);
+    tauri::async_runtime::spawn_blocking(move || {
+        evict_for_space_blocking(&app_data_dir, &exclude_info_hash, needed_bytes, limit_bytes)
+    })
+    .await
+    .map_err(|e| format!("Cache eviction task failed: {}", e))?
+}
+
+fn evict_for_space_blocking(
+    app_data_dir: &Path,
+    exclude_info_hash: &str,
+    needed_bytes: u64,
+    limit_bytes: u64,
+) -> Result<Vec<String>, String> {
+    let downloads_dir = cache::downloads_dir(app_data_dir);
+    let path = cache::manifest_path(app_data_dir);
     let mut manifest = cache::read_manifest(&path);
 
     let to_evict =
-        cache::pick_eviction_candidates(&manifest, &exclude_info_hash, needed_bytes, limit_bytes);
+        cache::pick_eviction_candidates(&manifest, exclude_info_hash, needed_bytes, limit_bytes);
 
     for info_hash in &to_evict {
         if let Some(entry) = cache::remove_entry(&mut manifest, info_hash) {
