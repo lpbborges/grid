@@ -21,6 +21,9 @@
 
   let origDisplay = $derived(originalLanguage ? getLanguageName(originalLanguage) : '');
   let originalLabel = $derived(origDisplay ? `Original (${origDisplay})` : 'Original');
+  let audioSelectValue = $derived(
+    originalLanguage && settingsStore.audio === originalLanguage ? 'original' : settingsStore.audio
+  );
 
   let selectClass = $derived(
     `border-primary/50 focus:border-green bg-surface text-main w-full appearance-none rounded border pr-6 pl-2 font-mono text-xs focus:outline-none ${
@@ -56,7 +59,7 @@
   >
   <select
     id={audioSelectId}
-    value={settingsStore.audio}
+    value={audioSelectValue}
     onchange={(e) => (settingsStore.audio = e.currentTarget.value)}
     class={selectClass}
   >

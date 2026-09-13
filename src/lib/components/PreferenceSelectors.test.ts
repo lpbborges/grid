@@ -37,6 +37,17 @@ describe('PreferenceSelectors component', () => {
     expect(within(audioSelect).queryByText('Inglês')).not.toBeInTheDocument();
   });
 
+  it('shows the "Original" option when the stored audio preference is the original language', () => {
+    settingsStore.audio = 'pt';
+    const { getByLabelText } = render(PreferenceSelectors, {
+      props: { originalLanguage: 'pt' }
+    });
+
+    const audioSelect = getByLabelText('Áudio') as HTMLSelectElement;
+    expect(audioSelect.value).toBe('original');
+    expect(audioSelect.selectedOptions[0].textContent).toBe('Original (Português)');
+  });
+
   it('renders all four subtitle options regardless of original language', () => {
     const { getByLabelText } = render(PreferenceSelectors, {
       props: { originalLanguage: 'en' }
