@@ -57,7 +57,7 @@ export const config: WebdriverIO.Config = {
   capabilities: [
     {
       maxInstances: 1,
-      'tauri:options': { application: APPLICATION }
+      'tauri:options': { application: APPLICATION, webviewOptions: {} }
     } as WebdriverIO.Capabilities
   ],
   logLevel: 'warn',
