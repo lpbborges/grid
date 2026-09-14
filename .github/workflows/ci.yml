@@ -125,6 +125,40 @@ jobs:
       - name: Run E2E specs (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run test:e2e:run
+      - name: Diagnose WebView2 automation (temporary)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $exe = "$PWD\src-tauri\target\debug\grid-play.exe"
+          Get-Item $exe | Select-Object FullName, Length
+          (Get-Item "C:\Program Files (x86)\Microsoft\EdgeWebView\Application\*\msedgewebview2.exe" -ErrorAction SilentlyContinue).VersionInfo.FileVersion
+          & "$env:NATIVE_DRIVER" --version
+          Write-Output "== direct launch with a remote debugging port"
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9333"
+          $p = Start-Process -FilePath $exe -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\app-out.txt" -RedirectStandardError "$env:RUNNER_TEMP\app-err.txt"
+          Start-Sleep -Seconds 20
+          "HasExited=$($p.HasExited) ExitCode=$($p.ExitCode)"
+          Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'grid-play|msedgewebview2' } | Select-Object ProcessId, ParentProcessId, CommandLine | Format-List
+          try { (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:9333/json/version -TimeoutSec 5).Content } catch { "CDP 9333 unreachable: $_" }
+          Get-ChildItem -Recurse -Filter DevToolsActivePort "$env:LOCALAPPDATA\com.lp01.grid-play.e2e" -ErrorAction SilentlyContinue | Select-Object FullName
+          Get-Content "$env:RUNNER_TEMP\app-out.txt", "$env:RUNNER_TEMP\app-err.txt" -ErrorAction SilentlyContinue
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force
+          Remove-Item Env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+          Start-Sleep -Seconds 3
+          Write-Output "== msedgedriver launch"
+          $driver = Start-Process -FilePath $env:NATIVE_DRIVER -ArgumentList "--port=9515", "--verbose", "--log-path=$env:RUNNER_TEMP\msedgedriver.log" -PassThru
+          Start-Sleep -Seconds 3
+          $body = @{ capabilities = @{ alwaysMatch = @{ browserName = "webview2"; "ms:edgeChromium" = $true; "ms:edgeOptions" = @{ binary = $exe; args = @(); webviewOptions = @{} } } } } | ConvertTo-Json -Depth 6
+          $job = Start-Job { param($b) try { (Invoke-WebRequest -UseBasicParsing -Method Post -ContentType "application/json" -Body $b http://127.0.0.1:9515/session -TimeoutSec 90).Content } catch { "session error: $_" } } -ArgumentList $body
+          Start-Sleep -Seconds 20
+          Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'grid-play|msedgewebview2' } | Select-Object ProcessId, ParentProcessId, CommandLine | Format-List
+          Wait-Job $job -Timeout 90 | Out-Null
+          Receive-Job $job
+          Stop-Process -Id $driver.Id -Force -ErrorAction SilentlyContinue
+          Get-Process grid-play, msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force
+          Get-Content "$env:RUNNER_TEMP\msedgedriver.log" -Tail 150
       - name: Run E2E specs (Windows)
         if: runner.os == 'Windows'
         run: npm run test:e2e:run
