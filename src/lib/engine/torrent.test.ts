@@ -285,6 +285,49 @@ describe('torrent engine', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('waitForTorrentLive keeps polling through initializing and network errors until live', async () => {
+    const hash = 'a'.repeat(40);
+    (globalThis.fetch as any)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ state: 'initializing' }) })
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ state: 'live' }) });
+
+    await expect(torrent.waitForTorrentLive(hash, 5, 1)).resolves.toBeUndefined();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/torrents/${hash}/stats/v1`),
+      expect.objectContaining({ signal: expect.anything() })
+    );
+  });
+
+  it('waitForTorrentLive fails fast when the engine reports an error state', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      json: async () => ({ state: 'error', error: 'disk full' })
+    });
+
+    await expect(torrent.waitForTorrentLive('a'.repeat(40), 5, 1)).rejects.toThrow('disk full');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('waitForTorrentLive throws when the torrent never becomes live', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      json: async () => ({ state: 'initializing' })
+    });
+
+    await expect(torrent.waitForTorrentLive('a'.repeat(40), 3, 1)).rejects.toThrow(
+      'Torrent failed to become ready in time'
+    );
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('waitForTorrentLive throws on invalid infoHash without calling fetch', async () => {
+    await expect(torrent.waitForTorrentLive('../etc', 3, 1)).rejects.toThrow('Invalid infoHash');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it('getTorrentStats returns data when successful', async () => {
     const hash = '1'.repeat(40);
     (globalThis.fetch as any).mockResolvedValueOnce({

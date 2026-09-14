@@ -8,6 +8,7 @@ import { settingsStore } from '$lib/stores/settings.svelte';
 vi.mock('./torrent', () => ({
   startEngine: vi.fn(),
   waitForEngine: vi.fn(),
+  waitForTorrentLive: vi.fn(),
   addTorrent: vi.fn(),
   getWantedFileIndices: vi.fn(),
   getStreamUrl: vi.fn(),
@@ -69,6 +70,7 @@ describe('prepareStream', () => {
     vi.mocked(subtitlesApi.getExternalSubtitles).mockResolvedValue([]);
     vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails() as any);
+    vi.mocked(torrentApi.waitForTorrentLive).mockResolvedValue(undefined);
   });
 
   it('adds the torrent with sub_folder set to the parsed info hash and onlyFilesRegex', async () => {
@@ -76,6 +78,35 @@ describe('prepareStream', () => {
     expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test', '1'.repeat(40), {
       onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$'
     });
+  });
+
+  // rqbit answers the add request while still re-checking already-downloaded
+  // data, and its stream endpoint returns 500 until that finishes.
+  it('waits for the added torrent to go live before selecting files or building the stream URL', async () => {
+    vi.mocked(torrentApi.addTorrent).mockResolvedValue(
+      mockDetails({ info_hash: 'b'.repeat(40) }) as any
+    );
+
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' });
+
+    expect(torrentApi.waitForTorrentLive).toHaveBeenCalledWith('b'.repeat(40));
+    const liveOrder = vi.mocked(torrentApi.waitForTorrentLive).mock.invocationCallOrder[0];
+    expect(vi.mocked(torrentApi.addTorrent).mock.invocationCallOrder[0]).toBeLessThan(liveOrder);
+    expect(liveOrder).toBeLessThan(
+      vi.mocked(torrentApi.updateOnlyFiles).mock.invocationCallOrder[0]
+    );
+    expect(liveOrder).toBeLessThan(vi.mocked(torrentApi.getStreamUrl).mock.invocationCallOrder[0]);
+  });
+
+  it('rejects without building a stream URL when the torrent never goes live', async () => {
+    vi.mocked(torrentApi.waitForTorrentLive).mockRejectedValue(
+      new Error('Torrent failed to become ready in time')
+    );
+
+    await expect(
+      prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' })
+    ).rejects.toThrow('Torrent failed to become ready in time');
+    expect(torrentApi.getStreamUrl).not.toHaveBeenCalled();
   });
 
   it('marks a video within the cache limit as cacheable, evicts for space, and upserts the manifest', async () => {

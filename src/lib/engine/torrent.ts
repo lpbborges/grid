@@ -52,6 +52,43 @@ export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<voi
   throw new Error('Torrent engine failed to become ready in time');
 }
 
+interface TorrentStatus {
+  state?: string;
+  error?: string | null;
+}
+
+// rqbit answers the add request while it is still re-checking data already on
+// disk (a resumed cached video), and its stream endpoint returns HTTP 500 until
+// the torrent is live, which the <video> element reports as an unsupported source.
+export async function waitForTorrentLive(
+  infoHash: string,
+  maxRetries = 600,
+  delayMs = 500
+): Promise<void> {
+  if (!isValidInfoHash(infoHash)) {
+    throw new Error('Invalid infoHash');
+  }
+  for (let i = 0; i < maxRetries; i++) {
+    let status: TorrentStatus | null = null;
+    try {
+      const res = await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/stats/v1`, {}, 8000);
+      if (res.ok) {
+        status = (await res.json()) as TorrentStatus;
+      }
+    } catch {
+      // Ignored, wait and retry
+    }
+    if (status?.state === 'live') {
+      return;
+    }
+    if (status?.state === 'error') {
+      throw new Error(`Torrent entered an error state: ${status.error ?? 'unknown error'}`);
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error('Torrent failed to become ready in time');
+}
+
 export async function getLoadedTorrentInfoHashes(): Promise<string[]> {
   try {
     const res = await fetchWithTimeout(`${ENGINE_URL}/torrents`, {}, 30000);

@@ -2,6 +2,7 @@ import { logger } from '$lib/logger';
 import {
   startEngine,
   waitForEngine,
+  waitForTorrentLive,
   addTorrent,
   getWantedFileIndices,
   getStreamUrl,
@@ -101,6 +102,7 @@ export async function prepareStream({
     onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$'
   });
   const infoHash = details.info_hash;
+  await waitForTorrentLive(infoHash);
 
   // From the filtered set, pick just the main video + subtitle files and
   // tell rqbit to drop any remaining unwanted video files (e.g. samples).
