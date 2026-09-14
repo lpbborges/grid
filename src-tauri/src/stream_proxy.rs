@@ -1,4 +1,4 @@
-use crate::mkv::{apply_patch, subtitle_track_patch, Patch, PatchLookup};
+use crate::media_patch::{self, FileView, Patch, Step};
 use crate::subtitles::{is_valid_file_idx, is_valid_info_hash};
 use futures_util::StreamExt;
 use reqwest::{Method, StatusCode};
@@ -6,13 +6,14 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::OnceCell;
 
 pub type EnginePort = Arc<dyn Fn() -> Option<u16> + Send + Sync>;
 
-type PatchCache = Arc<Mutex<HashMap<String, Option<Arc<Patch>>>>>;
+type PatchCache = Arc<Mutex<HashMap<String, Arc<OnceCell<Option<Arc<Patch>>>>>>>;
 
 const MAX_REQUEST_HEAD_BYTES: usize = 16 * 1024;
-const PATCH_PROBE_SIZES: [usize; 3] = [64 * 1024, 1024 * 1024, 8 * 1024 * 1024];
+const MAX_PROBE_STEPS: usize = 32;
 const FORWARDED_REQUEST_HEADERS: [&str; 2] = ["range", "origin"];
 const FORWARDED_RESPONSE_HEADERS: [&str; 6] = [
     "content-type",
@@ -28,6 +29,8 @@ struct ProxyRequest {
     path: String,
     headers: Vec<(&'static str, String)>,
 }
+
+struct ProbeFailed;
 
 pub fn engine_stream_url(port: u16, info_hash: &str, file_idx: i64) -> String {
     format!("http://127.0.0.1:{port}/torrents/{info_hash}/stream/{file_idx}")
@@ -151,34 +154,68 @@ fn parse_stream_path(path: &str) -> Option<(&str, i64)> {
 }
 
 async fn patch_for(client: &reqwest::Client, url: &str, cache: &PatchCache) -> Option<Arc<Patch>> {
-    if let Some(cached) = cache.lock().unwrap().get(url) {
-        return cached.clone();
-    }
-    let patch = probe_patch(client, url).await?;
-    cache.lock().unwrap().insert(url.to_string(), patch.clone());
-    patch
+    let cell = cache
+        .lock()
+        .unwrap()
+        .entry(url.to_string())
+        .or_default()
+        .clone();
+    cell.get_or_try_init(|| probe_patch(client, url))
+        .await
+        .ok()
+        .cloned()
+        .flatten()
 }
 
-async fn probe_patch(client: &reqwest::Client, url: &str) -> Option<Option<Arc<Patch>>> {
-    for size in PATCH_PROBE_SIZES {
-        let response = client
-            .get(url)
-            .header(reqwest::header::RANGE, format!("bytes=0-{}", size - 1))
-            .send()
-            .await
-            .ok()?;
-        if !response.status().is_success() {
-            return None;
-        }
-        let head = read_prefix(response, size).await?;
-        match subtitle_track_patch(&head) {
-            PatchLookup::Found(patch) => return Some(Some(Arc::new(patch))),
-            PatchLookup::NotApplicable => return Some(None),
-            PatchLookup::NeedMoreData if head.len() < size => return Some(None),
-            PatchLookup::NeedMoreData => {}
+async fn probe_patch(
+    client: &reqwest::Client,
+    url: &str,
+) -> Result<Option<Arc<Patch>>, ProbeFailed> {
+    let mut view = FileView::default();
+    for _ in 0..MAX_PROBE_STEPS {
+        match media_patch::next_step(&view) {
+            Step::Done(patch) => return Ok(patch.map(Arc::new)),
+            Step::Fetch { offset, len } => {
+                let (bytes, file_len) = fetch_range(client, url, offset, len).await?;
+                if bytes.is_empty() {
+                    return Ok(None);
+                }
+                view.insert(offset, bytes, file_len);
+            }
         }
     }
-    Some(None)
+    Ok(None)
+}
+
+async fn fetch_range(
+    client: &reqwest::Client,
+    url: &str,
+    offset: u64,
+    len: u64,
+) -> Result<(Vec<u8>, u64), ProbeFailed> {
+    let response = client
+        .get(url)
+        .header(
+            reqwest::header::RANGE,
+            format!("bytes={}-{}", offset, offset + len - 1),
+        )
+        .send()
+        .await
+        .map_err(|_| ProbeFailed)?;
+    if !response.status().is_success() {
+        return Err(ProbeFailed);
+    }
+    let range = content_range(&response);
+    if range.map_or(0, |(start, _)| start) != offset {
+        return Err(ProbeFailed);
+    }
+    let file_len = range
+        .map(|(_, total)| total)
+        .or(response.content_length())
+        .ok_or(ProbeFailed)?;
+    let len = usize::try_from(len).map_err(|_| ProbeFailed)?;
+    let bytes = read_prefix(response, len).await.ok_or(ProbeFailed)?;
+    Ok((bytes, file_len))
 }
 
 async fn read_prefix(response: reqwest::Response, size: usize) -> Option<Vec<u8>> {
@@ -194,18 +231,15 @@ async fn read_prefix(response: reqwest::Response, size: usize) -> Option<Vec<u8>
     Some(head)
 }
 
-fn range_start(response: &reqwest::Response) -> u64 {
-    if response.status() != StatusCode::PARTIAL_CONTENT {
-        return 0;
-    }
-    response
+fn content_range(response: &reqwest::Response) -> Option<(u64, u64)> {
+    let value = response
         .headers()
-        .get(reqwest::header::CONTENT_RANGE)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("bytes "))
-        .and_then(|value| value.split('-').next())
-        .and_then(|start| start.trim().parse().ok())
-        .unwrap_or(0)
+        .get(reqwest::header::CONTENT_RANGE)?
+        .to_str()
+        .ok()?;
+    let (range, total) = value.strip_prefix("bytes ")?.split_once('/')?;
+    let start = range.split('-').next()?.trim().parse().ok()?;
+    Some((start, total.trim().parse().ok()?))
 }
 
 fn status_line(status: StatusCode) -> String {
@@ -230,14 +264,14 @@ async fn relay_response(
     head.push_str("Connection: close\r\n\r\n");
     socket.write_all(head.as_bytes()).await?;
 
-    let mut offset = range_start(&response);
+    let mut offset = content_range(&response).map_or(0, |(start, _)| start);
     let mut body = response.bytes_stream();
     while let Some(chunk) = body.next().await {
         let chunk = chunk.map_err(std::io::Error::other)?;
         match patch {
-            Some(patch) if offset < patch.end() => {
+            Some(patch) if patch.overlaps(offset, chunk.len()) => {
                 let mut patched = chunk.to_vec();
-                apply_patch(&mut patched, offset, patch);
+                patch.apply(&mut patched, offset);
                 socket.write_all(&patched).await?;
             }
             _ => socket.write_all(&chunk).await?,
@@ -259,7 +293,9 @@ async fn write_empty_response(socket: &mut TcpStream, status: StatusCode) -> std
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mkv::fixtures::{matroska_with_cluster, track_entry, TestFile};
+    use crate::media_patch::matroska_fixtures::{matroska_with_cluster, track_entry, TestFile};
+    use crate::media_patch::mp4_fixtures::{mp4, trak};
+    use crate::media_patch::patched;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     const HASH: &str = "31810da7088bdd8b9293b3f5649d4ece574c930d";
@@ -350,17 +386,17 @@ mod tests {
         )
     }
 
-    fn expected_patched(bytes: &[u8]) -> Vec<u8> {
-        let PatchLookup::Found(patch) = subtitle_track_patch(bytes) else {
-            panic!("fixture must contain subtitle tracks");
-        };
-        let mut out = bytes.to_vec();
-        apply_patch(&mut out, 0, &patch);
-        out
-    }
-
     fn stream_url(proxy_port: u16) -> String {
         format!("http://127.0.0.1:{proxy_port}/torrents/{HASH}/stream/0")
+    }
+
+    async fn get_range(proxy_port: u16, range: String) -> reqwest::Response {
+        reqwest::Client::new()
+            .get(stream_url(proxy_port))
+            .header("Range", range)
+            .send()
+            .await
+            .unwrap()
     }
 
     #[tokio::test]
@@ -377,10 +413,7 @@ mod tests {
             res.headers()["content-length"],
             file.bytes.len().to_string().as_str()
         );
-        assert_eq!(
-            res.bytes().await.unwrap().to_vec(),
-            expected_patched(&file.bytes)
-        );
+        assert_eq!(res.bytes().await.unwrap().to_vec(), patched(&file.bytes));
     }
 
     #[tokio::test]
@@ -391,12 +424,7 @@ mod tests {
         let start = file.tracks_offset + 10;
         let end = file.tracks_offset + file.tracks_len + 99;
 
-        let res = reqwest::Client::new()
-            .get(stream_url(proxy_port))
-            .header("Range", format!("bytes={start}-{end}"))
-            .send()
-            .await
-            .unwrap();
+        let res = get_range(proxy_port, format!("bytes={start}-{end}")).await;
 
         assert_eq!(res.status(), StatusCode::PARTIAL_CONTENT);
         assert_eq!(
@@ -406,7 +434,7 @@ mod tests {
         assert_eq!(res.headers()["accept-ranges"], "bytes");
         assert_eq!(
             res.bytes().await.unwrap().to_vec(),
-            expected_patched(&file.bytes)[start..=end].to_vec()
+            patched(&file.bytes)[start..=end].to_vec()
         );
     }
 
@@ -417,12 +445,7 @@ mod tests {
         let proxy_port = spawn_proxy(engine_port).await;
         let start = file.bytes.len() - 50_000;
 
-        let res = reqwest::Client::new()
-            .get(stream_url(proxy_port))
-            .header("Range", format!("bytes={start}-"))
-            .send()
-            .await
-            .unwrap();
+        let res = get_range(proxy_port, format!("bytes={start}-")).await;
 
         assert_eq!(res.status(), StatusCode::PARTIAL_CONTENT);
         assert_eq!(
@@ -432,16 +455,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn passes_non_matroska_files_through_unchanged() {
-        let mut mp4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41".to_vec();
-        mp4.extend((0..200_000).map(|i| (i % 253) as u8));
-        let (engine_port, _) = spawn_mock_engine(mp4.clone()).await;
+    async fn frees_mp4_text_tracks_when_the_moov_follows_the_media_data() {
+        let file = mp4(
+            &[trak(b"vide"), trak(b"soun"), trak(b"sbtl")],
+            true,
+            300_000,
+        );
+        let (engine_port, _) = spawn_mock_engine(file.bytes.clone()).await;
+        let proxy_port = spawn_proxy(engine_port).await;
+        let start = file.bytes.len() - 2_000;
+
+        let res = get_range(proxy_port, format!("bytes={start}-")).await;
+
+        let body = res.bytes().await.unwrap().to_vec();
+        assert_ne!(body, file.bytes[start..].to_vec());
+        assert_eq!(body, patched(&file.bytes)[start..].to_vec());
+    }
+
+    #[tokio::test]
+    async fn passes_files_without_subtitle_tracks_through_unchanged() {
+        let file = mp4(&[trak(b"vide"), trak(b"soun")], false, 200_000);
+        let (engine_port, _) = spawn_mock_engine(file.bytes.clone()).await;
         let proxy_port = spawn_proxy(engine_port).await;
 
         let res = reqwest::get(stream_url(proxy_port)).await.unwrap();
 
         assert_eq!(res.status(), StatusCode::OK);
-        assert_eq!(res.bytes().await.unwrap().to_vec(), mp4);
+        assert_eq!(res.bytes().await.unwrap().to_vec(), file.bytes);
     }
 
     #[tokio::test]

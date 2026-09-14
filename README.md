@@ -77,7 +77,7 @@ SvelteKit UI (static build, runs in the Tauri webview)
   └─ <video> ────────► stream proxy on 127.0.0.1 ──► rqbit stream endpoint
 ```
 
-- **Stream proxy:** WebKitGTK never finishes loading Matroska files that carry embedded subtitle tracks, so the `<video>` element streams through a small proxy in `src-tauri/src/stream_proxy.rs`. It forwards range requests to rqbit and replaces every subtitle `TrackEntry` in the file header with a same-size `Void` element (`src-tauri/src/mkv.rs`), leaving every byte offset intact. Subtitles are still shown from separate `.srt`/`.vtt` files.
+- **Stream proxy:** WebKitGTK does not start MP4 or Matroska files that carry embedded subtitle tracks while the rest of the file is still downloading, so the `<video>` element streams through a small proxy in `src-tauri/src/stream_proxy.rs`. It forwards range requests to rqbit and hides every embedded subtitle track in the file header without changing its size (a `Void` element in Matroska, a `free` atom in MP4; see `src-tauri/src/media_patch/`), leaving every byte offset intact. Subtitles are still shown from separate `.srt`/`.vtt` files.
 
 - `src/lib/api/` wraps external services, `src/lib/engine/` drives playback (engine, cache, ranking), `src/lib/composables/` and `src/lib/stores/` hold reactive state, and `src/lib/components/` holds the UI.
 - **Where state lives:**

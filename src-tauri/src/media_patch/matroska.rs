@@ -1,3 +1,5 @@
+use super::{Edit, FileView, Patch, Step, INITIAL_FETCH_LEN};
+
 const EBML_HEADER_ID: u32 = 0x1A45_DFA3;
 const SEGMENT_ID: u32 = 0x1853_8067;
 const TRACKS_ID: u32 = 0x1654_AE6B;
@@ -6,25 +8,7 @@ const TRACK_ENTRY_ID: u32 = 0xAE;
 const TRACK_TYPE_ID: u32 = 0x83;
 const VOID_ID: u8 = 0xEC;
 const SUBTITLE_TRACK_TYPE: u64 = 0x11;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Patch {
-    pub offset: u64,
-    pub bytes: Vec<u8>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PatchLookup {
-    NeedMoreData,
-    NotApplicable,
-    Found(Patch),
-}
-
-impl Patch {
-    pub fn end(&self) -> u64 {
-        self.offset + self.bytes.len() as u64
-    }
-}
+const MAX_HEADER_LEN: usize = 16 * 1024 * 1024;
 
 enum ParseError {
     Incomplete,
@@ -136,15 +120,7 @@ fn void_subtitle_entries(tracks_payload: &mut [u8]) -> Parsed<usize> {
     Ok(voided)
 }
 
-fn find_patch(head: &[u8]) -> Parsed<Option<Patch>> {
-    if EBML_HEADER_ID
-        .to_be_bytes()
-        .iter()
-        .zip(head)
-        .any(|(a, b)| a != b)
-    {
-        return Err(ParseError::Invalid);
-    }
+fn find_edit(head: &[u8]) -> Parsed<Option<Edit>> {
     let ebml_header = read_element(head, 0)?;
     let segment = read_element(head, ebml_header.end()?)?;
     if segment.id != SEGMENT_ID {
@@ -164,7 +140,7 @@ fn find_patch(head: &[u8]) -> Parsed<Option<Patch>> {
                     .to_vec();
                 let voided = void_subtitle_entries(&mut bytes[child.payload_start - child.start..])
                     .map_err(|_| ParseError::Invalid)?;
-                return Ok((voided > 0).then_some(Patch {
+                return Ok((voided > 0).then_some(Edit {
                     offset: child.start as u64,
                     bytes,
                 }));
@@ -174,25 +150,23 @@ fn find_patch(head: &[u8]) -> Parsed<Option<Patch>> {
     }
 }
 
-pub fn subtitle_track_patch(head: &[u8]) -> PatchLookup {
-    match find_patch(head) {
-        Ok(Some(patch)) => PatchLookup::Found(patch),
-        Ok(None) | Err(ParseError::Invalid) => PatchLookup::NotApplicable,
-        Err(ParseError::Incomplete) => PatchLookup::NeedMoreData,
-    }
+pub(super) fn is_matroska(head: &[u8]) -> bool {
+    head.starts_with(&EBML_HEADER_ID.to_be_bytes())
 }
 
-pub fn apply_patch(chunk: &mut [u8], chunk_offset: u64, patch: &Patch) {
-    let chunk_end = chunk_offset + chunk.len() as u64;
-    let start = chunk_offset.max(patch.offset);
-    let end = chunk_end.min(patch.end());
-    if start >= end {
-        return;
+pub(super) fn next_step(view: &FileView, file_len: u64) -> Step {
+    let head = view.prefix();
+    let head_len = head.len() as u64;
+    match find_edit(head) {
+        Ok(edit) => Step::Done(edit.and_then(|edit| Patch::new(vec![edit]))),
+        Err(ParseError::Incomplete) if head.len() < MAX_HEADER_LEN && head_len < file_len => {
+            Step::Fetch {
+                offset: head_len,
+                len: head_len.max(INITIAL_FETCH_LEN).min(file_len - head_len),
+            }
+        }
+        Err(_) => Step::Done(None),
     }
-    let len = (end - start) as usize;
-    let chunk_from = (start - chunk_offset) as usize;
-    let patch_from = (start - patch.offset) as usize;
-    chunk[chunk_from..chunk_from + len].copy_from_slice(&patch.bytes[patch_from..patch_from + len]);
 }
 
 #[cfg(test)]
@@ -260,17 +234,9 @@ pub mod fixtures {
 mod tests {
     use super::fixtures::*;
     use super::*;
+    use crate::media_patch::{patched, resolve};
 
-    fn patched(bytes: &[u8]) -> Vec<u8> {
-        let PatchLookup::Found(patch) = subtitle_track_patch(bytes) else {
-            panic!("expected a patch");
-        };
-        let mut out = bytes.to_vec();
-        apply_patch(&mut out, 0, &patch);
-        out
-    }
-
-    fn read_vint(bytes: &[u8], at: usize) -> (usize, usize) {
+    fn read_size(bytes: &[u8], at: usize) -> (usize, usize) {
         let first = bytes[at];
         let len = first.leading_zeros() as usize + 1;
         let mut value = usize::from(first) & ((1usize << (8 - len)) - 1);
@@ -281,20 +247,20 @@ mod tests {
     }
 
     fn track_types_and_void_count(bytes: &[u8], tracks_offset: usize) -> (Vec<u8>, usize) {
-        let (tracks_size, tracks_size_len) = read_vint(bytes, tracks_offset + 4);
+        let (tracks_size, tracks_size_len) = read_size(bytes, tracks_offset + 4);
         let mut at = tracks_offset + 4 + tracks_size_len;
         let end = at + tracks_size;
         let mut types = Vec::new();
         let mut voids = 0;
         while at < end {
             let id = bytes[at];
-            let (payload_len, size_len) = read_vint(bytes, at + 1);
+            let (payload_len, size_len) = read_size(bytes, at + 1);
             let payload_start = at + 1 + size_len;
             let payload_end = payload_start + payload_len;
             if id == 0xAE {
                 let mut child = payload_start;
                 while child < payload_end {
-                    let (child_len, child_size_len) = read_vint(bytes, child + 1);
+                    let (child_len, child_size_len) = read_size(bytes, child + 1);
                     if bytes[child] == 0x83 {
                         types.push(bytes[child + 1 + child_size_len]);
                     }
@@ -338,12 +304,13 @@ mod tests {
             track_entry(2, 0x11, "S_TEXT/UTF8"),
         ]);
 
-        let PatchLookup::Found(patch) = subtitle_track_patch(&file.bytes) else {
+        let (Some(patch), _) = resolve(&file.bytes) else {
             panic!("expected a patch");
         };
 
-        assert_eq!(patch.offset, file.tracks_offset as u64);
-        assert_eq!(patch.bytes.len(), file.tracks_len);
+        assert_eq!(patch.edits.len(), 1);
+        assert_eq!(patch.edits[0].offset, file.tracks_offset as u64);
+        assert_eq!(patch.edits[0].bytes.len(), file.tracks_len);
     }
 
     #[test]
@@ -352,41 +319,32 @@ mod tests {
             track_entry(1, 0x01, "V_MPEG4/ISO/AVC"),
             track_entry(2, 0x02, "A_AAC"),
         ]);
-        assert_eq!(
-            subtitle_track_patch(&file.bytes),
-            PatchLookup::NotApplicable
-        );
+        assert_eq!(resolve(&file.bytes).0, None);
     }
 
     #[test]
-    fn is_not_applicable_for_non_matroska_data() {
-        let mp4_head = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41";
-        assert_eq!(subtitle_track_patch(mp4_head), PatchLookup::NotApplicable);
-    }
-
-    #[test]
-    fn needs_more_data_until_the_whole_tracks_element_is_available() {
+    fn fetches_more_until_the_whole_tracks_element_is_available() {
         let file = matroska(&[
             track_entry(1, 0x01, "V_MPEG4/ISO/AVC"),
             track_entry(2, 0x11, "S_TEXT/UTF8"),
         ]);
+        let file_len = file.bytes.len() as u64;
         let tracks_end = file.tracks_offset + file.tracks_len;
-        for cut in [
-            0,
-            3,
-            file.tracks_offset,
-            file.tracks_offset + 20,
-            tracks_end - 1,
-        ] {
-            assert_eq!(
-                subtitle_track_patch(&file.bytes[..cut]),
-                PatchLookup::NeedMoreData,
+        let view_of = |cut: usize| {
+            let mut view = FileView::default();
+            view.insert(0, file.bytes[..cut].to_vec(), file_len);
+            view
+        };
+
+        for cut in [file.tracks_offset, file.tracks_offset + 20, tracks_end - 1] {
+            assert!(
+                matches!(next_step(&view_of(cut), file_len), Step::Fetch { offset, .. } if offset == cut as u64),
                 "cut at {cut}"
             );
         }
         assert!(matches!(
-            subtitle_track_patch(&file.bytes[..tracks_end]),
-            PatchLookup::Found(_)
+            next_step(&view_of(tracks_end), file_len),
+            Step::Done(Some(_))
         ));
     }
 
@@ -402,7 +360,7 @@ mod tests {
             element(&[0x18, 0x53, 0x80, 0x67], &[cluster, tracks].concat()),
         ]
         .concat();
-        assert_eq!(subtitle_track_patch(&bytes), PatchLookup::NotApplicable);
+        assert_eq!(resolve(&bytes).0, None);
     }
 
     #[test]
@@ -436,27 +394,6 @@ mod tests {
                 (vec![], 1),
                 "entry length {total}"
             );
-        }
-    }
-
-    #[test]
-    fn apply_patch_overlays_only_the_overlapping_bytes() {
-        let patch = Patch {
-            offset: 10,
-            bytes: vec![1, 2, 3, 4],
-        };
-        let cases: [(u64, usize, Vec<u8>); 6] = [
-            (0, 10, vec![0; 10]),
-            (14, 4, vec![0; 4]),
-            (8, 4, vec![0, 0, 1, 2]),
-            (11, 2, vec![2, 3]),
-            (12, 6, vec![3, 4, 0, 0, 0, 0]),
-            (5, 12, vec![0, 0, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0]),
-        ];
-        for (offset, len, expected) in cases {
-            let mut chunk = vec![0u8; len];
-            apply_patch(&mut chunk, offset, &patch);
-            assert_eq!(chunk, expected, "chunk at {offset}");
         }
     }
 }

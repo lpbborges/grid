@@ -81,7 +81,7 @@ This document serves as a living repository of the core architectural decisions,
 - **Subtitle fetching:** External subtitle URLs and every redirect target must pass `is_allowed_subtitle_url` (the strem.io allowlist). The frontend caps subtitle fetches below the Rust rate limit (`SUBTITLE_RATE_LIMIT_PER_MINUTE`); change both together.
 - **TS/Rust parity:** Validators exist on both sides and must agree: `isValidInfoHash` ↔ `is_valid_info_hash`, `isValidFileIdx` ↔ `is_valid_file_idx`, and subtitle/video extension checks (case-insensitive on both sides).
 - **Sidecar:** Binaries in `src-tauri/bin/` must be named `rqbit-<target-triple>[.exe]` (see README → Streaming Engine Sidecar).
-- **Stream proxy:** The `<video>` element must load streams from `getStreamUrl` (the Rust stream proxy in `stream_proxy.rs`), never from rqbit directly. WebKitGTK stalls on Matroska files with embedded subtitle tracks, and the proxy voids those tracks in the header (`mkv.rs`) without changing byte offsets.
+- **Stream proxy:** The `<video>` element must load streams from `getStreamUrl` (the Rust stream proxy in `stream_proxy.rs`), never from rqbit directly. WebKitGTK stalls on MP4 and Matroska files with embedded subtitle tracks while they are still downloading, and the proxy hides those tracks in the header (`media_patch/`) without changing byte offsets.
 
 ## 6. Code Quality & Git
 
