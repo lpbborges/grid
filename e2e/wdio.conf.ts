@@ -71,22 +71,33 @@ export const config: WebdriverIO.Config = {
     rmSync(ARTIFACTS, { recursive: true, force: true });
     mkdirSync(ARTIFACTS, { recursive: true });
     for (const dir of appDataDirs()) rmSync(dir, { recursive: true, force: true });
-    services = await startE2eServices();
-    const log = createWriteStream(path.join(ARTIFACTS, 'app-and-driver.log'));
-    const nativeDriver = process.env.NATIVE_DRIVER
-      ? ['--native-driver', process.env.NATIVE_DRIVER]
-      : [];
-    tauriDriver = spawn(TAURI_DRIVER, nativeDriver, {
-      env: {
-        ...process.env,
-        ...RQBIT_OFFLINE_ENV,
-        RQBIT_TRACKERS_FILENAME: services.trackersFile
-      },
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-    tauriDriver.stdout?.pipe(log);
-    tauriDriver.stderr?.pipe(log);
-    await waitForPort(4444);
+    try {
+      services = await startE2eServices();
+      const log = createWriteStream(path.join(ARTIFACTS, 'app-and-driver.log'));
+      const nativeDriver = process.env.NATIVE_DRIVER
+        ? ['--native-driver', process.env.NATIVE_DRIVER]
+        : [];
+      tauriDriver = spawn(TAURI_DRIVER, nativeDriver, {
+        env: {
+          ...process.env,
+          ...RQBIT_OFFLINE_ENV,
+          RQBIT_TRACKERS_FILENAME: services.trackersFile
+        },
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      tauriDriver.stdout?.pipe(log);
+      tauriDriver.stderr?.pipe(log);
+      const driverFailed = new Promise<never>((_, reject) => {
+        tauriDriver?.once('error', reject);
+      });
+      await Promise.race([waitForPort(4444), driverFailed]);
+    } catch (error) {
+      tauriDriver?.kill();
+      await services?.stop();
+      tauriDriver = undefined;
+      services = undefined;
+      throw error;
+    }
   },
 
   afterTest: async (test, _context, { passed }) => {
