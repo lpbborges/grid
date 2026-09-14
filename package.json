@@ -29,6 +29,10 @@
       "prettier --write"
     ]
   },
+  "overrides": {
+    "extract-zip": "npm:@electron-internal/extract-zip@^1.0.5",
+    "serialize-javascript": "^7.1.1"
+  },
   "license": "MIT",
   "dependencies": {
     "@fontsource-variable/orbitron": "^5.3.0",
