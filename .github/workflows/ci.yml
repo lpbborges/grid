@@ -30,6 +30,7 @@ jobs:
       - run: npm run lint
       - run: npx prettier --check .
       - run: npm run check
+      - run: npm run check:e2e
       - run: npm run test:frontend
 
   rust:
@@ -79,3 +80,56 @@ jobs:
           tool: cargo-audit
       - run: cargo audit
         working-directory: src-tauri
+
+  e2e:
+    needs: [frontend, rust]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential curl wget file libxdo-dev libssl-dev \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            webkit2gtk-driver xvfb pulseaudio \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
+          pulseaudio -D --exit-idle-time=-1
+      - name: Install Edge WebDriver matching WebView2
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo install --git https://github.com/chippers/msedgedriver-tool
+          & "$env:USERPROFILE\.cargo\bin\msedgedriver-tool.exe"
+          "NATIVE_DRIVER=$PWD\msedgedriver.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - run: cargo install tauri-driver --locked
+      - run: npm ci
+      - name: Real engine tests on this platform
+        working-directory: src-tauri
+        run: cargo test playback_engine_tests
+      - run: npm run build:e2e
+      - name: Run E2E specs (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run test:e2e:run
+      - name: Run E2E specs (Windows)
+        if: runner.os == 'Windows'
+        run: npm run test:e2e:run
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-artifacts-${{ matrix.os }}
+          path: e2e/artifacts/
