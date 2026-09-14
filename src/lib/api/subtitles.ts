@@ -2,6 +2,7 @@ import { logger } from '$lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import type { ExternalSubtitleEntry } from '$lib/types';
+import { endpoints } from './endpoints';
 
 export interface SubtitleTrack {
   id: string;
@@ -211,8 +212,8 @@ export async function getExternalSubtitles(
   try {
     const url =
       season !== undefined && episode !== undefined
-        ? `https://opensubtitles-v3.strem.io/subtitles/series/${imdbId}:${season}:${episode}.json`
-        : `https://opensubtitles-v3.strem.io/subtitles/movie/${imdbId}.json`;
+        ? `${endpoints.openSubtitles}/subtitles/series/${imdbId}:${season}:${episode}.json`
+        : `${endpoints.openSubtitles}/subtitles/movie/${imdbId}.json`;
     const res = await fetchWithTimeout(url);
     if (!res.ok) return [];
     const data: { subtitles?: ExternalSubtitleEntry[] } = await res.json();

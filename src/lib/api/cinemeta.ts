@@ -1,8 +1,7 @@
 import { logger } from '$lib/logger';
 import type { CinemetaMeta, Movie, Series } from '../types';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
-
-const BASE_URL = 'https://movies-api.accel.li/api/v2';
+import { endpoints } from './endpoints';
 
 function mapCinemetaMeta(m: CinemetaMeta): Movie {
   return {
@@ -21,7 +20,7 @@ function mapCinemetaMeta(m: CinemetaMeta): Movie {
 
 export async function getPopularMovies(limit = 24): Promise<Movie[]> {
   try {
-    const res = await fetchWithTimeout(`https://v3-cinemeta.strem.io/catalog/movie/top.json`);
+    const res = await fetchWithTimeout(`${endpoints.cinemeta}/catalog/movie/top.json`);
     if (!res.ok) {
       throw new Error(`Failed to fetch popular movies from cinemeta: ${res.statusText}`);
     }
@@ -38,7 +37,7 @@ export async function getPopularMovies(limit = 24): Promise<Movie[]> {
 export async function getPopularSeries(limit = 24): Promise<Movie[]> {
   try {
     // using cinemeta for popular series
-    const res = await fetchWithTimeout(`https://v3-cinemeta.strem.io/catalog/series/top.json`);
+    const res = await fetchWithTimeout(`${endpoints.cinemeta}/catalog/series/top.json`);
     if (!res.ok) {
       throw new Error(`Failed to fetch popular series from cinemeta: ${res.statusText}`);
     }
@@ -59,7 +58,7 @@ async function searchCinemeta(
 ): Promise<Movie[]> {
   try {
     const res = await fetchWithTimeout(
-      `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(query)}.json`
+      `${endpoints.cinemeta}/catalog/${type}/top/search=${encodeURIComponent(query)}.json`
     );
     if (!res.ok) {
       throw new Error(`Failed to search cinemeta: ${res.statusText}`);
@@ -96,7 +95,9 @@ export async function searchCatalog(
 export async function getMovieDetails(movieId: number | string): Promise<Movie> {
   const isImdbId = typeof movieId === 'string' && movieId.startsWith('tt');
   const queryParam = isImdbId ? `imdb_id=${movieId}` : `movie_id=${movieId}`;
-  const res = await fetchWithTimeout(`${BASE_URL}/movie_details.json?${queryParam}&with_cast=true`);
+  const res = await fetchWithTimeout(
+    `${endpoints.moviesApi}/movie_details.json?${queryParam}&with_cast=true`
+  );
   if (!res.ok) {
     throw new Error(`Failed to fetch movie details: ${res.statusText}`);
   }
@@ -110,9 +111,7 @@ export async function getMovieDetails(movieId: number | string): Promise<Movie> 
   if (isImdbId || movie.imdb_code) {
     const imdbId = isImdbId ? movieId : movie.imdb_code;
     try {
-      const cineRes = await fetchWithTimeout(
-        `https://v3-cinemeta.strem.io/meta/movie/${imdbId}.json`
-      );
+      const cineRes = await fetchWithTimeout(`${endpoints.cinemeta}/meta/movie/${imdbId}.json`);
       if (cineRes.ok) {
         const cineData = await cineRes.json();
         if (cineData?.meta?.director) {
@@ -182,7 +181,7 @@ function mapCountryToLanguage(country: string | undefined): string {
 }
 
 export async function getSeriesDetails(seriesId: string): Promise<Series> {
-  const res = await fetchWithTimeout(`https://v3-cinemeta.strem.io/meta/series/${seriesId}.json`);
+  const res = await fetchWithTimeout(`${endpoints.cinemeta}/meta/series/${seriesId}.json`);
   if (!res.ok) {
     throw new Error(`Failed to fetch series details: ${res.statusText}`);
   }
