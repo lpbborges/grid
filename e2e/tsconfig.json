@@ -9,7 +9,7 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
-    "types": ["node"]
+    "types": ["node", "@wdio/globals/types", "@wdio/mocha-framework"]
   },
   "include": ["**/*.ts"]
 }

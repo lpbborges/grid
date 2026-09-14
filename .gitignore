@@ -16,3 +16,5 @@ coverage/
 # Local plans, not part of the shipped codebase
 .claude/plans/
 docs/superpowers/
+
+e2e/artifacts/
