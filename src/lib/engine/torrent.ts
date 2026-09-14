@@ -9,6 +9,7 @@ const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm'];
 const SUBTITLE_EXTENSIONS = ['.srt', '.vtt'];
 
 let ENGINE_URL = 'http://127.0.0.1:3030';
+let STREAM_URL = ENGINE_URL;
 
 export function isValidInfoHash(value: string): boolean {
   return /^[a-f0-9]{40}$/i.test(value) || /^[a-f0-9]{64}$/i.test(value);
@@ -27,14 +28,23 @@ export class EngineStartError extends Error {
 
 export async function startEngine(): Promise<void> {
   let url: string;
+  let streamUrl: string;
   try {
     url = await invoke<string>('start_torrent_engine');
+    streamUrl = await invoke<string>('get_stream_proxy_url');
   } catch (error) {
     throw new EngineStartError(error);
   }
-  if (url && url.startsWith('http')) {
+  if (isHttpUrl(url)) {
     ENGINE_URL = url;
   }
+  if (isHttpUrl(streamUrl)) {
+    STREAM_URL = streamUrl;
+  }
+}
+
+function isHttpUrl(url: string | undefined): url is string {
+  return !!url?.startsWith('http');
 }
 
 export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<void> {
@@ -219,7 +229,7 @@ export function getStreamUrl(infoHash: string, fileIdx: number): string {
   if (!isValidFileIdx(fileIdx)) {
     throw new Error('Invalid fileIdx');
   }
-  return `${ENGINE_URL}/torrents/${infoHash}/stream/${fileIdx}`;
+  return `${STREAM_URL}/torrents/${infoHash}/stream/${fileIdx}`;
 }
 
 export async function getTorrentSubtitles(

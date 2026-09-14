@@ -36,14 +36,33 @@ describe('torrent engine', () => {
     expect(url).toBe(`http://127.0.0.1:3030/torrents/${'a'.repeat(40)}/stream/2`);
   });
 
-  it('calls startEngine tauri invoke and updates the port getStreamUrl uses', async () => {
-    (invoke as any).mockResolvedValueOnce('http://127.0.0.1:41349');
-    await torrent.startEngine();
-    expect(invoke).toHaveBeenCalledWith('start_torrent_engine');
-    // Verifies startEngine's resolved URL actually propagates to getStreamUrl.
-    expect(torrent.getStreamUrl('b'.repeat(40), 1)).toBe(
-      `http://127.0.0.1:41349/torrents/${'b'.repeat(40)}/stream/1`
+  it('streams through the proxy URL and keeps the engine URL for API calls', async () => {
+    (invoke as any).mockImplementation(async (command: string) =>
+      command === 'start_torrent_engine' ? 'http://127.0.0.1:41349' : 'http://127.0.0.1:45000'
     );
+    (globalThis.fetch as any).mockResolvedValueOnce({ ok: true });
+
+    await torrent.startEngine();
+    await torrent.waitForEngine(1, 0);
+
+    expect(invoke).toHaveBeenCalledWith('start_torrent_engine');
+    expect(invoke).toHaveBeenCalledWith('get_stream_proxy_url');
+    expect(torrent.getStreamUrl('b'.repeat(40), 1)).toBe(
+      `http://127.0.0.1:45000/torrents/${'b'.repeat(40)}/stream/1`
+    );
+    expect(vi.mocked(globalThis.fetch).mock.calls[0][0]).toBe('http://127.0.0.1:41349/torrents');
+  });
+
+  it('rethrows a stream proxy failure as an EngineStartError', async () => {
+    (invoke as any).mockImplementation(async (command: string) => {
+      if (command === 'start_torrent_engine') return 'http://127.0.0.1:41349';
+      throw 'Stream proxy not running';
+    });
+
+    const failure = torrent.startEngine();
+
+    await expect(failure).rejects.toBeInstanceOf(torrent.EngineStartError);
+    await expect(failure).rejects.toMatchObject({ cause: 'Stream proxy not running' });
   });
 
   it("does not leak a prior test's startEngine port into an unrelated test", () => {

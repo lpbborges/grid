@@ -70,10 +70,14 @@ SvelteKit UI (static build, runs in the Tauri webview)
   ├─ fetch ──────────► Cinemeta / YTS mirror / Torrentio / translation APIs
   ├─ invoke ─────────► Rust commands (src-tauri/src/lib.rs)
   │                      ├─ start_torrent_engine   spawns the rqbit sidecar on a free 127.0.0.1 port
+  │                      ├─ get_stream_proxy_url    returns the local stream proxy address
   │                      ├─ fetch_*_subtitle        fetches subtitles, converts SRT to VTT
   │                      └─ get_cache_manifest / upsert_cache_entry / evict_for_space
-  └─ fetch ──────────► rqbit HTTP API on 127.0.0.1 (add, stream, stats)
+  ├─ fetch ──────────► rqbit HTTP API on 127.0.0.1 (add, stats)
+  └─ <video> ────────► stream proxy on 127.0.0.1 ──► rqbit stream endpoint
 ```
+
+- **Stream proxy:** WebKitGTK never finishes loading Matroska files that carry embedded subtitle tracks, so the `<video>` element streams through a small proxy in `src-tauri/src/stream_proxy.rs`. It forwards range requests to rqbit and replaces every subtitle `TrackEntry` in the file header with a same-size `Void` element (`src-tauri/src/mkv.rs`), leaving every byte offset intact. Subtitles are still shown from separate `.srt`/`.vtt` files.
 
 - `src/lib/api/` wraps external services, `src/lib/engine/` drives playback (engine, cache, ranking), `src/lib/composables/` and `src/lib/stores/` hold reactive state, and `src/lib/components/` holds the UI.
 - **Where state lives:**

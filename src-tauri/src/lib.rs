@@ -1,5 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod cache;
+mod mkv;
+mod stream_proxy;
 mod subtitles;
 
 use std::collections::HashMap;
@@ -86,14 +88,7 @@ async fn fetch_torrent_subtitle_impl(
         return Err("Requested file is not a subtitle".to_string());
     }
 
-    // Matches getStreamUrl in src/lib/engine/torrent.ts:
-    // `${ENGINE_URL}/torrents/${infoHash}/stream/${fileIdx}`
-    let target_url = format!(
-        "http://127.0.0.1:{}/torrents/{}/stream/{}",
-        port, info_hash, file_idx
-    );
-
-    fetch_and_convert(&target_url).await
+    fetch_and_convert(&stream_proxy::engine_stream_url(port, &info_hash, file_idx)).await
 }
 
 #[derive(serde::Deserialize)]
@@ -533,6 +528,33 @@ async fn start_torrent_engine(
     Ok(format!("http://127.0.0.1:{}", port))
 }
 
+struct StreamProxyState {
+    port: Mutex<Option<u16>>,
+}
+
+#[tauri::command]
+async fn get_stream_proxy_url(state: State<'_, StreamProxyState>) -> Result<String, String> {
+    let port = state.port.lock().unwrap();
+    port.map(|p| format!("http://127.0.0.1:{}", p))
+        .ok_or_else(|| "Stream proxy not running".to_string())
+}
+
+fn start_stream_proxy(app: &tauri::AppHandle) -> std::io::Result<u16> {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    listener.set_nonblocking(true)?;
+    let port = listener.local_addr()?.port();
+    let engine_app = app.clone();
+    let engine_port: stream_proxy::EnginePort =
+        std::sync::Arc::new(move || *engine_app.state::<EngineState>().port.lock().unwrap());
+    tauri::async_runtime::spawn(async move {
+        match tokio::net::TcpListener::from_std(listener) {
+            Ok(listener) => stream_proxy::serve(listener, engine_port).await,
+            Err(e) => eprintln!("Failed to start the stream proxy: {}", e),
+        }
+    });
+    Ok(port)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -555,8 +577,12 @@ pub fn run() {
         .manage(SubtitleRateLimit {
             counts: Mutex::new(HashMap::new()),
         })
+        .manage(StreamProxyState {
+            port: Mutex::new(None),
+        })
         .invoke_handler(tauri::generate_handler![
             start_torrent_engine,
+            get_stream_proxy_url,
             fetch_torrent_subtitle,
             fetch_external_subtitle,
             get_cache_manifest,
@@ -564,6 +590,10 @@ pub fn run() {
             evict_for_space
         ])
         .setup(|app| {
+            match start_stream_proxy(app.handle()) {
+                Ok(port) => *app.state::<StreamProxyState>().port.lock().unwrap() = Some(port),
+                Err(e) => eprintln!("Failed to bind the stream proxy: {}", e),
+            }
             if let Some(window) = app.get_webview_window("main") {
                 let app_handle = app.handle().clone();
                 window.on_window_event(move |event| {

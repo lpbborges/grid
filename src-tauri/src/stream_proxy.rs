@@ -1,0 +1,525 @@
+use crate::mkv::{apply_patch, subtitle_track_patch, Patch, PatchLookup};
+use crate::subtitles::{is_valid_file_idx, is_valid_info_hash};
+use futures_util::StreamExt;
+use reqwest::{Method, StatusCode};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+
+pub type EnginePort = Arc<dyn Fn() -> Option<u16> + Send + Sync>;
+
+type PatchCache = Arc<Mutex<HashMap<String, Option<Arc<Patch>>>>>;
+
+const MAX_REQUEST_HEAD_BYTES: usize = 16 * 1024;
+const PATCH_PROBE_SIZES: [usize; 3] = [64 * 1024, 1024 * 1024, 8 * 1024 * 1024];
+const FORWARDED_REQUEST_HEADERS: [&str; 2] = ["range", "origin"];
+const FORWARDED_RESPONSE_HEADERS: [&str; 6] = [
+    "content-type",
+    "content-length",
+    "content-range",
+    "accept-ranges",
+    "access-control-allow-origin",
+    "vary",
+];
+
+struct ProxyRequest {
+    method: Method,
+    path: String,
+    headers: Vec<(&'static str, String)>,
+}
+
+pub fn engine_stream_url(port: u16, info_hash: &str, file_idx: i64) -> String {
+    format!("http://127.0.0.1:{port}/torrents/{info_hash}/stream/{file_idx}")
+}
+
+pub async fn serve(listener: TcpListener, engine_port: EnginePort) {
+    let client = reqwest::Client::new();
+    let cache = PatchCache::default();
+    loop {
+        match listener.accept().await {
+            Ok((socket, _)) => {
+                tokio::spawn(handle_connection(
+                    socket,
+                    engine_port.clone(),
+                    client.clone(),
+                    cache.clone(),
+                ));
+            }
+            Err(e) => eprintln!("Stream proxy failed to accept a connection: {}", e),
+        }
+    }
+}
+
+async fn handle_connection(
+    mut socket: TcpStream,
+    engine_port: EnginePort,
+    client: reqwest::Client,
+    cache: PatchCache,
+) {
+    let Some(request) = read_request(&mut socket).await else {
+        return;
+    };
+    let result = match forward(request, &engine_port, &client, &cache).await {
+        Ok((response, patch)) => relay_response(&mut socket, response, patch.as_deref()).await,
+        Err(status) => write_empty_response(&mut socket, status).await,
+    };
+    if let Err(e) = result {
+        if !matches!(
+            e.kind(),
+            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset
+        ) {
+            eprintln!("Stream proxy stopped relaying a response: {}", e);
+        }
+    }
+}
+
+async fn forward(
+    request: ProxyRequest,
+    engine_port: &EnginePort,
+    client: &reqwest::Client,
+    cache: &PatchCache,
+) -> Result<(reqwest::Response, Option<Arc<Patch>>), StatusCode> {
+    if request.method != Method::GET && request.method != Method::HEAD {
+        return Err(StatusCode::METHOD_NOT_ALLOWED);
+    }
+    let (info_hash, file_idx) = parse_stream_path(&request.path).ok_or(StatusCode::NOT_FOUND)?;
+    let port = engine_port().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let url = engine_stream_url(port, info_hash, file_idx);
+    let patch = if request.method == Method::GET {
+        patch_for(client, &url, cache).await
+    } else {
+        None
+    };
+    let upstream = request.headers.into_iter().fold(
+        client.request(request.method, &url),
+        |builder, (name, value)| builder.header(name, value),
+    );
+    let response = upstream.send().await.map_err(|e| {
+        eprintln!("Stream proxy failed to reach the engine: {}", e);
+        StatusCode::BAD_GATEWAY
+    })?;
+    Ok((response, patch))
+}
+
+async fn read_request(socket: &mut TcpStream) -> Option<ProxyRequest> {
+    let mut head = Vec::new();
+    let mut buf = [0u8; 2048];
+    while !head.windows(4).any(|window| window == b"\r\n\r\n") {
+        if head.len() > MAX_REQUEST_HEAD_BYTES {
+            return None;
+        }
+        let read = socket.read(&mut buf).await.ok()?;
+        if read == 0 {
+            return None;
+        }
+        head.extend_from_slice(&buf[..read]);
+    }
+    let head = String::from_utf8_lossy(&head);
+    let mut lines = head.split("\r\n");
+    let mut request_line = lines.next()?.split_whitespace();
+    let method = Method::from_bytes(request_line.next()?.as_bytes()).ok()?;
+    let path = request_line.next()?.to_string();
+    let headers = lines
+        .filter_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            let name = FORWARDED_REQUEST_HEADERS
+                .into_iter()
+                .find(|forwarded| name.trim().eq_ignore_ascii_case(forwarded))?;
+            Some((name, value.trim().to_string()))
+        })
+        .collect();
+    Some(ProxyRequest {
+        method,
+        path,
+        headers,
+    })
+}
+
+fn parse_stream_path(path: &str) -> Option<(&str, i64)> {
+    let path = path.split('?').next()?;
+    let mut segments = path.strip_prefix("/torrents/")?.split('/');
+    let info_hash = segments.next()?;
+    if segments.next()? != "stream" {
+        return None;
+    }
+    let file_idx: i64 = segments.next()?.parse().ok()?;
+    if segments.next().is_some() || !is_valid_info_hash(info_hash) || !is_valid_file_idx(file_idx) {
+        return None;
+    }
+    Some((info_hash, file_idx))
+}
+
+async fn patch_for(client: &reqwest::Client, url: &str, cache: &PatchCache) -> Option<Arc<Patch>> {
+    if let Some(cached) = cache.lock().unwrap().get(url) {
+        return cached.clone();
+    }
+    let patch = probe_patch(client, url).await?;
+    cache.lock().unwrap().insert(url.to_string(), patch.clone());
+    patch
+}
+
+async fn probe_patch(client: &reqwest::Client, url: &str) -> Option<Option<Arc<Patch>>> {
+    for size in PATCH_PROBE_SIZES {
+        let response = client
+            .get(url)
+            .header(reqwest::header::RANGE, format!("bytes=0-{}", size - 1))
+            .send()
+            .await
+            .ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        let head = read_prefix(response, size).await?;
+        match subtitle_track_patch(&head) {
+            PatchLookup::Found(patch) => return Some(Some(Arc::new(patch))),
+            PatchLookup::NotApplicable => return Some(None),
+            PatchLookup::NeedMoreData if head.len() < size => return Some(None),
+            PatchLookup::NeedMoreData => {}
+        }
+    }
+    Some(None)
+}
+
+async fn read_prefix(response: reqwest::Response, size: usize) -> Option<Vec<u8>> {
+    let mut stream = response.bytes_stream();
+    let mut head = Vec::with_capacity(size.min(1024 * 1024));
+    while head.len() < size {
+        match stream.next().await {
+            Some(chunk) => head.extend_from_slice(&chunk.ok()?),
+            None => break,
+        }
+    }
+    head.truncate(size);
+    Some(head)
+}
+
+fn range_start(response: &reqwest::Response) -> u64 {
+    if response.status() != StatusCode::PARTIAL_CONTENT {
+        return 0;
+    }
+    response
+        .headers()
+        .get(reqwest::header::CONTENT_RANGE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("bytes "))
+        .and_then(|value| value.split('-').next())
+        .and_then(|start| start.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+fn status_line(status: StatusCode) -> String {
+    format!(
+        "HTTP/1.1 {} {}\r\n",
+        status.as_u16(),
+        status.canonical_reason().unwrap_or("")
+    )
+}
+
+async fn relay_response(
+    socket: &mut TcpStream,
+    response: reqwest::Response,
+    patch: Option<&Patch>,
+) -> std::io::Result<()> {
+    let mut head = status_line(response.status());
+    for name in FORWARDED_RESPONSE_HEADERS {
+        if let Some(value) = response.headers().get(name).and_then(|v| v.to_str().ok()) {
+            head.push_str(&format!("{}: {}\r\n", name, value));
+        }
+    }
+    head.push_str("Connection: close\r\n\r\n");
+    socket.write_all(head.as_bytes()).await?;
+
+    let mut offset = range_start(&response);
+    let mut body = response.bytes_stream();
+    while let Some(chunk) = body.next().await {
+        let chunk = chunk.map_err(std::io::Error::other)?;
+        match patch {
+            Some(patch) if offset < patch.end() => {
+                let mut patched = chunk.to_vec();
+                apply_patch(&mut patched, offset, patch);
+                socket.write_all(&patched).await?;
+            }
+            _ => socket.write_all(&chunk).await?,
+        }
+        offset += chunk.len() as u64;
+    }
+    socket.shutdown().await
+}
+
+async fn write_empty_response(socket: &mut TcpStream, status: StatusCode) -> std::io::Result<()> {
+    let head = format!(
+        "{}Content-Length: 0\r\nConnection: close\r\n\r\n",
+        status_line(status)
+    );
+    socket.write_all(head.as_bytes()).await?;
+    socket.shutdown().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mkv::fixtures::{matroska_with_cluster, track_entry, TestFile};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    const HASH: &str = "31810da7088bdd8b9293b3f5649d4ece574c930d";
+
+    async fn spawn_mock_engine(body: Vec<u8>) -> (u16, Arc<AtomicUsize>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let requests = Arc::new(AtomicUsize::new(0));
+        let body = Arc::new(body);
+        let counter = requests.clone();
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                counter.fetch_add(1, Ordering::SeqCst);
+                let body = body.clone();
+                tokio::spawn(async move {
+                    let mut head = Vec::new();
+                    let mut buf = [0u8; 1024];
+                    while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+                        let Ok(n) = socket.read(&mut buf).await else {
+                            return;
+                        };
+                        if n == 0 {
+                            return;
+                        }
+                        head.extend_from_slice(&buf[..n]);
+                    }
+                    let head = String::from_utf8_lossy(&head).to_lowercase();
+                    let total = body.len();
+                    let range = head
+                        .lines()
+                        .find_map(|line| line.strip_prefix("range: bytes="))
+                        .and_then(|spec| {
+                            let (start, end) = spec.trim().split_once('-')?;
+                            let start: usize = start.parse().ok()?;
+                            let end = end.parse().unwrap_or(total - 1).min(total - 1);
+                            Some((start, end))
+                        });
+                    let (status, start, end) = match range {
+                        Some((start, end)) => ("206 Partial Content", start, end),
+                        None => ("200 OK", 0, total - 1),
+                    };
+                    let mut response = format!(
+                        "HTTP/1.1 {status}\r\nContent-Type: video/x-matroska\r\nAccept-Ranges: bytes\r\nContent-Length: {}\r\n",
+                        end - start + 1
+                    );
+                    if range.is_some() {
+                        response
+                            .push_str(&format!("Content-Range: bytes {start}-{end}/{total}\r\n"));
+                    }
+                    response.push_str("Connection: close\r\n\r\n");
+                    if socket.write_all(response.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    if !head.starts_with("head") {
+                        for chunk in body[start..=end].chunks(7_000) {
+                            if socket.write_all(chunk).await.is_err() {
+                                return;
+                            }
+                        }
+                    }
+                    let _ = socket.shutdown().await;
+                });
+            }
+        });
+        (port, requests)
+    }
+
+    async fn spawn_proxy_with(engine_port: EnginePort) -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(serve(listener, engine_port));
+        port
+    }
+
+    async fn spawn_proxy(engine_port: u16) -> u16 {
+        spawn_proxy_with(Arc::new(move || Some(engine_port))).await
+    }
+
+    fn file_with_subtitles() -> TestFile {
+        matroska_with_cluster(
+            &[
+                track_entry(1, 0x01, "V_MPEG4/ISO/AVC"),
+                track_entry(2, 0x02, "A_EAC3"),
+                track_entry(3, 0x11, "S_TEXT/UTF8"),
+                track_entry(4, 0x11, "S_TEXT/UTF8"),
+            ],
+            300_000,
+        )
+    }
+
+    fn expected_patched(bytes: &[u8]) -> Vec<u8> {
+        let PatchLookup::Found(patch) = subtitle_track_patch(bytes) else {
+            panic!("fixture must contain subtitle tracks");
+        };
+        let mut out = bytes.to_vec();
+        apply_patch(&mut out, 0, &patch);
+        out
+    }
+
+    fn stream_url(proxy_port: u16) -> String {
+        format!("http://127.0.0.1:{proxy_port}/torrents/{HASH}/stream/0")
+    }
+
+    #[tokio::test]
+    async fn serves_the_whole_file_with_subtitle_tracks_voided() {
+        let file = file_with_subtitles();
+        let (engine_port, _) = spawn_mock_engine(file.bytes.clone()).await;
+        let proxy_port = spawn_proxy(engine_port).await;
+
+        let res = reqwest::get(stream_url(proxy_port)).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.headers()["content-type"], "video/x-matroska");
+        assert_eq!(
+            res.headers()["content-length"],
+            file.bytes.len().to_string().as_str()
+        );
+        assert_eq!(
+            res.bytes().await.unwrap().to_vec(),
+            expected_patched(&file.bytes)
+        );
+    }
+
+    #[tokio::test]
+    async fn patches_a_range_that_starts_inside_the_tracks_element() {
+        let file = file_with_subtitles();
+        let (engine_port, _) = spawn_mock_engine(file.bytes.clone()).await;
+        let proxy_port = spawn_proxy(engine_port).await;
+        let start = file.tracks_offset + 10;
+        let end = file.tracks_offset + file.tracks_len + 99;
+
+        let res = reqwest::Client::new()
+            .get(stream_url(proxy_port))
+            .header("Range", format!("bytes={start}-{end}"))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(
+            res.headers()["content-range"],
+            format!("bytes {start}-{end}/{}", file.bytes.len()).as_str()
+        );
+        assert_eq!(res.headers()["accept-ranges"], "bytes");
+        assert_eq!(
+            res.bytes().await.unwrap().to_vec(),
+            expected_patched(&file.bytes)[start..=end].to_vec()
+        );
+    }
+
+    #[tokio::test]
+    async fn leaves_ranges_after_the_tracks_element_untouched() {
+        let file = file_with_subtitles();
+        let (engine_port, _) = spawn_mock_engine(file.bytes.clone()).await;
+        let proxy_port = spawn_proxy(engine_port).await;
+        let start = file.bytes.len() - 50_000;
+
+        let res = reqwest::Client::new()
+            .get(stream_url(proxy_port))
+            .header("Range", format!("bytes={start}-"))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(
+            res.bytes().await.unwrap().to_vec(),
+            file.bytes[start..].to_vec()
+        );
+    }
+
+    #[tokio::test]
+    async fn passes_non_matroska_files_through_unchanged() {
+        let mut mp4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41".to_vec();
+        mp4.extend((0..200_000).map(|i| (i % 253) as u8));
+        let (engine_port, _) = spawn_mock_engine(mp4.clone()).await;
+        let proxy_port = spawn_proxy(engine_port).await;
+
+        let res = reqwest::get(stream_url(proxy_port)).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.bytes().await.unwrap().to_vec(), mp4);
+    }
+
+    #[tokio::test]
+    async fn answers_head_requests_with_headers_only() {
+        let file = file_with_subtitles();
+        let (engine_port, _) = spawn_mock_engine(file.bytes.clone()).await;
+        let proxy_port = spawn_proxy(engine_port).await;
+
+        let res = reqwest::Client::new()
+            .head(stream_url(proxy_port))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            res.headers()["content-length"],
+            file.bytes.len().to_string().as_str()
+        );
+        assert!(res.bytes().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn rejects_paths_other_than_a_valid_stream_without_contacting_the_engine() {
+        let (engine_port, requests) = spawn_mock_engine(vec![0; 16]).await;
+        let proxy_port = spawn_proxy(engine_port).await;
+
+        for path in [
+            "/torrents".to_string(),
+            format!("/torrents/{HASH}"),
+            "/torrents/not-a-hash/stream/0".to_string(),
+            format!("/torrents/{HASH}/stream/-1"),
+            format!("/torrents/{HASH}/stream/0/../../delete"),
+        ] {
+            let res = reqwest::get(format!("http://127.0.0.1:{proxy_port}{path}"))
+                .await
+                .unwrap();
+            assert_eq!(res.status(), StatusCode::NOT_FOUND, "{path}");
+        }
+        assert_eq!(requests.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn rejects_methods_other_than_get_and_head_without_contacting_the_engine() {
+        let (engine_port, requests) = spawn_mock_engine(vec![0; 16]).await;
+        let proxy_port = spawn_proxy(engine_port).await;
+
+        let res = reqwest::Client::new()
+            .post(stream_url(proxy_port))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(requests.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn answers_service_unavailable_while_the_engine_is_not_running() {
+        let proxy_port = spawn_proxy_with(Arc::new(|| None)).await;
+
+        let res = reqwest::get(stream_url(proxy_port)).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn answers_bad_gateway_when_the_engine_is_unreachable() {
+        let closed_port = TcpListener::bind("127.0.0.1:0")
+            .await
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let proxy_port = spawn_proxy(closed_port).await;
+
+        let res = reqwest::get(stream_url(proxy_port)).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::BAD_GATEWAY);
+    }
+}
