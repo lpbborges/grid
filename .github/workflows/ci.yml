@@ -125,6 +125,13 @@ jobs:
       - name: Run E2E specs (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run test:e2e:run
+      - name: Allow WebView2 remote debugging for the elevated E2E app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name 'grid-play.exe' -Value '--remote-debugging-port=0' -PropertyType String -Force | Out-Null
       - name: Run E2E specs (Windows)
         if: runner.os == 'Windows'
         run: npm run test:e2e:run
