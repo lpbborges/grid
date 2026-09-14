@@ -10,6 +10,8 @@
     "prepare": "husky",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "check:e2e": "tsc -p e2e/tsconfig.json",
+    "e2e:services": "node e2e/support/serve.ts",
     "tauri": "tauri",
     "lint": "eslint .",
     "format": "prettier --write .",
