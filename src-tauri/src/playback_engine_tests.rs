@@ -11,6 +11,15 @@ use tokio::process::{Child, Command};
 
 const ONLY_FILES_REGEX: &str = r"(?i)\.(mp4|mkv|webm|srt|vtt)$";
 
+static ENGINE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+fn http() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap()
+}
+
 fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -100,7 +109,9 @@ impl Drop for Swarm {
 }
 
 async fn get_json(port: u16, path: &str) -> Option<Value> {
-    let response = reqwest::get(format!("http://127.0.0.1:{port}{path}"))
+    let response = http()
+        .get(format!("http://127.0.0.1:{port}{path}"))
+        .send()
         .await
         .ok()?;
     if !response.status().is_success() {
@@ -110,7 +121,7 @@ async fn get_json(port: u16, path: &str) -> Option<Value> {
 }
 
 async fn post(port: u16, path: &str, content_type: &str, body: String) -> reqwest::Response {
-    reqwest::Client::new()
+    http()
         .post(format!("http://127.0.0.1:{port}{path}"))
         .header("Content-Type", content_type)
         .body(body)
@@ -198,7 +209,7 @@ async fn add_torrent(swarm: &Swarm) -> Value {
         ],
     )
     .unwrap();
-    let response = reqwest::Client::new()
+    let response = http()
         .post(url)
         .header("Content-Type", "text/plain")
         .body(format!(
@@ -309,6 +320,7 @@ fn check_snapshot(name: &str, mut actual: Value) {
 
 #[tokio::test]
 async fn rqbit_http_api_matches_the_recorded_contract() {
+    let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
     let swarm = start_swarm("movie-mkv").await;
     let port = swarm.engine_port;
     let hash = swarm.info_hash.clone();
@@ -356,7 +368,7 @@ async fn proxy_get(
     file_idx: usize,
     range: &str,
 ) -> (reqwest::StatusCode, Option<String>, Vec<u8>) {
-    let response = reqwest::Client::new()
+    let response = http()
         .get(format!(
             "http://127.0.0.1:{proxy_port}/torrents/{info_hash}/stream/{file_idx}"
         ))
@@ -442,6 +454,7 @@ async fn assert_streams_fixture_with_subtitles_hidden(
 
 #[tokio::test]
 async fn streams_the_mkv_fixture_through_the_proxy_with_subtitles_hidden() {
+    let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
     assert_streams_fixture_with_subtitles_hidden(
         "movie-mkv",
         "Grid.Play.Fixture.2026.1080p.mkv",
@@ -452,6 +465,7 @@ async fn streams_the_mkv_fixture_through_the_proxy_with_subtitles_hidden() {
 
 #[tokio::test]
 async fn streams_the_mp4_fixture_through_the_proxy_with_subtitles_hidden() {
+    let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
     assert_streams_fixture_with_subtitles_hidden(
         "movie-mp4",
         "Grid.Play.Fixture.2026.1080p.mp4",
@@ -462,6 +476,7 @@ async fn streams_the_mp4_fixture_through_the_proxy_with_subtitles_hidden() {
 
 #[tokio::test]
 async fn forgotten_torrents_resume_from_disk_and_deleted_ones_are_removed() {
+    let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
     let swarm = start_swarm("movie-mkv").await;
     let port = swarm.engine_port;
     let hash = swarm.info_hash.clone();
