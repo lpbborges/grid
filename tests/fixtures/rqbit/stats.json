@@ -1,0 +1,34 @@
+{
+  "average_piece_download_time": {
+    "nanos": 0,
+    "secs": 0
+  },
+  "download_speed": {
+    "human_readable": "2.45 MiB/s",
+    "mbps": 2.450005531311035
+  },
+  "snapshot": {
+    "downloaded_and_checked_bytes": 259672,
+    "downloaded_and_checked_pieces": 1,
+    "fetched_bytes": 259672,
+    "peer_stats": {
+      "connecting": 0,
+      "dead": 0,
+      "live": 0,
+      "live_socks": 0,
+      "live_tcp": 0,
+      "live_utp": 0,
+      "not_needed": 1,
+      "queued": 0,
+      "seen": 1,
+      "steals": 0
+    },
+    "total_piece_download_ms": 0,
+    "uploaded_bytes": 0
+  },
+  "time_remaining": null,
+  "upload_speed": {
+    "human_readable": "0.00 MiB/s",
+    "mbps": 0.0
+  }
+}
