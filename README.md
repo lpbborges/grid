@@ -30,6 +30,8 @@ Grid Play is a native desktop application built with **Tauri**, **SvelteKit**, *
     libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
   ```
 
+- For the end-to-end playback tests (Linux and Windows only): [`tauri-driver`](https://v2.tauri.app/develop/tests/webdriver/) (`cargo install tauri-driver --locked`), plus `WebKitWebDriver` and the GStreamer libav plugins on Linux (Debian/Ubuntu: `sudo apt-get install -y webkit2gtk-driver gstreamer1.0-libav`), or an `msedgedriver` matching your WebView2 version on Windows (point `NATIVE_DRIVER` at it). `ffmpeg` is needed only to regenerate the test media.
+
 ## Getting Started
 
 ```sh
@@ -58,10 +60,43 @@ Bundles are written to `src-tauri/target/release/bundle/`.
 - `npm run test:frontend:cov` - Run the frontend tests with a coverage report.
 - `npm run test:backend` - Run the Rust unit tests.
 - `npm run test:backend:cov` - Run the Rust tests with a coverage report (requires [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov)).
+- `npm run test:e2e` - Build the app against local mock services and play fixture movies and episodes in the real window (Linux/Windows).
+- `npm run test:e2e:run` - Run the E2E specs against the last `build:e2e` without rebuilding.
+- `npm run build:e2e` - Build the debug app used by the E2E specs.
+- `npm run test:e2e:live` - Manual smoke test that plays a public-domain title through the real services. Needs internet access; never required to pass.
+- `npm run check:e2e` - Type-check the `e2e/` folder.
+- `npm run e2e:services` - Start the E2E mock services and fixture seeders on their own, for debugging.
 - `npm run check` - Verify TypeScript typings.
 - `npm run check:watch` - Verify TypeScript typings in watch mode.
 - `npm run lint` - Lint the codebase using ESLint.
 - `npm run format` - Format the codebase using Prettier.
+
+## Testing Playback
+
+Playback is protected by three layers of tests that share the fixture videos in `tests/fixtures/media/` (short MP4 and MKV clips with embedded subtitle tracks):
+
+1. **Wiring tests** (`src/routes/*/[id]/*-playback.test.ts`, part of `npm run test:frontend`): render the real movie and series pages, player composable, orchestrator and engine client, faking only Tauri IPC and HTTP. They catch changes that disconnect the pieces.
+2. **Engine tests** (`src-tauri/src/playback_engine_tests.rs`, part of `npm run test:backend`): start the real rqbit sidecar, a local seeder and a fake tracker with no internet access, and stream the fixtures through the real stream proxy. They catch rqbit upgrades, proxy and header-patching bugs.
+3. **End-to-end tests** (`e2e/`, `npm run test:e2e`, CI job `e2e` on Linux and Windows): run the built app against local mock services and check that the video actually advances, including after a seek.
+
+The rqbit HTTP responses the wiring tests fake are recorded in `tests/fixtures/rqbit/`. After updating the sidecar, refresh them and fix `src/lib/engine/__fixtures__/fakeRqbit.ts` if the shapes changed:
+
+```sh
+cd src-tauri && UPDATE_RQBIT_SNAPSHOTS=1 cargo test playback_engine_tests
+```
+
+To regenerate the fixture videos: `scripts/fixtures/generate-media.sh` (requires `ffmpeg`).
+
+### Manual playback checklist
+
+Run this on macOS (not covered by the end-to-end tests) and before each release:
+
+1. Open a movie from the home screen, press **Reproduzir**, and confirm the video starts.
+2. Seek forward and backward; playback continues.
+3. Pick a subtitle and an audio track from the player menus.
+4. Close the player and press **Reproduzir** again; playback resumes where it stopped.
+5. Open a series and play episodes from two different seasons.
+6. Quit the app while a video is playing, reopen it, and play again.
 
 ## Architecture
 
@@ -124,6 +159,7 @@ Grid Play talks to these services directly from your machine. Every host must al
   - Linux: `~/.local/share/com.lp01.grid-play/`
   - macOS: `~/Library/Application Support/com.lp01.grid-play/`
   - Windows: `%APPDATA%\com.lp01.grid-play\`
+- **E2E specs never start playback**: read `e2e/artifacts/app-and-driver.log`. No `rqbit:` lines means the sidecar did not start. A `MediaError 4` means GStreamer lacks H.264/AAC decoders (install the libav plugins). Run `npm run e2e:services` to check the mock services and seeders on their own.
 
 ## Disclaimer
 

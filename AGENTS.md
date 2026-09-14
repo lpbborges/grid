@@ -13,6 +13,9 @@ This document serves as a living repository of the core architectural decisions,
 | Lint / format               | `npm run lint` / `npm run format`                                        |
 | Frontend tests (+ coverage) | `npm run test:frontend` (`test:frontend:cov`)                            |
 | Rust tests (+ coverage)     | `npm run test:backend` (`test:backend:cov`)                              |
+| E2E playback tests (Linux/Windows) | `npm run test:e2e` (`test:e2e:run` skips the build) |
+| Live smoke test (manual, internet)  | `npm run test:e2e:live`                              |
+| Refresh rqbit response snapshots    | `cd src-tauri && UPDATE_RQBIT_SNAPSHOTS=1 cargo test playback_engine_tests` |
 | Rust format / lint          | `cd src-tauri && cargo fmt && cargo clippy --all-targets -- -D warnings` |
 
 ## 1. Architecture & Modularity
@@ -64,6 +67,7 @@ This document serves as a living repository of the core architectural decisions,
 - **Module state:** Use `vi.resetModules()` and a dynamic `import()` per test for modules with module-level state (stores, `torrent.ts`).
 - **File Naming:** Tests must live alongside their implementation (e.g., `cinemeta.test.ts` next to `cinemeta.ts`).
 - **Coverage:** There is no enforced threshold; check `npm run test:frontend:cov` and don't lower coverage of the files you touch.
+- **Playback safety net:** Any change touching the play path (`src/lib/api/torrentio.ts`, `src/lib/api/endpoints.ts`, `src/lib/engine/`, `useStreamPlayer`, `VideoPlayer`, the movie/series pages, `stream_proxy.rs`, `media_patch/`, the sidecar) must keep `*-playback.test.ts` and `playback_engine_tests` green and must pass `npm run test:e2e` locally before it is committed. Add a wiring or E2E assertion for every playback bug you fix. Never point these tests at real external services; fake new services in `playbackBoundary.ts` and `e2e/support/mockServer.ts`, and add their base URL to `src/lib/api/endpoints.ts`.
 
 ## 4. UI & Styling
 
@@ -80,14 +84,14 @@ This document serves as a living repository of the core architectural decisions,
 - **CSP:** Any new external host must be added to `app.security.csp` in `src-tauri/tauri.conf.json`, and CSP expectations are covered by the `csp_*` tests in `lib.rs`.
 - **Subtitle fetching:** External subtitle URLs and every redirect target must pass `is_allowed_subtitle_url` (the strem.io allowlist). The frontend caps subtitle fetches below the Rust rate limit (`SUBTITLE_RATE_LIMIT_PER_MINUTE`); change both together.
 - **TS/Rust parity:** Validators exist on both sides and must agree: `isValidInfoHash` ↔ `is_valid_info_hash`, `isValidFileIdx` ↔ `is_valid_file_idx`, and subtitle/video extension checks (case-insensitive on both sides).
-- **Sidecar:** Binaries in `src-tauri/bin/` must be named `rqbit-<target-triple>[.exe]` (see README → Streaming Engine Sidecar).
+- **Sidecar:** Binaries in `src-tauri/bin/` must be named `rqbit-<target-triple>[.exe]` (see README → Streaming Engine Sidecar). After replacing the binaries, refresh `tests/fixtures/rqbit/` with `UPDATE_RQBIT_SNAPSHOTS=1` and update `src/lib/engine/__fixtures__/fakeRqbit.ts` if the response shapes changed.
 - **Stream proxy:** The `<video>` element must load streams from `getStreamUrl` (the Rust stream proxy in `stream_proxy.rs`), never from rqbit directly. WebKitGTK stalls on MP4 and Matroska files with embedded subtitle tracks while they are still downloading, and the proxy hides those tracks in the header (`media_patch/`) without changing byte offsets.
 
 ## 6. Code Quality & Git
 
 - **Formatting & Linting:** `eslint` and `prettier` are mandated for all TS/JS/Svelte code. `cargo fmt` and `cargo clippy --all-targets -- -D warnings` are mandated for Rust code.
 - **Pre-commit Hook:** `.husky/pre-commit` runs `lint-staged` (ESLint + Prettier on staged files), the full frontend test suite, the full Rust test suite, `cargo fmt --check`, and `cargo clippy`. A commit therefore takes a minute or more. Never bypass this hook unless absolutely necessary. It runs against the working tree, so don't leave intentionally failing tests unstaged while committing something else.
-- **CI:** `.github/workflows/ci.yml` runs lint, Prettier, `svelte-check`, the frontend tests, `cargo fmt`, `clippy`, `cargo test`, `npm audit`, and `cargo audit`.
+- **CI:** `.github/workflows/ci.yml` runs lint, Prettier, `svelte-check`, the frontend tests, `cargo fmt`, `clippy`, `cargo test`, `npm audit`, `cargo audit`, and, after those pass, the `e2e` job on Linux and Windows.
 - **Commits:** Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `chore:`, `ci:`) with small, atomic commits.
 - **Plans & specs:** Never commit planning or spec documents. `.claude/plans/`, `docs/superpowers/` and `.backlog/` are gitignored.
 
