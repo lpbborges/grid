@@ -84,28 +84,77 @@ async function startSeeder(fixture: FixtureName, trackerUrl: string): Promise<Se
     ],
     { env: { ...process.env, ...RQBIT_OFFLINE_ENV }, stdio: 'ignore' }
   );
-  const api = `http://127.0.0.1:${apiPort}`;
-  const list = await pollJson<{ torrents: { info_hash: string }[] }>(
-    `${api}/torrents`,
-    (value) => value.torrents.length > 0
-  );
-  const infoHash = list.torrents[0].info_hash;
-  const details = await pollJson<{ files: TorrentFile[] }>(`${api}/torrents/${infoHash}`, (value) =>
-    Array.isArray(value.files)
-  );
-  return {
-    fixture,
-    infoHash,
-    peerPort,
-    files: details.files.map(({ name, length }) => ({ name, length })),
-    process: child
-  };
+  try {
+    const api = `http://127.0.0.1:${apiPort}`;
+    const list = await pollJson<{ torrents: { info_hash: string }[] }>(
+      `${api}/torrents`,
+      (value) => value.torrents.length > 0
+    );
+    const infoHash = list.torrents[0].info_hash;
+    const details = await pollJson<{ files: TorrentFile[] }>(
+      `${api}/torrents/${infoHash}`,
+      (value) => Array.isArray(value.files)
+    );
+    return {
+      fixture,
+      infoHash,
+      peerPort,
+      files: details.files.map(({ name, length }) => ({ name, length })),
+      process: child
+    };
+  } catch (error) {
+    child.kill();
+    throw error;
+  }
 }
 
 export async function startSeeders(trackerUrl: string): Promise<Seeder[]> {
-  return Promise.all(FIXTURE_NAMES.map((fixture) => startSeeder(fixture, trackerUrl)));
+  const results = await Promise.allSettled(
+    FIXTURE_NAMES.map((fixture) => startSeeder(fixture, trackerUrl))
+  );
+  const fulfilled = results
+    .filter((result): result is PromiseFulfilledResult<Seeder> => result.status === 'fulfilled')
+    .map((result) => result.value);
+  const rejected = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected'
+  );
+  if (rejected) {
+    await stopSeeders(fulfilled);
+    throw rejected.reason;
+  }
+  return fulfilled;
 }
 
-export function stopSeeders(seeders: Seeder[]): void {
-  for (const seeder of seeders) seeder.process.kill();
+function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      child.off('exit', onExit);
+      resolve(false);
+    }, timeoutMs);
+    const onExit = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    child.once('exit', onExit);
+  });
+}
+
+function waitForExitEvent(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => child.once('exit', () => resolve()));
+}
+
+async function stopSeeder(seeder: Seeder): Promise<void> {
+  const { process: child } = seeder;
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  child.kill('SIGTERM');
+  const exited = await waitForExit(child, 5000);
+  if (exited) return;
+  child.kill('SIGKILL');
+  await waitForExitEvent(child);
+}
+
+export async function stopSeeders(seeders: Seeder[]): Promise<void> {
+  await Promise.all(seeders.map((seeder) => stopSeeder(seeder)));
 }

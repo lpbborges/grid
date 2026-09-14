@@ -29,7 +29,7 @@ export async function startE2eServices(): Promise<E2eServices> {
     mock,
     trackersFile,
     async stop() {
-      stopSeeders(seeders);
+      await stopSeeders(seeders);
       await mock.close();
       rmSync(workDir, { recursive: true, force: true });
     }
