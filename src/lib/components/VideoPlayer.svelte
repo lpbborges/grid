@@ -92,12 +92,6 @@
   };
 
   function handleVideoError() {
-    // Before `prepareStream()` resolves, this component is already mounted
-    // with `src=""` (the parent passes the stream URL only once it's known).
-    // An empty src makes the browser fail resource selection immediately and
-    // fire a spurious "error" with MEDIA_ERR_SRC_NOT_SUPPORTED — that's not a
-    // real playback failure, so ignore it.
-    if (!src) return;
     const mediaError = videoElement?.error;
     playbackError = mediaError
       ? (MEDIA_ERROR_MESSAGES[mediaError.code] ?? 'Erro desconhecido ao reproduzir o vídeo.')
@@ -442,47 +436,49 @@
     a11y gap is acknowledged and intentionally suppressed rather than papered over
     with a broken fallback. See VideoPlayer.test.ts for the covered behavior.
   -->
-  <!-- svelte-ignore a11y_media_has_caption -->
-  <video
-    bind:this={videoElement}
-    bind:paused
-    bind:currentTime
-    bind:duration
-    bind:volume
-    {src}
-    autoplay
-    class="h-full w-full cursor-pointer object-contain {hasStartedPlaying
-      ? 'opacity-100'
-      : 'opacity-0'}"
-    data-testid="video-element"
-    onclick={togglePlay}
-    onloadedmetadata={handleLoadedMetadata}
-    onplaying={markPlaying}
-    onwaiting={markWaiting}
-    oncanplay={markPlaying}
-    onseeked={markPlaying}
-    onerror={handleVideoError}
-    ontimeupdate={() => {
-      if (!isVideoPlaying && !paused) markPlaying();
-      if (mediaId && duration > 0) {
-        progressStore.update(mediaId, season, episode, currentTime, duration);
-      }
-      if (duration > 0 && currentTime / duration > 0.95 && onwatched && !watchedTriggered) {
-        watchedTriggered = true;
-        onwatched();
-      }
-    }}
-  >
-    {#each subtitles as sub, index}
-      <track
-        kind="subtitles"
-        src={sub.url}
-        srclang={sub.lang}
-        label={sub.label}
-        onerror={() => subtitleSelection.handleTrackError(index)}
-      />
-    {/each}
-  </video>
+  {#if src}
+    <!-- svelte-ignore a11y_media_has_caption -->
+    <video
+      bind:this={videoElement}
+      bind:paused
+      bind:currentTime
+      bind:duration
+      bind:volume
+      {src}
+      autoplay
+      class="h-full w-full cursor-pointer object-contain {hasStartedPlaying
+        ? 'opacity-100'
+        : 'opacity-0'}"
+      data-testid="video-element"
+      onclick={togglePlay}
+      onloadedmetadata={handleLoadedMetadata}
+      onplaying={markPlaying}
+      onwaiting={markWaiting}
+      oncanplay={markPlaying}
+      onseeked={markPlaying}
+      onerror={handleVideoError}
+      ontimeupdate={() => {
+        if (!isVideoPlaying && !paused) markPlaying();
+        if (mediaId && duration > 0) {
+          progressStore.update(mediaId, season, episode, currentTime, duration);
+        }
+        if (duration > 0 && currentTime / duration > 0.95 && onwatched && !watchedTriggered) {
+          watchedTriggered = true;
+          onwatched();
+        }
+      }}
+    >
+      {#each subtitles as sub, index}
+        <track
+          kind="subtitles"
+          src={sub.url}
+          srclang={sub.lang}
+          label={sub.label}
+          onerror={() => subtitleSelection.handleTrackError(index)}
+        />
+      {/each}
+    </video>
+  {/if}
 
   <!-- Custom Controls Bar -->
   <div

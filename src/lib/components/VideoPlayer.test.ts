@@ -32,6 +32,13 @@ describe('VideoPlayer component', () => {
     expect(video.autoplay).toBe(true);
   });
 
+  it('does not start playback before the stream URL is known', async () => {
+    render(VideoPlayer, { src: '' });
+    await act(() => {});
+
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+  });
+
   it('renders loading overlay when not playing', () => {
     const { getByText } = render(VideoPlayer, {
       src: 'test.mp4',
@@ -404,8 +411,6 @@ describe('VideoPlayer component', () => {
     // videoElement.textTracks reflects the just-rendered <track> elements —
     // this polls actual state instead of trusting either event.
     const { getByTestId, rerender } = render(VideoPlayer, { src: '', subtitles: [] });
-    const video = getByTestId('video-element') as any;
-    Object.defineProperty(video, 'textTracks', { writable: true, value: [] });
     await act(() => {});
 
     const subtitles: any = [
@@ -413,6 +418,8 @@ describe('VideoPlayer component', () => {
       { label: 'Português', lang: 'pt', url: 'sub-pt.vtt', group: 'Extra' }
     ];
     rerender({ src: 'http://localhost/stream', subtitles });
+    const video = getByTestId('video-element') as any;
+    Object.defineProperty(video, 'textTracks', { writable: true, value: [] });
     await act(() => {});
 
     // Tracks still not registered: polling must not lock in early.
@@ -595,19 +602,6 @@ describe('VideoPlayer component', () => {
     for (const track of tracks) {
       expect(track.getAttribute('kind')).toBe('subtitles');
     }
-  });
-
-  it('ignores a spurious error event fired while src is still empty', async () => {
-    const { queryByText, getByTestId } = render(VideoPlayer, { src: '' });
-    const video = getByTestId('video-element') as any;
-    Object.defineProperty(video, 'error', {
-      configurable: true,
-      value: { code: 4, message: 'MEDIA_ELEMENT_ERROR: Empty src attribute' }
-    });
-
-    await fireEvent(video, new Event('error'));
-
-    expect(queryByText('Formato de vídeo não suportado.')).toBeNull();
   });
 
   it('shows a mapped error message and hides the spinner when playback fails', async () => {
