@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { logger } from '$lib/logger';
   import { translateMediaInfo } from '$lib/api/translate';
   import { getMovieStreams, parseSeedCount } from '$lib/api/torrentio';
@@ -82,7 +83,7 @@
 
   $effect(() => {
     if (movie && movie.id) {
-      if (combinedTorrents.length === 0) {
+      if (untrack(() => combinedTorrents.length) === 0) {
         combinedTorrents = [...(movie.torrents || [])];
         const requestedId = movie.id;
         getMovieStreams(requestedId.toString())

@@ -152,6 +152,19 @@ describe('Movie page integration flow', () => {
     expect(video?.src).toBe('http://localhost:3000/stream');
   });
 
+  it('seeds the stream list from Torrentio when the movie has no YTS torrents', async () => {
+    const movieWithoutTorrents = { ...movie, torrents: [] };
+    getMovieStreamsMock.mockResolvedValue([
+      { name: 'Torrentio\n1080p', title: 'x\n👤 5', infoHash: 'a'.repeat(40), fileIdx: 0 }
+    ]);
+
+    render(MoviePage, {
+      props: { data: { movieId: 'tt1', movie: movieWithoutTorrents, error: null } }
+    });
+
+    expect(await screen.findByRole('button', { name: /reproduzir/i })).toBeInTheDocument();
+  });
+
   it('drops the previous movie torrents when navigating to a different movie', async () => {
     prepareStreamMock.mockResolvedValue({
       videoSrc: 'http://localhost:3000/stream',
