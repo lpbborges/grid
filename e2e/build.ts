@@ -9,7 +9,9 @@ const result = spawnSync(
     cwd: REPO_ROOT,
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    env: { ...process.env, VITE_E2E_API_BASE: MOCK_BASE }
+    env: process.argv.includes('--live')
+      ? { ...process.env }
+      : { ...process.env, VITE_E2E_API_BASE: MOCK_BASE }
   }
 );
 process.exit(result.status ?? 1);
