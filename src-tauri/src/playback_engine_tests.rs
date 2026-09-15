@@ -499,6 +499,8 @@ async fn forgotten_torrents_resume_from_disk_and_deleted_ones_are_removed() {
     .is_success());
     assert!(video.exists(), "forget must keep the cached file");
 
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
     add_torrent(&swarm).await;
     let resumed = wait_until_finished(&swarm).await;
     assert_eq!(resumed["progress_bytes"], resumed["total_bytes"]);
