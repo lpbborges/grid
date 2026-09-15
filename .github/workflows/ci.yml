@@ -134,11 +134,9 @@ jobs:
           New-ItemProperty -Path $key -Name 'grid-play.exe' -Value '--remote-debugging-port=0 --autoplay-policy=no-user-gesture-required --mute-audio --use-fake-device-for-media-stream --use-fake-ui-for-media-stream' -PropertyType String -Force | Out-Null
       - name: Run E2E specs (Windows)
         if: runner.os == 'Windows'
-        id: e2e-windows
-        continue-on-error: true
         run: npm run test:e2e:run
       - uses: actions/upload-artifact@v7
-        if: failure() || steps.e2e-windows.outcome == 'failure'
+        if: failure()
         with:
           name: e2e-artifacts-${{ matrix.os }}
           path: e2e/artifacts/

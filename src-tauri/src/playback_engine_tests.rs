@@ -167,6 +167,7 @@ async fn start_swarm(fixture: &str) -> Swarm {
         .spawn()
         .expect("seeder starts");
     let engine = rqbit()
+        .envs(crate::engine_environment())
         .env("RQBIT_TRACKERS_FILENAME", &trackers_file)
         .arg("--disable-dht-persistence")
         .arg("--http-api-listen-addr")
@@ -350,6 +351,34 @@ async fn rqbit_http_api_matches_the_recorded_contract() {
     .await;
     assert!(updated.status().is_success());
     check_snapshot("update-only-files", updated.json().await.unwrap());
+}
+
+#[tokio::test]
+async fn engine_accepts_requests_from_the_app_webview_on_every_platform() {
+    let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
+    let swarm = start_swarm("movie-mkv").await;
+
+    for (origin, allowed) in [
+        ("tauri://localhost", Some("tauri://localhost")),
+        ("http://tauri.localhost", Some("http://tauri.localhost")),
+        ("http://tauri.localhost.example.com", None),
+        ("http://example.com", None),
+    ] {
+        let response = http()
+            .get(format!("http://127.0.0.1:{}/torrents", swarm.engine_port))
+            .header("Origin", origin)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            response
+                .headers()
+                .get("access-control-allow-origin")
+                .and_then(|value| value.to_str().ok()),
+            allowed,
+            "{origin}"
+        );
+    }
 }
 
 async fn spawn_proxy(engine_port: u16) -> u16 {

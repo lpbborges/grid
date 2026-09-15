@@ -412,6 +412,10 @@ fn cleanup_stale_engine(pid_path: &Path) {
     remove_pid_file(pid_path);
 }
 
+fn engine_environment() -> [(&'static str, &'static str); 1] {
+    [("CORS_ALLOW_REGEXP", r"^http://tauri\.localhost$")]
+}
+
 #[tauri::command]
 async fn start_torrent_engine(
     app: tauri::AppHandle,
@@ -489,6 +493,7 @@ async fn start_torrent_engine(
             println!("Sidecar builder error: {}", e);
             e.to_string()
         })?
+        .envs(engine_environment())
         .arg("--disable-dht-persistence")
         .arg("--http-api-listen-addr")
         .arg(format!("127.0.0.1:{}", port))
@@ -812,6 +817,31 @@ mod tests {
                 (parts.next() == Some(directive)).then(|| parts.map(String::from).collect())
             })
             .unwrap_or_default()
+    }
+
+    #[test]
+    fn main_window_may_use_the_custom_titlebar_controls() {
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json"))
+                .expect("capabilities/default.json is valid JSON");
+        assert!(capability["windows"]
+            .as_array()
+            .expect("windows is an array")
+            .contains(&serde_json::json!("main")));
+        let permissions = capability["permissions"]
+            .as_array()
+            .expect("permissions is an array");
+        for permission in [
+            "core:window:allow-minimize",
+            "core:window:allow-toggle-maximize",
+            "core:window:allow-close",
+            "core:window:allow-start-dragging",
+        ] {
+            assert!(
+                permissions.contains(&serde_json::json!(permission)),
+                "missing {permission}"
+            );
+        }
     }
 
     #[test]
