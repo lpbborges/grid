@@ -412,6 +412,10 @@ fn cleanup_stale_engine(pid_path: &Path) {
     remove_pid_file(pid_path);
 }
 
+fn engine_environment() -> [(&'static str, &'static str); 1] {
+    [("CORS_ALLOW_REGEXP", r"^http://tauri\.localhost$")]
+}
+
 #[tauri::command]
 async fn start_torrent_engine(
     app: tauri::AppHandle,
@@ -489,6 +493,7 @@ async fn start_torrent_engine(
             println!("Sidecar builder error: {}", e);
             e.to_string()
         })?
+        .envs(engine_environment())
         .arg("--disable-dht-persistence")
         .arg("--http-api-listen-addr")
         .arg(format!("127.0.0.1:{}", port))
