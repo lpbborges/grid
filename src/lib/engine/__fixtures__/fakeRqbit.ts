@@ -12,6 +12,7 @@ export interface FakeTorrentFile {
 export interface FakeRqbitOptions {
   files: FakeTorrentFile[];
   failAdd?: boolean;
+  stallAdds?: number;
 }
 
 export interface FakeRqbitRequest {
@@ -34,9 +35,14 @@ function json(value: unknown, status = 200): Response {
   });
 }
 
-export function createFakeRqbit({ files, failAdd = false }: FakeRqbitOptions): FakeRqbit {
+export function createFakeRqbit({
+  files,
+  failAdd = false,
+  stallAdds = 0
+}: FakeRqbitOptions): FakeRqbit {
   const requests: FakeRqbitRequest[] = [];
   const loaded = new Set<string>();
+  let addsToStall = stallAdds;
   const totalBytes = files.reduce((sum, file) => sum + file.length, 0);
   const fileTemplate = postTorrents.details.files[0];
 
@@ -67,6 +73,14 @@ export function createFakeRqbit({ files, failAdd = false }: FakeRqbitOptions): F
       });
     }
     if (!infoHash && method === 'POST') {
+      if (addsToStall > 0) {
+        addsToStall--;
+        return new Promise<Response>((_, reject) => {
+          init.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError'))
+          );
+        });
+      }
       if (failAdd) return new Response('engine failure', { status: 500 });
       const hash = body.match(/btih:([a-f0-9]{40})/i)?.[1].toLowerCase();
       if (!hash) return new Response('invalid magnet', { status: 400 });

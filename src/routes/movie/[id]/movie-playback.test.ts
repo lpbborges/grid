@@ -9,6 +9,7 @@ import {
 } from '$lib/engine/__fixtures__/playbackBoundary';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { clearExternalSubtitleCache } from '$lib/api/subtitles';
+import { ADD_ATTEMPT_TIMEOUTS_MS } from '$lib/engine/torrent';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 
@@ -60,6 +61,7 @@ describe('Movie playback wiring', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     settingsStore.cacheLimitBytes = DEFAULT_CACHE_LIMIT;
   });
@@ -67,6 +69,23 @@ describe('Movie playback wiring', () => {
   it('plays the selected file through the stream proxy without reaching the network', async () => {
     await openAndPlay();
 
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await waitFor(() =>
+      expect(video.getAttribute('src')).toBe(`${PROXY_ORIGIN}/torrents/${HASH}/stream/1`)
+    );
+    expect(boundary.unhandledRequests).toEqual([]);
+  });
+
+  it('adds the magnet again and plays when the first add stalls', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await openAndPlay({ stallAdds: 1 });
+    const adds = () =>
+      boundary.rqbit.requests.filter((r) => r.method === 'POST' && r.path === '/torrents');
+    await waitFor(() => expect(adds()).toHaveLength(1));
+
+    await vi.advanceTimersByTimeAsync(ADD_ATTEMPT_TIMEOUTS_MS[0]);
+
+    expect(adds()).toHaveLength(2);
     const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
     await waitFor(() =>
       expect(video.getAttribute('src')).toBe(`${PROXY_ORIGIN}/torrents/${HASH}/stream/1`)
