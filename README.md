@@ -17,7 +17,7 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
 - **Cyberpunk Theme:** A unique visual identity built with Tailwind CSS v4 featuring neon glows, digital grid backgrounds, and cyberpunk typography (Orbitron/Rajdhani, bundled locally).
 - **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles.
 - **Test-Driven:** Vitest and Svelte Testing Library tests for the frontend, plus Rust unit tests for the backend. Run `npm run test:frontend:cov` for the current coverage report.
-- **Robust Error Handling:** Resilient polling for engine startup, a specific error when the engine cannot start, dynamic port allocation to prevent address conflicts, and timeouts on external API calls. Metadata translation tries Google Translate first and MyMemory as a backup; if both fail, the original English text is shown.
+- **Robust Error Handling:** Resilient polling for engine startup, a specific error when the engine cannot start, dynamic port allocation to prevent address conflicts, and timeouts on external API calls; starting playback automatically retries with a fresh request when a source stops responding. Metadata translation tries Google Translate first and MyMemory as a backup; if both fail, the original English text is shown.
 
 ## Prerequisites
 
@@ -77,7 +77,7 @@ Playback is protected by three layers of tests that share the fixture videos in 
 
 1. **Wiring tests** (`src/routes/*/[id]/*-playback.test.ts`, part of `npm run test:frontend`): render the real movie and series pages, player composable, orchestrator and engine client, faking only Tauri IPC and HTTP. They catch changes that disconnect the pieces.
 2. **Engine tests** (`src-tauri/src/playback_engine_tests.rs`, part of `npm run test:backend`): start the real rqbit sidecar, a local seeder and a fake tracker with no internet access, and stream the fixtures through the real stream proxy. They catch rqbit upgrades, proxy and header-patching bugs.
-3. **End-to-end tests** (`e2e/`, `npm run test:e2e`, CI job `e2e` on Linux and Windows): run the built app against local mock services and check that the video actually advances, including after a seek.
+3. **End-to-end tests** (`e2e/`, `npm run test:e2e`, CI job `e2e` on Linux and Windows): run the built app against local mock services and check that the video actually advances, including after a seek; the offline swarm includes a source that ignores its first connection so the add-retry path is exercised on every run.
 
 The rqbit HTTP responses the wiring tests fake are recorded in `tests/fixtures/rqbit/`. After updating the sidecar, refresh them and fix `src/lib/engine/__fixtures__/fakeRqbit.ts` if the shapes changed:
 
