@@ -23,7 +23,17 @@ export function useStreamPlayer() {
   let isCacheable = $state(false);
   let cacheEntry = $state<CacheEntry | undefined>(undefined);
 
+  // The preparation of the current play(). stop(), a newer play() and unmount
+  // abort it so a stream the user left stops loading and never overwrites the
+  // player's state.
+  let preparation: AbortController | undefined;
+
+  // Resolves false when the play failed (see `error`) or was cancelled (no error).
   async function play(magnet: string, options: PlayOptions = {}): Promise<boolean> {
+    preparation?.abort();
+    const controller = new AbortController();
+    preparation = controller;
+    const { signal } = controller;
     error = '';
     isPlaying = true;
     playerState.isPlaying = true;
@@ -32,13 +42,17 @@ export function useStreamPlayer() {
       const streamData = await prepareStream({
         magnet,
         onStatus: (status) => {
-          engineStatus = status;
+          if (!signal.aborted) engineStatus = status;
         },
         mediaId: options.mediaId,
         season: options.season,
         episode: options.episode,
-        preferredFileIdx: options.fileIdx
+        preferredFileIdx: options.fileIdx,
+        signal
       });
+      // Cancelled in the same tick the preparation finished. The torrent it
+      // added is not tracked here; the next play's reconciliation removes it.
+      if (signal.aborted) return false;
       infoHash = streamData.infoHash;
       totalBytes = streamData.totalBytes;
       videoSrc = streamData.videoSrc;
@@ -47,6 +61,7 @@ export function useStreamPlayer() {
       cacheEntry = streamData.cacheEntry;
       return true;
     } catch (e) {
+      if (signal.aborted) return false;
       logger.error('Erro ao iniciar reprodução:', e);
       error =
         e instanceof EngineStartError
@@ -56,10 +71,14 @@ export function useStreamPlayer() {
       isPlaying = false;
       playerState.isPlaying = false;
       return false;
+    } finally {
+      if (preparation === controller) preparation = undefined;
     }
   }
 
   async function stop(): Promise<void> {
+    preparation?.abort();
+    preparation = undefined;
     const finished = { infoHash, isCacheable, cacheEntry };
     isPlaying = false;
     playerState.isPlaying = false;
@@ -80,6 +99,7 @@ export function useStreamPlayer() {
   // on mediaId change.
   $effect(() => {
     return () => {
+      preparation?.abort();
       finalizeStream({ infoHash, isCacheable, cacheEntry }).catch((e) =>
         logger.error('Erro ao limpar torrents no unmount', e)
       );

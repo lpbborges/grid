@@ -102,7 +102,12 @@ describe('prepareStream', () => {
 
     await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' });
 
-    expect(torrentApi.waitForTorrentLive).toHaveBeenCalledWith('b'.repeat(40));
+    expect(torrentApi.waitForTorrentLive).toHaveBeenCalledWith(
+      'b'.repeat(40),
+      undefined,
+      undefined,
+      undefined
+    );
     const liveOrder = vi.mocked(torrentApi.waitForTorrentLive).mock.invocationCallOrder[0];
     expect(vi.mocked(torrentApi.addTorrent).mock.invocationCallOrder[0]).toBeLessThan(liveOrder);
     expect(liveOrder).toBeLessThan(
@@ -334,6 +339,75 @@ describe('prepareStream', () => {
     expect(revokeSpy).toHaveBeenCalledWith('blob:mock-url-1');
     expect(revokeSpy).toHaveBeenCalledWith('blob:mock-url-2');
     expect(revokeSpy).toHaveBeenCalledTimes(2);
+  });
+
+  describe('when the preparation is aborted', () => {
+    const hash = '1'.repeat(40);
+
+    it('passes the abort signal to the add and the live wait', async () => {
+      const controller = new AbortController();
+
+      await prepareStream({
+        magnet: 'magnet:?xt=test',
+        onStatus: vi.fn(),
+        signal: controller.signal
+      });
+
+      expect(torrentApi.addTorrent).toHaveBeenCalledWith(
+        'magnet:?xt=test',
+        hash,
+        expect.objectContaining({ signal: controller.signal })
+      );
+      expect(torrentApi.waitForTorrentLive).toHaveBeenCalledWith(
+        hash,
+        undefined,
+        undefined,
+        controller.signal
+      );
+    });
+
+    it('does not add the torrent when aborted before the add', async () => {
+      const controller = new AbortController();
+      vi.mocked(torrentApi.waitForEngine).mockImplementation(async () => controller.abort());
+
+      await expect(
+        prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), signal: controller.signal })
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(torrentApi.addTorrent).not.toHaveBeenCalled();
+    });
+
+    it('deletes a newly added torrent when aborted after the add', async () => {
+      const controller = new AbortController();
+      vi.mocked(torrentApi.waitForTorrentLive).mockImplementation(async () => controller.abort());
+
+      await expect(
+        prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), signal: controller.signal })
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(torrentApi.deleteTorrent).toHaveBeenCalledWith(hash);
+      expect(torrentApi.forgetTorrent).not.toHaveBeenCalled();
+      expect(torrentApi.getStreamUrl).not.toHaveBeenCalled();
+    });
+
+    it('forgets a torrent that is already cached, and revokes its new subtitles, when aborted late', async () => {
+      const controller = new AbortController();
+      const revokeSpy = vi.fn();
+      globalThis.URL.revokeObjectURL = revokeSpy;
+      vi.mocked(cacheApi.getCacheManifest).mockResolvedValue([
+        { infoHash: hash, downloadedBytes: 50, complete: false } as any
+      ]);
+      vi.mocked(torrentApi.getTorrentSubtitles).mockImplementation(async () => {
+        controller.abort();
+        return [{ id: 't', url: 'blob:late', lang: 'en', label: 'en', group: 'Embedded' }];
+      });
+
+      await expect(
+        prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), signal: controller.signal })
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(torrentApi.forgetTorrent).toHaveBeenCalledWith(hash);
+      expect(torrentApi.deleteTorrent).not.toHaveBeenCalled();
+      expect(revokeSpy).toHaveBeenCalledWith('blob:late');
+      expect(torrentApi.getStreamUrl).not.toHaveBeenCalled();
+    });
   });
 });
 

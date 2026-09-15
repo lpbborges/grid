@@ -75,6 +75,19 @@ export interface PrepareStreamOptions {
   season?: number;
   episode?: number;
   preferredFileIdx?: number;
+  // Aborted when the player closes or a newer stream replaces this one.
+  signal?: AbortSignal;
+}
+
+// A preparation cancelled after its add would otherwise leave the torrent
+// downloading with nobody watching. Files of a title already in the cache
+// stay on disk (forget); anything else is deleted.
+async function removeAbandonedTorrent(infoHash: string, keepFiles: boolean): Promise<void> {
+  if (keepFiles) {
+    await forgetTorrent(infoHash);
+  } else {
+    await deleteTorrent(infoHash);
+  }
 }
 
 export async function prepareStream({
@@ -83,100 +96,125 @@ export async function prepareStream({
   mediaId,
   season,
   episode,
-  preferredFileIdx
+  preferredFileIdx,
+  signal
 }: PrepareStreamOptions): Promise<StreamDetails> {
   onStatus('Iniciando player...');
   await startEngine();
   await waitForEngine();
+  signal?.throwIfAborted();
 
   onStatus('Preparando stream...');
   const manifest = await getCacheManifest();
   await reconcileLoadedTorrents(manifest.map((e) => e.infoHash));
+  signal?.throwIfAborted();
 
   const parsedInfoHash = parseInfoHashFromMagnet(magnet);
   const existingEntry = manifest.find((e) => e.infoHash === parsedInfoHash);
 
   // Add torrent with a regex filter so rqbit never starts downloading junk
   // files (images, NFO, txt). Only video and subtitle files are selected.
+  // Aborting the add also cancels rqbit's lookup, so nothing is left behind.
   const details = await addTorrent(magnet, parsedInfoHash ?? undefined, {
     onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$',
-    onRetry: () => onStatus('Ainda preparando o stream, aguarde...')
+    onRetry: () => onStatus('Ainda preparando o stream, aguarde...'),
+    signal
   });
   const infoHash = details.info_hash;
-  await waitForTorrentLive(infoHash);
-
-  // From the filtered set, pick just the main video + subtitle files and
-  // tell rqbit to drop any remaining unwanted video files (e.g. samples).
-  const wantedIndices = getWantedFileIndices(details.files, preferredFileIdx);
-  const bestFileIdx = wantedIndices[0];
-
-  await updateOnlyFiles(infoHash, wantedIndices).catch((error) => {
-    logger.warn('Failed to restrict torrent file selection, continuing anyway:', error);
-  });
-
-  const totalBytes = details.files[bestFileIdx]?.length ?? 0;
-
-  // rqbit can only ever cache/evict a torrent as a whole (no per-piece
-  // deletion), so a video whose total size alone exceeds the limit is
-  // simply never written to the manifest — it streams normally and is
-  // deleted (not forgotten) by finalizeStream when the stream ends.
-  const cacheLimitBytes = settingsStore.cacheLimitBytes;
-  const isCacheable = totalBytes > 0 && totalBytes <= cacheLimitBytes;
   let cacheEntry: CacheEntry | undefined;
 
-  if (isCacheable) {
-    const alreadyHave = existingEntry?.downloadedBytes ?? 0;
-    const neededBytes = Math.max(totalBytes - alreadyHave, 0);
-    await evictForSpace(infoHash, neededBytes, cacheLimitBytes);
+  try {
+    await waitForTorrentLive(infoHash, undefined, undefined, signal);
+    signal?.throwIfAborted();
 
-    cacheEntry = {
+    // From the filtered set, pick just the main video + subtitle files and
+    // tell rqbit to drop any remaining unwanted video files (e.g. samples).
+    const wantedIndices = getWantedFileIndices(details.files, preferredFileIdx);
+    const bestFileIdx = wantedIndices[0];
+
+    await updateOnlyFiles(infoHash, wantedIndices).catch((error) => {
+      logger.warn('Failed to restrict torrent file selection, continuing anyway:', error);
+    });
+    signal?.throwIfAborted();
+
+    const totalBytes = details.files[bestFileIdx]?.length ?? 0;
+
+    // rqbit can only ever cache/evict a torrent as a whole (no per-piece
+    // deletion), so a video whose total size alone exceeds the limit is
+    // simply never written to the manifest — it streams normally and is
+    // deleted (not forgotten) by finalizeStream when the stream ends.
+    const cacheLimitBytes = settingsStore.cacheLimitBytes;
+    const isCacheable = totalBytes > 0 && totalBytes <= cacheLimitBytes;
+
+    if (isCacheable) {
+      const alreadyHave = existingEntry?.downloadedBytes ?? 0;
+      const neededBytes = Math.max(totalBytes - alreadyHave, 0);
+      await evictForSpace(infoHash, neededBytes, cacheLimitBytes);
+      signal?.throwIfAborted();
+
+      cacheEntry = {
+        infoHash,
+        magnet,
+        mediaId,
+        season,
+        episode,
+        fileName: parsedInfoHash
+          ? `${parsedInfoHash}/${details.files[bestFileIdx].name}`
+          : details.files[bestFileIdx].name,
+        totalBytes,
+        downloadedBytes: alreadyHave,
+        complete: existingEntry?.complete ?? false,
+        lastAccessedAt: Date.now()
+      };
+      await upsertCacheEntry(cacheEntry);
+      signal?.throwIfAborted();
+    }
+
+    onStatus('Baixando legendas...');
+    // Subtitle failures must never block video playback, which does not
+    // depend on them, so each source is isolated with its own catch and
+    // fetched concurrently rather than sequentially.
+    const [tSubs, eSubs] = await Promise.all([
+      getTorrentSubtitles(details.info_hash, details.files).catch((error) => {
+        logger.warn('Failed to fetch torrent subtitles, continuing without them:', error);
+        return [];
+      }),
+      mediaId
+        ? getExternalSubtitles(mediaId, season, episode, settingsStore.subtitle).catch((error) => {
+            logger.warn('Failed to fetch external subtitles, continuing without them:', error);
+            return [];
+          })
+        : Promise.resolve([])
+    ]);
+
+    const subtitles = [...tSubs, ...eSubs];
+    if (signal?.aborted) {
+      revokeBlobUrls(subtitles.map((s) => s.url));
+      signal.throwIfAborted();
+    }
+
+    onStatus('Carregando vídeo...');
+    revokeBlobUrls(activeBlobUrls);
+    activeBlobUrls = subtitles.map((s) => s.url);
+    const videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
+
+    return {
       infoHash,
-      magnet,
-      mediaId,
-      season,
-      episode,
-      fileName: parsedInfoHash
-        ? `${parsedInfoHash}/${details.files[bestFileIdx].name}`
-        : details.files[bestFileIdx].name,
       totalBytes,
-      downloadedBytes: alreadyHave,
-      complete: existingEntry?.complete ?? false,
-      lastAccessedAt: Date.now()
+      videoSrc,
+      subtitles,
+      isCacheable,
+      cacheEntry
     };
-    await upsertCacheEntry(cacheEntry);
+  } catch (error) {
+    if (signal?.aborted) {
+      await removeAbandonedTorrent(
+        infoHash,
+        existingEntry !== undefined || cacheEntry !== undefined
+      );
+    }
+    throw error;
   }
-
-  onStatus('Baixando legendas...');
-  // Subtitle failures must never block video playback, which does not
-  // depend on them, so each source is isolated with its own catch and
-  // fetched concurrently rather than sequentially.
-  const [tSubs, eSubs] = await Promise.all([
-    getTorrentSubtitles(details.info_hash, details.files).catch((error) => {
-      logger.warn('Failed to fetch torrent subtitles, continuing without them:', error);
-      return [];
-    }),
-    mediaId
-      ? getExternalSubtitles(mediaId, season, episode, settingsStore.subtitle).catch((error) => {
-          logger.warn('Failed to fetch external subtitles, continuing without them:', error);
-          return [];
-        })
-      : Promise.resolve([])
-  ]);
-
-  onStatus('Carregando vídeo...');
-  const subtitles = [...tSubs, ...eSubs];
-  revokeBlobUrls(activeBlobUrls);
-  activeBlobUrls = subtitles.map((s) => s.url);
-  const videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
-
-  return {
-    infoHash,
-    totalBytes,
-    videoSrc,
-    subtitles,
-    isCacheable,
-    cacheEntry
-  };
 }
 
 // Called when a stream ends (stopped explicitly or on component unmount).

@@ -93,6 +93,25 @@ describe('Movie playback wiring', () => {
     expect(boundary.unhandledRequests).toEqual([]);
   });
 
+  it('stops preparing the stream when the player closes during a stalled add', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await openAndPlay({ stallAdds: 1 });
+    const adds = () =>
+      boundary.rqbit.requests.filter((r) => r.method === 'POST' && r.path === '/torrents');
+    await waitFor(() => expect(adds()).toHaveLength(1));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    await vi.advanceTimersByTimeAsync(
+      ADD_ATTEMPT_TIMEOUTS_MS.reduce((total, timeout) => total + timeout, 0)
+    );
+
+    expect(adds()).toHaveLength(1);
+    expect(boundary.rqbit.loaded.size).toBe(0);
+    expect(screen.queryByTestId('video-element')).not.toBeInTheDocument();
+    expect(screen.queryByText(/não foi possível/i)).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /reproduzir/i })).toBeInTheDocument();
+  });
+
   it('adds the magnet with the file filter and downloads only the video and its subtitle', async () => {
     await openAndPlay();
     await screen.findByTestId('video-element', {}, { timeout: 5000 });

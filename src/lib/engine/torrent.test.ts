@@ -269,6 +269,26 @@ describe('torrent engine', () => {
       expect(globalThis.fetch).toHaveBeenCalledOnce();
     });
 
+    it('stops without another attempt when the caller aborts a stalled add', async () => {
+      const onRetry = vi.fn();
+      (globalThis.fetch as any).mockImplementation(hangUntilAborted);
+      const controller = new AbortController();
+
+      const details = torrent.addTorrent('magnet:?xt=test', undefined, {
+        onRetry,
+        signal: controller.signal
+      });
+      const rejection = expect(details).rejects.toMatchObject({ name: 'AbortError' });
+      controller.abort();
+      await rejection;
+      await vi.advanceTimersByTimeAsync(
+        torrent.ADD_ATTEMPT_TIMEOUTS_MS.reduce((total, timeout) => total + timeout, 0)
+      );
+
+      expect(globalThis.fetch).toHaveBeenCalledOnce();
+      expect(onRetry).not.toHaveBeenCalled();
+    });
+
     it('retries after 20 seconds, keeps a long final attempt and a 5-minute total', () => {
       expect(torrent.ADD_ATTEMPT_TIMEOUTS_MS[0]).toBe(20_000);
       expect(torrent.ADD_ATTEMPT_TIMEOUTS_MS.reduce((total, timeout) => total + timeout, 0)).toBe(
@@ -422,6 +442,22 @@ describe('torrent engine', () => {
       'Torrent failed to become ready in time'
     );
     expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('waitForTorrentLive stops polling once the caller aborts', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      json: async () => ({ state: 'initializing' })
+    });
+    const controller = new AbortController();
+
+    const waiting = torrent.waitForTorrentLive('a'.repeat(40), 1000, 1, controller.signal);
+    controller.abort();
+
+    await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
+    const calls = vi.mocked(globalThis.fetch).mock.calls.length;
+    await new Promise((r) => setTimeout(r, 20));
+    expect(vi.mocked(globalThis.fetch).mock.calls.length).toBe(calls);
   });
 
   it('waitForTorrentLive throws on invalid infoHash without calling fetch', async () => {

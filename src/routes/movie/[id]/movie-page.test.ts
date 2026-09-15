@@ -138,7 +138,8 @@ describe('Movie page integration flow', () => {
       mediaId: 'tt1',
       season: undefined,
       episode: undefined,
-      preferredFileIdx: undefined
+      preferredFileIdx: undefined,
+      signal: expect.any(AbortSignal)
     });
 
     // Eventually the video player should be shown (represented by finding the "Voltar" or Titlebar, but we can check if VideoPlayer is rendered by checking for video controls)
@@ -197,7 +198,8 @@ describe('Movie page integration flow', () => {
       mediaId: 'tt2',
       season: undefined,
       episode: undefined,
-      preferredFileIdx: undefined
+      preferredFileIdx: undefined,
+      signal: expect.any(AbortSignal)
     });
   });
 
@@ -260,7 +262,8 @@ describe('Movie page integration flow', () => {
       mediaId: 'tt2',
       season: undefined,
       episode: undefined,
-      preferredFileIdx: undefined
+      preferredFileIdx: undefined,
+      signal: expect.any(AbortSignal)
     });
   });
 
@@ -326,7 +329,8 @@ describe('Movie page dubbed-audio heuristic (reselectBestTorrent)', () => {
       mediaId: 'tt1',
       season: undefined,
       episode: undefined,
-      preferredFileIdx: 0
+      preferredFileIdx: 0,
+      signal: expect.any(AbortSignal)
     });
   });
 });
