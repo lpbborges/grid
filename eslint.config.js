@@ -55,6 +55,14 @@ export default [
     }
   },
   {
+    files: ['e2e/**/*.ts', 'scripts/**/*.{js,ts}'],
+    languageOptions: {
+      globals: {
+        ...globals.node
+      }
+    }
+  },
+  {
     ignores: ['build/', '.svelte-kit/', 'src-tauri/target/', 'coverage/']
   }
 ];

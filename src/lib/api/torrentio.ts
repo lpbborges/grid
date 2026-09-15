@@ -1,5 +1,6 @@
 import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+import { endpoints } from './endpoints';
 
 export interface Stream {
   name?: string;
@@ -18,7 +19,7 @@ export function parseSeedCount(title: string | undefined): number {
 
 async function fetchTorrentioStreams(path: string): Promise<Stream[]> {
   try {
-    const res = await fetchWithTimeout(`https://torrentio.strem.fun/stream/${path}.json`);
+    const res = await fetchWithTimeout(`${endpoints.torrentio}/stream/${path}.json`);
     if (!res.ok) {
       throw new Error(`Failed to fetch streams: ${res.statusText}`);
     }

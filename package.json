@@ -10,6 +10,13 @@
     "prepare": "husky",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "check:e2e": "tsc -p e2e/tsconfig.json",
+    "e2e:services": "node e2e/support/serve.ts",
+    "build:e2e": "node e2e/build.ts",
+    "build:e2e:live": "node e2e/build.ts --live",
+    "test:e2e": "npm run build:e2e && npm run test:e2e:run",
+    "test:e2e:run": "wdio run e2e/wdio.conf.ts",
+    "test:e2e:live": "npm run build:e2e:live && wdio run e2e/wdio.live.conf.ts",
     "tauri": "tauri",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -23,6 +30,10 @@
       "eslint --fix",
       "prettier --write"
     ]
+  },
+  "overrides": {
+    "extract-zip": "npm:@electron-internal/extract-zip@^1.0.5",
+    "serialize-javascript": "^7.1.1"
   },
   "license": "MIT",
   "dependencies": {
@@ -42,6 +53,12 @@
     "@testing-library/svelte": "^5.4.2",
     "@types/node": "^24.13.4",
     "@vitest/coverage-v8": "^5.0.0",
+    "@wdio/cli": "^9.31.9",
+    "@wdio/globals": "^9.31.3",
+    "@wdio/local-runner": "^9.31.9",
+    "@wdio/mocha-framework": "^9.31.9",
+    "@wdio/spec-reporter": "^9.31.2",
+    "@wdio/types": "^9.31.2",
     "eslint": "^10.10.0",
     "eslint-plugin-svelte": "^3.23.0",
     "fake-indexeddb": "^6.2.5",

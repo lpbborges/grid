@@ -1,0 +1,37 @@
+{
+  "files": [
+    {
+      "attributes": {
+        "executable": false,
+        "hidden": false,
+        "padding": false,
+        "symlink": false
+      },
+      "components": [
+        "Grid.Play.Fixture.2026.1080p.mkv"
+      ],
+      "included": true,
+      "length": 259622,
+      "name": "Grid.Play.Fixture.2026.1080p.mkv"
+    },
+    {
+      "attributes": {
+        "executable": false,
+        "hidden": false,
+        "padding": false,
+        "symlink": false
+      },
+      "components": [
+        "Grid.Play.Fixture.2026.1080p.en.srt"
+      ],
+      "included": true,
+      "length": 50,
+      "name": "Grid.Play.Fixture.2026.1080p.en.srt"
+    }
+  ],
+  "id": 0,
+  "info_hash": "8cc7a9c66d61afda6f2c5791ea3218c87ee59ce3",
+  "name": "movie-mkv",
+  "output_folder": "/downloads/fixture",
+  "total_pieces": 1
+}

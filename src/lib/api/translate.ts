@@ -2,6 +2,7 @@ import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { getCached, setCached } from '../stores/translation-cache';
 import type { Episode } from '../types';
+import { endpoints } from './endpoints';
 
 const TRANSLATE_TIMEOUT_MS = 6000;
 
@@ -38,7 +39,7 @@ async function performTranslation(text: string, targetLang: string): Promise<str
 async function runTranslationCascade(text: string, targetLang: string): Promise<string> {
   try {
     // google translate free endpoint
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+    const url = `${endpoints.googleTranslate}/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
     const res = await fetchWithTimeout(url, {}, TRANSLATE_TIMEOUT_MS);
     if (res.ok) {
       const data: unknown = await res.json();
@@ -51,7 +52,7 @@ async function runTranslationCascade(text: string, targetLang: string): Promise<
   }
 
   try {
-    const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetLang}`;
+    const myMemoryUrl = `${endpoints.myMemory}/get?q=${encodeURIComponent(text)}&langpair=en|${targetLang}`;
     const myMemoryRes = await fetchWithTimeout(myMemoryUrl, {}, TRANSLATE_TIMEOUT_MS);
     if (myMemoryRes.ok) {
       const myMemoryData = await myMemoryRes.json();

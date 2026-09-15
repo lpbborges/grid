@@ -1,0 +1,11 @@
+{
+  "torrents": [
+    {
+      "id": 0,
+      "info_hash": "8cc7a9c66d61afda6f2c5791ea3218c87ee59ce3",
+      "name": "movie-mkv",
+      "output_folder": "/downloads/fixture",
+      "total_pieces": 1
+    }
+  ]
+}
