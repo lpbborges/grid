@@ -4,19 +4,19 @@ This document serves as a living repository of the core architectural decisions,
 
 ## Command Cheat-Sheet
 
-| Task                        | Command                                                                  |
-| --------------------------- | ------------------------------------------------------------------------ |
-| Frontend only (no playback) | `npm run dev`                                                            |
-| Full app                    | `npm run tauri dev`                                                      |
-| Release bundles             | `npm run tauri build`                                                    |
-| Type check                  | `npm run check`                                                          |
-| Lint / format               | `npm run lint` / `npm run format`                                        |
-| Frontend tests (+ coverage) | `npm run test:frontend` (`test:frontend:cov`)                            |
-| Rust tests (+ coverage)     | `npm run test:backend` (`test:backend:cov`)                              |
-| E2E playback tests (Linux/Windows) | `npm run test:e2e` (`test:e2e:run` skips the build) |
-| Live smoke test (manual, internet)  | `npm run test:e2e:live`                              |
-| Refresh rqbit response snapshots    | `cd src-tauri && UPDATE_RQBIT_SNAPSHOTS=1 cargo test playback_engine_tests` |
-| Rust format / lint          | `cd src-tauri && cargo fmt && cargo clippy --all-targets -- -D warnings` |
+| Task                               | Command                                                                     |
+| ---------------------------------- | --------------------------------------------------------------------------- |
+| Frontend only (no playback)        | `npm run dev`                                                               |
+| Full app                           | `npm run tauri dev`                                                         |
+| Release bundles                    | `npm run tauri build`                                                       |
+| Type check                         | `npm run check`                                                             |
+| Lint / format                      | `npm run lint` / `npm run format`                                           |
+| Frontend tests (+ coverage)        | `npm run test:frontend` (`test:frontend:cov`)                               |
+| Rust tests (+ coverage)            | `npm run test:backend` (`test:backend:cov`)                                 |
+| E2E playback tests (Linux/Windows) | `npm run test:e2e` (`test:e2e:run` skips the build)                         |
+| Live smoke test (manual, internet) | `npm run test:e2e:live`                                                     |
+| Refresh rqbit response snapshots   | `cd src-tauri && UPDATE_RQBIT_SNAPSHOTS=1 cargo test playback_engine_tests` |
+| Rust format / lint                 | `cd src-tauri && cargo fmt && cargo clippy --all-targets -- -D warnings`    |
 
 ## 1. Architecture & Modularity
 
