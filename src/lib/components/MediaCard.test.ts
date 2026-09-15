@@ -6,7 +6,7 @@ import { progressStore } from '$lib/stores/progress.svelte';
 
 const mockMovie: Movie = {
   id: 123,
-  title: 'Test Evangelion',
+  title: 'Test Movie',
   year: 2024,
   rating: 9.9,
   medium_cover_image: 'test.jpg',
@@ -48,20 +48,20 @@ describe('MediaCard component', () => {
   it('renders media title and details for movie', () => {
     const { getAllByText, getByAltText } = render(MediaCard, { media: mockMovie, type: 'movie' });
 
-    expect(getAllByText('Test Evangelion')[0]).toBeDefined();
-    expect(getByAltText('Test Evangelion')).toBeDefined();
+    expect(getAllByText('Test Movie')[0]).toBeDefined();
+    expect(getByAltText('Test Movie')).toBeDefined();
 
-    const link = getAllByText('Test Evangelion')[0].closest('a');
+    const link = getAllByText('Test Movie')[0].closest('a');
     expect(link?.getAttribute('href')).toBe('/movie/123');
   });
 
   it('renders media title and details for series', () => {
     const { getAllByText, getByAltText } = render(MediaCard, { media: mockMovie, type: 'series' });
 
-    expect(getAllByText('Test Evangelion')[0]).toBeDefined();
-    expect(getByAltText('Test Evangelion')).toBeDefined();
+    expect(getAllByText('Test Movie')[0]).toBeDefined();
+    expect(getByAltText('Test Movie')).toBeDefined();
 
-    const link = getAllByText('Test Evangelion')[0].closest('a');
+    const link = getAllByText('Test Movie')[0].closest('a');
     expect(link?.getAttribute('href')).toBe('/series/123');
   });
 });

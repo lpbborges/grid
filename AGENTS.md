@@ -71,7 +71,7 @@ This document serves as a living repository of the core architectural decisions,
 
 ## 4. UI & Styling
 
-- **Theme Consistency:** We strictly adhere to the Evangelion Unit-01 style guide. Use the theme tokens defined in `src/app.css` (`primary`, `accent`, `secondary`, `green`, `orange`, `dark`, `surface`, `main`, `muted`, `error`, `backdrop`).
+- **Theme Consistency:** We strictly adhere to the project's style guide. Use the theme tokens defined in `src/app.css` (`primary`, `accent`, `secondary`, `green`, `orange`, `dark`, `surface`, `main`, `muted`, `error`, `backdrop`).
 - **Tailwind v4:** All styling should be implemented using Tailwind utility classes. Global CSS variables for the theme are maintained in `src/app.css`.
 - **No raw Tailwind colors:** ESLint (`no-restricted-syntax` in `eslint.config.js`) rejects raw color utilities such as `text-red-500` or `bg-black`. If a color is intentionally off-palette (e.g. a true-black video backdrop), add a targeted `eslint-disable-next-line no-restricted-syntax` with a reason instead of widening the rule.
 - **Tailwind v4 Variable Naming:** When adding custom variables to `@theme` in `src/app.css` (e.g. `--color-*`), do NOT include property contexts like `bg-`, `text-`, or `accent-` in the variable name. Tailwind automatically prepends these contexts. Use base names (e.g., `--color-dark` instead of `--color-bg-dark`, `--color-green` instead of `--color-accent-green`) to avoid generating redundant utility classes like `bg-bg-dark`, `text-text-main`, or `accent-accent-green`. This is enforced automatically by `src/lib/theme.test.ts`.
