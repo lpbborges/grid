@@ -1,6 +1,6 @@
-# Grid Play
+# Grid
 
-Grid Play is a native desktop application built with **Tauri**, **SvelteKit**, **TypeScript**, and **Rust**. It lets you browse popular movies and TV series via Cinemeta and stream them directly using a built-in streaming engine (`rqbit`).
+Grid is a native desktop application built with **Tauri**, **SvelteKit**, **TypeScript**, and **Rust**. It lets you browse popular movies and TV series via Cinemeta and stream them directly using a built-in streaming engine (`rqbit`).
 
 ## Features
 
@@ -12,7 +12,7 @@ Grid Play is a native desktop application built with **Tauri**, **SvelteKit**, *
 - **Video Cache:** Downloaded videos are kept in a persistent cache under the app data directory (`downloads/`, tracked by `downloads/manifest.json`) so rewatching doesn't download again. The cache is capped at 3 GB by default; when a new video needs space, the least recently watched entries are evicted. Videos larger than the cap stream normally and are deleted when playback ends.
 - **Watch Progress:** Playback position is remembered per movie and per episode, and home-screen cards show a progress bar (for series, the most recently watched episode).
 - **TV Series Playback:** Full support for season/episode selection and dynamic metadata/subtitle loading.
-- **Global Playback Preferences:** Audio, Subtitle, and Quality preferences set once and remembered across the app (persisted locally). Grid Play ranks and picks the best matching source from YTS + Torrentio behind the scenes and silently enables the right embedded audio/subtitle track when playback starts, resolving the movie/show's real original language instead of guessing.
+- **Global Playback Preferences:** Audio, Subtitle, and Quality preferences set once and remembered across the app (persisted locally). Grid ranks and picks the best matching source from YTS + Torrentio behind the scenes and silently enables the right embedded audio/subtitle track when playback starts, resolving the movie/show's real original language instead of guessing.
 - **Frameless Design:** Desktop window with custom controls and a draggable header.
 - **Evangelion Unit-01 Theme:** A unique visual identity built with Tailwind CSS v4 featuring neon glows, digital grid backgrounds, and cyberpunk typography (Orbitron/Rajdhani, bundled locally).
 - **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles.
@@ -116,10 +116,10 @@ SvelteKit UI (static build, runs in the Tauri webview)
 
 - `src/lib/api/` wraps external services, `src/lib/engine/` drives playback (engine, cache, ranking), `src/lib/composables/` and `src/lib/stores/` hold reactive state, and `src/lib/components/` holds the UI.
 - **Where state lives:**
-  - `localStorage`: playback preferences (`grid-play-audio`, `grid-play-subtitle`, `grid-play-quality`, `grid-play-cache-limit-bytes`), watch progress (`grid-play-progress`) and watched titles (`grid-play-watched`).
-  - IndexedDB `grid-play-translations`: the metadata translation cache.
+  - `localStorage`: playback preferences (`grid-audio`, `grid-subtitle`, `grid-quality`, `grid-cache-limit-bytes`), watch progress (`grid-progress`) and watched titles (`grid-watched`).
+  - IndexedDB `grid-translations`: the metadata translation cache.
   - App data directory: the video cache (`downloads/` and `downloads/manifest.json`).
-  - App cache directory: `grid-play-engine.pid`, used to clean up an engine left behind by a crash.
+  - App cache directory: `grid-engine.pid`, used to clean up an engine left behind by a crash.
 
 ## Streaming Engine Sidecar
 
@@ -140,7 +140,7 @@ To update it:
 
 ## Data Sources & Privacy
 
-Grid Play talks to these services directly from your machine. Every host must also be allowed in the CSP in `src-tauri/tauri.conf.json`.
+Grid talks to these services directly from your machine. Every host must also be allowed in the CSP in `src-tauri/tauri.conf.json`.
 
 - **Cinemeta** (`v3-cinemeta.strem.io`): catalog, search, and movie/series metadata.
 - **YTS mirror** (`movies-api.accel.li`): extra movie details.
@@ -154,16 +154,16 @@ Grid Play talks to these services directly from your machine. Every host must al
 
 - **"Não foi possível iniciar o player"**: the engine could not start. Check that the sidecar for your platform exists in `src-tauri/bin/` and is executable, and read the `tauri dev` terminal output for `Sidecar spawn error`.
 - **`Port 1420 is already in use`**: the dev server needs port 1420 (`strictPort`). Stop the other process using it. The engine itself always picks free ports.
-- **A stale engine keeps running after a crash**: the next start kills it using `grid-play-engine.pid` in the app cache directory, but only if the process still looks like `rqbit`. If one survives, end the `rqbit` process manually and delete the PID file.
+- **A stale engine keeps running after a crash**: the next start kills it using `grid-engine.pid` in the app cache directory, but only if the process still looks like `rqbit`. If one survives, end the `rqbit` process manually and delete the PID file.
 - **Clearing the video cache**: quit the app and delete the `downloads/` folder in the app data directory:
-  - Linux: `~/.local/share/com.lp01.grid-play/`
-  - macOS: `~/Library/Application Support/com.lp01.grid-play/`
-  - Windows: `%APPDATA%\com.lp01.grid-play\`
+  - Linux: `~/.local/share/com.lp01.grid/`
+  - macOS: `~/Library/Application Support/com.lp01.grid/`
+  - Windows: `%APPDATA%\com.lp01.grid\`
 - **E2E specs never start playback**: read `e2e/artifacts/app-and-driver.log`. No `rqbit:` lines means the sidecar did not start. A `MediaError 4` means GStreamer lacks H.264/AAC decoders (install the libav plugins). Run `npm run e2e:services` to check the mock services and seeders on their own.
 
 ## Disclaimer
 
-Grid Play does not host, index, or distribute any content. It only plays streams that third-party services return, using a peer-to-peer engine that uploads data while downloading. You are responsible for making sure that what you watch is legal where you live.
+Grid does not host, index, or distribute any content. It only plays streams that third-party services return, using a peer-to-peer engine that uploads data while downloading. You are responsible for making sure that what you watch is legal where you live.
 
 ## License
 

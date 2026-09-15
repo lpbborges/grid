@@ -5,7 +5,7 @@ class WatchedStore {
 
   constructor() {
     if (browser) {
-      const stored = localStorage.getItem('grid-play-watched');
+      const stored = localStorage.getItem('grid-watched');
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
@@ -21,7 +21,7 @@ class WatchedStore {
 
   private save() {
     if (browser) {
-      localStorage.setItem('grid-play-watched', JSON.stringify(this.watchedIds));
+      localStorage.setItem('grid-watched', JSON.stringify(this.watchedIds));
     }
   }
 

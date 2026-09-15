@@ -6,9 +6,9 @@ export const POSTER =
     '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450"><rect width="300" height="450" fill="#1a1a2e"/></svg>'
   ).toString('base64');
 
-export const MKV_MOVIE = { id: 'tt9000001', title: 'Grid Play Fixture MKV' };
-export const MP4_MOVIE = { id: 'tt9000002', title: 'Grid Play Fixture MP4' };
-export const FIXTURE_SERIES = { id: 'tt9000003', title: 'Grid Play Fixture Series' };
+export const MKV_MOVIE = { id: 'tt9000001', title: 'Grid Fixture MKV' };
+export const MP4_MOVIE = { id: 'tt9000002', title: 'Grid Fixture MP4' };
+export const FIXTURE_SERIES = { id: 'tt9000003', title: 'Grid Fixture Series' };
 
 export interface StreamEntry {
   name: string;

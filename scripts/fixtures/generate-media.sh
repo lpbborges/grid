@@ -6,7 +6,7 @@ OUT="$ROOT/tests/fixtures/media"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-printf '1\n00:00:01,000 --> 00:00:04,000\nGrid Play fixture\n' > "$WORK/sub.srt"
+printf '1\n00:00:01,000 --> 00:00:04,000\nGrid fixture\n' > "$WORK/sub.srt"
 
 clip() {
   local seconds="$1" subtitle_codec="$2" output="$3"

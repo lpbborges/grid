@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { REPO_ROOT } from './swarm.ts';
 
-export const E2E_IDENTIFIER = 'com.lp01.grid-play.e2e';
+export const E2E_IDENTIFIER = 'com.lp01.grid.e2e';
 
 const IS_WINDOWS = process.platform === 'win32';
 
@@ -15,7 +15,7 @@ export const APPLICATION = path.join(
   'src-tauri',
   'target',
   'debug',
-  IS_WINDOWS ? 'grid-play.exe' : 'grid-play'
+  IS_WINDOWS ? 'grid.exe' : 'grid'
 );
 
 const TAURI_DRIVER =

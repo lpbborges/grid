@@ -1,6 +1,6 @@
-# Grid Play: Agent & Developer Guidelines
+# Grid: Agent & Developer Guidelines
 
-This document serves as a living repository of the core architectural decisions, conventions, and best practices established for the **Grid Play** project. Any AI agent or developer working on this codebase should adhere to these rules.
+This document serves as a living repository of the core architectural decisions, conventions, and best practices established for the **Grid** project. Any AI agent or developer working on this codebase should adhere to these rules.
 
 ## Command Cheat-Sheet
 
@@ -111,7 +111,7 @@ Update `README.md` in the same change whenever you:
 
 - **UI Language is pt-BR:** All user-facing copy (labels, status messages, errors, empty states, date formatting) is written in Brazilian Portuguese, and `src/app.html` declares `lang="pt-BR"`. There is no i18n layer, so hardcode new strings in pt-BR. Only Cinemeta metadata (titles, synopses, episode names) is translated at runtime into the system language. Code, identifiers, logs, comments, and docs stay in English.
 - **User-Friendly Language:** The app should function like Netflix for non-technical users. NEVER mention technical terms like "torrent", "magnet", "seeders", or "peers" in the UI. Use simple, familiar terms like "Stream", "Play", "Loading", "Quality", etc., instead.
-- **Product name:** The app is called "Grid Play" everywhere (README, window title, `productName`, `<title>`, logo).
+- **Product name:** The app is called "Grid" everywhere (README, window title, `productName`, `<title>`, logo).
 
 ---
 
