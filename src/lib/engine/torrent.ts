@@ -2,7 +2,7 @@ import { logger } from '$lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
 import { getLanguageName } from '../api/subtitles';
-import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+import { FetchTimeoutError, fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { hasExtension } from '../utils/fileExtension';
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm'];
@@ -127,44 +127,82 @@ export async function deleteTorrent(infoHash: string): Promise<void> {
   }
 }
 
+// rqbit tries each source only once while resolving a magnet, so a source that
+// accepts the connection and never answers hangs the add forever. A new add
+// starts from scratch and reaches that source again.
+export const ADD_ATTEMPT_TIMEOUTS_MS: readonly number[] = [
+  20_000, 40_000, 60_000, 60_000, 60_000, 60_000
+];
+
+export class AddTorrentTimeoutError extends Error {
+  constructor(attempts: number) {
+    super(`The engine did not add the torrent after ${attempts} attempts`);
+    this.name = 'AddTorrentTimeoutError';
+  }
+}
+
+export interface AddTorrentOptions {
+  onlyFilesRegex?: string;
+  onRetry?: (attempt: number) => void;
+}
+
 export async function addTorrent(
   magnetLink: string,
   subFolder?: string,
-  options?: { onlyFilesRegex?: string }
+  options: AddTorrentOptions = {}
 ): Promise<TorrentEngineDetails> {
   const params = new URLSearchParams();
   params.set('overwrite', 'true'); // Required for rqbit to hash-check and resume existing files
   if (subFolder) {
     params.set('sub_folder', subFolder);
   }
-  if (options?.onlyFilesRegex) {
+  if (options.onlyFilesRegex) {
     params.set('only_files_regex', options.onlyFilesRegex);
   }
 
   const qs = params.toString();
   const url = qs ? `${ENGINE_URL}/torrents?${qs}` : `${ENGINE_URL}/torrents`;
 
-  const res = await fetchWithTimeout(
-    url,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain'
-      },
-      body: magnetLink
-    },
-    300000
-  );
+  for (const [index, timeoutMs] of ADD_ATTEMPT_TIMEOUTS_MS.entries()) {
+    if (index > 0) {
+      options.onRetry?.(index + 1);
+    }
 
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => 'No response body');
-    throw new Error(
-      `Failed to add torrent to engine: ${res.status} ${res.statusText} - ${errorText}`
-    );
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain'
+          },
+          body: magnetLink
+        },
+        timeoutMs
+      );
+    } catch (error) {
+      if (!(error instanceof FetchTimeoutError)) {
+        throw error;
+      }
+      logger.warn(
+        `Adding the torrent timed out after ${timeoutMs}ms (attempt ${index + 1} of ${ADD_ATTEMPT_TIMEOUTS_MS.length})`
+      );
+      continue;
+    }
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => 'No response body');
+      throw new Error(
+        `Failed to add torrent to engine: ${res.status} ${res.statusText} - ${errorText}`
+      );
+    }
+
+    const data = await res.json();
+    return data.details as TorrentEngineDetails;
   }
 
-  const data = await res.json();
-  return data.details as TorrentEngineDetails;
+  throw new AddTorrentTimeoutError(ADD_ATTEMPT_TIMEOUTS_MS.length);
 }
 
 export function getWantedFileIndices(

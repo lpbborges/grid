@@ -53,9 +53,17 @@ export async function seekTo(seconds: number): Promise<void> {
   }, seconds);
 }
 
-export async function mockState(): Promise<{ announces: number; unexpectedRequests: string[] }> {
+export async function mockState(): Promise<{
+  announces: number;
+  stalledConnections: number;
+  unexpectedRequests: string[];
+}> {
   const response = await fetch(MOCK_STATE_URL);
-  return (await response.json()) as { announces: number; unexpectedRequests: string[] };
+  return (await response.json()) as {
+    announces: number;
+    stalledConnections: number;
+    unexpectedRequests: string[];
+  };
 }
 
 export async function openTitle(type: 'movie' | 'series', id: string): Promise<void> {

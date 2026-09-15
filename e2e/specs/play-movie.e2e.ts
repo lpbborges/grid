@@ -69,6 +69,7 @@ describe('Offline sandbox', () => {
   it('found the fixture seeders through the local tracker and made no unexpected requests', async () => {
     const state = await mockState();
     expect(state.announces).toBeGreaterThan(0);
+    expect(state.stalledConnections).toBe(1);
     expect(state.unexpectedRequests).toEqual([]);
   });
 });

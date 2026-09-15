@@ -4,6 +4,12 @@ import { POSTER, type Catalog, type CatalogMovie, type CatalogSeries } from './c
 export const MOCK_PORT = 47100;
 export const MOCK_BASE = `http://127.0.0.1:${MOCK_PORT}`;
 export const TRACKER_URL = `${MOCK_BASE}/announce`;
+export const APP_TRACKER_URL = `${MOCK_BASE}/announce-app`;
+
+export interface MockServerOptions {
+  appPeerPorts: number[];
+  stalledConnections: () => number;
+}
 
 export interface MockServer {
   announces: () => number;
@@ -57,7 +63,7 @@ function compactPeers(peerPorts: number[]): Buffer {
   ]);
 }
 
-export function startMockServer(catalog: Catalog, peerPorts: number[]): Promise<MockServer> {
+export function startMockServer(catalog: Catalog, options: MockServerOptions): Promise<MockServer> {
   let announceCount = 0;
   const unexpectedRequests: string[] = [];
 
@@ -71,15 +77,19 @@ export function startMockServer(catalog: Catalog, peerPorts: number[]): Promise<
       res.end(JSON.stringify(body));
     };
 
-    if (url.pathname === '/announce') {
+    if (url.pathname === '/announce' || url.pathname === '/announce-app') {
       announceCount++;
       res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end(compactPeers(peerPorts));
+      res.end(compactPeers(url.pathname === '/announce-app' ? options.appPeerPorts : []));
       return;
     }
 
     if (url.pathname === '/__e2e/state') {
-      return send(200, { announces: announceCount, unexpectedRequests });
+      return send(200, {
+        announces: announceCount,
+        stalledConnections: options.stalledConnections(),
+        unexpectedRequests
+      });
     }
 
     const [service, ...rest] = url.pathname.split('/').filter(Boolean);
