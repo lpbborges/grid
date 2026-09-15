@@ -15,6 +15,8 @@ export interface PlaybackBoundaryOptions {
   engineStartError?: unknown;
   failAdd?: boolean;
   stallAdds?: number;
+  /** Delays `upsert_cache_entry`, like the slower IPC on Windows. */
+  cacheWriteDelayMs?: number;
 }
 
 export interface InvokeCall {
@@ -55,6 +57,9 @@ export function installPlaybackBoundary(options: PlaybackBoundaryOptions): Playb
       case 'get_cache_manifest':
         return [];
       case 'upsert_cache_entry':
+        if (options.cacheWriteDelayMs) {
+          await new Promise((resolve) => setTimeout(resolve, options.cacheWriteDelayMs));
+        }
         return undefined;
       case 'evict_for_space':
         return [];

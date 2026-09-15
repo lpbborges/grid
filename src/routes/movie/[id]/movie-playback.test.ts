@@ -164,6 +164,28 @@ describe('Movie playback wiring', () => {
     expect(await screen.findByRole('button', { name: /reproduzir/i })).toBeInTheDocument();
   });
 
+  // Closing the player writes the cache entry before forgetting the torrent.
+  // Playing again re-adds the same info hash, so that late forget must not
+  // remove the torrent the new stream waits on (Windows CI, run 35036299512).
+  it('keeps the re-added title loaded when the previous cleanup finishes late', async () => {
+    await openAndPlay({ cacheWriteDelayMs: 50 });
+    await screen.findByTestId('video-element', {}, { timeout: 5000 });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
+
+    const adds = () =>
+      boundary.rqbit.requests.filter((r) => r.method === 'POST' && r.path === '/torrents');
+    await waitFor(() => expect(adds()).toHaveLength(2), { timeout: 5000 });
+    // Let the delayed cache write, and the forget behind it, finish.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(boundary.rqbit.loaded.has(HASH)).toBe(true);
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    expect(video.getAttribute('src')).toBe(`${PROXY_ORIGIN}/torrents/${HASH}/stream/1`);
+    expect(boundary.unhandledRequests).toEqual([]);
+  });
+
   it('deletes a stream that is too large for the cache when the player closes', async () => {
     settingsStore.cacheLimitBytes = 1000;
     await openAndPlay();

@@ -341,6 +341,46 @@ describe('prepareStream', () => {
     expect(revokeSpy).toHaveBeenCalledTimes(2);
   });
 
+  // finalizeStream writes the cache entry over IPC before it forgets the
+  // torrent. Closing the player and playing the same title again re-adds the
+  // same info hash, so a late forget would delete the torrent the new stream
+  // is waiting on (seen on Windows CI: "no need to start torrent anymore").
+  it('waits for an in-flight finalizeStream before adding the torrent again', async () => {
+    const calls: string[] = [];
+    let releaseForget: () => void = () => {};
+    vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({
+      snapshot: { downloaded_and_checked_bytes: 10 }
+    });
+    vi.mocked(torrentApi.forgetTorrent).mockImplementation(async () => {
+      calls.push('forget');
+      await new Promise<void>((resolve) => {
+        releaseForget = resolve;
+      });
+    });
+    vi.mocked(torrentApi.addTorrent).mockImplementation(async () => {
+      calls.push('add');
+      return mockDetails() as any;
+    });
+
+    const finalizing = finalizeStream({
+      infoHash: '1'.repeat(40),
+      isCacheable: true,
+      cacheEntry: { infoHash: '1'.repeat(40), totalBytes: 200 } as any
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toEqual(['forget']);
+
+    const preparing = prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn() });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toEqual(['forget']);
+
+    releaseForget();
+    await finalizing;
+    await preparing;
+
+    expect(calls).toEqual(['forget', 'add']);
+  });
+
   describe('when the preparation is aborted', () => {
     const hash = '1'.repeat(40);
 
