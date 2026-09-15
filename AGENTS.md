@@ -90,6 +90,7 @@ This document serves as a living repository of the core architectural decisions,
 ## 6. Code Quality & Git
 
 - **Formatting & Linting:** `eslint` and `prettier` are mandated for all TS/JS/Svelte code. `cargo fmt` and `cargo clippy --all-targets -- -D warnings` are mandated for Rust code.
+- **Versioning:** You MUST bump the version number in BOTH `package.json` and `src-tauri/tauri.conf.json` on every functional or feature change you make. Changes to documentation or configuration files do not require a version bump. Choose patch, minor, or major depending on the scope of the change.
 - **Pre-commit Hook:** `.husky/pre-commit` runs `lint-staged` (ESLint + Prettier on staged files), the full frontend test suite, the full Rust test suite, `cargo fmt --check`, and `cargo clippy`. A commit therefore takes a minute or more. Never bypass this hook unless absolutely necessary. It runs against the working tree, so don't leave intentionally failing tests unstaged while committing something else.
 - **CI:** `.github/workflows/ci.yml` runs lint, Prettier, `svelte-check`, the frontend tests, `cargo fmt`, `clippy`, `cargo test`, `npm audit`, `cargo audit`, and, after those pass, the `e2e` job on Linux and Windows.
 - **Commits:** Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `chore:`, `ci:`) with small, atomic commits.
