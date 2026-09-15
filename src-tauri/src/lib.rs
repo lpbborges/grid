@@ -815,6 +815,31 @@ mod tests {
     }
 
     #[test]
+    fn main_window_may_use_the_custom_titlebar_controls() {
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json"))
+                .expect("capabilities/default.json is valid JSON");
+        assert!(capability["windows"]
+            .as_array()
+            .expect("windows is an array")
+            .contains(&serde_json::json!("main")));
+        let permissions = capability["permissions"]
+            .as_array()
+            .expect("permissions is an array");
+        for permission in [
+            "core:window:allow-minimize",
+            "core:window:allow-toggle-maximize",
+            "core:window:allow-close",
+            "core:window:allow-start-dragging",
+        ] {
+            assert!(
+                permissions.contains(&serde_json::json!(permission)),
+                "missing {permission}"
+            );
+        }
+    }
+
+    #[test]
     fn csp_allows_blob_media_for_subtitle_tracks() {
         // Subtitles are rendered as <track src="blob:..."> (getTorrentSubtitles /
         // getExternalSubtitles). WebKit checks <track> URLs against media-src, so

@@ -1,6 +1,6 @@
 {
   "name": "grid-play",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Grid Play: a desktop app for browsing and streaming movies and TV series",
   "type": "module",
   "scripts": {
