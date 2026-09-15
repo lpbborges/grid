@@ -1,7 +1,7 @@
 use crate::media_patch;
 use crate::stream_proxy;
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
@@ -80,16 +80,32 @@ async fn spawn_tracker(seeder_peer_port: u16) -> String {
     format!("http://127.0.0.1:{port}/announce")
 }
 
-fn rqbit() -> Command {
+const SWARM_PROCESSES: [&str; 2] = ["seeder", "engine"];
+const LOG_TAIL_LINES: usize = 40;
+
+fn rqbit(log: &Path) -> Command {
+    let log = std::fs::File::create(log).expect("rqbit log file is created");
     let mut command = Command::new(sidecar_path());
     command
         .env("RQBIT_DHT_DISABLE", "true")
         .env("RQBIT_LSD_DISABLE", "true")
         .env("RQBIT_UPNP_PORT_FORWARD_DISABLE", "true")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(Stdio::from(
+            log.try_clone().expect("rqbit log file is cloned"),
+        ))
+        .stderr(Stdio::from(log))
         .kill_on_drop(true);
     command
+}
+
+fn log_path(temp: &Path, process: &str) -> PathBuf {
+    temp.join(format!("{process}.log"))
+}
+
+fn log_tail(path: &Path) -> String {
+    let log = std::fs::read_to_string(path).unwrap_or_default();
+    let lines: Vec<&str> = log.lines().collect();
+    lines[lines.len().saturating_sub(LOG_TAIL_LINES)..].join("\n")
 }
 
 struct Swarm {
@@ -102,6 +118,18 @@ struct Swarm {
 
 impl Drop for Swarm {
     fn drop(&mut self) {
+        if std::thread::panicking() {
+            for (process, child) in SWARM_PROCESSES
+                .into_iter()
+                .zip([&mut self.seeder, &mut self.engine])
+            {
+                eprintln!(
+                    "---- rqbit {process} (exit status: {:?}) ----\n{}",
+                    child.try_wait(),
+                    log_tail(&log_path(&self.temp, process))
+                );
+            }
+        }
         let _ = self.seeder.start_kill();
         let _ = self.engine.start_kill();
         let _ = std::fs::remove_dir_all(&self.temp);
@@ -156,7 +184,7 @@ async fn start_swarm(fixture: &str) -> Swarm {
     let trackers_file = temp.join("trackers.txt");
     std::fs::write(&trackers_file, format!("{tracker}\n")).unwrap();
 
-    let seeder = rqbit()
+    let seeder = rqbit(&log_path(&temp, "seeder"))
         .arg("--http-api-listen-addr")
         .arg(format!("127.0.0.1:{seeder_api_port}"))
         .arg("--listen-port")
@@ -166,7 +194,7 @@ async fn start_swarm(fixture: &str) -> Swarm {
         .arg(&tracker)
         .spawn()
         .expect("seeder starts");
-    let engine = rqbit()
+    let engine = rqbit(&log_path(&temp, "engine"))
         .envs(crate::engine_environment())
         .env("RQBIT_TRACKERS_FILENAME", &trackers_file)
         .arg("--disable-dht-persistence")
@@ -181,23 +209,25 @@ async fn start_swarm(fixture: &str) -> Swarm {
         .spawn()
         .expect("engine starts");
 
+    let mut swarm = Swarm {
+        engine_port,
+        info_hash: String::new(),
+        temp,
+        seeder,
+        engine,
+    };
+
     let seeded = wait_for_json(seeder_api_port, "/torrents", |value| {
         value["torrents"].as_array().is_some_and(|t| !t.is_empty())
     })
     .await;
-    let info_hash = seeded["torrents"][0]["info_hash"]
+    swarm.info_hash = seeded["torrents"][0]["info_hash"]
         .as_str()
         .unwrap()
         .to_string();
     wait_for_json(engine_port, "/torrents", |_| true).await;
 
-    Swarm {
-        engine_port,
-        info_hash,
-        temp,
-        seeder,
-        engine,
-    }
+    swarm
 }
 
 async fn add_torrent(swarm: &Swarm) -> Value {
