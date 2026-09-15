@@ -1,5 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod cache;
+mod engine_process;
 mod media_patch;
 #[cfg(test)]
 mod playback_engine_tests;
@@ -11,11 +12,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Instant;
 use tauri::{Manager, State};
-use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
 struct EngineState {
-    child: Mutex<Option<tauri_plugin_shell::process::CommandChild>>,
+    child: Mutex<Option<std::process::Child>>,
     pid: Mutex<Option<u32>>,
     port: Mutex<Option<u16>>,
 }
@@ -412,6 +412,27 @@ fn cleanup_stale_engine(pid_path: &Path) {
     remove_pid_file(pid_path);
 }
 
+/// Prints every line the engine writes with an `rqbit:` prefix, which the
+/// E2E app log relies on.
+fn forward_engine_output(stream: impl std::io::Read + Send + 'static, to_stderr: bool) {
+    use std::io::BufRead;
+
+    std::thread::spawn(move || {
+        let mut reader = std::io::BufReader::new(stream);
+        let mut line = Vec::new();
+        while matches!(reader.read_until(b'\n', &mut line), Ok(read) if read > 0) {
+            let text = String::from_utf8_lossy(&line);
+            let text = text.trim_end_matches(['\r', '\n']);
+            if to_stderr {
+                eprintln!("rqbit: {:?}", text);
+            } else {
+                println!("rqbit: {:?}", text);
+            }
+            line.clear();
+        }
+    });
+}
+
 fn engine_environment() -> [(&'static str, &'static str); 1] {
     [("CORS_ALLOW_REGEXP", r"^http://tauri\.localhost$")]
 }
@@ -486,7 +507,9 @@ async fn start_torrent_engine(
         .map_err(|e| e.to_string())?
         .port();
 
-    let sidecar_command = app
+    // The shell plugin resolves the sidecar path; spawning the resulting std
+    // command ourselves lets engine_process tie the engine to the app.
+    let mut command: std::process::Command = app
         .shell()
         .sidecar("rqbit")
         .map_err(|e| {
@@ -502,14 +525,27 @@ async fn start_torrent_engine(
         .arg("server")
         .arg("start")
         .arg("--disable-persistence")
-        .arg(output_folder);
+        .arg(output_folder)
+        .into();
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
 
-    let (mut rx, child) = sidecar_command.spawn().map_err(|e| {
+    // Spawned on this async command's Tokio worker thread, never inside
+    // spawn_blocking: on Linux the engine is tied to the spawning thread.
+    let mut child = engine_process::spawn_tied_to_app(&mut command).map_err(|e| {
         println!("Sidecar spawn error: {}", e);
         e.to_string()
     })?;
+    if let Some(stdout) = child.stdout.take() {
+        forward_engine_output(stdout, false);
+    }
+    if let Some(stderr) = child.stderr.take() {
+        forward_engine_output(stderr, true);
+    }
 
-    let pid = child.pid();
+    let pid = child.id();
     if let Err(e) = write_pid_file(&pid_path, pid) {
         eprintln!("Failed to write engine PID file: {}", e);
     }
@@ -517,20 +553,6 @@ async fn start_torrent_engine(
     *child_guard = Some(child);
     *pid_guard = Some(pid);
     *port_guard = Some(port);
-
-    tauri::async_runtime::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(line) => {
-                    println!("rqbit: {:?}", String::from_utf8_lossy(&line));
-                }
-                CommandEvent::Stderr(line) => {
-                    eprintln!("rqbit: {:?}", String::from_utf8_lossy(&line));
-                }
-                _ => {}
-            }
-        }
-    });
 
     Ok(format!("http://127.0.0.1:{}", port))
 }
@@ -610,7 +632,7 @@ pub fn run() {
                         // Drop on EngineState is not guaranteed to run on
                         // Tauri's close/force-quit paths.
                         let state = app_handle.state::<EngineState>();
-                        if let Some(child) = state.child.lock().unwrap().take() {
+                        if let Some(mut child) = state.child.lock().unwrap().take() {
                             let _ = child.kill();
                         }
                         *state.pid.lock().unwrap() = None;

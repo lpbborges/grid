@@ -119,7 +119,7 @@ SvelteKit UI (static build, runs in the Tauri webview)
   - `localStorage`: playback preferences (`grid-audio`, `grid-subtitle`, `grid-quality`, `grid-cache-limit-bytes`), watch progress (`grid-progress`) and watched titles (`grid-watched`).
   - IndexedDB `grid-translations`: the metadata translation cache.
   - App data directory: the video cache (`downloads/` and `downloads/manifest.json`).
-  - App cache directory: `grid-engine.pid`, used to clean up an engine left behind by a crash.
+  - App cache directory: `grid-engine.pid`, used to clean up an engine left behind by a crash. On Linux and Windows the engine also stops by itself when the app is killed (`src-tauri/src/engine_process.rs`).
 
 ## Streaming Engine Sidecar
 
@@ -154,7 +154,7 @@ Grid talks to these services directly from your machine. Every host must also be
 
 - **"Não foi possível iniciar o player"**: the engine could not start. Check that the sidecar for your platform exists in `src-tauri/bin/` and is executable, and read the `tauri dev` terminal output for `Sidecar spawn error`.
 - **`Port 1420 is already in use`**: the dev server needs port 1420 (`strictPort`). Stop the other process using it. The engine itself always picks free ports.
-- **A stale engine keeps running after a crash**: the next start kills it using `grid-engine.pid` in the app cache directory, but only if the process still looks like `rqbit`. If one survives, end the `rqbit` process manually and delete the PID file.
+- **A stale engine keeps running after a crash**: on Linux and Windows the engine stops together with the app, even when the app is force-quit. On macOS, and if that fails, the next start kills it using `grid-engine.pid` in the app cache directory, but only if the process still looks like `rqbit`. If one survives, end the `rqbit` process manually and delete the PID file.
 - **Clearing the video cache**: quit the app and delete the `downloads/` folder in the app data directory:
   - Linux: `~/.local/share/com.lp01.grid/`
   - macOS: `~/Library/Application Support/com.lp01.grid/`
