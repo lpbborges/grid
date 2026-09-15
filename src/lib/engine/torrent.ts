@@ -129,10 +129,10 @@ export async function deleteTorrent(infoHash: string): Promise<void> {
 
 // rqbit tries each source only once while resolving a magnet, so a source that
 // accepts the connection and never answers hangs the add forever. A new add
-// starts from scratch and reaches that source again.
-export const ADD_ATTEMPT_TIMEOUTS_MS: readonly number[] = [
-  20_000, 40_000, 60_000, 60_000, 60_000, 60_000
-];
+// starts from scratch and reaches that source again. Aborting an attempt drops
+// rqbit's lookup progress, so the last attempt is long enough that a slow but
+// legitimate lookup can still finish instead of being cancelled early.
+export const ADD_ATTEMPT_TIMEOUTS_MS: readonly number[] = [20_000, 40_000, 240_000];
 
 export class AddTorrentTimeoutError extends Error {
   constructor(attempts: number) {

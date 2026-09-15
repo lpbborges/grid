@@ -269,11 +269,12 @@ describe('torrent engine', () => {
       expect(globalThis.fetch).toHaveBeenCalledOnce();
     });
 
-    it('retries after 20 seconds and keeps the total wait at 5 minutes', () => {
+    it('retries after 20 seconds, keeps a long final attempt and a 5-minute total', () => {
       expect(torrent.ADD_ATTEMPT_TIMEOUTS_MS[0]).toBe(20_000);
       expect(torrent.ADD_ATTEMPT_TIMEOUTS_MS.reduce((total, timeout) => total + timeout, 0)).toBe(
         300_000
       );
+      expect(torrent.ADD_ATTEMPT_TIMEOUTS_MS.at(-1)).toBeGreaterThanOrEqual(240_000);
     });
   });
 

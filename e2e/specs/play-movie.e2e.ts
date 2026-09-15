@@ -18,6 +18,9 @@ async function pressPlay(): Promise<void> {
   await play.click();
 }
 
+// MKV_MOVIE must stay the first title added in this run: the offline swarm's
+// stalling source (e2e/support/stallingPeer.ts) only swallows the first
+// connection it receives, so only the first add exercises the retry path.
 for (const movie of [MKV_MOVIE, MP4_MOVIE]) {
   describe(`Playing ${movie.title}`, () => {
     it('opens the title from the catalog and starts playback through the stream proxy', async () => {
