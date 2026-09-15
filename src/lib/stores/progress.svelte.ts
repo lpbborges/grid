@@ -15,7 +15,7 @@ class ProgressStore {
 
   constructor() {
     if (browser) {
-      const stored = localStorage.getItem('grid-play-progress');
+      const stored = localStorage.getItem('grid-progress');
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
@@ -34,7 +34,7 @@ class ProgressStore {
     clearTimeout(this.#persistTimer);
     this.#persistTimer = undefined;
     if (browser) {
-      localStorage.setItem('grid-play-progress', JSON.stringify(this.progress));
+      localStorage.setItem('grid-progress', JSON.stringify(this.progress));
     }
   }
 

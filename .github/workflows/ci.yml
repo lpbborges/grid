@@ -131,7 +131,7 @@ jobs:
         run: |
           $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
           New-Item -Path $key -Force | Out-Null
-          New-ItemProperty -Path $key -Name 'grid-play.exe' -Value '--remote-debugging-port=0 --autoplay-policy=no-user-gesture-required --mute-audio --use-fake-device-for-media-stream --use-fake-ui-for-media-stream' -PropertyType String -Force | Out-Null
+          New-ItemProperty -Path $key -Name 'grid.exe' -Value '--remote-debugging-port=0 --autoplay-policy=no-user-gesture-required --mute-audio --use-fake-device-for-media-stream --use-fake-ui-for-media-stream' -PropertyType String -Force | Out-Null
       - name: Run E2E specs (Windows)
         if: runner.os == 'Windows'
         run: npm run test:e2e:run

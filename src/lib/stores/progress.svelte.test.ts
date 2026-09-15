@@ -7,7 +7,7 @@ async function loadStore() {
 }
 
 function storedProgress() {
-  return JSON.parse(localStorage.getItem('grid-play-progress') ?? 'null');
+  return JSON.parse(localStorage.getItem('grid-progress') ?? 'null');
 }
 
 describe('progressStore persistence', () => {

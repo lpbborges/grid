@@ -316,7 +316,7 @@ fn evict_for_space_blocking(
 /// Path to the PID file tracking the currently-running (or most recently
 /// running) rqbit sidecar process, inside the app's own cache directory.
 fn pid_file_path(app_cache_dir: &Path) -> PathBuf {
-    app_cache_dir.join("grid-play-engine.pid")
+    app_cache_dir.join("grid-engine.pid")
 }
 
 /// Reads and parses a PID from `path`. Returns `None` on any error: missing
@@ -705,7 +705,7 @@ mod tests {
 
     fn unique_test_pid_path(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
-            "grid-play-engine-test-{}-{}.pid",
+            "grid-engine-test-{}-{}.pid",
             name,
             std::process::id()
         ))
@@ -713,11 +713,8 @@ mod tests {
 
     #[test]
     fn pid_file_path_is_under_the_given_cache_dir_with_expected_name() {
-        let cache_dir = PathBuf::from("/home/user/.cache/com.lp01.grid-play");
-        assert_eq!(
-            pid_file_path(&cache_dir),
-            cache_dir.join("grid-play-engine.pid")
-        );
+        let cache_dir = PathBuf::from("/home/user/.cache/com.lp01.grid");
+        assert_eq!(pid_file_path(&cache_dir), cache_dir.join("grid-engine.pid"));
     }
 
     #[test]

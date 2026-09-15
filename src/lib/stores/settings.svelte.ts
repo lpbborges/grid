@@ -16,16 +16,16 @@ class SettingsStore {
 
   constructor() {
     if (browser) {
-      const storedAudio = localStorage.getItem('grid-play-audio');
+      const storedAudio = localStorage.getItem('grid-audio');
       if (storedAudio && isAudioPreference(storedAudio)) this.#audio = storedAudio;
 
-      const storedSub = localStorage.getItem('grid-play-subtitle');
+      const storedSub = localStorage.getItem('grid-subtitle');
       if (storedSub) this.#subtitle = storedSub;
 
-      const storedQuality = localStorage.getItem('grid-play-quality');
+      const storedQuality = localStorage.getItem('grid-quality');
       if (storedQuality) this.#quality = storedQuality;
 
-      const storedCacheLimit = localStorage.getItem('grid-play-cache-limit-bytes');
+      const storedCacheLimit = localStorage.getItem('grid-cache-limit-bytes');
       const parsedCacheLimit = normalizeCacheLimit(
         storedCacheLimit ? Number(storedCacheLimit) : NaN
       );
@@ -40,7 +40,7 @@ class SettingsStore {
   }
   set audio(value: AudioPreference) {
     this.#audio = value;
-    this.persist('grid-play-audio', value);
+    this.persist('grid-audio', value);
   }
 
   get subtitle() {
@@ -48,7 +48,7 @@ class SettingsStore {
   }
   set subtitle(value: string) {
     this.#subtitle = value;
-    this.persist('grid-play-subtitle', value);
+    this.persist('grid-subtitle', value);
   }
 
   get quality() {
@@ -56,7 +56,7 @@ class SettingsStore {
   }
   set quality(value: string) {
     this.#quality = value;
-    this.persist('grid-play-quality', value);
+    this.persist('grid-quality', value);
   }
 
   get cacheLimitBytes() {
@@ -66,7 +66,7 @@ class SettingsStore {
     const normalized = normalizeCacheLimit(value);
     if (normalized === null) return;
     this.#cacheLimitBytes = normalized;
-    this.persist('grid-play-cache-limit-bytes', String(normalized));
+    this.persist('grid-cache-limit-bytes', String(normalized));
   }
 
   private persist(key: string, value: string) {

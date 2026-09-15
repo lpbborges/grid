@@ -6,7 +6,7 @@ import { createFakeRqbit, type FakeRqbit, type FakeTorrentFile } from './fakeRqb
 
 export const ENGINE_ORIGIN = 'http://127.0.0.1:41000';
 export const PROXY_ORIGIN = 'http://127.0.0.1:42000';
-export const FIXTURE_VTT = 'WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nGrid Play fixture\n';
+export const FIXTURE_VTT = 'WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nGrid fixture\n';
 
 export interface PlaybackBoundaryOptions {
   files: FakeTorrentFile[];

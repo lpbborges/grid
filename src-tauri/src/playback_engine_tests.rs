@@ -176,7 +176,7 @@ async fn start_swarm(fixture: &str) -> Swarm {
     let engine_port = free_port();
     let engine_peer_port = free_port();
     let temp = std::env::temp_dir().join(format!(
-        "grid-play-engine-test-{}-{engine_port}",
+        "grid-engine-test-{}-{engine_port}",
         std::process::id()
     ));
     std::fs::create_dir_all(&temp).unwrap();

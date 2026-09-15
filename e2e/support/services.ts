@@ -20,7 +20,7 @@ export async function startE2eServices(): Promise<E2eServices> {
     catalog,
     seeders.map((s) => s.peerPort)
   );
-  const workDir = mkdtempSync(path.join(tmpdir(), 'grid-play-e2e-'));
+  const workDir = mkdtempSync(path.join(tmpdir(), 'grid-e2e-'));
   const trackersFile = path.join(workDir, 'trackers.txt');
   writeFileSync(trackersFile, `${TRACKER_URL}\n`);
   return {

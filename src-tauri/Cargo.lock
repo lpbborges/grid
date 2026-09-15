@@ -1419,8 +1419,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "grid-play"
-version = "0.1.0"
+name = "grid"
+version = "0.1.2"
 dependencies = [
  "futures-util",
  "regex",
