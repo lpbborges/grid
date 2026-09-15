@@ -55,17 +55,24 @@ fn free_port() -> u16 {
         .port()
 }
 
-async fn spawn_tracker(seeder_peer_port: u16) -> String {
+async fn spawn_tracker(peer_ports: &[u16]) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
+    let peers: Vec<u8> = peer_ports
+        .iter()
+        .flat_map(|peer_port| {
+            let [high, low] = peer_port.to_be_bytes();
+            [127, 0, 0, 1, high, low]
+        })
+        .collect();
     tokio::spawn(async move {
         while let Ok((mut socket, _)) = listener.accept().await {
+            let peers = peers.clone();
             tokio::spawn(async move {
                 let mut buf = [0u8; 4096];
                 let _ = socket.read(&mut buf).await;
-                let mut body = b"d8:intervali5e5:peers6:".to_vec();
-                body.extend_from_slice(&[127, 0, 0, 1]);
-                body.extend_from_slice(&seeder_peer_port.to_be_bytes());
+                let mut body = format!("d8:intervali5e5:peers{}:", peers.len()).into_bytes();
+                body.extend_from_slice(&peers);
                 body.push(b'e');
                 let head = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -78,6 +85,29 @@ async fn spawn_tracker(seeder_peer_port: u16) -> String {
         }
     });
     format!("http://127.0.0.1:{port}/announce")
+}
+
+async fn spawn_stalling_peer(target_port: u16) -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let mut stalled = Vec::new();
+        while let Ok((socket, _)) = listener.accept().await {
+            if stalled.is_empty() {
+                stalled.push(socket);
+                continue;
+            }
+            tokio::spawn(async move {
+                let mut socket = socket;
+                if let Ok(mut target) =
+                    tokio::net::TcpStream::connect(("127.0.0.1", target_port)).await
+                {
+                    let _ = tokio::io::copy_bidirectional(&mut socket, &mut target).await;
+                }
+            });
+        }
+    });
+    port
 }
 
 const SWARM_PROCESSES: [&str; 2] = ["seeder", "engine"];
@@ -170,19 +200,30 @@ async fn wait_for_json(port: u16, path: &str, ready: impl Fn(&Value) -> bool) ->
     panic!("timed out waiting for {path} on port {port}");
 }
 
-async fn start_swarm(fixture: &str) -> Swarm {
+#[derive(Clone, Copy)]
+enum EnginePeers {
+    Seeder,
+    StallFirstConnection,
+}
+
+async fn start_swarm(fixture: &str, peers: EnginePeers) -> Swarm {
     let seeder_peer_port = free_port();
     let seeder_api_port = free_port();
     let engine_port = free_port();
-    let engine_peer_port = free_port();
+    let engine_listen_port = free_port();
     let temp = std::env::temp_dir().join(format!(
         "grid-engine-test-{}-{engine_port}",
         std::process::id()
     ));
     std::fs::create_dir_all(&temp).unwrap();
-    let tracker = spawn_tracker(seeder_peer_port).await;
+    let engine_peer_port = match peers {
+        EnginePeers::Seeder => seeder_peer_port,
+        EnginePeers::StallFirstConnection => spawn_stalling_peer(seeder_peer_port).await,
+    };
+    let seeder_tracker = spawn_tracker(&[]).await;
+    let engine_tracker = spawn_tracker(&[engine_peer_port]).await;
     let trackers_file = temp.join("trackers.txt");
-    std::fs::write(&trackers_file, format!("{tracker}\n")).unwrap();
+    std::fs::write(&trackers_file, format!("{engine_tracker}\n")).unwrap();
 
     let seeder = rqbit(&log_path(&temp, "seeder"))
         .arg("--http-api-listen-addr")
@@ -191,7 +232,7 @@ async fn start_swarm(fixture: &str) -> Swarm {
         .arg(seeder_peer_port.to_string())
         .arg("share")
         .arg(media_dir(fixture))
-        .arg(&tracker)
+        .arg(&seeder_tracker)
         .spawn()
         .expect("seeder starts");
     let engine = rqbit(&log_path(&temp, "engine"))
@@ -201,7 +242,7 @@ async fn start_swarm(fixture: &str) -> Swarm {
         .arg("--http-api-listen-addr")
         .arg(format!("127.0.0.1:{engine_port}"))
         .arg("--listen-port")
-        .arg(engine_peer_port.to_string())
+        .arg(engine_listen_port.to_string())
         .arg("server")
         .arg("start")
         .arg("--disable-persistence")
@@ -230,7 +271,7 @@ async fn start_swarm(fixture: &str) -> Swarm {
     swarm
 }
 
-async fn add_torrent(swarm: &Swarm) -> Value {
+fn add_torrent_request(client: &reqwest::Client, swarm: &Swarm) -> reqwest::RequestBuilder {
     let url = reqwest::Url::parse_with_params(
         &format!("http://127.0.0.1:{}/torrents", swarm.engine_port),
         &[
@@ -240,16 +281,17 @@ async fn add_torrent(swarm: &Swarm) -> Value {
         ],
     )
     .unwrap();
-    let response = http()
+    client
         .post(url)
         .header("Content-Type", "text/plain")
         .body(format!(
             "magnet:?xt=urn:btih:{}&dn=Fixture",
             swarm.info_hash
         ))
-        .send()
-        .await
-        .unwrap();
+}
+
+async fn add_torrent(swarm: &Swarm) -> Value {
+    let response = add_torrent_request(&http(), swarm).send().await.unwrap();
     assert!(
         response.status().is_success(),
         "adding the torrent failed: {}",
@@ -352,7 +394,7 @@ fn check_snapshot(name: &str, mut actual: Value) {
 #[tokio::test]
 async fn rqbit_http_api_matches_the_recorded_contract() {
     let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
-    let swarm = start_swarm("movie-mkv").await;
+    let swarm = start_swarm("movie-mkv", EnginePeers::Seeder).await;
     let port = swarm.engine_port;
     let hash = swarm.info_hash.clone();
 
@@ -386,7 +428,7 @@ async fn rqbit_http_api_matches_the_recorded_contract() {
 #[tokio::test]
 async fn engine_accepts_requests_from_the_app_webview_on_every_platform() {
     let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
-    let swarm = start_swarm("movie-mkv").await;
+    let swarm = start_swarm("movie-mkv", EnginePeers::Seeder).await;
 
     for (origin, allowed) in [
         ("tauri://localhost", Some("tauri://localhost")),
@@ -460,7 +502,7 @@ async fn assert_streams_fixture_with_subtitles_hidden(
     let expected = media_patch::patched(&original);
     assert_eq!(expected.len(), original.len());
 
-    let swarm = start_swarm(fixture).await;
+    let swarm = start_swarm(fixture, EnginePeers::Seeder).await;
     let added = add_torrent(&swarm).await;
     wait_until_finished(&swarm).await;
     let file_idx = file_index(&added["details"], extension);
@@ -536,7 +578,7 @@ async fn streams_the_mp4_fixture_through_the_proxy_with_subtitles_hidden() {
 #[tokio::test]
 async fn forgotten_torrents_resume_from_disk_and_deleted_ones_are_removed() {
     let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
-    let swarm = start_swarm("movie-mkv").await;
+    let swarm = start_swarm("movie-mkv", EnginePeers::Seeder).await;
     let port = swarm.engine_port;
     let hash = swarm.info_hash.clone();
     let video = swarm
@@ -580,4 +622,27 @@ async fn forgotten_torrents_resume_from_disk_and_deleted_ones_are_removed() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
     panic!("delete must remove the downloaded file");
+}
+
+#[tokio::test]
+async fn a_magnet_add_stalled_by_a_silent_source_succeeds_when_added_again() {
+    let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
+    let swarm = start_swarm("movie-mkv", EnginePeers::StallFirstConnection).await;
+
+    let impatient = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .unwrap();
+    let stalled = add_torrent_request(&impatient, &swarm).send().await;
+    assert!(
+        stalled.as_ref().is_err_and(|error| error.is_timeout()),
+        "the first add should hang on the silent source, got {stalled:?}"
+    );
+
+    add_torrent(&swarm).await;
+    let finished = wait_until_finished(&swarm).await;
+    assert_eq!(finished["progress_bytes"], finished["total_bytes"]);
+
+    let loaded = get_json(swarm.engine_port, "/torrents").await.unwrap();
+    assert_eq!(loaded["torrents"].as_array().map(Vec::len), Some(1));
 }
