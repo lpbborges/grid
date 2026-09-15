@@ -290,8 +290,29 @@ fn add_torrent_request(client: &reqwest::Client, swarm: &Swarm) -> reqwest::Requ
         ))
 }
 
+/// rqbit tries each source once while resolving a magnet, so a source that
+/// never answers hangs `POST /torrents` (see `addTorrent` in `torrent.ts`).
+/// A timed-out add is sent again, like the app does.
 async fn add_torrent(swarm: &Swarm) -> Value {
-    let response = add_torrent_request(&http(), swarm).send().await.unwrap();
+    const ATTEMPTS: u32 = 3;
+    const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(20);
+
+    let client = reqwest::Client::builder()
+        .timeout(ATTEMPT_TIMEOUT)
+        .build()
+        .unwrap();
+    let mut attempt = 1;
+    let response = loop {
+        match add_torrent_request(&client, swarm).send().await {
+            Err(error) if error.is_timeout() && attempt < ATTEMPTS => {
+                eprintln!(
+                    "adding the torrent timed out (attempt {attempt} of {ATTEMPTS}), retrying"
+                );
+                attempt += 1;
+            }
+            result => break result.unwrap(),
+        }
+    };
     assert!(
         response.status().is_success(),
         "adding the torrent failed: {}",
