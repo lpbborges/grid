@@ -59,7 +59,10 @@ export async function startTauriDriver(extraEnv: Record<string, string>): Promis
     ? ['--native-driver', process.env.NATIVE_DRIVER]
     : [];
   const driver = spawn(TAURI_DRIVER, nativeDriver, {
-    env: { ...process.env, ...extraEnv },
+    // On Windows the app is launched by msedgedriver, so its stdout (and the
+    // sidecar's `rqbit:` lines) never reaches this log. rqbit inherits the
+    // environment and appends its own debug log for every app launch instead.
+    env: { ...process.env, RQBIT_LOG_FILE: path.join(ARTIFACTS, 'engine.log'), ...extraEnv },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   driver.stdout?.pipe(log);

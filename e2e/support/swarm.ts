@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { closeSync, mkdirSync, openSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 
@@ -68,9 +69,16 @@ async function pollJson<T>(url: string, ready: (value: T) => boolean): Promise<T
   throw new Error(`Timed out waiting for ${url}`);
 }
 
-async function startSeeder(fixture: FixtureName, trackerUrl: string): Promise<Seeder> {
+async function startSeeder(
+  fixture: FixtureName,
+  trackerUrl: string,
+  logDir: string
+): Promise<Seeder> {
   const peerPort = await freePort();
   const apiPort = await freePort();
+  // Keep the seeder's output: a stalled E2E playback is otherwise impossible
+  // to tell apart from a seeder that never announced or never served pieces.
+  const log = openSync(path.join(logDir, `seeder-${fixture}.log`), 'w');
   const child = spawn(
     sidecarPath(),
     [
@@ -82,8 +90,9 @@ async function startSeeder(fixture: FixtureName, trackerUrl: string): Promise<Se
       path.join(REPO_ROOT, 'tests', 'fixtures', 'media', fixture),
       trackerUrl
     ],
-    { env: { ...process.env, ...RQBIT_OFFLINE_ENV }, stdio: 'ignore' }
+    { env: { ...process.env, ...RQBIT_OFFLINE_ENV }, stdio: ['ignore', log, log] }
   );
+  closeSync(log);
   try {
     const api = `http://127.0.0.1:${apiPort}`;
     const list = await pollJson<{ torrents: { info_hash: string }[] }>(
@@ -108,9 +117,10 @@ async function startSeeder(fixture: FixtureName, trackerUrl: string): Promise<Se
   }
 }
 
-export async function startSeeders(trackerUrl: string): Promise<Seeder[]> {
+export async function startSeeders(trackerUrl: string, logDir: string): Promise<Seeder[]> {
+  mkdirSync(logDir, { recursive: true });
   const results = await Promise.allSettled(
-    FIXTURE_NAMES.map((fixture) => startSeeder(fixture, trackerUrl))
+    FIXTURE_NAMES.map((fixture) => startSeeder(fixture, trackerUrl, logDir))
   );
   const fulfilled = results
     .filter((result): result is PromiseFulfilledResult<Seeder> => result.status === 'fulfilled')
