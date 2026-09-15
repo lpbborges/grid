@@ -63,7 +63,8 @@ describe('useStreamPlayer', () => {
       mediaId: 'tt1',
       season: undefined,
       episode: undefined,
-      preferredFileIdx: undefined
+      preferredFileIdx: undefined,
+      signal: expect.any(AbortSignal)
     });
   });
 
@@ -190,5 +191,91 @@ describe('useStreamPlayer', () => {
     await streamPlayer.play('magnet:?xt=urn:btih:abc');
 
     expect(streamPlayer.engineStatus).toBe('Preparando stream...');
+  });
+
+  it('stop() during play(): aborts the preparation and ignores its late result', async () => {
+    let resolvePrepare: (value: any) => void = () => {};
+    let signal: AbortSignal | undefined;
+    prepareStreamMock.mockImplementation(
+      (options: { signal: AbortSignal }) =>
+        new Promise((resolve) => {
+          signal = options.signal;
+          resolvePrepare = resolve;
+        })
+    );
+    const streamPlayer = await mount();
+
+    const playPromise = streamPlayer.play('magnet:?xt=urn:btih:abc');
+    await streamPlayer.stop();
+    expect(signal?.aborted).toBe(true);
+
+    resolvePrepare({
+      infoHash: 'abc',
+      totalBytes: 1,
+      videoSrc: 'http://stream/abc',
+      subtitles: []
+    });
+
+    expect(await playPromise).toBe(false);
+    expect(streamPlayer.videoSrc).toBe('');
+    expect(streamPlayer.infoHash).toBe('');
+    expect(streamPlayer.isPlaying).toBe(false);
+    expect(streamPlayer.error).toBe('');
+  });
+
+  it('a cancelled play() that rejects with the abort reports no error and no status', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    prepareStreamMock.mockImplementation(
+      ({ signal, onStatus }: { signal: AbortSignal; onStatus: (s: string) => void }) =>
+        new Promise((_, reject) => {
+          signal.addEventListener('abort', () => {
+            onStatus('Ainda preparando o stream, aguarde...');
+            reject(signal.reason);
+          });
+        })
+    );
+    const streamPlayer = await mount();
+
+    const playPromise = streamPlayer.play('magnet:?xt=urn:btih:abc');
+    await streamPlayer.stop();
+
+    expect(await playPromise).toBe(false);
+    expect(streamPlayer.error).toBe('');
+    expect(streamPlayer.engineStatus).toBe('');
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('a new play() aborts the previous one', async () => {
+    const signals: AbortSignal[] = [];
+    prepareStreamMock.mockImplementation((options: { signal: AbortSignal }) => {
+      signals.push(options.signal);
+      return new Promise(() => {});
+    });
+    const streamPlayer = await mount();
+
+    streamPlayer.play('magnet:?xt=urn:btih:abc');
+    streamPlayer.play('magnet:?xt=urn:btih:def');
+
+    expect(signals.map((s) => s.aborted)).toEqual([true, false]);
+  });
+
+  it('unmount aborts an in-flight play()', async () => {
+    let signal: AbortSignal | undefined;
+    prepareStreamMock.mockImplementation((options: { signal: AbortSignal }) => {
+      signal = options.signal;
+      return new Promise(() => {});
+    });
+    let resolveOnReady: (sp: ReturnType<typeof useStreamPlayer>) => void = () => {};
+    const readyPromise = new Promise<ReturnType<typeof useStreamPlayer>>((resolve) => {
+      resolveOnReady = resolve;
+    });
+    const { unmount } = render(StreamPlayerHarness, { props: { onReady: resolveOnReady } });
+    (await readyPromise).play('magnet:?xt=urn:btih:abc');
+
+    unmount();
+
+    expect(signal?.aborted).toBe(true);
   });
 });

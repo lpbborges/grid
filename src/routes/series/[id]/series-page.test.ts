@@ -144,7 +144,8 @@ describe('Series page integration flow', () => {
       mediaId: 'tt1',
       season: 1,
       episode: 1,
-      preferredFileIdx: 0
+      preferredFileIdx: 0,
+      signal: expect.any(AbortSignal)
     });
   });
 });

@@ -86,12 +86,15 @@
     if (typeof window === 'undefined' || !series) return;
 
     lastAttemptedEpisode = episode;
+    const requestedId = seriesId;
 
     error = '';
     errorSource = null;
 
     try {
       const streams = await getSeriesStreams(seriesId, episode.season, episode.episode);
+      // The route moved to another series while the sources were loading.
+      if (seriesId !== requestedId) return;
 
       if (!streams || streams.length === 0) {
         error = 'Nenhuma fonte encontrada para este episódio.';
@@ -129,7 +132,10 @@
         fileIdx: bestStream.fileIdx
       });
 
-      if (!ok) {
+      // The route moved to another series while the stream was being prepared.
+      if (seriesId !== requestedId) return;
+      // A play cancelled by closing the player fails without an error.
+      if (!ok && streamPlayer.error) {
         error = streamPlayer.error;
         errorSource = 'play';
       }

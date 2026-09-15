@@ -175,8 +175,12 @@
     const fileIdx = selectedTorrent.rawStream?.fileIdx;
     const magnet = `magnet:?xt=urn:btih:${selectedTorrent.hash}&dn=${encodeURIComponent(movie?.title || '')}`;
 
+    const requestedId = movieId;
     const ok = await streamPlayer.play(magnet, { mediaId: movieId, fileIdx });
-    if (!ok) {
+    // The route moved to another title while the stream was being prepared.
+    if (movieId !== requestedId) return;
+    // A play cancelled by closing the player fails without an error.
+    if (!ok && streamPlayer.error) {
       error = streamPlayer.error;
       errorSource = 'play';
     }

@@ -55,4 +55,34 @@ describe('fetchWithTimeout', () => {
 
     await expect(fetchWithTimeout('https://example.com', {}, 5000)).rejects.toThrow('DNS failure');
   });
+
+  it('aborts the request and rethrows the abort reason when the caller signal aborts', async () => {
+    globalThis.fetch = vi.fn().mockImplementation(
+      (_url: string, opts: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          (opts.signal as AbortSignal).addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'));
+          });
+        })
+    );
+    const caller = new AbortController();
+
+    const promise = fetchWithTimeout('https://example.com', { signal: caller.signal }, 5000);
+    caller.abort();
+
+    const error = await promise.catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(FetchTimeoutError);
+    expect(error).toMatchObject({ name: 'AbortError' });
+  });
+
+  it('rejects without fetching when the caller signal is already aborted', async () => {
+    globalThis.fetch = vi.fn();
+    const caller = new AbortController();
+    caller.abort();
+
+    await expect(
+      fetchWithTimeout('https://example.com', { signal: caller.signal }, 5000)
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
 });

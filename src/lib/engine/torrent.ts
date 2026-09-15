@@ -73,19 +73,28 @@ interface TorrentStatus {
 export async function waitForTorrentLive(
   infoHash: string,
   maxRetries = 600,
-  delayMs = 500
+  delayMs = 500,
+  signal?: AbortSignal
 ): Promise<void> {
   if (!isValidInfoHash(infoHash)) {
     throw new Error('Invalid infoHash');
   }
   for (let i = 0; i < maxRetries; i++) {
+    signal?.throwIfAborted();
     let status: TorrentStatus | null = null;
     try {
-      const res = await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/stats/v1`, {}, 8000);
+      const res = await fetchWithTimeout(
+        `${ENGINE_URL}/torrents/${infoHash}/stats/v1`,
+        { signal },
+        8000
+      );
       if (res.ok) {
         status = (await res.json()) as TorrentStatus;
       }
-    } catch {
+    } catch (error) {
+      if (signal?.aborted) {
+        throw error;
+      }
       // Ignored, wait and retry
     }
     if (status?.state === 'live') {
@@ -144,6 +153,7 @@ export class AddTorrentTimeoutError extends Error {
 export interface AddTorrentOptions {
   onlyFilesRegex?: string;
   onRetry?: (attempt: number) => void;
+  signal?: AbortSignal;
 }
 
 export async function addTorrent(
@@ -164,6 +174,7 @@ export async function addTorrent(
   const url = qs ? `${ENGINE_URL}/torrents?${qs}` : `${ENGINE_URL}/torrents`;
 
   for (const [index, timeoutMs] of ADD_ATTEMPT_TIMEOUTS_MS.entries()) {
+    options.signal?.throwIfAborted();
     if (index > 0) {
       options.onRetry?.(index + 1);
     }
@@ -177,7 +188,8 @@ export async function addTorrent(
           headers: {
             'Content-Type': 'text/plain'
           },
-          body: magnetLink
+          body: magnetLink,
+          signal: options.signal
         },
         timeoutMs
       );
