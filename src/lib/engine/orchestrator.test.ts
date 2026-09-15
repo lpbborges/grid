@@ -76,8 +76,21 @@ describe('prepareStream', () => {
   it('adds the torrent with sub_folder set to the parsed info hash and onlyFilesRegex', async () => {
     await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' });
     expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test', '1'.repeat(40), {
-      onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$'
+      onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$',
+      onRetry: expect.any(Function)
     });
+  });
+
+  it('tells the user the stream is still being prepared when the add is retried', async () => {
+    vi.mocked(torrentApi.addTorrent).mockImplementation(async (_magnet, _subFolder, options) => {
+      options?.onRetry?.(2);
+      return mockDetails() as any;
+    });
+    const statusCb = vi.fn();
+
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: statusCb, mediaId: 'media-123' });
+
+    expect(statusCb).toHaveBeenCalledWith('Ainda preparando o stream, aguarde...');
   });
 
   // rqbit answers the add request while still re-checking already-downloaded
@@ -222,7 +235,8 @@ describe('prepareStream', () => {
     expect(torrentApi.startEngine).toHaveBeenCalled();
     expect(torrentApi.waitForEngine).toHaveBeenCalled();
     expect(torrentApi.addTorrent).toHaveBeenCalledWith('magnet:?xt=test', '1'.repeat(40), {
-      onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$'
+      onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$',
+      onRetry: expect.any(Function)
     });
     expect(torrentApi.updateOnlyFiles).toHaveBeenCalledWith('12345', [1]);
 

@@ -99,7 +99,8 @@ export async function prepareStream({
   // Add torrent with a regex filter so rqbit never starts downloading junk
   // files (images, NFO, txt). Only video and subtitle files are selected.
   const details = await addTorrent(magnet, parsedInfoHash ?? undefined, {
-    onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$'
+    onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$',
+    onRetry: () => onStatus('Ainda preparando o stream, aguarde...')
   });
   const infoHash = details.info_hash;
   await waitForTorrentLive(infoHash);

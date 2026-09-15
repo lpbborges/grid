@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type * as TorrentModule from './torrent';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -194,6 +194,88 @@ describe('torrent engine', () => {
     } as any);
 
     await expect(torrent.addTorrent('magnet:')).rejects.toThrow('Failed to add torrent to engine');
+  });
+
+  describe('when adding a torrent stalls', () => {
+    function hangUntilAborted(_url: string, init: RequestInit): Promise<Response> {
+      return new Promise((_, reject) => {
+        init.signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError'))
+        );
+      });
+    }
+
+    const added = { ok: true, json: async () => ({ details: { info_hash: '123', files: [] } }) };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('adds the magnet again with a fresh request when an attempt times out', async () => {
+      const onRetry = vi.fn();
+      (globalThis.fetch as any)
+        .mockImplementationOnce(hangUntilAborted)
+        .mockResolvedValueOnce(added);
+
+      const details = torrent.addTorrent('magnet:?xt=test', 'abc', { onRetry });
+      await vi.advanceTimersByTimeAsync(torrent.ADD_ATTEMPT_TIMEOUTS_MS[0]);
+
+      await expect(details).resolves.toMatchObject({ info_hash: '123' });
+      const calls = vi.mocked(globalThis.fetch).mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(calls[1][0]).toBe(calls[0][0]);
+      expect(calls[1][1]).toMatchObject({ method: 'POST', body: 'magnet:?xt=test' });
+      expect(onRetry).toHaveBeenCalledOnce();
+      expect(onRetry).toHaveBeenCalledWith(2);
+    });
+
+    it('gives up with an AddTorrentTimeoutError once every attempt timed out', async () => {
+      (globalThis.fetch as any).mockImplementation(hangUntilAborted);
+
+      const details = torrent.addTorrent('magnet:?xt=test');
+      const rejection = expect(details).rejects.toBeInstanceOf(torrent.AddTorrentTimeoutError);
+      await vi.advanceTimersByTimeAsync(
+        torrent.ADD_ATTEMPT_TIMEOUTS_MS.reduce((total, timeout) => total + timeout, 0)
+      );
+
+      await rejection;
+      expect(globalThis.fetch).toHaveBeenCalledTimes(torrent.ADD_ATTEMPT_TIMEOUTS_MS.length);
+    });
+
+    it('does not retry when the engine rejects the add', async () => {
+      const onRetry = vi.fn();
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        text: async () => 'invalid magnet'
+      });
+
+      await expect(torrent.addTorrent('magnet:', undefined, { onRetry })).rejects.toThrow(
+        'Failed to add torrent to engine'
+      );
+      expect(globalThis.fetch).toHaveBeenCalledOnce();
+      expect(onRetry).not.toHaveBeenCalled();
+    });
+
+    it('does not retry when the engine cannot be reached', async () => {
+      (globalThis.fetch as any).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+      await expect(torrent.addTorrent('magnet:?xt=test')).rejects.toThrow('Failed to fetch');
+      expect(globalThis.fetch).toHaveBeenCalledOnce();
+    });
+
+    it('retries after 20 seconds, keeps a long final attempt and a 5-minute total', () => {
+      expect(torrent.ADD_ATTEMPT_TIMEOUTS_MS[0]).toBe(20_000);
+      expect(torrent.ADD_ATTEMPT_TIMEOUTS_MS.reduce((total, timeout) => total + timeout, 0)).toBe(
+        300_000
+      );
+      expect(torrent.ADD_ATTEMPT_TIMEOUTS_MS.at(-1)).toBeGreaterThanOrEqual(240_000);
+    });
   });
 
   it('selects an uppercase-extension video file', () => {

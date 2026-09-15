@@ -14,6 +14,7 @@ export interface PlaybackBoundaryOptions {
   externalSubtitles?: ExternalSubtitleEntry[];
   engineStartError?: unknown;
   failAdd?: boolean;
+  stallAdds?: number;
 }
 
 export interface InvokeCall {
@@ -34,7 +35,11 @@ function json(value: unknown): Response {
 }
 
 export function installPlaybackBoundary(options: PlaybackBoundaryOptions): PlaybackBoundary {
-  const rqbit = createFakeRqbit({ files: options.files, failAdd: options.failAdd });
+  const rqbit = createFakeRqbit({
+    files: options.files,
+    failAdd: options.failAdd,
+    stallAdds: options.stallAdds
+  });
   const invokeCalls: InvokeCall[] = [];
   const unhandledRequests: string[] = [];
   let blobCount = 0;
