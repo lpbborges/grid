@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { buildCatalog, type Catalog } from './catalog.ts';
+import { ARTIFACTS } from './driver.ts';
 import { startMockServer, TRACKER_URL, type MockServer } from './mockServer.ts';
 import { startSeeders, stopSeeders, type Seeder } from './swarm.ts';
 
@@ -14,7 +15,7 @@ export interface E2eServices {
 }
 
 export async function startE2eServices(): Promise<E2eServices> {
-  const seeders = await startSeeders(TRACKER_URL);
+  const seeders = await startSeeders(TRACKER_URL, ARTIFACTS);
   const catalog = buildCatalog(seeders);
   const mock = await startMockServer(
     catalog,

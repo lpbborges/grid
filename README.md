@@ -159,7 +159,7 @@ Grid talks to these services directly from your machine. Every host must also be
   - Linux: `~/.local/share/com.lp01.grid/`
   - macOS: `~/Library/Application Support/com.lp01.grid/`
   - Windows: `%APPDATA%\com.lp01.grid\`
-- **E2E specs never start playback**: read `e2e/artifacts/app-and-driver.log`. No `rqbit:` lines means the sidecar did not start. A `MediaError 4` means GStreamer lacks H.264/AAC decoders (install the libav plugins). Run `npm run e2e:services` to check the mock services and seeders on their own.
+- **E2E specs never start playback**: read the logs in `e2e/artifacts/` (uploaded by CI on failure): `engine.log` is the app's streaming engine (every app launch, on Linux and Windows), `seeder-<fixture>.log` are the local fixture seeders, and `app-and-driver.log` is the WebDriver output. An empty `engine.log` means the sidecar did not start. A `MediaError 4` means GStreamer lacks H.264/AAC decoders (install the libav plugins). Run `npm run e2e:services` to check the mock services and seeders on their own.
 
 ## Disclaimer
 
