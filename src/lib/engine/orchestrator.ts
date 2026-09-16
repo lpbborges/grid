@@ -40,6 +40,13 @@ export type FinishedStream = Pick<StreamDetails, 'infoHash' | 'isCacheable' | 'c
 // for the lifetime of the process.
 let activeBlobUrls: string[] = [];
 
+// The finalize of the stream that just ended, while it is still running.
+// finalizeStream writes the cache entry over IPC before it forgets the
+// torrent, and nothing awaits it (the player's close button calls stop()
+// fire-and-forget). Playing the same title again re-adds the same info hash,
+// so a late forget would delete the torrent the new stream is waiting on.
+let pendingFinalize: Promise<void> = Promise.resolve();
+
 function revokeBlobUrls(urls: string[]): void {
   for (const url of urls) {
     if (!url.startsWith('blob:')) continue;
@@ -105,6 +112,8 @@ export async function prepareStream({
   signal?.throwIfAborted();
 
   onStatus('Preparando stream...');
+  await pendingFinalize;
+  signal?.throwIfAborted();
   const manifest = await getCacheManifest();
   await reconcileLoadedTorrents(manifest.map((e) => e.infoHash));
   signal?.throwIfAborted();
@@ -222,7 +231,15 @@ export async function prepareStream({
 // but leaves the files on disk) after recording its latest downloaded-bytes
 // count in the manifest; a non-cacheable (oversized) stream is deleted
 // outright, matching the old clearTorrents() behavior for that one torrent.
-export async function finalizeStream({
+export function finalizeStream(finished: FinishedStream): Promise<void> {
+  const finalizing = runFinalizeStream(finished);
+  // The caller still sees the failure; this copy only orders the next
+  // prepareStream after it.
+  pendingFinalize = finalizing.catch(() => {});
+  return finalizing;
+}
+
+async function runFinalizeStream({
   infoHash,
   isCacheable,
   cacheEntry
