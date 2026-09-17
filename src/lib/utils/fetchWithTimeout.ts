@@ -12,11 +12,13 @@ export class FetchTimeoutError extends Error {
 // that retry timeouts do not retry a cancellation.
 export async function fetchWithTimeout(
   url: string,
-  options: RequestInit = {},
+  options: RequestInit & { fetch?: typeof fetch } = {},
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<Response> {
-  const { signal: callerSignal, ...init } = options;
+  const { signal: callerSignal, fetch: customFetch, ...init } = options;
   callerSignal?.throwIfAborted();
+
+  const fetchFn = customFetch || fetch;
 
   const controller = new AbortController();
   let timedOut = false;
@@ -28,7 +30,7 @@ export async function fetchWithTimeout(
   callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
 
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await fetchFn(url, { ...init, signal: controller.signal });
   } catch (error) {
     if (timedOut) {
       throw new FetchTimeoutError(url, timeoutMs);

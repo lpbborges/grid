@@ -1,10 +1,10 @@
 import type { PageLoad } from './$types';
 import { getMovieDetails } from '$lib/api/cinemeta';
 
-export const load: PageLoad = async ({ params }) => {
+export const load: PageLoad = async ({ fetch, params }) => {
   const movieId = params.id;
   try {
-    const movie = await getMovieDetails(movieId);
+    const movie = await getMovieDetails(movieId, fetch);
     return {
       movieId,
       movie,

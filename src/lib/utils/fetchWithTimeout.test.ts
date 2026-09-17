@@ -34,6 +34,24 @@ describe('fetchWithTimeout', () => {
     );
   });
 
+  it('uses custom fetch implementation when provided in options', async () => {
+    const mockCustomFetch = vi.fn().mockResolvedValue({ ok: true } as Response);
+    globalThis.fetch = vi.fn();
+
+    const result = await fetchWithTimeout(
+      'https://example.com',
+      { fetch: mockCustomFetch as unknown as typeof fetch },
+      5000
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(mockCustomFetch).toHaveBeenCalledWith(
+      'https://example.com',
+      expect.objectContaining({ signal: expect.anything() })
+    );
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it('rejects with FetchTimeoutError when the timeout elapses first', async () => {
     globalThis.fetch = vi.fn().mockImplementation(
       (_url: string, opts: RequestInit) =>

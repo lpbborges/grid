@@ -18,9 +18,11 @@ function mapCinemetaMeta(m: CinemetaMeta): Movie {
   };
 }
 
-export async function getPopularMovies(limit = 24): Promise<Movie[]> {
+export async function getPopularMovies(limit = 24, customFetch?: typeof fetch): Promise<Movie[]> {
   try {
-    const res = await fetchWithTimeout(`${endpoints.cinemeta}/catalog/movie/top.json`);
+    const res = await fetchWithTimeout(`${endpoints.cinemeta}/catalog/movie/top.json`, {
+      fetch: customFetch
+    });
     if (!res.ok) {
       throw new Error(`Failed to fetch popular movies from cinemeta: ${res.statusText}`);
     }
@@ -34,10 +36,12 @@ export async function getPopularMovies(limit = 24): Promise<Movie[]> {
   }
 }
 
-export async function getPopularSeries(limit = 24): Promise<Movie[]> {
+export async function getPopularSeries(limit = 24, customFetch?: typeof fetch): Promise<Movie[]> {
   try {
     // using cinemeta for popular series
-    const res = await fetchWithTimeout(`${endpoints.cinemeta}/catalog/series/top.json`);
+    const res = await fetchWithTimeout(`${endpoints.cinemeta}/catalog/series/top.json`, {
+      fetch: customFetch
+    });
     if (!res.ok) {
       throw new Error(`Failed to fetch popular series from cinemeta: ${res.statusText}`);
     }
@@ -54,11 +58,13 @@ export async function getPopularSeries(limit = 24): Promise<Movie[]> {
 async function searchCinemeta(
   type: 'movie' | 'series',
   query: string,
-  limit = 12
+  limit = 12,
+  customFetch?: typeof fetch
 ): Promise<Movie[]> {
   try {
     const res = await fetchWithTimeout(
-      `${endpoints.cinemeta}/catalog/${type}/top/search=${encodeURIComponent(query)}.json`
+      `${endpoints.cinemeta}/catalog/${type}/top/search=${encodeURIComponent(query)}.json`,
+      { fetch: customFetch }
     );
     if (!res.ok) {
       throw new Error(`Failed to search cinemeta: ${res.statusText}`);
@@ -73,30 +79,43 @@ async function searchCinemeta(
   }
 }
 
-export function searchMovies(query: string, limit = 12): Promise<Movie[]> {
-  return searchCinemeta('movie', query, limit);
+export function searchMovies(
+  query: string,
+  limit = 12,
+  customFetch?: typeof fetch
+): Promise<Movie[]> {
+  return searchCinemeta('movie', query, limit, customFetch);
 }
 
-export function searchSeries(query: string, limit = 12): Promise<Movie[]> {
-  return searchCinemeta('series', query, limit);
+export function searchSeries(
+  query: string,
+  limit = 12,
+  customFetch?: typeof fetch
+): Promise<Movie[]> {
+  return searchCinemeta('series', query, limit, customFetch);
 }
 
 export async function searchCatalog(
   query: string,
-  limit = 12
+  limit = 12,
+  customFetch?: typeof fetch
 ): Promise<{ movies: Movie[]; series: Movie[] }> {
   const [movies, series] = await Promise.all([
-    searchMovies(query, limit),
-    searchSeries(query, limit)
+    searchMovies(query, limit, customFetch),
+    searchSeries(query, limit, customFetch)
   ]);
   return { movies, series };
 }
 
-export async function getMovieDetails(movieId: number | string): Promise<Movie> {
+export async function getMovieDetails(
+  movieId: number | string,
+  customFetch?: typeof fetch
+): Promise<Movie> {
   const isImdbId = typeof movieId === 'string' && movieId.startsWith('tt');
   const queryParam = isImdbId ? `imdb_id=${movieId}` : `movie_id=${movieId}`;
   const res = await fetchWithTimeout(
-    `${endpoints.moviesApi}/movie_details.json?${queryParam}&with_cast=true`
+    `${endpoints.moviesApi}/movie_details.json?${queryParam}&with_cast=true`,
+    { fetch: customFetch }
   );
   if (!res.ok) {
     throw new Error(`Failed to fetch movie details: ${res.statusText}`);
@@ -111,7 +130,9 @@ export async function getMovieDetails(movieId: number | string): Promise<Movie> 
   if (isImdbId || movie.imdb_code) {
     const imdbId = isImdbId ? movieId : movie.imdb_code;
     try {
-      const cineRes = await fetchWithTimeout(`${endpoints.cinemeta}/meta/movie/${imdbId}.json`);
+      const cineRes = await fetchWithTimeout(`${endpoints.cinemeta}/meta/movie/${imdbId}.json`, {
+        fetch: customFetch
+      });
       if (cineRes.ok) {
         const cineData = await cineRes.json();
         if (cineData?.meta?.director) {
@@ -180,8 +201,13 @@ function mapCountryToLanguage(country: string | undefined): string {
   return 'en'; // fallback
 }
 
-export async function getSeriesDetails(seriesId: string): Promise<Series> {
-  const res = await fetchWithTimeout(`${endpoints.cinemeta}/meta/series/${seriesId}.json`);
+export async function getSeriesDetails(
+  seriesId: string,
+  customFetch?: typeof fetch
+): Promise<Series> {
+  const res = await fetchWithTimeout(`${endpoints.cinemeta}/meta/series/${seriesId}.json`, {
+    fetch: customFetch
+  });
   if (!res.ok) {
     throw new Error(`Failed to fetch series details: ${res.statusText}`);
   }
