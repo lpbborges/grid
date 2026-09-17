@@ -73,7 +73,7 @@ export function useSubtitleSelection(options: UseSubtitleSelectionOptions) {
     // existing controlsVisible adjustment.
     const menuOpen = showMenu || getAudioMenuOpen();
     const controlsVisible = getControlsVisible();
-    const targetLine = menuOpen ? 70 : controlsVisible ? 80 : 92;
+    const targetLine = menuOpen ? 70 : controlsVisible ? 80 : 88;
     for (const textTrack of videoElement.textTracks) {
       if (textTrack.mode !== 'showing' || !textTrack.cues) continue;
       for (let i = 0; i < textTrack.cues.length; i++) {
