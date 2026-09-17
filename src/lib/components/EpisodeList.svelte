@@ -38,7 +38,7 @@
 {#if episodes && episodes.length > 0}
   <div class="flex flex-col gap-4">
     <div class="border-primary/30 flex flex-col gap-3 border-b pb-3">
-      <h3 class="text-primary text-sm font-bold tracking-widest uppercase">Episódios</h3>
+      <h3 class="text-green text-sm font-bold tracking-widest uppercase">Episódios</h3>
       <div class="flex items-center gap-2">
         <div class="relative w-1/2">
           <select

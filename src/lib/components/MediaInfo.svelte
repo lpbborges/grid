@@ -32,7 +32,7 @@
   </button>
 </div>
 
-<div class="text-primary mb-6 flex flex-wrap gap-4 font-mono text-sm">
+<div class="text-main mb-6 flex flex-wrap gap-4 font-mono text-sm">
   <span class="border-primary/50 bg-surface rounded border px-3 py-1">ANO: {year}</span>
   {#if director && director.length > 0}
     <span class="border-primary/50 bg-surface rounded border px-3 py-1"
@@ -68,7 +68,7 @@
 {#if cast && cast.length > 0}
   <div class="mb-8">
     <h3
-      class="text-primary border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
+      class="text-green border-primary/30 mb-4 border-b pb-2 text-sm font-bold tracking-widest uppercase"
     >
       Elenco
     </h3>
@@ -107,7 +107,7 @@
           <span class="text-main text-sm leading-tight font-bold" title={actor.name}
             >{actor.name}</span
           >
-          <span class="text-green mt-1 text-xs leading-tight" title={actor.character_name}
+          <span class="text-muted mt-1 text-xs leading-tight" title={actor.character_name}
             >{actor.character_name}</span
           >
         </div>
