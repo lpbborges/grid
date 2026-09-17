@@ -77,6 +77,9 @@ async fn handle_connection(
     }
 }
 
+const ENGINE_RESTART_RETRY_ATTEMPTS: usize = 5;
+const ENGINE_RESTART_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
+
 async fn forward(
     request: ProxyRequest,
     engine_port: &EnginePort,
@@ -94,15 +97,40 @@ async fn forward(
     } else {
         None
     };
-    let upstream = request.headers.into_iter().fold(
-        client.request(request.method, &url),
-        |builder, (name, value)| builder.header(name, value),
-    );
-    let response = upstream.send().await.map_err(|e| {
-        eprintln!("Stream proxy failed to reach the engine: {}", e);
-        StatusCode::BAD_GATEWAY
-    })?;
+    let response = send_with_engine_restart_retry(client, request.method, &url, &request.headers)
+        .await
+        .map_err(|e| {
+            eprintln!("Stream proxy failed to reach the engine: {}", e);
+            StatusCode::BAD_GATEWAY
+        })?;
     Ok((response, patch))
+}
+
+async fn send_with_engine_restart_retry(
+    client: &reqwest::Client,
+    method: Method,
+    url: &str,
+    headers: &[(&'static str, String)],
+) -> Result<reqwest::Response, reqwest::Error> {
+    let build_request = || {
+        headers.iter().fold(
+            client.request(method.clone(), url),
+            |builder, (name, value)| builder.header(*name, value),
+        )
+    };
+    let mut last_error = None;
+    for attempt in 0..ENGINE_RESTART_RETRY_ATTEMPTS {
+        match build_request().send().await {
+            Ok(response) => return Ok(response),
+            Err(e) => {
+                if attempt + 1 < ENGINE_RESTART_RETRY_ATTEMPTS {
+                    tokio::time::sleep(ENGINE_RESTART_RETRY_DELAY).await;
+                }
+                last_error = Some(e);
+            }
+        }
+    }
+    Err(last_error.expect("looped at least once"))
 }
 
 async fn read_request(socket: &mut TcpStream) -> Option<ProxyRequest> {
@@ -397,6 +425,56 @@ mod tests {
             .send()
             .await
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn retries_when_the_engine_is_briefly_unreachable_after_a_restart() {
+        let body: Vec<u8> = (0..50_000u32).map(|i| (i % 256) as u8).collect();
+
+        let reserved = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = reserved.local_addr().unwrap().port();
+        drop(reserved);
+
+        let engine_body = body.clone();
+        tokio::spawn(async move {
+            let body = engine_body;
+            tokio::time::sleep(ENGINE_RESTART_RETRY_DELAY * 2).await;
+            let listener = TcpListener::bind(format!("127.0.0.1:{port}"))
+                .await
+                .unwrap();
+            while let Ok((mut socket, _)) = listener.accept().await {
+                let body = body.clone();
+                tokio::spawn(async move {
+                    let mut head = Vec::new();
+                    let mut buf = [0u8; 1024];
+                    while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+                        let Ok(n) = socket.read(&mut buf).await else {
+                            return;
+                        };
+                        if n == 0 {
+                            return;
+                        }
+                        head.extend_from_slice(&buf[..n]);
+                    }
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: video/x-matroska\r\nAccept-Ranges: bytes\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    if socket.write_all(response.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    let _ = socket.write_all(&body).await;
+                    let _ = socket.shutdown().await;
+                });
+            }
+        });
+
+        let proxy_port = spawn_proxy(port).await;
+
+        let res = reqwest::get(stream_url(proxy_port)).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.bytes().await.unwrap().to_vec(), body);
     }
 
     #[tokio::test]
