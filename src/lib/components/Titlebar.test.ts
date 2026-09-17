@@ -19,6 +19,7 @@ describe('Titlebar Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     playerState.isPlaying = false;
+    playerState.showControls = true;
   });
 
   it('renders when player is not playing', () => {
@@ -26,10 +27,20 @@ describe('Titlebar Component', () => {
     expect(screen.getByRole('button', { name: 'Fechar' })).toBeTruthy();
   });
 
-  it('does not render when player is playing', () => {
+  it('renders when player is playing and controls are active', () => {
     playerState.isPlaying = true;
+    playerState.showControls = true;
     render(Titlebar);
-    expect(screen.queryByRole('button', { name: 'Fechar' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Fechar' })).toBeTruthy();
+  });
+
+  it('fades out when playing and player controls auto-hide', () => {
+    playerState.isPlaying = true;
+    playerState.showControls = false;
+    const { container } = render(Titlebar);
+    const titlebarEl = container.firstElementChild;
+    expect(titlebarEl?.className).toContain('opacity-0');
+    expect(titlebarEl?.className).toContain('pointer-events-none');
   });
 
   it('calls minimize when minimize button is clicked', async () => {

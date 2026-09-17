@@ -233,7 +233,7 @@
     </button>
   </div>
 {:else if movie}
-  {#if movie.background_image_original || movie.background_image}
+  {#if (movie.background_image_original || movie.background_image) && !streamPlayer.isPlaying}
     <div class="pointer-events-none fixed inset-0">
       <img
         src={movie.background_image_original || movie.background_image}

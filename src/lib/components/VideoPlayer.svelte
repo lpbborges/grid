@@ -6,6 +6,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { useAudioTrackSelection } from '$lib/composables/useAudioTrackSelection.svelte';
   import { useSubtitleSelection } from '$lib/composables/useSubtitleSelection.svelte';
+  import { playerState } from '$lib/stores.svelte';
   import AudioMenu from './AudioMenu.svelte';
   import SubtitleMenu from './SubtitleMenu.svelte';
 
@@ -174,6 +175,13 @@
   let controlsVisible = $derived(
     showControls || paused || subtitleSelection.showMenu || audioSelection.showAudioMenu
   );
+
+  $effect(() => {
+    playerState.showControls = controlsVisible;
+    return () => {
+      playerState.showControls = true;
+    };
+  });
 
   $effect(() => {
     // Re-apply layout when controls visibility or menu state changes
@@ -348,7 +356,7 @@
   {#if onclose}
     <button
       onclick={onclose}
-      class="hover:text-green hover:bg-main/10 focus-visible:ring-green text-muted absolute top-6 right-6 z-50 rounded-full p-2 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {showControls ||
+      class="hover:text-green text-main focus-visible:ring-green absolute top-10 left-6 z-50 p-2 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {showControls ||
       paused ||
       subtitleSelection.showMenu
         ? 'opacity-100'
@@ -357,17 +365,17 @@
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        width="28"
-        height="28"
+        width="26"
+        height="26"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        stroke-width="2"
+        stroke-width="2.5"
         stroke-linecap="round"
         stroke-linejoin="round"
+        class="[filter:drop-shadow(0_1px_2px_rgba(0,0,0,0.8))]"
       >
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
+        <path d="m15 18-6-6 6-6" />
       </svg>
     </button>
   {/if}

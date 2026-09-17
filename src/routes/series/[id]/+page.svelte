@@ -193,7 +193,7 @@
     </button>
   </div>
 {:else if series}
-  {#if series.background_image_original || series.background_image}
+  {#if (series.background_image_original || series.background_image) && !streamPlayer.isPlaying}
     <div class="pointer-events-none fixed inset-0">
       <img
         src={series.background_image_original || series.background_image}

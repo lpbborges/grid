@@ -1,5 +1,6 @@
 export const playerState = $state({
-  isPlaying: false
+  isPlaying: false,
+  showControls: true
 });
 
 export const searchQuery = $state({ value: '' });
