@@ -14,21 +14,11 @@
       <!-- Left: Logo -->
       <div class="flex w-1/4 items-center">
         <a href="/" class="group flex items-center gap-2">
-          <div
-            class="bg-primary/20 border-primary text-primary group-hover:bg-primary group-hover:text-main flex h-8 w-8 items-center justify-center rounded-sm border transition-all duration-300 group-hover:shadow-[0_0_10px_rgba(107,33,168,0.8)]"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg
-            >
-          </div>
+          <img
+            src="/logo.svg"
+            alt="Grid Logo"
+            class="h-8 w-8 transition-transform duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_10px_rgba(107,33,168,0.8)]"
+          />
           <span
             class="text-main font-cyber group-hover:text-primary text-xl tracking-[0.2em] uppercase transition-colors duration-300"
             >Grid</span
