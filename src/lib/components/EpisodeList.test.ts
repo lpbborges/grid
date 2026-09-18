@@ -25,6 +25,7 @@ describe('EpisodeList component', () => {
     });
 
     expect(getByText('Episódios')).toBeInTheDocument();
+    expect(getByText('Temporada 1')).toBeInTheDocument();
     expect(getByText(/1\. Ep 1 Translated/)).toBeInTheDocument();
     expect(getByText(/2\. Ep 2/)).toBeInTheDocument();
 

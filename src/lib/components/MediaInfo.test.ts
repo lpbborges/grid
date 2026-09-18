@@ -40,4 +40,46 @@ describe('MediaInfo component', () => {
     expect(queryByText(/DIRETOR:/)).not.toBeInTheDocument();
     expect(queryByText('Elenco')).not.toBeInTheDocument();
   });
+
+  it('renders the watched icon button below cast/info and toggles status', async () => {
+    const { fireEvent } = await import('@testing-library/svelte');
+    const { watchedStore } = await import('$lib/stores/watched.svelte');
+
+    const { getByRole } = render(MediaInfo, {
+      props: {
+        id: '999',
+        title: 'Watched Test Movie',
+        year: 2024,
+        rating: 9.0,
+        synopsis: 'Test synopsis.'
+      }
+    });
+
+    const button = getByRole('button', { name: /marcar como assistido/i });
+    expect(button).toBeInTheDocument();
+
+    await fireEvent.click(button);
+    expect(watchedStore.watchedIds.includes('999')).toBe(true);
+  });
+
+  it('renders the favorites button and toggles favorite status', async () => {
+    const { fireEvent } = await import('@testing-library/svelte');
+    const { favoritesStore } = await import('$lib/stores/favorites.svelte');
+
+    const { getByRole } = render(MediaInfo, {
+      props: {
+        id: '888',
+        title: 'Favorite Test Movie',
+        year: 2024,
+        rating: 9.0,
+        synopsis: 'Test synopsis.'
+      }
+    });
+
+    const button = getByRole('button', { name: /adicionar aos favoritos/i });
+    expect(button).toBeInTheDocument();
+
+    await fireEvent.click(button);
+    expect(favoritesStore.has('888')).toBe(true);
+  });
 });

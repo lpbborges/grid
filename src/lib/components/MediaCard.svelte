@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Movie } from '../types';
+  import { favoritesStore } from '$lib/stores/favorites.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
 
@@ -9,7 +10,13 @@
 
 <a
   href="/{type}/{media.id}"
-  class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 will-change-transform hover:-translate-y-2 hover:shadow-[0_0_20px_rgba(107,33,168,0.4)] focus-visible:ring-2 focus-visible:outline-none"
+  class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 will-change-transform hover:-translate-y-2 focus-visible:ring-2 focus-visible:outline-none {favoritesStore.has(
+    media.id
+  )
+    ? 'hover:shadow-[0_0_20px_rgba(249,115,22,0.4)]'
+    : watchedStore.watchedIds.includes(String(media.id))
+      ? 'hover:shadow-[0_0_20px_rgba(54,211,83,0.4)]'
+      : 'hover:shadow-[0_0_20px_rgba(107,33,168,0.4)]'}"
   data-testid="media-card"
 >
   <!-- Cyberpunk border effect -->
@@ -31,11 +38,44 @@
     <div
       class="pointer-events-none absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
     ></div>
-    {#if watchedStore.watchedIds.includes(String(media.id))}
+    {#if favoritesStore.has(media.id)}
       <div
-        class="bg-green text-dark absolute top-2 right-2 z-20 rounded-sm px-2 py-0.5 text-xs font-bold tracking-wider uppercase shadow-[0_0_10px_rgba(54,211,83,0.8)] will-change-transform"
+        class="text-orange pointer-events-none absolute top-2.5 right-2.5 z-20 [filter:drop-shadow(0_0_8px_rgba(249,115,22,0.9))] transition-transform duration-300 group-hover:scale-110"
+        title="Favorito"
       >
-        Assistido
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          stroke="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
+          />
+        </svg>
+      </div>
+    {:else if watchedStore.watchedIds.includes(String(media.id))}
+      <div
+        class="text-green pointer-events-none absolute top-2.5 right-2.5 z-20 [filter:drop-shadow(0_0_8px_rgba(54,211,83,0.9))] transition-transform duration-300 group-hover:scale-110"
+        title="Assistido"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
       </div>
     {/if}
     {#if !watchedStore.watchedIds.includes(String(media.id)) && latestProgress}

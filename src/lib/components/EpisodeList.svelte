@@ -40,13 +40,13 @@
     <div class="border-primary/30 flex flex-col gap-3 border-b pb-3">
       <h3 class="text-green text-sm font-bold tracking-widest uppercase">Episódios</h3>
       <div class="flex items-center gap-2">
-        <div class="relative w-1/2">
+        <div class="relative flex-1">
           <select
             bind:value={selectedSeason}
             class="border-primary/50 focus:border-green bg-surface text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
           >
             {#each availableSeasons as season}
-              <option value={season} class="bg-surface text-main">Temp. {season}</option>
+              <option value={season} class="bg-surface text-main">Temporada {season}</option>
             {/each}
           </select>
           <div
@@ -65,7 +65,7 @@
             >
           </div>
         </div>
-        <QualitySelector size="compact" showLabel={false} wrapperClass="w-1/2" />
+        <QualitySelector size="compact" showLabel={false} wrapperClass="flex-1" />
       </div>
       <div class="mt-2 flex items-center gap-2">
         <PreferenceSelectors {originalLanguage} size="compact" />

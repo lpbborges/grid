@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { favoritesStore } from '$lib/stores/favorites.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import type { CastMember } from '$lib/types';
 
@@ -13,23 +14,13 @@
   }>();
 </script>
 
-<div class="mb-2 flex items-center justify-between gap-4">
+<div class="mb-2">
   <h1
     class="text-main font-cyber text-4xl tracking-widest uppercase md:text-5xl"
     style="text-shadow: 0 0 15px rgba(107,33,168,0.5);"
   >
     {title}
   </h1>
-  <button
-    onclick={() => watchedStore.toggle(id)}
-    class="focus-visible:ring-green shrink-0 border px-4 py-2 text-sm font-bold tracking-widest uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none {watchedStore.watchedIds.includes(
-      String(id)
-    )
-      ? 'bg-green text-dark border-green shadow-[0_0_10px_rgba(54,211,83,0.8)]'
-      : 'border-primary/50 text-main bg-surface hover:bg-primary/20'}"
-  >
-    {watchedStore.watchedIds.includes(String(id)) ? 'Assistido' : 'Marcar como Assistido'}
-  </button>
 </div>
 
 <div class="text-main mb-6 flex flex-wrap gap-4 font-mono text-sm">
@@ -115,3 +106,99 @@
     </div>
   </div>
 {/if}
+
+<div class="mt-6 flex items-center gap-3">
+  <!-- Watched toggle button -->
+  <button
+    onclick={() => watchedStore.toggle(id)}
+    title={watchedStore.watchedIds.includes(String(id))
+      ? 'Marcado como assistido'
+      : 'Marcar como assistido'}
+    aria-label={watchedStore.watchedIds.includes(String(id))
+      ? 'Marcado como assistido'
+      : 'Marcar como assistido'}
+    class="group focus-visible:ring-green relative flex h-11 w-11 items-center justify-center rounded-sm border transition-all duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:outline-none active:scale-95 {watchedStore.watchedIds.includes(
+      String(id)
+    )
+      ? 'bg-green/15 border-green text-green shadow-[0_0_15px_rgba(54,211,83,0.4)]'
+      : 'border-primary/50 text-muted bg-surface/60 hover:border-green hover:text-green hover:bg-surface hover:shadow-[0_0_15px_rgba(54,211,83,0.25)]'}"
+  >
+    <!-- Cyberpunk corner bracket accents -->
+    <div
+      class="absolute -top-[1px] -left-[1px] h-2.5 w-2.5 border-t-2 border-l-2 transition-colors duration-300 {watchedStore.watchedIds.includes(
+        String(id)
+      )
+        ? 'border-green'
+        : 'border-primary/70 group-hover:border-green'}"
+    ></div>
+    <div
+      class="absolute -right-[1px] -bottom-[1px] h-2.5 w-2.5 border-r-2 border-b-2 transition-colors duration-300 {watchedStore.watchedIds.includes(
+        String(id)
+      )
+        ? 'border-green'
+        : 'border-primary/70 group-hover:border-green'}"
+    ></div>
+
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="transition-transform duration-300 group-hover:scale-110"
+      aria-hidden="true"
+    >
+      <polyline points="20 6 9 17 4 12"></polyline>
+    </svg>
+  </button>
+
+  <!-- Favorites toggle button -->
+  <button
+    onclick={() => favoritesStore.toggle(id)}
+    title={favoritesStore.has(id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+    aria-label={favoritesStore.has(id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+    class="group focus-visible:ring-orange relative flex h-11 w-11 items-center justify-center rounded-sm border transition-all duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:outline-none active:scale-95 {favoritesStore.has(
+      id
+    )
+      ? 'bg-orange/15 border-orange text-orange shadow-[0_0_15px_rgba(249,115,22,0.4)]'
+      : 'border-primary/50 text-muted bg-surface/60 hover:border-orange hover:text-orange hover:bg-surface hover:shadow-[0_0_15px_rgba(249,115,22,0.25)]'}"
+  >
+    <!-- Cyberpunk corner bracket accents -->
+    <div
+      class="absolute -top-[1px] -left-[1px] h-2.5 w-2.5 border-t-2 border-l-2 transition-colors duration-300 {favoritesStore.has(
+        id
+      )
+        ? 'border-orange'
+        : 'border-primary/70 group-hover:border-orange'}"
+    ></div>
+    <div
+      class="absolute -right-[1px] -bottom-[1px] h-2.5 w-2.5 border-r-2 border-b-2 transition-colors duration-300 {favoritesStore.has(
+        id
+      )
+        ? 'border-orange'
+        : 'border-primary/70 group-hover:border-orange'}"
+    ></div>
+
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill={favoritesStore.has(id) ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="transition-transform duration-300 group-hover:scale-110"
+      aria-hidden="true"
+    >
+      <path
+        d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
+      />
+    </svg>
+  </button>
+</div>

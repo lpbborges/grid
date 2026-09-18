@@ -175,7 +175,7 @@
         class="text-primary group-hover:text-green transition-colors"
         ><path d="m15 18-6-6 6-6" /></svg
       >
-      Voltar ao Catálogo
+      Voltar
     </a>
   </div>
 {/if}

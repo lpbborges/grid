@@ -64,4 +64,16 @@ describe('MediaCard component', () => {
     const link = getAllByText('Test Movie')[0].closest('a');
     expect(link?.getAttribute('href')).toBe('/series/123');
   });
+
+  it('renders Favorito badge with priority over Assistido badge', async () => {
+    const { favoritesStore } = await import('$lib/stores/favorites.svelte');
+    const { watchedStore } = await import('$lib/stores/watched.svelte');
+
+    favoritesStore.add(123);
+    watchedStore.add(123);
+
+    const { getByTitle, queryByTitle } = render(MediaCard, { media: mockMovie, type: 'movie' });
+    expect(getByTitle('Favorito')).toBeInTheDocument();
+    expect(queryByTitle('Assistido')).not.toBeInTheDocument();
+  });
 });
