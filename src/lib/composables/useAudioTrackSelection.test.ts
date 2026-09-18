@@ -2,10 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { useAudioTrackSelection } from './useAudioTrackSelection.svelte';
 
 describe('useAudioTrackSelection', () => {
-  function createFakeVideoElement(tracks: any[]) {
+  interface FakeVideo extends HTMLVideoElement {
+    audioTracks: any;
+  }
+
+  function createFakeVideoElement(tracks: any[]): FakeVideo {
     const audioTracks = [...tracks] as any;
     audioTracks.onchange = null;
-    return { audioTracks } as unknown as HTMLVideoElement;
+    return { audioTracks } as unknown as FakeVideo;
   }
 
   it('initializes with no tracks if videoElement is null', () => {

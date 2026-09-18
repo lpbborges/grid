@@ -32,9 +32,9 @@ describe('useSubtitleSelection', () => {
   it('groups subtitles by language', () => {
     const selection = useSubtitleSelection(mockOptions);
     const subs: SubtitleTrack[] = [
-      { id: '1', label: 'English', url: '1' },
-      { id: '2', label: 'Portuguese', url: '2' },
-      { id: '3', label: 'English', url: '3' }
+      { id: '1', label: 'English', url: '1', lang: 'en', group: 'Extra' },
+      { id: '2', label: 'Portuguese', url: '2', lang: 'pt', group: 'Extra' },
+      { id: '3', label: 'English', url: '3', lang: 'en', group: 'Extra' }
     ];
 
     const groups = selection.groupByLanguage(subs);
@@ -74,7 +74,9 @@ describe('useSubtitleSelection', () => {
   it('handles track error and disables track', () => {
     const fakeTracks = [{ mode: 'showing', oncuechange: null }];
     mockOptions.getVideoElement.mockReturnValue(createFakeVideoElement(fakeTracks));
-    mockOptions.getSubtitles.mockReturnValue([{ id: '1', label: 'English', url: '1' }]);
+    mockOptions.getSubtitles.mockReturnValue([
+      { id: '1', label: 'English', url: '1', lang: 'en', group: 'Extra' }
+    ]);
 
     const selection = useSubtitleSelection(mockOptions);
     selection.selectTrack(0); // active is now 0
@@ -95,8 +97,8 @@ describe('useSubtitleSelection', () => {
     mockOptions.getVideoElement.mockReturnValue(createFakeVideoElement(fakeTracks));
     // Subtitles have labels that might match 'pt'
     mockOptions.getSubtitles.mockReturnValue([
-      { id: '1', lang: 'en', label: 'English', url: '1' },
-      { id: '2', lang: 'por', label: 'Português', url: '2' }
+      { id: '1', lang: 'en', label: 'English', url: '1', group: 'Extra' },
+      { id: '2', lang: 'por', label: 'Português', url: '2', group: 'Extra' }
     ]);
 
     const selection = useSubtitleSelection(mockOptions);
@@ -164,7 +166,9 @@ describe('useSubtitleSelection', () => {
   it('resetTrackErrorState clears errors', () => {
     const fakeTracks = [{ mode: 'showing', oncuechange: null }];
     mockOptions.getVideoElement.mockReturnValue(createFakeVideoElement(fakeTracks));
-    mockOptions.getSubtitles.mockReturnValue([{ id: '1', lang: 'en', label: 'English', url: '1' }]);
+    mockOptions.getSubtitles.mockReturnValue([
+      { id: '1', lang: 'en', label: 'English', url: '1', group: 'Extra' }
+    ]);
 
     const selection = useSubtitleSelection(mockOptions);
     selection.selectTrack(0);
