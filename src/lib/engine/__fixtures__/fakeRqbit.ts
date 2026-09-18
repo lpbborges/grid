@@ -90,6 +90,7 @@ export function createFakeRqbit({
     if (action === 'stats' && version === 'v1') {
       return json({
         ...statsV1,
+        file_progress: files.map((f) => f.length),
         state: 'live',
         finished: true,
         progress_bytes: totalBytes,

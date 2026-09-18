@@ -279,6 +279,7 @@
           }}
           engineStatus={streamPlayer.engineStatus}
           infoHash={streamPlayer.infoHash}
+          fileIdx={streamPlayer.fileIdx}
           totalBytes={streamPlayer.totalBytes}
         />
       {:else}

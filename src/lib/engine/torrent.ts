@@ -300,7 +300,8 @@ export async function getTorrentSubtitles(
 
   const results = await Promise.allSettled(
     candidates.map(async ({ idx, name }) => {
-      const langMatch = name.match(/[._]([a-zA-Z]{2,3})\.(srt|vtt)$/i);
+      const baseName = name.split(/[/\\]/).pop() || name;
+      const langMatch = baseName.match(/(?:^|[._-])([a-zA-Z]{2,3})\.(?:srt|vtt)$/i);
       const lang = langMatch ? langMatch[1] : 'Unknown';
       const langName = getLanguageName(lang);
 
@@ -315,13 +316,7 @@ export async function getTorrentSubtitles(
         id: `torrent-${idx}`,
         url,
         lang,
-        label:
-          lang === 'Unknown'
-            ? name
-                .split(/[/\\]/)
-                .pop()
-                ?.replace(/\.(srt|vtt)$/i, '') || name
-            : langName,
+        label: lang === 'Unknown' ? 'Desconhecido' : langName || lang,
         group: 'Embedded' as const
       };
     })
@@ -349,8 +344,11 @@ export async function getTorrentSubtitles(
 }
 
 export interface TorrentStats {
-  snapshot?: {
-    downloaded_and_checked_bytes?: number;
+  file_progress?: number[];
+  live?: {
+    snapshot?: {
+      downloaded_and_checked_bytes?: number;
+    };
   };
 }
 
@@ -359,7 +357,7 @@ export async function getTorrentStats(infoHash: string): Promise<TorrentStats | 
     return null;
   }
   try {
-    const res = await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/stats`, {}, 8000);
+    const res = await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/stats/v1`, {}, 8000);
     if (!res.ok) return null;
     return await res.json();
   } catch {

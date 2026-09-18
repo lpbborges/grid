@@ -19,6 +19,7 @@ export function useStreamPlayer() {
   let engineStatus = $state('');
   let error = $state('');
   let infoHash = $state('');
+  let fileIdx = $state<number | undefined>(undefined);
   let totalBytes = $state(0);
   let isCacheable = $state(false);
   let cacheEntry = $state<CacheEntry | undefined>(undefined);
@@ -54,6 +55,7 @@ export function useStreamPlayer() {
       // added is not tracked here; the next play's reconciliation removes it.
       if (signal.aborted) return false;
       infoHash = streamData.infoHash;
+      fileIdx = streamData.fileIdx;
       totalBytes = streamData.totalBytes;
       videoSrc = streamData.videoSrc;
       subtitles = streamData.subtitles;
@@ -79,14 +81,15 @@ export function useStreamPlayer() {
   async function stop(): Promise<void> {
     preparation?.abort();
     preparation = undefined;
-    const finished = { infoHash, isCacheable, cacheEntry };
+    const finished = { infoHash, fileIdx, isCacheable, cacheEntry };
     isPlaying = false;
     playerState.isPlaying = false;
     videoSrc = '';
+    engineStatus = '';
     infoHash = '';
+    fileIdx = undefined;
     totalBytes = 0;
     cacheEntry = undefined;
-    engineStatus = '';
     try {
       await finalizeStream(finished);
     } catch (e) {
@@ -124,6 +127,9 @@ export function useStreamPlayer() {
     },
     get infoHash() {
       return infoHash;
+    },
+    get fileIdx() {
+      return fileIdx;
     },
     get totalBytes() {
       return totalBytes;

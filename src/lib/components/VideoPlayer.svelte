@@ -17,6 +17,7 @@
     onwatched,
     engineStatus = '',
     infoHash = '',
+    fileIdx,
     totalBytes = 0,
     mediaId,
     season,
@@ -30,6 +31,7 @@
     onwatched?: () => void;
     engineStatus?: string;
     infoHash?: string;
+    fileIdx?: number;
     totalBytes?: number;
     mediaId?: string | number;
     season?: number;
@@ -156,10 +158,19 @@
         statsInterval = window.setInterval(async () => {
           if (isVideoPlaying) return;
           const stats = await getTorrentStats(infoHash);
-          if (stats && stats.snapshot && totalBytes > 0) {
-            const downloaded = stats.snapshot.downloaded_and_checked_bytes || 0;
+          if (stats && totalBytes > 0) {
+            let downloaded = 0;
+            if (
+              fileIdx !== undefined &&
+              stats.file_progress &&
+              stats.file_progress[fileIdx] !== undefined
+            ) {
+              downloaded = stats.file_progress[fileIdx];
+            } else if (stats.live?.snapshot) {
+              downloaded = stats.live.snapshot.downloaded_and_checked_bytes || 0;
+            }
             const percent = (downloaded / totalBytes) * 100;
-            downloadPercent = Math.min(Math.round(percent), 100);
+            downloadPercent = Math.min(percent, 100);
           }
         }, 1000);
       }
@@ -422,14 +433,8 @@
         </div>
       {/if}
       {#if !playbackError && infoHash && downloadPercent > 0}
-        <div class="bg-dark border-primary/30 mb-2 h-2 w-full max-w-md rounded-full border">
-          <div
-            class="bg-green h-2 rounded-full transition-all duration-300"
-            style="width: {downloadPercent}%"
-          ></div>
-        </div>
         <div class="text-main font-mono text-sm">
-          Baixando: {downloadPercent}%
+          {downloadPercent.toFixed(2)}%
         </div>
       {/if}
     </div>

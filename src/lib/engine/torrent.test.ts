@@ -613,7 +613,7 @@ describe('getTorrentSubtitles', () => {
       id: 'torrent-3',
       url: expect.stringMatching(/^blob:mock-url-/),
       lang: 'Unknown',
-      label: 'weird-name',
+      label: 'Desconhecido',
       group: 'Embedded'
     });
   });

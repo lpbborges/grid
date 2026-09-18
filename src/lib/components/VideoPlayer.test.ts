@@ -518,7 +518,7 @@ describe('VideoPlayer component', () => {
 
   it('polls for torrent stats if infoHash is provided', async () => {
     vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({
-      snapshot: { downloaded_and_checked_bytes: 500 }
+      live: { snapshot: { downloaded_and_checked_bytes: 500 } }
     } as any);
 
     const { getByText, getByTestId } = render(VideoPlayer, {
@@ -532,7 +532,7 @@ describe('VideoPlayer component', () => {
     });
 
     expect(torrentApi.getTorrentStats).toHaveBeenCalledWith('abc');
-    expect(getByText('Baixando: 50%')).toBeDefined();
+    expect(getByText('50.00%')).toBeDefined();
 
     const video = getByTestId('video-element');
     await fireEvent.playing(video);

@@ -485,7 +485,7 @@ describe('finalizeStream', () => {
 
   it('updates the cache entry with fresh stats without re-reading the manifest, then forgets the stream', async () => {
     vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({
-      snapshot: { downloaded_and_checked_bytes: 150 }
+      live: { snapshot: { downloaded_and_checked_bytes: 150 } }
     });
 
     await finalizeStream({ infoHash: 'abc', isCacheable: true, cacheEntry: cachedEntry });
@@ -499,7 +499,7 @@ describe('finalizeStream', () => {
 
   it('marks complete when downloaded bytes reach the total', async () => {
     vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({
-      snapshot: { downloaded_and_checked_bytes: 200 }
+      live: { snapshot: { downloaded_and_checked_bytes: 200 } }
     });
 
     await finalizeStream({ infoHash: 'abc', isCacheable: true, cacheEntry: cachedEntry });
@@ -511,7 +511,7 @@ describe('finalizeStream', () => {
 
   it('forgets a cacheable stream without touching the cache when it has no entry', async () => {
     vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({
-      snapshot: { downloaded_and_checked_bytes: 200 }
+      live: { snapshot: { downloaded_and_checked_bytes: 200 } }
     });
 
     await finalizeStream({ infoHash: 'abc', isCacheable: true });

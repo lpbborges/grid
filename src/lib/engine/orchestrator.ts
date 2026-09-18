@@ -25,6 +25,7 @@ import { settingsStore } from '$lib/stores/settings.svelte';
 
 export interface StreamDetails {
   infoHash: string;
+  fileIdx: number;
   totalBytes: number;
   videoSrc: string;
   subtitles: SubtitleTrack[];
@@ -32,7 +33,9 @@ export interface StreamDetails {
   cacheEntry?: CacheEntry;
 }
 
-export type FinishedStream = Pick<StreamDetails, 'infoHash' | 'isCacheable' | 'cacheEntry'>;
+export type FinishedStream = Pick<StreamDetails, 'infoHash' | 'isCacheable' | 'cacheEntry'> & {
+  fileIdx?: number;
+};
 
 // Blob URLs created for the subtitles of the most recently prepared stream.
 // Tracked so they can be revoked when a new stream is prepared, otherwise
@@ -209,6 +212,7 @@ export async function prepareStream({
 
     return {
       infoHash,
+      fileIdx: bestFileIdx,
       totalBytes,
       videoSrc,
       subtitles,
@@ -241,6 +245,7 @@ export function finalizeStream(finished: FinishedStream): Promise<void> {
 
 async function runFinalizeStream({
   infoHash,
+  fileIdx,
   isCacheable,
   cacheEntry
 }: FinishedStream): Promise<void> {
@@ -254,7 +259,14 @@ async function runFinalizeStream({
   if (cacheEntry) {
     try {
       const stats = await getTorrentStats(infoHash);
-      const downloadedBytes = stats?.snapshot?.downloaded_and_checked_bytes;
+      let downloadedBytes = stats?.live?.snapshot?.downloaded_and_checked_bytes;
+      if (
+        fileIdx !== undefined &&
+        stats?.file_progress &&
+        stats.file_progress[fileIdx] !== undefined
+      ) {
+        downloadedBytes = stats.file_progress[fileIdx];
+      }
       if (downloadedBytes !== undefined) {
         await upsertCacheEntry({
           ...cacheEntry,
