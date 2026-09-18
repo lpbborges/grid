@@ -349,7 +349,7 @@ describe('prepareStream', () => {
     const calls: string[] = [];
     let releaseForget: () => void = () => {};
     vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({
-      snapshot: { downloaded_and_checked_bytes: 10 }
+      live: { snapshot: { downloaded_and_checked_bytes: 10 } }
     });
     vi.mocked(torrentApi.forgetTorrent).mockImplementation(async () => {
       calls.push('forget');

@@ -469,14 +469,14 @@ describe('torrent engine', () => {
     const hash = '1'.repeat(40);
     (globalThis.fetch as any).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ snapshot: { downloaded_and_checked_bytes: 100 } })
+      json: async () => ({ live: { snapshot: { downloaded_and_checked_bytes: 100 } } })
     });
     const stats = await torrent.getTorrentStats(hash);
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining(`/torrents/${hash}/stats`),
       expect.objectContaining({ signal: expect.anything() })
     );
-    expect(stats?.snapshot?.downloaded_and_checked_bytes).toBe(100);
+    expect(stats?.live?.snapshot?.downloaded_and_checked_bytes).toBe(100);
   });
 
   it('getTorrentStats returns null when not ok', async () => {
