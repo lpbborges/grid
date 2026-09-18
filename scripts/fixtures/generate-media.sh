@@ -25,11 +25,11 @@ clip() {
 rm -rf "$OUT"
 mkdir -p "$OUT/movie-mkv" "$OUT/movie-mp4" "$OUT/series"
 
-clip 10 srt "$OUT/movie-mkv/Grid.Play.Fixture.2026.1080p.mkv"
-cp "$WORK/sub.srt" "$OUT/movie-mkv/Grid.Play.Fixture.2026.1080p.en.srt"
+clip 10 srt "$OUT/movie-mkv/Grid.Fixture.2026.1080p.mkv"
+cp "$WORK/sub.srt" "$OUT/movie-mkv/Grid.Fixture.2026.1080p.en.srt"
 
-clip 10 mov_text "$OUT/movie-mp4/Grid.Play.Fixture.2026.1080p.mp4" -movflags +faststart
-cp "$WORK/sub.srt" "$OUT/movie-mp4/Grid.Play.Fixture.2026.1080p.en.srt"
+clip 10 mov_text "$OUT/movie-mp4/Grid.Fixture.2026.1080p.mp4" -movflags +faststart
+cp "$WORK/sub.srt" "$OUT/movie-mp4/Grid.Fixture.2026.1080p.en.srt"
 
-clip 10 srt "$OUT/series/Grid.Play.Series.S01E01.1080p.mkv"
-clip 14 srt "$OUT/series/Grid.Play.Series.S01E02.1080p.mkv"
+clip 10 srt "$OUT/series/Grid.Series.S01E01.1080p.mkv"
+clip 14 srt "$OUT/series/Grid.Series.S01E02.1080p.mkv"

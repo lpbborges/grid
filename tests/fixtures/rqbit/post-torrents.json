@@ -9,11 +9,11 @@
           "symlink": false
         },
         "components": [
-          "Grid.Play.Fixture.2026.1080p.mkv"
+          "Grid.Fixture.2026.1080p.mkv"
         ],
         "included": true,
         "length": 259622,
-        "name": "Grid.Play.Fixture.2026.1080p.mkv"
+        "name": "Grid.Fixture.2026.1080p.mkv"
       },
       {
         "attributes": {
@@ -23,11 +23,11 @@
           "symlink": false
         },
         "components": [
-          "Grid.Play.Fixture.2026.1080p.en.srt"
+          "Grid.Fixture.2026.1080p.en.srt"
         ],
         "included": true,
         "length": 50,
-        "name": "Grid.Play.Fixture.2026.1080p.en.srt"
+        "name": "Grid.Fixture.2026.1080p.en.srt"
       }
     ],
     "id": 0,

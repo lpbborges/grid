@@ -14,14 +14,14 @@ import { ADD_ATTEMPT_TIMEOUTS_MS } from '$lib/engine/torrent';
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 
 const HASH = '792b54cacb8c5d54cf8941b6215cbb9bdf08632c';
-const VIDEO = 'Grid.Play.Fixture.2026.1080p.mkv';
-const SUBTITLE = 'Grid.Play.Fixture.2026.1080p.en.srt';
+const VIDEO = 'Grid.Fixture.2026.1080p.mkv';
+const SUBTITLE = 'Grid.Fixture.2026.1080p.en.srt';
 const POSTER = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
 const DEFAULT_CACHE_LIMIT = 3 * 1024 * 1024 * 1024;
 
 const movie = {
   id: 'tt0000001',
-  title: 'Grid Play Fixture',
+  title: 'Grid Fixture',
   year: 2026,
   rating: 7,
   summary: 'Fixture movie',

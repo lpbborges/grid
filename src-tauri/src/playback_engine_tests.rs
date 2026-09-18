@@ -579,7 +579,7 @@ async fn streams_the_mkv_fixture_through_the_proxy_with_subtitles_hidden() {
     let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
     assert_streams_fixture_with_subtitles_hidden(
         "movie-mkv",
-        "Grid.Play.Fixture.2026.1080p.mkv",
+        "Grid.Fixture.2026.1080p.mkv",
         ".mkv",
     )
     .await;
@@ -590,7 +590,7 @@ async fn streams_the_mp4_fixture_through_the_proxy_with_subtitles_hidden() {
     let _engine_test_guard = ENGINE_TEST_LOCK.lock().await;
     assert_streams_fixture_with_subtitles_hidden(
         "movie-mp4",
-        "Grid.Play.Fixture.2026.1080p.mp4",
+        "Grid.Fixture.2026.1080p.mp4",
         ".mp4",
     )
     .await;
@@ -606,7 +606,7 @@ async fn forgotten_torrents_resume_from_disk_and_deleted_ones_are_removed() {
         .temp
         .join("downloads")
         .join(&hash)
-        .join("Grid.Play.Fixture.2026.1080p.mkv");
+        .join("Grid.Fixture.2026.1080p.mkv");
 
     add_torrent(&swarm).await;
     wait_until_finished(&swarm).await;

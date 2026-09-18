@@ -16,7 +16,7 @@ const POSTER = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
 
 const series = {
   id: 'tt0000002',
-  title: 'Grid Play Series',
+  title: 'Grid Series',
   year: 2026,
   rating: 7,
   summary: 'Fixture series',
@@ -32,8 +32,8 @@ const series = {
 };
 
 const files = [
-  { name: 'Grid.Play.Series.S01E01.1080p.mkv', length: 259767 },
-  { name: 'Grid.Play.Series.S01E02.1080p.mkv', length: 363000 }
+  { name: 'Grid.Series.S01E01.1080p.mkv', length: 259767 },
+  { name: 'Grid.Series.S01E02.1080p.mkv', length: 363000 }
 ];
 
 let boundary: PlaybackBoundary;
