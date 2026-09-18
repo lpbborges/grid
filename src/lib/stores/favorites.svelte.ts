@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { watchedStore } from './watched.svelte';
 
 class FavoritesStore {
   favoriteIds = $state<string[]>([]);
@@ -34,6 +35,7 @@ class FavoritesStore {
     if (!this.favoriteIds.includes(key)) {
       this.favoriteIds.push(key);
       this.save();
+      watchedStore.add(key);
     }
   }
 

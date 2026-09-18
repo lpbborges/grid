@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { favoritesStore } from './favorites.svelte';
+import { watchedStore } from './watched.svelte';
 
 describe('favoritesStore', () => {
   beforeEach(() => {
     favoritesStore.favoriteIds = [];
+    watchedStore.watchedIds = [];
     localStorage.clear();
   });
 
@@ -24,5 +26,11 @@ describe('favoritesStore', () => {
 
     favoritesStore.toggle('456');
     expect(favoritesStore.has('456')).toBe(false);
+  });
+
+  it('marks as watched when added to favorites', () => {
+    expect(watchedStore.has('789')).toBe(false);
+    favoritesStore.add('789');
+    expect(watchedStore.has('789')).toBe(true);
   });
 });
