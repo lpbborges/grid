@@ -76,21 +76,34 @@
       class="scrollbar-thumb-primary/50 flex max-h-[600px] scrollbar-thin flex-col gap-3 overflow-y-auto pr-2"
     >
       {#each filteredEpisodes as episode}
+        {@const isUnreleased = episode.firstAired
+          ? new Date(episode.firstAired) > new Date()
+          : false}
         <div
-          class="group hover:border-green border-primary/30 bg-surface/40 hover:bg-surface/80 relative flex items-center justify-between rounded-sm border p-3 transition-all duration-300 hover:-translate-x-1 hover:shadow-[0_0_15px_rgba(54,211,83,0.3)]"
+          class="group border-primary/30 bg-surface/40 relative flex items-center justify-between rounded-sm border p-3 transition-all duration-300 {isUnreleased
+            ? 'opacity-50 grayscale'
+            : 'hover:border-green hover:bg-surface/80 hover:-translate-x-1 hover:shadow-[0_0_15px_rgba(54,211,83,0.3)]'}"
+          title={isUnreleased ? 'Este episódio ainda não foi lançado' : undefined}
         >
           <!-- Cyberpunk inner border left -->
           <div
-            class="bg-primary group-hover:bg-green absolute top-0 bottom-0 left-0 w-1 transition-colors duration-300"
+            class="bg-primary absolute top-0 bottom-0 left-0 w-1 transition-colors duration-300 {isUnreleased
+              ? ''
+              : 'group-hover:bg-green'}"
           ></div>
 
           <button
-            class="flex flex-1 items-center justify-between gap-2 text-left"
+            class="flex flex-1 items-center justify-between gap-2 text-left {isUnreleased
+              ? 'cursor-not-allowed'
+              : ''}"
             onclick={() => onPlayEpisode(episode)}
+            disabled={isUnreleased}
           >
             <div class="flex flex-col pl-2">
               <span
-                class="text-main font-cyber group-hover:text-green text-sm tracking-wider uppercase transition-colors duration-300"
+                class="text-main font-cyber text-sm tracking-wider uppercase transition-colors duration-300 {isUnreleased
+                  ? ''
+                  : 'group-hover:text-green'}"
               >
                 {episode.episode}. {translatedEpisodes[episode.id] ||
                   episode.name ||
@@ -98,13 +111,17 @@
               </span>
               {#if episode.firstAired}
                 <span class="text-muted font-mono text-xs opacity-70">
-                  LANÇADO EM: {new Date(episode.firstAired).toLocaleDateString('pt-BR')}
+                  {isUnreleased ? 'LANÇAMENTO EM' : 'LANÇADO EM'}: {new Date(
+                    episode.firstAired
+                  ).toLocaleDateString('pt-BR')}
                 </span>
               {/if}
             </div>
             <div
               aria-hidden="true"
-              class="border-primary/50 group-hover:bg-green group-hover:text-dark text-primary rounded-sm border p-2 transition-all duration-300"
+              class="border-primary/50 text-primary rounded-sm border p-2 transition-all duration-300 {isUnreleased
+                ? ''
+                : 'group-hover:bg-green group-hover:text-dark'}"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -122,13 +139,16 @@
             </div>
           </button>
           <button
-            class="border-primary/50 group-hover:bg-primary/20 hover:text-green hover:border-green text-primary ml-2 rounded-sm border p-2 transition-all duration-300 {watchedStore.watchedIds.includes(
+            class="border-primary/50 text-primary ml-2 rounded-sm border p-2 transition-all duration-300 {watchedStore.watchedIds.includes(
               seriesId + '-S' + episode.season + 'E' + episode.episode
             )
               ? 'bg-green text-dark border-green shadow-[0_0_10px_rgba(54,211,83,0.8)]'
-              : ''}"
-            title="Marcar como assistido"
+              : ''} {isUnreleased
+              ? 'cursor-not-allowed opacity-50'
+              : 'group-hover:bg-primary/20 hover:text-green hover:border-green'}"
+            title={isUnreleased ? 'Este episódio ainda não foi lançado' : 'Marcar como assistido'}
             onclick={() => watchedStore.toggle(seriesId, episode.season, episode.episode)}
+            disabled={isUnreleased}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
