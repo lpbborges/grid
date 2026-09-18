@@ -7,6 +7,7 @@ static TIMING_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 static COMMA_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(\d{2}:\d{2}:\d{2}),(\d{3})").unwrap());
+static ASS_TAG_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{\\[^}]+\}").unwrap());
 
 /// Converts SRT subtitle content to WebVTT.
 ///
@@ -17,6 +18,7 @@ static COMMA_RE: LazyLock<Regex> =
 ///   lines are passed through unchanged).
 /// - Basic styling tags (`<i>`, `<b>`, `<u>`) — VTT supports these natively
 ///   in cue text, so they're left untouched rather than stripped/escaped.
+/// - ASS formatting tags like `{\an8}` — these are stripped so they don't leak into the UI.
 /// - Timestamp separators (`,` -> `.`).
 ///
 /// Empty or malformed input never panics: it's returned as-is (minus any
@@ -46,7 +48,9 @@ pub fn srt_to_vtt(input: &str) -> String {
     if normalized.ends_with('\n') && !normalized.is_empty() {
         joined.push('\n');
     }
-    let converted = COMMA_RE.replace_all(&joined, "$1.$2");
+
+    let without_ass = ASS_TAG_RE.replace_all(&joined, "");
+    let converted = COMMA_RE.replace_all(&without_ass, "$1.$2");
     format!("WEBVTT\n\n{}", converted)
 }
 
@@ -144,6 +148,16 @@ mod tests {
         let srt = "1\n00:00:01,000 --> 00:00:02,000\n<i>italic</i> <b>bold</b> <u>underline</u>\n";
         let vtt = srt_to_vtt(srt);
         assert!(vtt.contains("<i>italic</i> <b>bold</b> <u>underline</u>"));
+    }
+
+    #[test]
+    fn strips_ass_formatting_tags() {
+        let srt = "1\n00:00:01,000 --> 00:00:02,000\n{\\an8}Top Text\n{\\pos(10,10)}Positioned\n";
+        let vtt = srt_to_vtt(srt);
+        assert!(vtt.contains("Top Text"));
+        assert!(vtt.contains("Positioned"));
+        assert!(!vtt.contains("{\\an8}"));
+        assert!(!vtt.contains("{\\pos"));
     }
 
     #[test]
