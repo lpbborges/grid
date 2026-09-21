@@ -35,6 +35,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["bin/rqbit"]
+    "externalBin": ["bin/rqbit"],
+    "linux": {
+      "deb": {
+        "depends": ["gstreamer1.0-libav", "gstreamer1.0-plugins-good", "gstreamer1.0-plugins-bad"]
+      }
+    }
   }
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { logger } from '$lib/logger';
   import { getTorrentStats } from '$lib/engine/torrent';
+  import { describeMediaError } from '$lib/engine/codecSupport';
   import type { SubtitleTrack } from '$lib/api/subtitles';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -86,18 +87,11 @@
   // network failure (unsupported codec, CORS rejection, torrent stream
   // aborting) left the loading overlay spinning forever with no way to tell
   // that apart from "still downloading". Surface it instead.
-  const MEDIA_ERROR_MESSAGES: Record<number, string> = {
-    1: 'O carregamento do vídeo foi interrompido.',
-    2: 'Falha de rede ao carregar o vídeo.',
-    3: 'Não foi possível decodificar este vídeo (codec não suportado).',
-    4: 'Formato de vídeo não suportado.'
-  };
-
   function handleVideoError() {
     const mediaError = videoElement?.error;
     playbackError = mediaError
-      ? (MEDIA_ERROR_MESSAGES[mediaError.code] ?? 'Erro desconhecido ao reproduzir o vídeo.')
-      : 'Erro desconhecido ao reproduzir o vídeo.';
+      ? describeMediaError(mediaError.code)
+      : 'Não foi possível reproduzir este vídeo.';
     // Otherwise an error firing after playback already started (isVideoPlaying
     // still true from an earlier 'playing'/'canplay') would leave the overlay
     // hidden (it's gated on !isVideoPlaying) and the video frozen on its last

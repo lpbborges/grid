@@ -30,6 +30,13 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
     libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
   ```
 
+- On Linux, the GStreamer decoders the webview plays through. They are not installed by default on a clean Ubuntu or Fedora, and without them 4K HEVC and E-AC3 releases fail with "este vídeo precisa de componentes de vídeo que não estão instalados no sistema". The `.deb` declares them; for `tauri dev` or another package format, install them yourself (Debian/Ubuntu):
+
+  ```sh
+  sudo apt-get install -y gstreamer1.0-libav gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad
+  ```
+
 - For the end-to-end playback tests (Linux and Windows only): [`tauri-driver`](https://v2.tauri.app/develop/tests/webdriver/) (`cargo install tauri-driver --locked`), plus `WebKitWebDriver` and the GStreamer libav plugins on Linux (Debian/Ubuntu: `sudo apt-get install -y webkit2gtk-driver gstreamer1.0-libav`), or an `msedgedriver` matching your WebView2 version on Windows (point `NATIVE_DRIVER` at it). `ffmpeg` is needed only to regenerate the test media.
 
 ## Getting Started
@@ -113,12 +120,15 @@ SvelteKit UI (static build, runs in the Tauri webview)
   │                      └─ start_native_player / native_player_set_tracks /
   │                         stop_native_player    (Windows: drives the mpv sidecar)
   ├─ fetch ──────────► rqbit HTTP API on 127.0.0.1 (add, stats)
-  └─ <video> ────────► stream proxy on 127.0.0.1 ──► rqbit stream endpoint
+  ├─ <video> ────────► stream proxy on 127.0.0.1 ──► rqbit stream endpoint  (Linux/macOS)
+  └─ mpv sidecar ────► stream proxy on 127.0.0.1 ?raw=1                     (Windows, in-window)
 ```
 
 - **Stream proxy:** WebKitGTK does not start MP4 or Matroska files that carry embedded subtitle tracks while the rest of the file is still downloading, so the `<video>` element streams through a small proxy in `src-tauri/src/stream_proxy.rs`. It forwards range requests to rqbit and hides every embedded subtitle track in the file header without changing its size (a `Void` element in Matroska, a `free` atom in MP4; see `src-tauri/src/media_patch/`), leaving every byte offset intact. Subtitles are still shown from separate `.srt`/`.vtt` files.
 
   The patch exists only for WebKitGTK. Anything that demuxes Matroska correctly would see an empty subtitle menu instead, so the proxy also serves an unpatched variant at `?raw=1`, which is what the Windows mpv path asks for.
+
+- **Decoding:** Linux and macOS play in a `<video>` element, which decodes through GStreamer in WebKitGTK — hence the plugin requirement above. Windows cannot: the webview decodes neither HEVC nor E-AC3 and cannot demux Matroska, so it plays through the mpv sidecar instead, reparented into Grid's own window so the same Svelte controls sit on top (see [Player](#player-windows-only)).
 
 - `src/lib/api/` wraps external services, `src/lib/engine/` drives playback (engine, cache, ranking), `src/lib/composables/` and `src/lib/stores/` hold reactive state, and `src/lib/components/` holds the UI.
 - **Where state lives:**
