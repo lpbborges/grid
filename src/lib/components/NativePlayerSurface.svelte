@@ -178,6 +178,7 @@
     ? ''
     : 'bg-backdrop'}"
   data-testid="native-player-surface"
+  data-native-player
   onmousemove={revealControls}
 >
   {#if player.isRunning}

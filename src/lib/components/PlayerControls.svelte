@@ -94,9 +94,12 @@
   }
 
   function seekFromPointer(bar: HTMLElement, clientX: number) {
+    // Without a length there is no position to compute: `fraction * 0` is 0,
+    // so every click on the bar would jump the film back to the start.
+    if (!duration) return;
     const rect = bar.getBoundingClientRect();
     const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    onseek(fraction * (duration || 0));
+    onseek(fraction * duration);
   }
 </script>
 

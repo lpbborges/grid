@@ -115,3 +115,18 @@ body.native-player-active > div > div {
   background: transparent !important;
   background-image: none !important;
 }
+
+/* Clearing backgrounds is not enough: the poster, the backdrop image and the
+   rest of the page are opaque elements in their own right, and mpv is behind
+   the webview, so every one of them paints over the video. `visibility`
+   inherits and a descendant can override it, so hiding the layout root and
+   re-showing only the player and the titlebar works at any nesting depth and
+   without touching layout. */
+body.native-player-active > div > div {
+  visibility: hidden;
+}
+
+body.native-player-active [data-native-player],
+body.native-player-active [data-titlebar] {
+  visibility: visible;
+}

@@ -713,17 +713,58 @@ async fn start_native_player_impl(
         };
 
     let (reader, writer) = tokio::io::split(pipe);
-    let (client, events) = mpv_player::connect(reader, writer);
-    client.observe_time().await?;
-    client.observe_pause().await?;
+    let (mut events, client) = {
+        let (client, events) = mpv_player::connect(reader, writer);
+        client.observe_time().await?;
+        client.observe_pause().await?;
+        client.observe_duration().await?;
+        (events, client)
+    };
+
+    // Wait for mpv to parse the file before asking what is in it. `track-list`
+    // is empty and `duration` is null until `file-loaded`, so reading them on
+    // connect gives no tracks (no audio or subtitle menu) and a length of 0,
+    // which pins the seek bar at zero and blocks every progress write.
+    //
+    // Events that arrive first are dropped on purpose: mpv is still paused on
+    // the first frame, so there is no position worth keeping.
+    let loaded = tokio::time::timeout(std::time::Duration::from_secs(60), async {
+        while let Some(event) = events.recv().await {
+            match event {
+                mpv_player::PlayerEvent::Loaded => return Ok(()),
+                // The file failed before it ever loaded; report that rather
+                // than time out on it.
+                mpv_player::PlayerEvent::Failed(detail) => return Err(detail),
+                mpv_player::PlayerEvent::Ended => {
+                    return Err("mpv closed the file before it loaded".to_string())
+                }
+                _ => {}
+            }
+        }
+        Err("the mpv connection closed before the file loaded".to_string())
+    })
+    .await;
+
+    match loaded {
+        Ok(Ok(())) => {}
+        Ok(Err(detail)) => {
+            stop_player(&state).await;
+            return Err(format!("mpv could not load the stream: {detail}"));
+        }
+        Err(_) => {
+            stop_player(&state).await;
+            return Err("mpv did not load the stream in time".to_string());
+        }
+    }
+
     let playback = client.playback().await?;
 
     // mpv's child window is created above the webview; the transparent webview
     // only composites over it once it is at the bottom.
     //
     // Retried rather than done once: mpv creates the `--wid` child at VO
-    // reconfig, which happens after the `file-loaded` that `playback()` waits
-    // on, so it may not exist yet on the first look. Losing this is not
+    // reconfig, which can still trail the `file-loaded` waited on above, so
+    // the window may not exist yet on the first look. Losing this is not
     // cosmetic - mpv stays above WebView2 and covers the whole UI, with no
     // controls and no way out. Nothing re-raises it once ordered, so the loop
     // stops at the first success.
@@ -890,6 +931,12 @@ fn pump_player_events(
             let emitted = match event {
                 mpv_player::PlayerEvent::Time(seconds) => app.emit("native-player-time", seconds),
                 mpv_player::PlayerEvent::Paused(paused) => app.emit("native-player-paused", paused),
+                mpv_player::PlayerEvent::Duration(seconds) => {
+                    app.emit("native-player-duration", seconds)
+                }
+                // Consumed by start_native_player before this pump starts; a
+                // second one would only mean mpv reloaded the same file.
+                mpv_player::PlayerEvent::Loaded => Ok(()),
                 mpv_player::PlayerEvent::Ended => app.emit("native-player-ended", ()),
                 mpv_player::PlayerEvent::Failed(detail) => app.emit("native-player-error", detail),
             };

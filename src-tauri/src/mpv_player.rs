@@ -74,6 +74,13 @@ pub enum PlayerEvent {
     /// can change it now, but mpv still pauses itself on EOF and on a failed
     /// seek, so the UI follows the property rather than assuming.
     Paused(bool),
+    /// mpv finished parsing the file. Only now do `track-list` and `duration`
+    /// hold anything: before it, a streamed file reports no tracks and no
+    /// length at all.
+    Loaded,
+    /// mpv's `duration` property changed. A stream usually reports none at
+    /// first and learns it once enough of the file has been demuxed.
+    Duration(f64),
     Ended,
     Failed(String),
 }
@@ -294,6 +301,15 @@ impl Client {
     /// Asks mpv to push `time-pos` changes instead of polling for them.
     pub async fn observe_time(&self) -> Result<(), String> {
         self.call(json!(["observe_property", 1, "time-pos"]))
+            .await?;
+        Ok(())
+    }
+
+    /// Asks mpv to push `duration` changes instead of polling for them.
+    ///
+    /// Observer id `3`: `observe_time` uses 1 and `observe_pause` uses 2.
+    pub async fn observe_duration(&self) -> Result<(), String> {
+        self.call(json!(["observe_property", 3, "duration"]))
             .await?;
         Ok(())
     }
@@ -616,6 +632,12 @@ fn parse_event(message: &Value, throttle: &mut TimeThrottle) -> Option<PlayerEve
         "property-change" if message.get("name")?.as_str()? == "pause" => {
             Some(PlayerEvent::Paused(message.get("data")?.as_bool()?))
         }
+        // Also unthrottled: it fires once or twice per file, and dropping it
+        // leaves the seek bar pinned at zero for the whole film.
+        "property-change" if message.get("name")?.as_str()? == "duration" => {
+            Some(PlayerEvent::Duration(message.get("data")?.as_f64()?))
+        }
+        "file-loaded" => Some(PlayerEvent::Loaded),
         "end-file" => match message.get("reason").and_then(Value::as_str) {
             Some("error") => {
                 let detail = message
@@ -920,10 +942,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reports_the_file_being_loaded() {
+        let (_client, mut events, mut mpv) = MockMpv::connect();
+
+        mpv.push(json!({ "event": "file-loaded" })).await;
+
+        // Before this, mpv has parsed nothing: `track-list` is empty and
+        // `duration` is null, so reading them yields no tracks and 0.
+        assert_eq!(events.recv().await, Some(PlayerEvent::Loaded));
+    }
+
+    #[tokio::test]
+    async fn forwards_duration_changes_as_events() {
+        let (_client, mut events, mut mpv) = MockMpv::connect();
+
+        mpv.push(json!({
+            "event": "property-change",
+            "id": 3,
+            "name": "duration",
+            "data": 5025.0
+        }))
+        .await;
+
+        // A streamed file often reports no duration at first and learns it
+        // later; without this the seek bar stays pinned at zero forever.
+        assert_eq!(events.recv().await, Some(PlayerEvent::Duration(5025.0)));
+    }
+
+    #[tokio::test]
+    async fn observes_duration_on_an_id_of_its_own() {
+        let (client, _events, mut mpv) = MockMpv::connect();
+
+        let ask = tokio::spawn(async move { client.observe_duration().await });
+        let command = mpv.answer_next(Value::Null).await;
+
+        // 1 is time-pos and 2 is pause; reusing an id replaces that observer.
+        assert_eq!(
+            command["command"],
+            json!(["observe_property", 3, "duration"])
+        );
+        ask.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
     async fn ignores_events_that_are_not_part_of_the_narrow_surface() {
         let (_client, mut events, mut mpv) = MockMpv::connect();
 
-        for noise in ["file-loaded", "playback-restart", "audio-reconfig"] {
+        for noise in ["playback-restart", "audio-reconfig"] {
             mpv.push(json!({ "event": noise })).await;
         }
         mpv.push(json!({ "event": "end-file", "reason": "eof" }))

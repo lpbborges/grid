@@ -113,6 +113,15 @@ describe('NativePlayerSurface', () => {
     expect(screen.queryByTestId('native-loading')).toBeNull();
   });
 
+  it('marks itself so the page can be hidden behind it', () => {
+    const { container } = render(NativePlayerSurface, { player: fakePlayer() });
+
+    // app.css hides the layout root while the native player is active and
+    // re-shows only this element and the titlebar. Without the hook the
+    // poster and the backdrop paint over mpv, which sits behind the webview.
+    expect(container.querySelector('[data-native-player]')).toBeTruthy();
+  });
+
   it('makes the document transparent only while it is mounted', () => {
     const { unmount } = render(NativePlayerSurface, { player: fakePlayer() });
 

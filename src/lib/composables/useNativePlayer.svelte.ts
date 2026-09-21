@@ -212,6 +212,14 @@ export function useNativePlayer() {
         listen<boolean>('native-player-paused', (event) => {
           paused = event.payload;
         }),
+        listen<number>('native-player-duration', (event) => {
+          // A streamed file often reports no length until mpv has demuxed
+          // enough of it. Both copies move: `duration` guards progress
+          // writes, `durationState` is what the seek bar renders.
+          if (!Number.isFinite(event.payload) || event.payload <= 0) return;
+          duration = event.payload;
+          durationState = event.payload;
+        }),
         listen('native-player-ended', () => {
           void finish();
         }),

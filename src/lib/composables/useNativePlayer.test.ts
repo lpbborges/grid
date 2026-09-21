@@ -457,6 +457,22 @@ describe('useNativePlayer', () => {
     expect(player.tracks.find((t) => t.type === 'audio')?.selected).toBe(true);
   });
 
+  it('follows the duration mpv learns after loading', async () => {
+    vi.mocked(invoke).mockImplementation((async (command: string) =>
+      command === 'start_native_player' ? { duration: 0, tracks: [] } : undefined) as never);
+    const update = vi.spyOn(progressStore, 'update');
+    const { player } = await start();
+
+    handlers['native-player-duration']({ payload: 5025 });
+
+    // A streamed file often reports no length at first. Without following it
+    // the seek bar stays pinned at zero and no progress is ever written.
+    expect(player.duration).toBe(5025);
+
+    handlers['native-player-time']({ payload: 60 });
+    expect(update).toHaveBeenCalledWith('tt1', undefined, undefined, 60, 5025);
+  });
+
   it('exposes the track list mpv reported', async () => {
     const { player } = await start();
 
