@@ -77,6 +77,16 @@ pub fn plan_z_order(children: &[(isize, String)]) -> ZOrderPlan {
     }
 }
 
+/// Prefix of the report [`push_video_behind_ui`] returns once the video is
+/// ordered. Callers match on this rather than on a literal, so the success
+/// wording and the check cannot drift apart.
+pub const ORDERED_REPORT_PREFIX: &str = "video pushed behind the UI";
+
+/// Whether a report from [`push_video_behind_ui`] says the video is ordered.
+pub fn is_ordered(report: &str) -> bool {
+    report.starts_with(ORDERED_REPORT_PREFIX)
+}
+
 #[cfg(windows)]
 mod win {
     use super::{plan_z_order, ZOrderPlan};
@@ -138,7 +148,7 @@ mod win {
                 if ok == 0 {
                     format!("SetWindowPos failed. children: [{inventory}]")
                 } else {
-                    format!("video pushed behind the UI. children: [{inventory}]")
+                    format!("{}. children: [{inventory}]", super::ORDERED_REPORT_PREFIX)
                 }
             }
             ZOrderPlan::VideoMissing => {
@@ -193,6 +203,22 @@ mod tests {
         let children = vec![(0x10, "Chrome_WidgetWin_1".to_string())];
 
         assert_eq!(plan_z_order(&children), ZOrderPlan::VideoMissing);
+    }
+
+    #[test]
+    fn tells_an_ordered_report_from_every_failure() {
+        // lib.rs retries until this says yes, so a mismatch between the
+        // wording and the check would retry forever or give up immediately.
+        assert!(is_ordered(&format!(
+            "{ORDERED_REPORT_PREFIX}. children: [mpv (0x1)]"
+        )));
+        assert!(!is_ordered("SetWindowPos failed. children: [mpv (0x1)]"));
+        assert!(!is_ordered(
+            "mpv created no child window - `--wid` ignored? children: []"
+        ));
+        assert!(!is_ordered(
+            "no WebView2 child under this handle. children: []"
+        ));
     }
 
     #[test]

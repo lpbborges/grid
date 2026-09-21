@@ -719,18 +719,36 @@ async fn start_native_player_impl(
     let playback = client.playback().await?;
 
     // mpv's child window is created above the webview; the transparent webview
-    // only composites over it once it is at the bottom. One call is enough -
-    // nothing re-raises mpv as it presents.
+    // only composites over it once it is at the bottom.
+    //
+    // Retried rather than done once: mpv creates the `--wid` child at VO
+    // reconfig, which happens after the `file-loaded` that `playback()` waits
+    // on, so it may not exist yet on the first look. Losing this is not
+    // cosmetic - mpv stays above WebView2 and covers the whole UI, with no
+    // controls and no way out. Nothing re-raises it once ordered, so the loop
+    // stops at the first success.
     //
     // Skipped when headless: `--vo=null` means there is no video window, and
     // ordering one would report it as missing and blame `--wid`, which was
     // never passed in that case.
     if !headless {
-        let report = window_embed::push_video_behind_ui(parent);
-        if !report.starts_with("video pushed behind the UI") {
-            // Not fatal: playback works, the UI is just in the wrong layer.
-            // Loud in the log rather than a silent black window.
-            eprintln!("Embedded player z-order: {report}");
+        const Z_ORDER_ATTEMPTS: u32 = 40;
+        const Z_ORDER_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
+
+        let mut report = String::new();
+        for attempt in 0..Z_ORDER_ATTEMPTS {
+            report = window_embed::push_video_behind_ui(parent);
+            if window_embed::is_ordered(&report) {
+                break;
+            }
+            if attempt + 1 < Z_ORDER_ATTEMPTS {
+                tokio::time::sleep(Z_ORDER_INTERVAL).await;
+            }
+        }
+        if !window_embed::is_ordered(&report) {
+            // Not fatal in the sense that playback works, but the UI is behind
+            // the video. Loud in the log rather than a silently covered window.
+            eprintln!("Embedded player z-order failed after retrying: {report}");
         }
     }
 

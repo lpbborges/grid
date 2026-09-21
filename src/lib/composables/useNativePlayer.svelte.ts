@@ -102,6 +102,25 @@ export function resolveNativeTracks(
 }
 
 /**
+ * Fills in the language of every external subtitle track.
+ *
+ * mpv reports no `lang` for a track added with `--sub-file`, which is how Grid
+ * passes every subtitle it fetched, so those tracks would label themselves
+ * "Legenda 3" in the menu with no way to tell Portuguese from English. Grid
+ * knows what it wrote and mpv lists external tracks in the order they were
+ * given, so the languages are matched back on by position - the same rule
+ * `resolveNativeTracks` applies when picking the preferred one.
+ */
+export function withExternalLangs(tracks: NativeTrack[], externalLangs: string[]): NativeTrack[] {
+  let seen = 0;
+  return tracks.map((track) => {
+    if (track.type !== 'sub' || !track.external) return track;
+    const lang = externalLangs[seen++];
+    return lang && !track.lang ? { ...track, lang } : track;
+  });
+}
+
+/**
  * Reads the already-fetched subtitle text back out of its `blob:` URL and hands
  * it to Rust to write into the app cache.
  *
@@ -181,7 +200,10 @@ export function useNativePlayer() {
       });
       duration = playback.duration;
       durationState = playback.duration;
-      tracks = playback.tracks;
+      tracks = withExternalLangs(
+        playback.tracks,
+        external.map((subtitle) => subtitle.lang)
+      );
 
       unlisteners = await Promise.all([
         listen<number>('native-player-time', (event) => {

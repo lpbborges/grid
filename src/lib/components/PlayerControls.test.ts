@@ -80,13 +80,12 @@ describe('PlayerControls', () => {
     expect(screen.queryByLabelText('Tela cheia')).toBeNull();
   });
 
-  it('shows status and progress only for a host without its own overlay', () => {
+  it('shows status only for a host without its own overlay', () => {
     const { rerender } = render(PlayerControls, baseProps());
-    expect(screen.queryByText('50.00%')).toBeNull();
+    expect(screen.queryByText('Preparando')).toBeNull();
 
-    rerender(baseProps({ engineStatus: 'Preparando', downloadPercent: 50 }));
+    rerender(baseProps({ engineStatus: 'Preparando' }));
 
     expect(screen.getByText('Preparando')).toBeInTheDocument();
-    expect(screen.getByText('50.00%')).toBeInTheDocument();
   });
 });

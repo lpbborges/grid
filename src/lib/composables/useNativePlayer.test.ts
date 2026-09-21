@@ -6,6 +6,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import NativePlayerHarness from './__fixtures__/NativePlayerHarness.svelte';
 import {
   resolveNativeTracks,
+  withExternalLangs,
   nativeTrackLabel,
   type NativeTrack,
   type useNativePlayer
@@ -50,6 +51,37 @@ describe('nativeTrackLabel', () => {
 
   it('is empty when mpv reports neither a language nor a title', () => {
     expect(nativeTrackLabel(track({ id: 1, type: 'audio' }))).toBe('');
+  });
+});
+
+describe('withExternalLangs', () => {
+  it('names external subtitle tracks mpv reports no language for', () => {
+    const tracks = [
+      track({ id: 1, type: 'sub', lang: 'en' }),
+      track({ id: 2, type: 'sub', external: true }),
+      track({ id: 3, type: 'sub', external: true })
+    ];
+
+    const named = withExternalLangs(tracks, ['pob', 'eng']);
+
+    // Without this the menu shows "Legenda 2" and "Legenda 3" and the user
+    // cannot tell Portuguese from English.
+    expect(named[1].lang).toBe('pob');
+    expect(named[2].lang).toBe('eng');
+    // The embedded track already had one and keeps it.
+    expect(named[0].lang).toBe('en');
+  });
+
+  it('leaves audio tracks and unmatched externals alone', () => {
+    const tracks = [
+      track({ id: 1, type: 'audio', external: true }),
+      track({ id: 2, type: 'sub', external: true })
+    ];
+
+    const named = withExternalLangs(tracks, []);
+
+    expect(named[0].lang).toBeNull();
+    expect(named[1].lang).toBeNull();
   });
 });
 

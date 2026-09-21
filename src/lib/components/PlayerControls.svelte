@@ -24,7 +24,6 @@
     paused,
     volume,
     visible,
-    downloadPercent = 0,
     engineStatus = '',
     subtitles = [],
     torrentSubsGrouped = [],
@@ -54,11 +53,10 @@
     volume: number;
     visible: boolean;
     /**
-     * Progress and status for a host with no loading overlay of its own.
-     * `VideoPlayer` passes neither - it already renders both in its overlay -
-     * so nothing extra appears on the `<video>` path.
+     * Status for a host with no loading overlay of its own. `VideoPlayer`
+     * does not pass it - it already renders status in its overlay - so
+     * nothing extra appears on the `<video>` path.
      */
-    downloadPercent?: number;
     engineStatus?: string;
     subtitles?: SubtitleTrack[];
     torrentSubsGrouped?: SubtitleGroup[];
@@ -133,15 +131,8 @@
     ? 'opacity-100'
     : 'opacity-0'}"
 >
-  {#if engineStatus || downloadPercent > 0}
-    <div class="text-muted mb-2 flex items-center gap-3 font-mono text-xs">
-      {#if engineStatus}
-        <span class="tracking-widest uppercase">{engineStatus}</span>
-      {/if}
-      {#if downloadPercent > 0}
-        <span>{downloadPercent.toFixed(2)}%</span>
-      {/if}
-    </div>
+  {#if engineStatus}
+    <div class="text-muted mb-2 font-mono text-xs tracking-widest uppercase">{engineStatus}</div>
   {/if}
 
   <div

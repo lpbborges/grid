@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { logger } from '$lib/logger';
+  import { playerState } from '$lib/stores.svelte';
   import PlayerControls from './PlayerControls.svelte';
   import { groupByLanguage } from '$lib/composables/useSubtitleSelection.svelte';
   import {
@@ -20,16 +21,15 @@
   let {
     player,
     engineStatus = '',
-    downloadPercent = 0,
     onclose
   } = $props<{
     player: ReturnType<typeof useNativePlayer>;
     engineStatus?: string;
-    downloadPercent?: number;
     onclose?: () => void;
   }>();
 
   let showControls = $state(true);
+  let controlsTimeout: number | undefined;
   let showAudioMenu = $state(false);
   let showSubtitleMenu = $state(false);
   let expandedGroups = $state<Record<string, boolean>>({});
@@ -70,6 +70,10 @@
     groupByLanguage(subtitleOptions.filter((s: SubtitleTrack) => s.group === 'Extra'))
   );
 
+  const controlsVisible = $derived(
+    showControls || player.paused || showSubtitleMenu || showAudioMenu
+  );
+
   // Every layer from the document down to the layout wrapper has to be clear
   // while this is up, or our own background hides mpv's window completely.
   $effect(() => {
@@ -106,14 +110,17 @@
         }
         e.preventDefault();
         void player.togglePlay();
+        revealControls();
         break;
       case 'ArrowLeft':
         e.preventDefault();
         void player.seek(player.currentTime - 5);
+        revealControls();
         break;
       case 'ArrowRight':
         e.preventDefault();
         void player.seek(player.currentTime + 5);
+        revealControls();
         break;
       case 'Escape':
         e.preventDefault();
@@ -126,6 +133,34 @@
     void player.stop();
     onclose?.();
   }
+
+  // Mirrors VideoPlayer: without a hide timer the gradient bar and the back
+  // arrow sit over the picture for the whole film with no way to dismiss them.
+  function scheduleHideControls() {
+    window.clearTimeout(controlsTimeout);
+    controlsTimeout = window.setTimeout(() => {
+      if (!player.paused) showControls = false;
+    }, 2500);
+  }
+
+  function revealControls() {
+    showControls = true;
+    scheduleHideControls();
+  }
+
+  $effect(() => {
+    scheduleHideControls();
+    return () => window.clearTimeout(controlsTimeout);
+  });
+
+  // Titlebar fades itself out on this. Only VideoPlayer used to write it, so
+  // on this path the titlebar gradient never left the top of the video.
+  $effect(() => {
+    playerState.showControls = controlsVisible;
+    return () => {
+      playerState.showControls = true;
+    };
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -135,7 +170,7 @@
   aria-label="Reprodutor de Vídeo"
   class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden"
   data-testid="native-player-surface"
-  onmousemove={() => (showControls = true)}
+  onmousemove={revealControls}
 >
   <!--
     No background, no child that paints one: mpv's window sits directly behind
@@ -148,9 +183,8 @@
     duration={player.duration}
     paused={player.paused}
     volume={player.volume}
-    visible={showControls || player.paused || showSubtitleMenu || showAudioMenu}
+    visible={controlsVisible}
     {engineStatus}
-    {downloadPercent}
     subtitles={subtitleOptions}
     torrentSubsGrouped={embeddedSubsGrouped}
     {externalSubsGrouped}
