@@ -22,8 +22,8 @@
   let errorSource = $state<'load' | 'play' | null>(null);
 
   const streamPlayer = useStreamPlayer();
-  // Windows plays in mpv's own window; everywhere else mounts <video>. The
-  // branch lives here so VideoPlayer itself never has to know about it.
+  // Windows plays through mpv embedded in this window; everywhere else mounts
+  // <video>. The branch lives here so VideoPlayer never has to know about it.
   const isNative = playbackMode() === 'native';
   const nativePlayer = useNativePlayer();
 

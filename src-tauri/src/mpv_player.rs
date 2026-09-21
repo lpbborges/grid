@@ -1,10 +1,11 @@
 //! Native playback on Windows: the JSON IPC controller for the mpv sidecar.
 //!
 //! WebView2 cannot decode the codecs torrent releases actually ship (HEVC,
-//! AC3/E-AC3) and cannot demux Matroska, so Windows plays through mpv in its
-//! own window instead of a `<video>` element. mpv owns its UI and its
-//! keybindings; Grid only starts it, applies track preferences once, listens,
-//! and stops it.
+//! AC3/E-AC3) and cannot demux Matroska, so Windows plays through mpv instead
+//! of a `<video>` element. mpv is reparented into Grid's own window with
+//! `--wid` (see `window_embed.rs`) and draws nothing of its own: its OSC,
+//! cursor and keyboard handling are off, and Grid's Svelte controls drive
+//! every command over this connection.
 //!
 //! The command surface here is deliberately tiny. mpv's own command set
 //! includes `run` (spawn a process) and `load-script`, and the app injects

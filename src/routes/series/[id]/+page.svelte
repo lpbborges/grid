@@ -23,7 +23,7 @@
   let lastAttemptedEpisode = $state<Episode | null>(null);
 
   const streamPlayer = useStreamPlayer();
-  // Windows plays in mpv's own window; everywhere else mounts <video>.
+  // Windows plays through mpv embedded in this window; else mounts <video>.
   const isNative = playbackMode() === 'native';
   const nativePlayer = useNativePlayer();
 

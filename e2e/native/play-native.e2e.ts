@@ -5,7 +5,8 @@ import { MKV_MOVIE } from '../support/catalog.ts';
 import { openTitle } from '../specs/helpers.ts';
 import { REPO_ROOT } from '../support/swarm.ts';
 
-// Windows plays in mpv's own window, which WebDriver cannot see into. So this
+// Windows draws the video in an mpv child window behind the webview, which
+// WebDriver cannot see into - only the controls on top are in the DOM. So this
 // asserts on what the frontend surfaces - the events mpv sends back over IPC,
 // the tracks it reported, and the progress they produce - rather than on pixels.
 // The IPC handshake, track-list parsing, preference application and cleanup are
