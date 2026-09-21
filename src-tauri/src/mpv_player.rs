@@ -74,6 +74,10 @@ pub enum PlayerEvent {
     /// can change it now, but mpv still pauses itself on EOF and on a failed
     /// seek, so the UI follows the property rather than assuming.
     Paused(bool),
+    /// mpv began painting. Fires after loading and after every seek; the UI
+    /// latches it, because until the first frame is on screen there is
+    /// nothing behind the webview to composite against.
+    Presenting,
     /// mpv finished parsing the file. Only now do `track-list` and `duration`
     /// hold anything: before it, a streamed file reports no tracks and no
     /// length at all.
@@ -638,6 +642,7 @@ fn parse_event(message: &Value, throttle: &mut TimeThrottle) -> Option<PlayerEve
             Some(PlayerEvent::Duration(message.get("data")?.as_f64()?))
         }
         "file-loaded" => Some(PlayerEvent::Loaded),
+        "playback-restart" => Some(PlayerEvent::Presenting),
         "end-file" => match message.get("reason").and_then(Value::as_str) {
             Some("error") => {
                 let detail = message
@@ -942,6 +947,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reports_when_mpv_starts_presenting() {
+        let (_client, mut events, mut mpv) = MockMpv::connect();
+
+        mpv.push(json!({ "event": "playback-restart" })).await;
+
+        // `file-loaded` only means mpv parsed the file; it is still paused
+        // with no frame on screen. This is the first moment anything is
+        // actually painted, which is when the UI may go transparent.
+        assert_eq!(events.recv().await, Some(PlayerEvent::Presenting));
+    }
+
+    #[tokio::test]
     async fn reports_the_file_being_loaded() {
         let (_client, mut events, mut mpv) = MockMpv::connect();
 
@@ -988,7 +1005,7 @@ mod tests {
     async fn ignores_events_that_are_not_part_of_the_narrow_surface() {
         let (_client, mut events, mut mpv) = MockMpv::connect();
 
-        for noise in ["playback-restart", "audio-reconfig"] {
+        for noise in ["audio-reconfig", "video-reconfig"] {
             mpv.push(json!({ "event": noise })).await;
         }
         mpv.push(json!({ "event": "end-file", "reason": "eof" }))

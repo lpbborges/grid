@@ -100,8 +100,16 @@ describe('Movie native playback wiring', () => {
     expect(document.body.classList.contains('native-player-active')).toBe(false);
   });
 
-  it('clears the page background once mpv is running', async () => {
+  it('clears the page background once mpv starts painting', async () => {
     await openAndPlay();
+    await waitFor(() => expect(handlers['native-player-presenting']).toBeDefined(), {
+      timeout: 5000
+    });
+
+    // Loaded but not yet painting: still opaque, or the desktop shows through.
+    expect(document.body.classList.contains('native-player-active')).toBe(false);
+
+    handlers['native-player-presenting']({ payload: undefined });
 
     // Without this the layout's own bg-dark hides mpv completely, and the
     // failure looks like broken compositing rather than a CSS bug.

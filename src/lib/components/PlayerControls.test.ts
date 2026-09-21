@@ -80,12 +80,11 @@ describe('PlayerControls', () => {
     expect(screen.queryByLabelText('Tela cheia')).toBeNull();
   });
 
-  it('shows status only for a host without its own overlay', () => {
-    const { rerender } = render(PlayerControls, baseProps());
-    expect(screen.queryByText('Preparando')).toBeNull();
+  it('never renders engine status over the film', () => {
+    // Status belongs to the centred loading view. Rendered here it sat over
+    // the picture for the whole runtime.
+    render(PlayerControls, baseProps({ engineStatus: 'Carregando vídeo...' }));
 
-    rerender(baseProps({ engineStatus: 'Preparando' }));
-
-    expect(screen.getByText('Preparando')).toBeInTheDocument();
+    expect(screen.queryByText('Carregando vídeo...')).toBeNull();
   });
 });

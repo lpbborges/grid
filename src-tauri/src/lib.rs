@@ -937,6 +937,7 @@ fn pump_player_events(
                 // Consumed by start_native_player before this pump starts; a
                 // second one would only mean mpv reloaded the same file.
                 mpv_player::PlayerEvent::Loaded => Ok(()),
+                mpv_player::PlayerEvent::Presenting => app.emit("native-player-presenting", ()),
                 mpv_player::PlayerEvent::Ended => app.emit("native-player-ended", ()),
                 mpv_player::PlayerEvent::Failed(detail) => app.emit("native-player-error", detail),
             };

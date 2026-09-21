@@ -75,14 +75,15 @@
   );
 
   // Every layer from the document down to the layout wrapper has to be clear
-  // for mpv's window to show through, but ONLY once mpv is actually up.
+  // for mpv's window to show through, but ONLY once mpv is actually painting.
   //
-  // The surface mounts as soon as the stream starts being prepared, which is
-  // well before `start_native_player` runs. Clearing the background then
-  // leaves nothing behind the webview at all and the desktop shows through
-  // the whole window.
+  // `isRunning` is not enough. The surface mounts while the stream is still
+  // being prepared, and even after `file-loaded` mpv sits paused with nothing
+  // on screen - which is the state a replayed title passes through. Clearing
+  // the background in either one leaves nothing behind the webview at all and
+  // the desktop shows through the whole window.
   $effect(() => {
-    if (!player.isRunning) return;
+    if (!player.hasVideo) return;
     document.body.classList.add('native-player-active');
     return () => document.body.classList.remove('native-player-active');
   });
@@ -174,14 +175,14 @@
 <div
   role="region"
   aria-label="Reprodutor de Vídeo"
-  class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden {player.isRunning
+  class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden {player.hasVideo
     ? ''
     : 'bg-backdrop'}"
   data-testid="native-player-surface"
   data-native-player
   onmousemove={revealControls}
 >
-  {#if player.isRunning}
+  {#if player.hasVideo}
     <!--
       No background, no child that paints one: mpv's window sits directly
       behind this element and any fill hides it completely.
@@ -215,7 +216,6 @@
     paused={player.paused}
     volume={player.volume}
     visible={controlsVisible}
-    {engineStatus}
     subtitles={subtitleOptions}
     torrentSubsGrouped={embeddedSubsGrouped}
     {externalSubsGrouped}

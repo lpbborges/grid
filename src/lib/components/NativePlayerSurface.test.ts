@@ -23,6 +23,7 @@ function track(partial: Partial<NativeTrack> & { id: number; type: string }): Na
 function fakePlayer(overrides = {}) {
   return {
     isRunning: true,
+    hasVideo: true,
     error: '',
     currentTime: 0,
     duration: 100,
@@ -89,12 +90,23 @@ describe('NativePlayerSurface', () => {
     expect(typeof vi.mocked(player.seek).mock.calls[0][0]).toBe('number');
   });
 
+  it('stays opaque while mpv is loaded but not yet painting', () => {
+    // Replaying a title reaches this state with a known duration and no
+    // frame on screen; going transparent here shows the desktop.
+    render(NativePlayerSurface, {
+      player: fakePlayer({ isRunning: true, hasVideo: false })
+    });
+
+    expect(document.body.classList.contains('native-player-active')).toBe(false);
+    expect(screen.getByTestId('native-loading')).toBeInTheDocument();
+  });
+
   it('stays opaque until mpv is actually up', () => {
     // The surface mounts as soon as the stream starts being prepared, long
     // before start_native_player runs. Going transparent then shows the
     // desktop through the window, because there is no mpv behind it yet.
     const { container } = render(NativePlayerSurface, {
-      player: fakePlayer({ isRunning: false }),
+      player: fakePlayer({ isRunning: false, hasVideo: false }),
       engineStatus: 'Preparando stream...'
     });
 
@@ -103,9 +115,9 @@ describe('NativePlayerSurface', () => {
     expect(screen.getByTestId('native-loading')).toBeInTheDocument();
   });
 
-  it('opens the hole once mpv is running', () => {
+  it('opens the hole once mpv is painting', () => {
     const { container } = render(NativePlayerSurface, {
-      player: fakePlayer({ isRunning: true })
+      player: fakePlayer({ isRunning: true, hasVideo: true })
     });
 
     expect(document.body.classList.contains('native-player-active')).toBe(true);

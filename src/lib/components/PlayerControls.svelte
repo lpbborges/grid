@@ -24,7 +24,6 @@
     paused,
     volume,
     visible,
-    engineStatus = '',
     subtitles = [],
     torrentSubsGrouped = [],
     externalSubsGrouped = [],
@@ -52,12 +51,6 @@
     paused: boolean;
     volume: number;
     visible: boolean;
-    /**
-     * Status for a host with no loading overlay of its own. `VideoPlayer`
-     * does not pass it - it already renders status in its overlay - so
-     * nothing extra appears on the `<video>` path.
-     */
-    engineStatus?: string;
     subtitles?: SubtitleTrack[];
     torrentSubsGrouped?: SubtitleGroup[];
     externalSubsGrouped?: SubtitleGroup[];
@@ -134,10 +127,6 @@
     ? 'opacity-100'
     : 'opacity-0'}"
 >
-  {#if engineStatus}
-    <div class="text-muted mb-2 font-mono text-xs tracking-widest uppercase">{engineStatus}</div>
-  {/if}
-
   <div
     class="group focus-visible:ring-green mb-3 flex w-full cursor-pointer items-center rounded py-2 focus-visible:ring-2 focus-visible:outline-none"
     onclick={(e) => seekFromPointer(e.currentTarget, e.clientX)}

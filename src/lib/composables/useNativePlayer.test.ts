@@ -473,6 +473,39 @@ describe('useNativePlayer', () => {
     expect(update).toHaveBeenCalledWith('tt1', undefined, undefined, 60, 5025);
   });
 
+  it('moves the selection onto the preferred tracks at startup', async () => {
+    settingsStore.subtitle = 'pt';
+    vi.mocked(invoke).mockImplementation((async (command: string) =>
+      command === 'start_native_player'
+        ? {
+            duration: 100,
+            tracks: [
+              track({ id: 1, type: 'sub', lang: 'en', selected: true }),
+              track({ id: 2, type: 'sub', lang: 'pt' })
+            ]
+          }
+        : undefined) as never);
+    const { player } = await start();
+
+    // set_tracks applied Portuguese to mpv, but the flags still came from
+    // mpv's own default, so the menu highlighted English while Portuguese
+    // played.
+    const subs = player.tracks.filter((t) => t.type === 'sub');
+    expect(subs.find((t) => t.selected)?.id).toBe(2);
+  });
+
+  it('reports no video until mpv actually paints', async () => {
+    const { player } = await start();
+
+    // file-loaded only means the file was parsed; mpv is still paused with
+    // nothing on screen, and going transparent then shows the desktop.
+    expect(player.hasVideo).toBe(false);
+
+    handlers['native-player-presenting']({ payload: undefined });
+
+    expect(player.hasVideo).toBe(true);
+  });
+
   it('exposes the track list mpv reported', async () => {
     const { player } = await start();
 

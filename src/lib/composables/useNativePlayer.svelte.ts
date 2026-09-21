@@ -148,6 +148,7 @@ export function useNativePlayer() {
   let paused = $state(false);
   let volume = $state(1);
   let tracks = $state<NativeTrack[]>([]);
+  let hasVideo = $state(false);
   let durationState = $state(0);
 
   let unlisteners: UnlistenFn[] = [];
@@ -177,10 +178,23 @@ export function useNativePlayer() {
     paused = false;
     volume = 1;
     tracks = [];
+    hasVideo = false;
     durationState = 0;
     const ended = current?.onended;
     current = undefined;
     ended?.();
+  }
+
+  /**
+   * Moves `selected` onto the chosen track of one type.
+   *
+   * mpv is never asked for the track list again, so nothing else would move
+   * the flag and the menu would keep its check mark on the previous row. Only
+   * the given type is touched: rewriting both would make a subtitle change
+   * read as an audio change.
+   */
+  function markSelected(kind: string, id: number | null) {
+    tracks = tracks.map((t) => (t.type === kind ? { ...t, selected: t.id === id } : t));
   }
 
   async function start(options: NativePlayOptions): Promise<boolean> {
@@ -189,6 +203,7 @@ export function useNativePlayer() {
     duration = 0;
     currentTime = 0;
     paused = false;
+    hasVideo = false;
 
     try {
       const external = options.subtitles ?? [];
@@ -211,6 +226,11 @@ export function useNativePlayer() {
         }),
         listen<boolean>('native-player-paused', (event) => {
           paused = event.payload;
+        }),
+        listen('native-player-presenting', () => {
+          // Latched: it fires again on every seek, and the UI only needs to
+          // know that a frame has been on screen at least once.
+          hasVideo = true;
         }),
         listen<number>('native-player-duration', (event) => {
           // A streamed file often reports no length until mpv has demuxed
@@ -240,6 +260,10 @@ export function useNativePlayer() {
       );
       // mpv launches paused; this applies the preferences and starts playback.
       await invoke('native_player_set_tracks', { aid, sid });
+      // The flags still describe mpv's own defaults, so without this the menu
+      // highlights the track mpv picked while the preferred one is playing.
+      markSelected('audio', aid);
+      markSelected('sub', sid);
       return true;
     } catch (e) {
       logger.error('Erro ao iniciar o player nativo', e);
@@ -309,18 +333,6 @@ export function useNativePlayer() {
     }
   }
 
-  /**
-   * Moves `selected` onto the chosen track of one type.
-   *
-   * mpv is never asked for the track list again, so nothing else would move
-   * the flag and the menu would keep its check mark on the previous row. Only
-   * the given type is touched: rewriting both would make a subtitle change
-   * read as an audio change.
-   */
-  function markSelected(kind: string, id: number | null) {
-    tracks = tracks.map((t) => (t.type === kind ? { ...t, selected: t.id === id } : t));
-  }
-
   async function selectAudio(id: number | null): Promise<void> {
     try {
       await invoke('native_player_select_audio', { aid: id });
@@ -369,6 +381,9 @@ export function useNativePlayer() {
     },
     get tracks() {
       return tracks;
+    },
+    get hasVideo() {
+      return hasVideo;
     },
     start,
     stop,
