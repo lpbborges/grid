@@ -67,7 +67,7 @@ This document serves as a living repository of the core architectural decisions,
 - **Module state:** Use `vi.resetModules()` and a dynamic `import()` per test for modules with module-level state (stores, `torrent.ts`).
 - **File Naming:** Tests must live alongside their implementation (e.g., `cinemeta.test.ts` next to `cinemeta.ts`).
 - **Coverage:** There is no enforced threshold; check `npm run test:frontend:cov` and don't lower coverage of the files you touch.
-- **Playback safety net:** Any change touching the play path (`src/lib/api/torrentio.ts`, `src/lib/api/endpoints.ts`, `src/lib/engine/`, `useStreamPlayer`, `VideoPlayer`, the movie/series pages, `stream_proxy.rs`, `media_patch/`, the sidecar) must keep `*-playback.test.ts` and `playback_engine_tests` green and must pass `npm run test:e2e` locally before it is committed. Add a wiring or E2E assertion for every playback bug you fix. Never point these tests at real external services; fake new services in `playbackBoundary.ts` and `e2e/support/mockServer.ts`, and add their base URL to `src/lib/api/endpoints.ts`.
+- **Playback safety net:** Any change touching the play path (`src/lib/api/torrentio.ts`, `src/lib/api/endpoints.ts`, `src/lib/engine/`, `useStreamPlayer`, `VideoPlayer`, the movie/series pages, `stream_proxy.rs`, `media_patch/`, `mpv_player.rs` and the native Windows playback path, the sidecars) must keep `*-playback.test.ts` and `playback_engine_tests` green and must pass `npm run test:e2e` locally before it is committed. Add a wiring or E2E assertion for every playback bug you fix. Never point these tests at real external services; fake new services in `playbackBoundary.ts` and `e2e/support/mockServer.ts`, and add their base URL to `src/lib/api/endpoints.ts`.
 
 ## 4. UI & Styling
 
@@ -84,10 +84,13 @@ This document serves as a living repository of the core architectural decisions,
 - **CSP:** Any new external host must be added to `app.security.csp` in `src-tauri/tauri.conf.json`, and CSP expectations are covered by the `csp_*` tests in `lib.rs`.
 - **Subtitle fetching:** External subtitle URLs and every redirect target must pass `is_allowed_subtitle_url` (the strem.io allowlist). The frontend caps subtitle fetches below the Rust rate limit (`SUBTITLE_RATE_LIMIT_PER_MINUTE`); change both together.
 - **TS/Rust parity:** Validators exist on both sides and must agree: `isValidInfoHash` ↔ `is_valid_info_hash`, `isValidFileIdx` ↔ `is_valid_file_idx`, and subtitle/video extension checks (case-insensitive on both sides).
-- **Sidecar:** Binaries in `src-tauri/bin/` must be named `rqbit-<target-triple>[.exe]` (see README → Streaming Engine Sidecar). After replacing the binaries, refresh `tests/fixtures/rqbit/` with `UPDATE_RQBIT_SNAPSHOTS=1` and update `src/lib/engine/__fixtures__/fakeRqbit.ts` if the response shapes changed.
+- **Sidecar:** Binaries in `src-tauri/bin/` must be named `<name>-<target-triple>[.exe]` (see README → Sidecars). After replacing the binaries, refresh `tests/fixtures/rqbit/` with `UPDATE_RQBIT_SNAPSHOTS=1` and update `src/lib/engine/__fixtures__/fakeRqbit.ts` if the response shapes changed.
 - **Sidecar lifetime:** Spawn the engine through `engine_process::spawn_tied_to_app` (Linux parent-death signal, Windows kill-on-close Job Object) so it stops when the app is killed. On Linux the signal follows the spawning thread, so never spawn it inside `spawn_blocking`. macOS relies on the PID-file cleanup at the next launch.
 - **Magnet adds:** rqbit tries each source only once while resolving a magnet, so a source that never answers hangs `POST /torrents`. `addTorrent` retries with growing timeouts (`ADD_ATTEMPT_TIMEOUTS_MS`); keep that behavior and `a_magnet_add_stalled_by_a_silent_source_succeeds_when_added_again` in sync when updating the sidecar.
 - **Stream proxy:** The `<video>` element must load streams from `getStreamUrl` (the Rust stream proxy in `stream_proxy.rs`), never from rqbit directly. WebKitGTK stalls on MP4 and Matroska files with embedded subtitle tracks while they are still downloading, and the proxy hides those tracks in the header (`media_patch/`) without changing byte offsets.
+
+- **Raw streams:** The header patch above hides every embedded subtitle track, so anything that demuxes Matroska correctly must ask for `?raw=1` (`getStreamUrl(hash, idx, { raw: true })`). The `<video>` element must not: it needs the patch. Keep the Rust `wants_raw` check and the TS option in sync.
+- **mpv sidecar (Windows):** Declared in `src-tauri/tauri.windows.conf.json`, never the shared `tauri.conf.json` — `externalBin` resolves per target triple, so a shared entry breaks `tauri build` on Linux and macOS. mpv is always a **separate process** over JSON IPC (`mpv_player.rs`); linking `libmpv-2.dll` would make Grid's MIT code a GPL derivative (see `src-tauri/licenses/`). Keep the command surface narrow: mpv's own commands include `run` and `load-script`, so never add a generic passthrough. The IPC endpoint name is randomised per launch and must never be logged, and `start_native_player` must reject any URL that is not the local stream proxy.
 
 ## 6. Code Quality & Git
 
@@ -106,7 +109,7 @@ Update `README.md` in the same change whenever you:
 - add or rename an npm script (**Scripts**);
 - add, remove, or change an external service (**Data Sources & Privacy**, plus the CSP);
 - change where state is stored or how the frontend talks to the backend (**Architecture**);
-- update the sidecar (**Streaming Engine Sidecar**);
+- update or add a sidecar (**Sidecars**);
 - change setup requirements (**Prerequisites**, **Getting Started**).
 
 ## 8. User Experience & Terminology

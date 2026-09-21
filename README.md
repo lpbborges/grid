@@ -63,6 +63,8 @@ Bundles are written to `src-tauri/target/release/bundle/`.
 - `npm run test:e2e` - Build the app against local mock services and play fixture movies and episodes in the real window (Linux/Windows).
 - `npm run test:e2e:run` - Run the E2E specs against the last `build:e2e` without rebuilding.
 - `npm run build:e2e` - Build the debug app used by the E2E specs.
+- `npm run test:e2e:native` - Build with the native Windows player enabled and exercise it (Windows only). Skipped automatically when the mpv sidecar is absent; see [Sidecars](#sidecars).
+- `npm run build:e2e:native` - Build the debug app with the native player enabled, without running the specs.
 - `npm run test:e2e:live` - Manual smoke test that plays a public-domain title through the real services. Needs internet access; never required to pass.
 - `npm run check:e2e` - Type-check the `e2e/` folder.
 - `npm run e2e:services` - Start the E2E mock services and fixture seeders on their own, for debugging.
@@ -107,12 +109,16 @@ SvelteKit UI (static build, runs in the Tauri webview)
   │                      ├─ start_torrent_engine   spawns the rqbit sidecar on a free 127.0.0.1 port
   │                      ├─ get_stream_proxy_url    returns the local stream proxy address
   │                      ├─ fetch_*_subtitle        fetches subtitles, converts SRT to VTT
-  │                      └─ get_cache_manifest / upsert_cache_entry / evict_for_space
+  │                      ├─ get_cache_manifest / upsert_cache_entry / evict_for_space
+  │                      └─ start_native_player / native_player_set_tracks /
+  │                         stop_native_player    (Windows: drives the mpv sidecar)
   ├─ fetch ──────────► rqbit HTTP API on 127.0.0.1 (add, stats)
   └─ <video> ────────► stream proxy on 127.0.0.1 ──► rqbit stream endpoint
 ```
 
 - **Stream proxy:** WebKitGTK does not start MP4 or Matroska files that carry embedded subtitle tracks while the rest of the file is still downloading, so the `<video>` element streams through a small proxy in `src-tauri/src/stream_proxy.rs`. It forwards range requests to rqbit and hides every embedded subtitle track in the file header without changing its size (a `Void` element in Matroska, a `free` atom in MP4; see `src-tauri/src/media_patch/`), leaving every byte offset intact. Subtitles are still shown from separate `.srt`/`.vtt` files.
+
+  The patch exists only for WebKitGTK. Anything that demuxes Matroska correctly would see an empty subtitle menu instead, so the proxy also serves an unpatched variant at `?raw=1`, which is what the Windows mpv path asks for.
 
 - `src/lib/api/` wraps external services, `src/lib/engine/` drives playback (engine, cache, ranking), `src/lib/composables/` and `src/lib/stores/` hold reactive state, and `src/lib/components/` holds the UI.
 - **Where state lives:**
@@ -121,9 +127,13 @@ SvelteKit UI (static build, runs in the Tauri webview)
   - App data directory: the video cache (`downloads/` and `downloads/manifest.json`).
   - App cache directory: `grid-engine.pid`, used to clean up an engine left behind by a crash. On Linux and Windows the engine also stops by itself when the app is killed (`src-tauri/src/engine_process.rs`).
 
-## Streaming Engine Sidecar
+## Sidecars
 
-The engine is [rqbit](https://github.com/ikatson/rqbit) 9.0.1, shipped as a [Tauri sidecar](https://v2.tauri.app/develop/sidecar/) declared in `src-tauri/tauri.conf.json` (`bundle.externalBin`). Tauri expects one binary per target, named `rqbit-<target-triple>`:
+Grid ships two sidecar binaries. Both are declared as [Tauri sidecars](https://v2.tauri.app/develop/sidecar/) under `bundle.externalBin`, and Tauri expects one binary per target, named `<name>-<target-triple>`.
+
+### Streaming engine (all platforms)
+
+The engine is [rqbit](https://github.com/ikatson/rqbit) 9.0.1, declared in `src-tauri/tauri.conf.json`:
 
 | File in `src-tauri/bin/`           | Platform                                    |
 | ---------------------------------- | ------------------------------------------- |
@@ -137,6 +147,46 @@ To update it:
 1. Download the new release for each platform from the [rqbit releases page](https://github.com/ikatson/rqbit/releases).
 2. Rename each binary to `rqbit-<target-triple>` (`rustc --print host-tuple` prints the triple of your machine) and replace the file in `src-tauri/bin/`. On Linux/macOS, make sure it is executable (`chmod +x`).
 3. Run `src-tauri/bin/rqbit-<your-triple> --version`, then `npm run tauri dev` and play something to confirm the HTTP API is still compatible.
+
+### Player (Windows only)
+
+WebView2 cannot decode the codecs torrent releases actually ship (HEVC, AC3/E-AC3)
+and cannot demux Matroska over range requests, so Windows playback runs through
+[mpv](https://mpv.io/) in its own window instead of a `<video>` element. Linux
+keeps the `<video>` element and bundles no player.
+
+| File in `src-tauri/bin/`         | Platform       |
+| -------------------------------- | -------------- |
+| `mpv-x86_64-pc-windows-msvc.exe` | Windows x86-64 |
+
+> **Not committed yet.** `src-tauri/bin/mpv-*` is gitignored while the licensing
+> route is settled: the only Windows build published upstream is GPLv2+, and
+> bundling it would put a source-distribution obligation on every release. The
+> plan is to ship an LGPL build instead — see
+> [`src-tauri/licenses/README.md`](src-tauri/licenses/README.md). Put a local copy
+> there to run native playback during development.
+
+Because it is Windows-only, it is declared in `src-tauri/tauri.windows.conf.json`
+rather than the shared `tauri.conf.json` — Tauri resolves `externalBin` per target
+triple, so listing `bin/mpv` in the shared config would make `npm run tauri build`
+fail on Linux and macOS with a missing `mpv-<triple>`. Tauri v2 merges
+`tauri.<platform>.conf.json` automatically, replacing arrays rather than
+concatenating them, which is why that file repeats `bin/rqbit`.
+
+mpv is driven as a **separate process** over a JSON IPC pipe
+(`src-tauri/src/mpv_player.rs`), never by linking `libmpv-2.dll`. That distinction
+is a licensing one, not a technical preference — see
+[`src-tauri/licenses/README.md`](src-tauri/licenses/README.md).
+
+To update it:
+
+1. Put the binary at `src-tauri/bin/mpv-x86_64-pc-windows-msvc.exe`.
+2. Confirm it is self-contained: copy it alone to an empty directory and run
+   `mpv.exe --version` there. A good build needs no sibling DLLs.
+3. Confirm it still decodes what Grid needs: `mpv.exe --vd=help` must list `h264`
+   and `hevc`.
+4. Update the version, licence and source links in
+   `src-tauri/licenses/README.md`.
 
 ## Data Sources & Privacy
 
@@ -168,3 +218,5 @@ Grid does not host, index, or distribute any content. It only plays streams that
 ## License
 
 [MIT](LICENSE) © 2026 LP
+
+The Windows build will additionally bundle mpv (and the FFmpeg linked into it). Grid runs it as a separate process and ships no third-party player code inside its own executable. No mpv binary is committed or distributed yet — see [`src-tauri/licenses/`](src-tauri/licenses/) for the licensing route and what it still needs.

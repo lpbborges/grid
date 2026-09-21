@@ -18,3 +18,9 @@ coverage/
 docs/superpowers/
 
 e2e/artifacts/
+
+# The mpv sidecar is deliberately NOT committed yet. The only Windows build
+# available upstream is GPLv2+, and bundling it would put a source-distribution
+# obligation on every Grid release (see src-tauri/licenses/README.md). A local
+# copy is fine for development; remove this rule once an LGPL build exists.
+src-tauri/bin/mpv-*
