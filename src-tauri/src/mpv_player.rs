@@ -364,6 +364,23 @@ pub struct LaunchOptions<'a> {
     /// `--vo=null --ao=null` for the E2E job: WebDriver cannot see into mpv's
     /// window anyway, and `windows-latest` has no GPU for `--vo=gpu`.
     pub headless: bool,
+    /// SPIKE (`spike/windows-mpv-wid-overlay`): the parent window handle to
+    /// reparent mpv into, so the video draws inside Grid's own window with the
+    /// Svelte UI composited on top, instead of in a separate window (D2).
+    ///
+    /// `--wid` is an mpv *command-line* option, so this keeps the sidecar a
+    /// separate process and leaves D7 (never link `libmpv-2.dll`) untouched.
+    /// `None` reproduces the current behaviour exactly.
+    pub parent_window: Option<i64>,
+    /// SPIKE: forces mpv onto D3D11's WARP software renderer with hardware
+    /// decoding off, so the spike can run inside a VM whose virtual GPU has no
+    /// usable D3D11 hardware path.
+    ///
+    /// This separates two failures that otherwise look the same on screen:
+    /// "the compositing arrangement does not work" and "this machine cannot
+    /// render video at all". It is a diagnostic, never a shipping mode - 4K
+    /// HEVC through WARP is a slideshow.
+    pub software_gpu: bool,
 }
 
 /// mpv's arguments, per plan section 3.2.
@@ -399,10 +416,28 @@ pub fn launch_args(options: &LaunchOptions) -> Vec<String> {
         args.push("--ao=null".to_string());
         args.push("--fullscreen=no".to_string());
     } else {
-        args.push("--fullscreen=yes".to_string());
         args.push("--vo=gpu".to_string());
         args.push("--gpu-api=d3d11".to_string());
-        args.push("--hwdec=auto-safe".to_string());
+        if options.software_gpu {
+            args.push("--d3d11-warp=yes".to_string());
+            args.push("--hwdec=no".to_string());
+        } else {
+            args.push("--hwdec=auto-safe".to_string());
+        }
+        match options.parent_window {
+            // Embedded: mpv fills the parent's client area, so fullscreen would
+            // fight the host window. Grid's own UI draws the controls, so mpv's
+            // OSC and its cursor handling are off - every click belongs to the
+            // webview on top.
+            Some(handle) => {
+                args.push(format!("--wid={handle}"));
+                args.push("--fullscreen=no".to_string());
+                args.push("--osc=no".to_string());
+                args.push("--input-cursor=no".to_string());
+                args.push("--input-vo-keyboard=no".to_string());
+            }
+            None => args.push("--fullscreen=yes".to_string()),
+        }
     }
     for file in options.subtitle_files {
         args.push(format!("--sub-file={file}"));
@@ -794,12 +829,34 @@ mod tests {
     }
 
     fn args_for(subtitles: &[String], headless: bool) -> Vec<String> {
+        args_for_parent(subtitles, headless, None)
+    }
+
+    fn args_for_parent(
+        subtitles: &[String],
+        headless: bool,
+        parent_window: Option<i64>,
+    ) -> Vec<String> {
         launch_args(&LaunchOptions {
             endpoint: "ENDPOINT",
             url: &stream_url(PROXY_PORT),
             start_seconds: 12.5,
             subtitle_files: subtitles,
             headless,
+            parent_window,
+            software_gpu: false,
+        })
+    }
+
+    fn args_with_software_gpu() -> Vec<String> {
+        launch_args(&LaunchOptions {
+            endpoint: "ENDPOINT",
+            url: &stream_url(PROXY_PORT),
+            start_seconds: 0.0,
+            subtitle_files: &[],
+            headless: false,
+            parent_window: Some(42),
+            software_gpu: true,
         })
     }
 
@@ -855,6 +912,62 @@ mod tests {
         assert!(windowed.iter().any(|a| a == "--gpu-api=d3d11"));
         assert!(windowed.iter().any(|a| a == "--hwdec=auto-safe"));
         assert!(windowed.iter().any(|a| a == "--fullscreen=yes"));
+    }
+
+    #[test]
+    fn a_parent_window_reparents_mpv_instead_of_going_fullscreen() {
+        let args = args_for_parent(&[], false, Some(0x001A_2B3C));
+
+        assert!(args.iter().any(|a| a == "--wid=1715004"));
+        assert!(args.iter().any(|a| a == "--fullscreen=no"));
+        assert!(!args.iter().any(|a| a == "--fullscreen=yes"));
+        // Still the real GPU path: embedding must not cost hardware decoding.
+        assert!(args.iter().any(|a| a == "--vo=gpu"));
+        assert!(args.iter().any(|a| a == "--hwdec=auto-safe"));
+    }
+
+    #[test]
+    fn an_embedded_mpv_surrenders_its_own_controls_to_the_webview() {
+        let args = args_for_parent(&[], false, Some(42));
+
+        // Grid's Svelte overlay owns every control and every click; mpv drawing
+        // its own OSC underneath would show through the transparent webview.
+        assert!(args.iter().any(|a| a == "--osc=no"));
+        assert!(args.iter().any(|a| a == "--input-cursor=no"));
+        assert!(args.iter().any(|a| a == "--input-vo-keyboard=no"));
+    }
+
+    #[test]
+    fn no_parent_window_leaves_the_current_own_window_behaviour_untouched() {
+        let args = args_for_parent(&[], false, None);
+
+        assert!(!args.iter().any(|a| a.starts_with("--wid=")));
+        assert!(args.iter().any(|a| a == "--fullscreen=yes"));
+        assert!(!args.iter().any(|a| a == "--osc=no"));
+    }
+
+    #[test]
+    fn the_software_gpu_fallback_drops_hardware_decoding_for_warp() {
+        let args = args_with_software_gpu();
+
+        assert!(args.iter().any(|a| a == "--d3d11-warp=yes"));
+        assert!(args.iter().any(|a| a == "--hwdec=no"));
+        assert!(!args.iter().any(|a| a == "--hwdec=auto-safe"));
+        // Still the same renderer and the same embedding, so a result here
+        // still speaks to the compositing question.
+        assert!(args.iter().any(|a| a == "--vo=gpu"));
+        assert!(args.iter().any(|a| a == "--gpu-api=d3d11"));
+        assert!(args.iter().any(|a| a == "--wid=42"));
+    }
+
+    #[test]
+    fn headless_ignores_the_parent_window() {
+        // The E2E job has no GPU and no window to embed into; `--wid` there
+        // would point mpv at a handle that WebDriver never created.
+        let args = args_for_parent(&[], true, Some(42));
+
+        assert!(!args.iter().any(|a| a.starts_with("--wid=")));
+        assert!(args.iter().any(|a| a == "--vo=null"));
     }
 
     #[test]
