@@ -733,8 +733,8 @@ async fn start_native_player_impl(
 
 /// Applies the preselected tracks, then starts playback.
 ///
-/// The only mid-session command. Everything else - play, pause, seek, volume,
-/// in-playback track switching - is mpv's own window and keybindings (D5).
+/// Startup only: it writes both track properties and unpauses as one step.
+/// The mid-session controls below are separate for exactly that reason.
 #[tauri::command]
 async fn native_player_set_tracks(
     state: State<'_, mpv_player::NativePlayerState>,
@@ -746,6 +746,81 @@ async fn native_player_set_tracks(
         .ok_or_else(|| "No native player is running".to_string())?;
     client.set_tracks(aid, sid).await?;
     client.set_paused(false).await
+}
+
+/// Pauses or resumes playback.
+///
+/// Separate from `native_player_set_tracks`, which unpauses as part of
+/// starting: that one applies preferences once, this one is the control the
+/// user presses.
+#[tauri::command]
+async fn native_player_set_paused(
+    state: State<'_, mpv_player::NativePlayerState>,
+    paused: bool,
+) -> Result<(), String> {
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.set_paused(paused).await
+}
+
+/// Seeks to an absolute position in seconds.
+#[tauri::command]
+async fn native_player_seek(
+    state: State<'_, mpv_player::NativePlayerState>,
+    seconds: f64,
+) -> Result<(), String> {
+    if !seconds.is_finite() || seconds < 0.0 {
+        return Err("Invalid seek position".to_string());
+    }
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.seek(seconds).await
+}
+
+/// Sets the output volume on mpv's 0-100 scale.
+#[tauri::command]
+async fn native_player_set_volume(
+    state: State<'_, mpv_player::NativePlayerState>,
+    percent: f64,
+) -> Result<(), String> {
+    if !percent.is_finite() || !(0.0..=100.0).contains(&percent) {
+        return Err("Invalid volume".to_string());
+    }
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.set_volume(percent).await
+}
+
+/// Switches the audio track mid-playback.
+///
+/// Distinct from `native_player_set_tracks`, which writes both properties and
+/// then unpauses. That is right when applying preferences at startup and wrong
+/// here twice over: changing the audio while paused must not start the film,
+/// and it must not disable the subtitles.
+#[tauri::command]
+async fn native_player_select_audio(
+    state: State<'_, mpv_player::NativePlayerState>,
+    aid: Option<i64>,
+) -> Result<(), String> {
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.set_audio_track(aid).await
+}
+
+/// Switches the subtitle track mid-playback. `None` means no subtitles.
+#[tauri::command]
+async fn native_player_select_subtitle(
+    state: State<'_, mpv_player::NativePlayerState>,
+    sid: Option<i64>,
+) -> Result<(), String> {
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.set_subtitle_track(sid).await
 }
 
 #[tauri::command]
@@ -860,6 +935,11 @@ pub fn run() {
             evict_for_space,
             start_native_player,
             native_player_set_tracks,
+            native_player_set_paused,
+            native_player_seek,
+            native_player_set_volume,
+            native_player_select_audio,
+            native_player_select_subtitle,
             stop_native_player,
             cache_native_subtitles
         ])
