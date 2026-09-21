@@ -55,8 +55,9 @@
   <!-- The hole. If compositing works, mpv's video is visible here. -->
   <div class="video-hole">
     <p class="hint">
-      VIDEO SHOULD BE VISIBLE HERE.<br />
-      If this text sits on a plain background, compositing failed.
+      VIDEO SHOULD BE VISIBLE AND MOVING HERE.<br />
+      If this text sits on a plain background, compositing failed.<br />
+      A still frame is not a pass: it does not prove a presenting swapchain stays under the webview.
     </p>
   </div>
 

@@ -792,6 +792,12 @@ async fn spike_embed_player_impl(
     let (client, events) = mpv_player::connect(reader, writer);
     let playback = client.playback().await?;
 
+    // launch_args starts mpv paused so the real path can apply track
+    // preferences before the first frame. The spike has no preferences to
+    // apply, and a still frame would only prove that *a* frame composites -
+    // not that a continuously presenting swapchain stays under the webview.
+    client.set_paused(false).await?;
+
     pump_player_events(app.clone(), events);
     *state.child.lock().unwrap() = Some(child);
     *state.client.lock().unwrap() = Some(client);
