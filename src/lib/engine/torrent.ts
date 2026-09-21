@@ -272,14 +272,25 @@ export function getBestVideoFileIndex(files: { name: string; length: number }[])
   return bestFileIdx;
 }
 
-export function getStreamUrl(infoHash: string, fileIdx: number): string {
+/**
+ * `raw` opts out of the stream proxy's Matroska/MP4 header patch. The patch
+ * exists only to stop WebKitGTK stalling on embedded subtitle tracks, and it
+ * hides those tracks from anything that demuxes correctly — so the native
+ * Windows player asks for the raw stream. The `<video>` element never does.
+ */
+export function getStreamUrl(
+  infoHash: string,
+  fileIdx: number,
+  options: { raw?: boolean } = {}
+): string {
   if (!isValidInfoHash(infoHash)) {
     throw new Error('Invalid infoHash');
   }
   if (!isValidFileIdx(fileIdx)) {
     throw new Error('Invalid fileIdx');
   }
-  return `${STREAM_URL}/torrents/${infoHash}/stream/${fileIdx}`;
+  const query = options.raw ? '?raw=1' : '';
+  return `${STREAM_URL}/torrents/${infoHash}/stream/${fileIdx}${query}`;
 }
 
 export async function getTorrentSubtitles(
