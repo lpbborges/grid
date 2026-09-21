@@ -122,6 +122,10 @@ export function getLanguageName(code: string, strict = false): string | null {
     vie: 'Vietnamita',
     vi: 'Vietnamita',
     vietnamese: 'Vietnamita',
+    ron: 'Romeno',
+    rum: 'Romeno',
+    ro: 'Romeno',
+    romanian: 'Romeno',
     spl: 'Espanhol (América Latina)'
   };
   const normalized = (code || '').toLowerCase().trim();
