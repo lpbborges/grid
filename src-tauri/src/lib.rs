@@ -674,12 +674,15 @@ async fn start_native_player_impl(
     // Randomised per launch and never logged: a guessable endpoint would
     // let any process running as this user issue mpv's `run` command.
     let endpoint = mpv_player::random_endpoint_name();
+    // `--vo=null` for the E2E job, which also means mpv creates no video
+    // window to order.
+    let headless = std::env::var("GRID_E2E").is_ok();
     let args = mpv_player::launch_args(&mpv_player::LaunchOptions {
         endpoint: &endpoint,
         url: &url,
         start_seconds,
         subtitle_files: &subtitle_files,
-        headless: std::env::var("GRID_E2E").is_ok(),
+        headless,
         parent_window: Some(parent as i64),
         software_gpu: false,
     });
@@ -718,11 +721,17 @@ async fn start_native_player_impl(
     // mpv's child window is created above the webview; the transparent webview
     // only composites over it once it is at the bottom. One call is enough -
     // nothing re-raises mpv as it presents.
-    let report = window_embed::push_video_behind_ui(parent);
-    if !report.starts_with("video pushed behind the UI") {
-        // Not fatal: playback works, the UI is just in the wrong layer. Loud in
-        // the log rather than a silent black window.
-        eprintln!("Embedded player z-order: {report}");
+    //
+    // Skipped when headless: `--vo=null` means there is no video window, and
+    // ordering one would report it as missing and blame `--wid`, which was
+    // never passed in that case.
+    if !headless {
+        let report = window_embed::push_video_behind_ui(parent);
+        if !report.starts_with("video pushed behind the UI") {
+            // Not fatal: playback works, the UI is just in the wrong layer.
+            // Loud in the log rather than a silent black window.
+            eprintln!("Embedded player z-order: {report}");
+        }
     }
 
     pump_player_events(app.clone(), events);
