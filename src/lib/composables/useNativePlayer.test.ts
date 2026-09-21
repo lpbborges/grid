@@ -395,6 +395,36 @@ describe('useNativePlayer', () => {
     expect(player.currentTime).toBe(100);
   });
 
+  it('moves the selection when a track is switched', async () => {
+    vi.mocked(invoke).mockImplementation((async (command: string) =>
+      command === 'start_native_player'
+        ? {
+            duration: 100,
+            tracks: [
+              track({ id: 1, type: 'audio', lang: 'en', selected: true }),
+              track({ id: 2, type: 'audio', lang: 'pt' })
+            ]
+          }
+        : undefined) as never);
+    const { player } = await start();
+
+    await player.selectAudio(2);
+
+    // mpv is not asked for the track list again, so nothing else moves the
+    // flag and the menu would keep its check mark on the old row.
+    const audio = player.tracks.filter((t) => t.type === 'audio');
+    expect(audio.find((t) => t.selected)?.id).toBe(2);
+  });
+
+  it('leaves the audio selection alone when the subtitle changes', async () => {
+    const { player } = await start();
+
+    await player.selectSubtitle(null);
+
+    // Disabling subtitles must not read as disabling the audio track too.
+    expect(player.tracks.find((t) => t.type === 'audio')?.selected).toBe(true);
+  });
+
   it('exposes the track list mpv reported', async () => {
     const { player } = await start();
 

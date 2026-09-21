@@ -279,9 +279,22 @@ export function useNativePlayer() {
     }
   }
 
+  /**
+   * Moves `selected` onto the chosen track of one type.
+   *
+   * mpv is never asked for the track list again, so nothing else would move
+   * the flag and the menu would keep its check mark on the previous row. Only
+   * the given type is touched: rewriting both would make a subtitle change
+   * read as an audio change.
+   */
+  function markSelected(kind: string, id: number | null) {
+    tracks = tracks.map((t) => (t.type === kind ? { ...t, selected: t.id === id } : t));
+  }
+
   async function selectAudio(id: number | null): Promise<void> {
     try {
       await invoke('native_player_select_audio', { aid: id });
+      markSelected('audio', id);
     } catch (e) {
       logger.error('Erro ao trocar o áudio', e);
     }
@@ -290,6 +303,7 @@ export function useNativePlayer() {
   async function selectSubtitle(id: number | null): Promise<void> {
     try {
       await invoke('native_player_select_subtitle', { sid: id });
+      markSelected('sub', id);
     } catch (e) {
       logger.error('Erro ao trocar a legenda', e);
     }
