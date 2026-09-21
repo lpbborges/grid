@@ -18,13 +18,13 @@ be blamed on rqbit, the stream proxy or the Matroska header patch.
 
 ## The five checks
 
-| Check | Question                        | Result | Evidence                                                                                            |
-| ----- | ------------------------------- | ------ | --------------------------------------------------------------------------------------------------- |
-| P1    | Video visible in the upper area | Pass   | 4K HEVC fills the window; logo, search box and hint text draw over it                               |
-| P2    | Translucent bar over the video  | Pass   | Colour bars show through the 70% surface bar and through the path input                             |
-| P3    | Clicks reach the UI             | Pass   | Counter 13 → 17 after exactly four clicks on the button sitting over the video                      |
-| P4    | Video follows the client area   | Pass   | Grid 1296x809 → mpv child 1280x800; resized to 1000x640 → child 984x631; restored → 1280x800        |
-| P5    | mpv dies with Grid              | Pass   | One mpv (pid 5564) before; `TerminateProcess` on `grid.exe` (pid 5192); zero mpv processes 6s later |
+| Check | Question                       | Result | Evidence                                                                                            |
+| ----- | ------------------------------ | ------ | --------------------------------------------------------------------------------------------------- |
+| P1    | Video plays in the upper area  | Pass   | 4K HEVC plays continuously; logo, search box and hint text draw over it                             |
+| P2    | Translucent bar over the video | Pass   | Colour bars show through the 70% surface bar and through the path input                             |
+| P3    | Clicks reach the UI            | Pass   | Counter 13 → 17 after exactly four clicks on the button sitting over the video                      |
+| P4    | Video follows the client area  | Pass   | Grid 1296x809 → mpv child 1280x800; resized to 1000x640 → child 984x631; restored → 1280x800        |
+| P5    | mpv dies with Grid             | Pass   | One mpv (pid 5564) before; `TerminateProcess` on `grid.exe` (pid 5192); zero mpv processes 6s later |
 
 Status line, verbatim:
 
@@ -130,14 +130,22 @@ mpv "av://lavfi:testsrc2=size=3840x2160:rate=24[out0];sine=frequency=440:sample_
 
 ## What this does not answer
 
-- **The frame is static.** `launch_args` sets `--pause=yes`, and only
-  `native_player_set_tracks` unpauses — which the spike page never calls. Zero
-  differing pixels were sampled across three seconds. So what is verified is a
-  _rendered video frame_ composited under a live UI, not moving video.
-  Compositing, z-order, input and resize are answered; whether a continuously
-  presenting swapchain stays under the webview is not.
 - **The content is synthetic.** `testsrc2` plus a sine tone, encoded to HEVC and
   E-AC3. The codecs match the motivating case; the content does not.
+- **Hardware decoding never engaged.** The virtio GPU is display-only, so
+  `--hwdec=auto-safe` fell back to software for the whole run. That the
+  arrangement composites is established; that a real GPU's decode path and
+  presentation behave the same under the webview is not. This is the one check
+  worth repeating on physical hardware, and it is about performance, not
+  feasibility.
+- **Nothing was streamed.** A local file was used on purpose. Seeking into an
+  undownloaded region through `stream_proxy.rs` is untouched here and stays a
+  risk the real implementation carries over from the existing plan.
+- **EOF was not exercised as a product case.** `--keep-open=no` makes mpv exit at
+  the end of the file, so its child window disappears while the Svelte UI stays
+  up. Harmless in a spike; in the real player that transition has to be handled
+  on the `native-player-ended` event rather than left to leave a hole in the
+  window.
 
 ## Conclusion
 
