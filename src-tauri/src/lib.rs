@@ -5,9 +5,9 @@ mod media_patch;
 mod mpv_player;
 #[cfg(test)]
 mod playback_engine_tests;
-mod spike_embed;
 mod stream_proxy;
 mod subtitles;
+mod window_embed;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -704,111 +704,6 @@ async fn start_native_player_impl(
     Ok(playback)
 }
 
-/// SPIKE (`spike/windows-mpv-wid-overlay`): starts mpv *inside* Grid's window.
-///
-/// Answers one question - does the Svelte UI composite on top of an embedded
-/// mpv surface? - and is called only by the `/spike` route. Not part of the
-/// playback path; delete this with the branch if the answer is no.
-///
-/// Takes a plain local file path rather than a proxy URL on purpose: the
-/// compositing question is independent of rqbit, the stream proxy and the
-/// Matroska header patch, and dragging them in would make a negative result
-/// ambiguous. That is also why this must never outlive the spike - the real
-/// `start_native_player` keeps its `is_local_stream_url` check.
-#[tauri::command]
-async fn spike_embed_player(
-    app: tauri::AppHandle,
-    window: tauri::Window,
-    state: State<'_, mpv_player::NativePlayerState>,
-    path: String,
-) -> Result<String, String> {
-    spike_embed_player_impl(app, window, state, path).await
-}
-
-#[cfg(not(windows))]
-async fn spike_embed_player_impl(
-    _app: tauri::AppHandle,
-    _window: tauri::Window,
-    _state: State<'_, mpv_player::NativePlayerState>,
-    _path: String,
-) -> Result<String, String> {
-    Err("The embedding spike only runs on Windows".to_string())
-}
-
-#[cfg(windows)]
-async fn spike_embed_player_impl(
-    app: tauri::AppHandle,
-    window: tauri::Window,
-    state: State<'_, mpv_player::NativePlayerState>,
-    path: String,
-) -> Result<String, String> {
-    use tauri_plugin_shell::ShellExt;
-
-    stop_player(&state).await;
-
-    // Tauri hands back the `windows` crate's HWND newtype; the Win32 calls in
-    // spike_embed take the raw pointer value.
-    let parent = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
-
-    let endpoint = mpv_player::random_endpoint_name();
-    let args = mpv_player::launch_args(&mpv_player::LaunchOptions {
-        endpoint: &endpoint,
-        url: &path,
-        start_seconds: 0.0,
-        subtitle_files: &[],
-        headless: false,
-        parent_window: Some(parent as i64),
-        // A VM's virtual GPU usually has no usable D3D11 hardware path; this
-        // lets the tester rule that out without a rebuild.
-        software_gpu: std::env::var("GRID_SPIKE_SOFTWARE_GPU").is_ok(),
-    });
-
-    let mut command: std::process::Command = app
-        .shell()
-        .sidecar("mpv")
-        .map_err(|e| e.to_string())?
-        .args(args)
-        .into();
-    command
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-
-    let child = engine_process::spawn_tied_to_app(&mut command).map_err(|e| e.to_string())?;
-
-    // Connecting to the IPC proves mpv is up; its video window is created
-    // around the same time, so the z-order pass has something to find.
-    let pipe =
-        match mpv_player::connect_endpoint(&endpoint, std::time::Duration::from_secs(15)).await {
-            Ok(pipe) => pipe,
-            Err(e) => {
-                let mut child = child;
-                let _ = child.kill();
-                return Err(format!("mpv did not accept a connection: {e}"));
-            }
-        };
-
-    let (reader, writer) = tokio::io::split(pipe);
-    let (client, events) = mpv_player::connect(reader, writer);
-    let playback = client.playback().await?;
-
-    // launch_args starts mpv paused so the real path can apply track
-    // preferences before the first frame. The spike has no preferences to
-    // apply, and a still frame would only prove that *a* frame composites -
-    // not that a continuously presenting swapchain stays under the webview.
-    client.set_paused(false).await?;
-
-    pump_player_events(app.clone(), events);
-    *state.child.lock().unwrap() = Some(child);
-    *state.client.lock().unwrap() = Some(client);
-
-    let report = spike_embed::push_video_behind_ui(parent);
-    Ok(format!(
-        "parent 0x{parent:x}; {} track(s); {report}",
-        playback.tracks.len()
-    ))
-}
-
 /// Applies the preselected tracks, then starts playback.
 ///
 /// The only mid-session command. Everything else - play, pause, seek, volume,
@@ -939,8 +834,7 @@ pub fn run() {
             start_native_player,
             native_player_set_tracks,
             stop_native_player,
-            cache_native_subtitles,
-            spike_embed_player
+            cache_native_subtitles
         ])
         .setup(|app| {
             match start_stream_proxy(app.handle()) {

@@ -1,31 +1,19 @@
-//! SPIKE (`spike/windows-mpv-wid-overlay`): does Grid's Svelte UI composite on
-//! top of an embedded mpv video surface inside a single Tauri window?
+//! Win32 window plumbing for the embedded player.
 //!
-//! This module exists to answer one question and then be deleted or promoted.
-//! It is not wired into the real playback path: `lib.rs` exposes it as
-//! `spike_*` commands that only the `/spike` route calls.
+//! mpv is launched with `--wid=<Grid's HWND>`, so it creates a window of class
+//! `mpv` as a direct child of Grid's top-level window, sibling to WebView2's
+//! `Chrome_WidgetWin_*`. It has to sit at the bottom of that z-order for the
+//! transparent webview to composite over it.
 //!
-//! # The question
-//!
-//! `.backlog/PLAN-windows-playback-mpv.md` D2 rejected embedding because the
-//! compositing behaviour was considered undebuggable. Stremio ships exactly
-//! this arrangement (`Stremio/stremio-shell-ng`, `stremio_player/player.rs`
-//! sets mpv's `wid` to the main window and puts a transparent WebView2 over
-//! it), so it is achievable in principle. What is unknown is whether it works
-//! through *Tauri's* window management rather than hand-rolled Win32.
-//!
-//! Concretely: mpv's `--wid` child window and WebView2's child window are
-//! siblings under Grid's top-level HWND. For the video to be visible at all,
-//! WebView2 must render transparently *and* composite against its sibling
-//! rather than against the window background. That is the spike.
-//!
-//! # Why this keeps Grid MIT
+//! One `SetWindowPos(HWND_BOTTOM)` at startup is enough. Measured against a
+//! live Windows build: mpv stayed last on every probe while presenting, so
+//! nothing re-raises it and no watchdog is needed.
 //!
 //! `--wid` is a command-line option on the stock `mpv.exe`, so the sidecar
-//! stays a separate process over JSON IPC. D7 ("never `libmpv-2.dll`") is
-//! untouched and no LGPL mpv build is required. Only D2 and D4 are in question.
+//! stays a separate process over JSON IPC and D7 ("never link `libmpv-2.dll`")
+//! holds. Grid's licence does not change.
 
-// The spike's Windows plumbing is unreferenced on Linux and macOS, the same way
+// This Windows plumbing is unreferenced on Linux and macOS, the same way
 // mpv_player.rs keeps its protocol layer compiled everywhere.
 #![allow(dead_code)]
 
@@ -43,7 +31,7 @@ pub enum Child {
     Other,
 }
 
-/// Maps a Win32 window class name to the role it plays in the spike.
+/// Maps a Win32 window class name to the role it plays in the embedded player.
 ///
 /// mpv registers its video window as `mpv`. WebView2 uses Chromium's widget
 /// classes, which carry a trailing instance number (`Chrome_WidgetWin_0`,
@@ -60,9 +48,9 @@ pub fn classify(class_name: &str) -> Child {
 
 /// The z-order fix to apply once both children exist.
 ///
-/// Returned rather than performed so the decision is testable off-Windows: the
-/// spike has to distinguish "compositing does not work" from "we never found
-/// the windows to order", and those look identical from a screenshot.
+/// Returned rather than performed so the decision is testable off-Windows:
+/// "compositing does not work" and "we never found the windows to order" look
+/// identical from a screenshot, and only this split tells them apart.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ZOrderPlan {
     /// Both windows found: push the video behind the UI.
@@ -123,9 +111,9 @@ mod win {
 
     /// Puts mpv's video window underneath Tauri's webview.
     ///
-    /// Returns a human-readable report: the spike is run by a person looking at
-    /// a screen, and "which windows were found" is the first thing to check
-    /// when nothing is visible.
+    /// Returns a human-readable report rather than a bare bool: when the screen
+    /// is black, "which windows were found" is the first thing to check, and
+    /// `start_native_player` logs this verbatim.
     pub fn push_video_behind_ui(parent: isize) -> String {
         let children = children_of(parent);
         let inventory = children
@@ -201,7 +189,7 @@ mod tests {
     #[test]
     fn reports_a_missing_video_window_rather_than_ordering_nothing() {
         // The failure that looks exactly like "compositing is broken" on
-        // screen, and the one the spike most needs told apart from it.
+        // screen, and the one most needing to be told apart from it.
         let children = vec![(0x10, "Chrome_WidgetWin_1".to_string())];
 
         assert_eq!(plan_z_order(&children), ZOrderPlan::VideoMissing);

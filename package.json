@@ -20,7 +20,6 @@
     "test:e2e:native": "npm run build:e2e:native && wdio run e2e/wdio.native.conf.ts",
     "test:e2e:live": "npm run build:e2e:live && wdio run e2e/wdio.live.conf.ts",
     "tauri": "tauri",
-    "spike:embed": "tauri dev --config src-tauri/tauri.spike.conf.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test:frontend": "vitest run",

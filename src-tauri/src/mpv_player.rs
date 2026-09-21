@@ -416,17 +416,17 @@ pub struct LaunchOptions<'a> {
     /// `--vo=null --ao=null` for the E2E job: WebDriver cannot see into mpv's
     /// window anyway, and `windows-latest` has no GPU for `--vo=gpu`.
     pub headless: bool,
-    /// SPIKE (`spike/windows-mpv-wid-overlay`): the parent window handle to
-    /// reparent mpv into, so the video draws inside Grid's own window with the
-    /// Svelte UI composited on top, instead of in a separate window (D2).
+    /// The parent window handle to reparent mpv into, so the video draws
+    /// inside Grid's own window with the Svelte UI composited on top, instead
+    /// of in a separate window (D2, overturned).
     ///
     /// `--wid` is an mpv *command-line* option, so this keeps the sidecar a
     /// separate process and leaves D7 (never link `libmpv-2.dll`) untouched.
     /// `None` reproduces the current behaviour exactly.
     pub parent_window: Option<i64>,
-    /// SPIKE: forces mpv onto D3D11's WARP software renderer with hardware
-    /// decoding off, so the spike can run inside a VM whose virtual GPU has no
-    /// usable D3D11 hardware path.
+    /// Forces mpv onto D3D11's WARP software renderer with hardware decoding
+    /// off, for a machine whose GPU has no usable D3D11 hardware path - a VM's
+    /// virtual GPU, typically.
     ///
     /// This separates two failures that otherwise look the same on screen:
     /// "the compositing arrangement does not work" and "this machine cannot
@@ -439,8 +439,12 @@ pub struct LaunchOptions<'a> {
 ///
 /// `--no-config` and `--load-scripts=no` matter more than they look: without
 /// them a user's own `mpv.conf` silently reconfigures Grid's player and
-/// produces bug reports nobody can reproduce. Default keybindings stay on - `#`
-/// and `j` are the in-playback track switching (D5).
+/// produces bug reports nobody can reproduce.
+///
+/// An embedded mpv (`parent_window`) additionally gets `--osc=no`,
+/// `--input-cursor=no` and `--input-vo-keyboard=no`: it handles no input at
+/// all and Grid's own controls drive it over IPC. D5, which left in-playback
+/// track switching to mpv's `#` and `j` keys, is overturned.
 ///
 /// The cache and timeout values are the ones that survived a 26-second stall
 /// when seeking into an undownloaded region during the Phase 2 spike.
