@@ -15,7 +15,7 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
 - **Global Playback Preferences:** Audio, Subtitle, and Quality preferences set once and remembered across the app (persisted locally). Grid ranks and picks the best matching source from YTS + Torrentio behind the scenes and silently enables the right embedded audio/subtitle track when playback starts, resolving the movie/show's real original language instead of guessing.
 - **Frameless Design:** Desktop window with custom controls and a draggable header.
 - **Cyberpunk Theme:** A unique visual identity built with Tailwind CSS v4 featuring neon glows, digital grid backgrounds, and cyberpunk typography (Orbitron/Rajdhani, bundled locally).
-- **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles.
+- **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles. The same controls drive both backends: a `<video>` element on Linux and macOS, and the mpv sidecar rendering inside Grid's own window on Windows, where the webview cannot decode what releases actually ship.
 - **Test-Driven:** Vitest and Svelte Testing Library tests for the frontend, plus Rust unit tests for the backend. Run `npm run test:frontend:cov` for the current coverage report.
 - **Robust Error Handling:** Resilient polling for engine startup, a specific error when the engine cannot start, dynamic port allocation to prevent address conflicts, and timeouts on external API calls; starting playback automatically retries with a fresh request when a source stops responding. Metadata translation tries Google Translate first and MyMemory as a backup; if both fail, the original English text is shown.
 
@@ -28,6 +28,13 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
   ```sh
   sudo apt-get install -y build-essential curl wget file libxdo-dev libssl-dev \
     libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+  ```
+
+- On Linux, the GStreamer decoders the webview plays through. They are not installed by default on a clean Ubuntu or Fedora, and without them 4K HEVC and E-AC3 releases fail with "este vídeo precisa de componentes de vídeo que não estão instalados no sistema". The `.deb` declares them; for `tauri dev` or another package format, install them yourself (Debian/Ubuntu):
+
+  ```sh
+  sudo apt-get install -y gstreamer1.0-libav gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad
   ```
 
 - For the end-to-end playback tests (Linux and Windows only): [`tauri-driver`](https://v2.tauri.app/develop/tests/webdriver/) (`cargo install tauri-driver --locked`), plus `WebKitWebDriver` and the GStreamer libav plugins on Linux (Debian/Ubuntu: `sudo apt-get install -y webkit2gtk-driver gstreamer1.0-libav`), or an `msedgedriver` matching your WebView2 version on Windows (point `NATIVE_DRIVER` at it). `ffmpeg` is needed only to regenerate the test media.
@@ -113,12 +120,15 @@ SvelteKit UI (static build, runs in the Tauri webview)
   │                      └─ start_native_player / native_player_set_tracks /
   │                         stop_native_player    (Windows: drives the mpv sidecar)
   ├─ fetch ──────────► rqbit HTTP API on 127.0.0.1 (add, stats)
-  └─ <video> ────────► stream proxy on 127.0.0.1 ──► rqbit stream endpoint
+  ├─ <video> ────────► stream proxy on 127.0.0.1 ──► rqbit stream endpoint  (Linux/macOS)
+  └─ mpv sidecar ────► stream proxy on 127.0.0.1 ?raw=1                     (Windows, in-window)
 ```
 
 - **Stream proxy:** WebKitGTK does not start MP4 or Matroska files that carry embedded subtitle tracks while the rest of the file is still downloading, so the `<video>` element streams through a small proxy in `src-tauri/src/stream_proxy.rs`. It forwards range requests to rqbit and hides every embedded subtitle track in the file header without changing its size (a `Void` element in Matroska, a `free` atom in MP4; see `src-tauri/src/media_patch/`), leaving every byte offset intact. Subtitles are still shown from separate `.srt`/`.vtt` files.
 
   The patch exists only for WebKitGTK. Anything that demuxes Matroska correctly would see an empty subtitle menu instead, so the proxy also serves an unpatched variant at `?raw=1`, which is what the Windows mpv path asks for.
+
+- **Decoding:** Linux and macOS play in a `<video>` element, which decodes through GStreamer in WebKitGTK — hence the plugin requirement above. Windows cannot: the webview decodes neither HEVC nor E-AC3 and cannot demux Matroska, so it plays through the mpv sidecar instead, reparented into Grid's own window so the same Svelte controls sit on top (see [Player](#player-windows-only)).
 
 - `src/lib/api/` wraps external services, `src/lib/engine/` drives playback (engine, cache, ranking), `src/lib/composables/` and `src/lib/stores/` hold reactive state, and `src/lib/components/` holds the UI.
 - **Where state lives:**
@@ -152,8 +162,11 @@ To update it:
 
 WebView2 cannot decode the codecs torrent releases actually ship (HEVC, AC3/E-AC3)
 and cannot demux Matroska over range requests, so Windows playback runs through
-[mpv](https://mpv.io/) in its own window instead of a `<video>` element. Linux
-keeps the `<video>` element and bundles no player.
+[mpv](https://mpv.io/) instead of a `<video>` element. mpv is launched with
+`--wid` so it renders **inside** Grid's own window, beneath the transparent
+webview, with Grid's Svelte controls composited on top — the same player UI as
+on Linux, driven over IPC rather than through a DOM element. Linux keeps the
+`<video>` element and bundles no player.
 
 | File in `src-tauri/bin/`         | Platform       |
 | -------------------------------- | -------------- |

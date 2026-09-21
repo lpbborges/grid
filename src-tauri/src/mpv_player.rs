@@ -1,10 +1,11 @@
 //! Native playback on Windows: the JSON IPC controller for the mpv sidecar.
 //!
 //! WebView2 cannot decode the codecs torrent releases actually ship (HEVC,
-//! AC3/E-AC3) and cannot demux Matroska, so Windows plays through mpv in its
-//! own window instead of a `<video>` element. mpv owns its UI and its
-//! keybindings; Grid only starts it, applies track preferences once, listens,
-//! and stops it.
+//! AC3/E-AC3) and cannot demux Matroska, so Windows plays through mpv instead
+//! of a `<video>` element. mpv is reparented into Grid's own window with
+//! `--wid` (see `window_embed.rs`) and draws nothing of its own: its OSC,
+//! cursor and keyboard handling are off, and Grid's Svelte controls drive
+//! every command over this connection.
 //!
 //! The command surface here is deliberately tiny. mpv's own command set
 //! includes `run` (spawn a process) and `load-script`, and the app injects
@@ -69,6 +70,21 @@ pub struct Playback {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlayerEvent {
     Time(f64),
+    /// mpv's `pause` property changed. Grid's controls are the only thing that
+    /// can change it now, but mpv still pauses itself on EOF and on a failed
+    /// seek, so the UI follows the property rather than assuming.
+    Paused(bool),
+    /// mpv began painting. Fires after loading and after every seek; the UI
+    /// latches it, because until the first frame is on screen there is
+    /// nothing behind the webview to composite against.
+    Presenting,
+    /// mpv finished parsing the file. Only now do `track-list` and `duration`
+    /// hold anything: before it, a streamed file reports no tracks and no
+    /// length at all.
+    Loaded,
+    /// mpv's `duration` property changed. A stream usually reports none at
+    /// first and learns it once enough of the file has been demuxed.
+    Duration(f64),
     Ended,
     Failed(String),
 }
@@ -247,10 +263,67 @@ impl Client {
         Ok(())
     }
 
+    /// Seeks to an absolute position in seconds.
+    ///
+    /// `absolute` rather than `relative`: Grid's seek bar reports a target, not
+    /// a delta, and a relative seek would compound rounding on every drag.
+    pub async fn seek(&self, seconds: f64) -> Result<(), String> {
+        self.call(json!(["seek", seconds, "absolute"])).await?;
+        Ok(())
+    }
+
+    /// Sets the output volume.
+    ///
+    /// `percent` is mpv's own 0-100 scale, not the DOM's 0-1. The conversion
+    /// belongs to the caller so this stays a thin wrapper over the property.
+    pub async fn set_volume(&self, percent: f64) -> Result<(), String> {
+        self.call(json!(["set_property", "volume", percent]))
+            .await?;
+        Ok(())
+    }
+
+    /// Selects an audio track, leaving the subtitle track untouched.
+    ///
+    /// `set_tracks` writes both properties at once, which is right when applying
+    /// preferences at startup and wrong for a mid-playback switch: `None` there
+    /// means mpv's `no` sentinel and would disable the other track.
+    pub async fn set_audio_track(&self, id: Option<i64>) -> Result<(), String> {
+        self.call(json!(["set_property", "aid", track_value(id)]))
+            .await?;
+        Ok(())
+    }
+
+    /// Selects a subtitle track, leaving the audio track untouched.
+    ///
+    /// `None` is meaningful here and means "no subtitles".
+    pub async fn set_subtitle_track(&self, id: Option<i64>) -> Result<(), String> {
+        self.call(json!(["set_property", "sid", track_value(id)]))
+            .await?;
+        Ok(())
+    }
+
     /// Asks mpv to push `time-pos` changes instead of polling for them.
     pub async fn observe_time(&self) -> Result<(), String> {
         self.call(json!(["observe_property", 1, "time-pos"]))
             .await?;
+        Ok(())
+    }
+
+    /// Asks mpv to push `duration` changes instead of polling for them.
+    ///
+    /// Observer id `3`: `observe_time` uses 1 and `observe_pause` uses 2.
+    pub async fn observe_duration(&self) -> Result<(), String> {
+        self.call(json!(["observe_property", 3, "duration"]))
+            .await?;
+        Ok(())
+    }
+
+    /// Asks mpv to push `pause` changes instead of polling for them.
+    ///
+    /// Observer id `2` is deliberate: `observe_time` already uses `1`, and
+    /// reusing an id silently replaces the earlier observer.
+    pub async fn observe_pause(&self) -> Result<(), String> {
+        self.call(json!(["observe_property", 2, "pause"])).await?;
         Ok(())
     }
 
@@ -364,14 +437,35 @@ pub struct LaunchOptions<'a> {
     /// `--vo=null --ao=null` for the E2E job: WebDriver cannot see into mpv's
     /// window anyway, and `windows-latest` has no GPU for `--vo=gpu`.
     pub headless: bool,
+    /// The parent window handle to reparent mpv into, so the video draws
+    /// inside Grid's own window with the Svelte UI composited on top, instead
+    /// of in a separate window (D2, overturned).
+    ///
+    /// `--wid` is an mpv *command-line* option, so this keeps the sidecar a
+    /// separate process and leaves D7 (never link `libmpv-2.dll`) untouched.
+    /// `None` reproduces the current behaviour exactly.
+    pub parent_window: Option<i64>,
+    /// Forces mpv onto D3D11's WARP software renderer with hardware decoding
+    /// off, for a machine whose GPU has no usable D3D11 hardware path - a VM's
+    /// virtual GPU, typically.
+    ///
+    /// This separates two failures that otherwise look the same on screen:
+    /// "the compositing arrangement does not work" and "this machine cannot
+    /// render video at all". It is a diagnostic, never a shipping mode - 4K
+    /// HEVC through WARP is a slideshow.
+    pub software_gpu: bool,
 }
 
 /// mpv's arguments, per plan section 3.2.
 ///
 /// `--no-config` and `--load-scripts=no` matter more than they look: without
 /// them a user's own `mpv.conf` silently reconfigures Grid's player and
-/// produces bug reports nobody can reproduce. Default keybindings stay on - `#`
-/// and `j` are the in-playback track switching (D5).
+/// produces bug reports nobody can reproduce.
+///
+/// An embedded mpv (`parent_window`) additionally gets `--osc=no`,
+/// `--input-cursor=no` and `--input-vo-keyboard=no`: it handles no input at
+/// all and Grid's own controls drive it over IPC. D5, which left in-playback
+/// track switching to mpv's `#` and `j` keys, is overturned.
 ///
 /// The cache and timeout values are the ones that survived a 26-second stall
 /// when seeking into an undownloaded region during the Phase 2 spike.
@@ -399,10 +493,28 @@ pub fn launch_args(options: &LaunchOptions) -> Vec<String> {
         args.push("--ao=null".to_string());
         args.push("--fullscreen=no".to_string());
     } else {
-        args.push("--fullscreen=yes".to_string());
         args.push("--vo=gpu".to_string());
         args.push("--gpu-api=d3d11".to_string());
-        args.push("--hwdec=auto-safe".to_string());
+        if options.software_gpu {
+            args.push("--d3d11-warp=yes".to_string());
+            args.push("--hwdec=no".to_string());
+        } else {
+            args.push("--hwdec=auto-safe".to_string());
+        }
+        match options.parent_window {
+            // Embedded: mpv fills the parent's client area, so fullscreen would
+            // fight the host window. Grid's own UI draws the controls, so mpv's
+            // OSC and its cursor handling are off - every click belongs to the
+            // webview on top.
+            Some(handle) => {
+                args.push(format!("--wid={handle}"));
+                args.push("--fullscreen=no".to_string());
+                args.push("--osc=no".to_string());
+                args.push("--input-cursor=no".to_string());
+                args.push("--input-vo-keyboard=no".to_string());
+            }
+            None => args.push("--fullscreen=yes".to_string()),
+        }
     }
     for file in options.subtitle_files {
         args.push(format!("--sub-file={file}"));
@@ -519,6 +631,18 @@ fn parse_event(message: &Value, throttle: &mut TimeThrottle) -> Option<PlayerEve
                 .accept(Instant::now())
                 .then_some(PlayerEvent::Time(seconds))
         }
+        // Deliberately not throttled, unlike `time-pos`: a pause change fires
+        // rarely and a dropped one leaves the button showing the wrong icon.
+        "property-change" if message.get("name")?.as_str()? == "pause" => {
+            Some(PlayerEvent::Paused(message.get("data")?.as_bool()?))
+        }
+        // Also unthrottled: it fires once or twice per file, and dropping it
+        // leaves the seek bar pinned at zero for the whole film.
+        "property-change" if message.get("name")?.as_str()? == "duration" => {
+            Some(PlayerEvent::Duration(message.get("data")?.as_f64()?))
+        }
+        "file-loaded" => Some(PlayerEvent::Loaded),
+        "playback-restart" => Some(PlayerEvent::Presenting),
         "end-file" => match message.get("reason").and_then(Value::as_str) {
             Some("error") => {
                 let detail = message
@@ -695,6 +819,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn seeks_to_an_absolute_position() {
+        let (client, _events, mut mpv) = MockMpv::connect();
+
+        let ask = tokio::spawn(async move { client.seek(42.5).await });
+        let command = mpv.answer_next(Value::Null).await;
+
+        assert_eq!(command["command"], json!(["seek", 42.5, "absolute"]));
+        ask.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn sets_volume_on_mpvs_own_scale() {
+        let (client, _events, mut mpv) = MockMpv::connect();
+
+        let ask = tokio::spawn(async move { client.set_volume(65.0).await });
+        let command = mpv.answer_next(Value::Null).await;
+
+        // mpv's `volume` property is 0-100, not the DOM's 0-1. Sending 0.65 here
+        // would make every film nearly silent.
+        assert_eq!(command["command"], json!(["set_property", "volume", 65.0]));
+        ask.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn forwards_pause_changes_as_events() {
+        let (_client, mut events, mut mpv) = MockMpv::connect();
+
+        mpv.push(json!({
+            "event": "property-change",
+            "id": 2,
+            "name": "pause",
+            "data": true
+        }))
+        .await;
+
+        assert_eq!(events.recv().await, Some(PlayerEvent::Paused(true)));
+    }
+
+    #[tokio::test]
+    async fn switching_one_track_leaves_the_other_alone() {
+        let (client, _events, mut mpv) = MockMpv::connect();
+
+        // `set_tracks` writes BOTH properties, and track_value(None) is mpv's
+        // "no" sentinel - which disables a track. Reusing it for a mid-playback
+        // subtitle switch would mute the film as a side effect.
+        let ask = tokio::spawn(async move { client.set_subtitle_track(Some(3)).await });
+        let command = mpv.answer_next(Value::Null).await;
+
+        assert_eq!(command["command"], json!(["set_property", "sid", 3]));
+        ask.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
     async fn matches_replies_to_their_own_request_when_they_arrive_out_of_order() {
         let (client, _events, mut mpv) = MockMpv::connect();
 
@@ -770,10 +947,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reports_when_mpv_starts_presenting() {
+        let (_client, mut events, mut mpv) = MockMpv::connect();
+
+        mpv.push(json!({ "event": "playback-restart" })).await;
+
+        // `file-loaded` only means mpv parsed the file; it is still paused
+        // with no frame on screen. This is the first moment anything is
+        // actually painted, which is when the UI may go transparent.
+        assert_eq!(events.recv().await, Some(PlayerEvent::Presenting));
+    }
+
+    #[tokio::test]
+    async fn reports_the_file_being_loaded() {
+        let (_client, mut events, mut mpv) = MockMpv::connect();
+
+        mpv.push(json!({ "event": "file-loaded" })).await;
+
+        // Before this, mpv has parsed nothing: `track-list` is empty and
+        // `duration` is null, so reading them yields no tracks and 0.
+        assert_eq!(events.recv().await, Some(PlayerEvent::Loaded));
+    }
+
+    #[tokio::test]
+    async fn forwards_duration_changes_as_events() {
+        let (_client, mut events, mut mpv) = MockMpv::connect();
+
+        mpv.push(json!({
+            "event": "property-change",
+            "id": 3,
+            "name": "duration",
+            "data": 5025.0
+        }))
+        .await;
+
+        // A streamed file often reports no duration at first and learns it
+        // later; without this the seek bar stays pinned at zero forever.
+        assert_eq!(events.recv().await, Some(PlayerEvent::Duration(5025.0)));
+    }
+
+    #[tokio::test]
+    async fn observes_duration_on_an_id_of_its_own() {
+        let (client, _events, mut mpv) = MockMpv::connect();
+
+        let ask = tokio::spawn(async move { client.observe_duration().await });
+        let command = mpv.answer_next(Value::Null).await;
+
+        // 1 is time-pos and 2 is pause; reusing an id replaces that observer.
+        assert_eq!(
+            command["command"],
+            json!(["observe_property", 3, "duration"])
+        );
+        ask.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
     async fn ignores_events_that_are_not_part_of_the_narrow_surface() {
         let (_client, mut events, mut mpv) = MockMpv::connect();
 
-        for noise in ["file-loaded", "playback-restart", "audio-reconfig"] {
+        for noise in ["audio-reconfig", "video-reconfig"] {
             mpv.push(json!({ "event": noise })).await;
         }
         mpv.push(json!({ "event": "end-file", "reason": "eof" }))
@@ -794,12 +1026,34 @@ mod tests {
     }
 
     fn args_for(subtitles: &[String], headless: bool) -> Vec<String> {
+        args_for_parent(subtitles, headless, None)
+    }
+
+    fn args_for_parent(
+        subtitles: &[String],
+        headless: bool,
+        parent_window: Option<i64>,
+    ) -> Vec<String> {
         launch_args(&LaunchOptions {
             endpoint: "ENDPOINT",
             url: &stream_url(PROXY_PORT),
             start_seconds: 12.5,
             subtitle_files: subtitles,
             headless,
+            parent_window,
+            software_gpu: false,
+        })
+    }
+
+    fn args_with_software_gpu() -> Vec<String> {
+        launch_args(&LaunchOptions {
+            endpoint: "ENDPOINT",
+            url: &stream_url(PROXY_PORT),
+            start_seconds: 0.0,
+            subtitle_files: &[],
+            headless: false,
+            parent_window: Some(42),
+            software_gpu: true,
         })
     }
 
@@ -855,6 +1109,62 @@ mod tests {
         assert!(windowed.iter().any(|a| a == "--gpu-api=d3d11"));
         assert!(windowed.iter().any(|a| a == "--hwdec=auto-safe"));
         assert!(windowed.iter().any(|a| a == "--fullscreen=yes"));
+    }
+
+    #[test]
+    fn a_parent_window_reparents_mpv_instead_of_going_fullscreen() {
+        let args = args_for_parent(&[], false, Some(0x001A_2B3C));
+
+        assert!(args.iter().any(|a| a == "--wid=1715004"));
+        assert!(args.iter().any(|a| a == "--fullscreen=no"));
+        assert!(!args.iter().any(|a| a == "--fullscreen=yes"));
+        // Still the real GPU path: embedding must not cost hardware decoding.
+        assert!(args.iter().any(|a| a == "--vo=gpu"));
+        assert!(args.iter().any(|a| a == "--hwdec=auto-safe"));
+    }
+
+    #[test]
+    fn an_embedded_mpv_surrenders_its_own_controls_to_the_webview() {
+        let args = args_for_parent(&[], false, Some(42));
+
+        // Grid's Svelte overlay owns every control and every click; mpv drawing
+        // its own OSC underneath would show through the transparent webview.
+        assert!(args.iter().any(|a| a == "--osc=no"));
+        assert!(args.iter().any(|a| a == "--input-cursor=no"));
+        assert!(args.iter().any(|a| a == "--input-vo-keyboard=no"));
+    }
+
+    #[test]
+    fn no_parent_window_leaves_the_current_own_window_behaviour_untouched() {
+        let args = args_for_parent(&[], false, None);
+
+        assert!(!args.iter().any(|a| a.starts_with("--wid=")));
+        assert!(args.iter().any(|a| a == "--fullscreen=yes"));
+        assert!(!args.iter().any(|a| a == "--osc=no"));
+    }
+
+    #[test]
+    fn the_software_gpu_fallback_drops_hardware_decoding_for_warp() {
+        let args = args_with_software_gpu();
+
+        assert!(args.iter().any(|a| a == "--d3d11-warp=yes"));
+        assert!(args.iter().any(|a| a == "--hwdec=no"));
+        assert!(!args.iter().any(|a| a == "--hwdec=auto-safe"));
+        // Still the same renderer and the same embedding, so a result here
+        // still speaks to the compositing question.
+        assert!(args.iter().any(|a| a == "--vo=gpu"));
+        assert!(args.iter().any(|a| a == "--gpu-api=d3d11"));
+        assert!(args.iter().any(|a| a == "--wid=42"));
+    }
+
+    #[test]
+    fn headless_ignores_the_parent_window() {
+        // The E2E job has no GPU and no window to embed into; `--wid` there
+        // would point mpv at a handle that WebDriver never created.
+        let args = args_for_parent(&[], true, Some(42));
+
+        assert!(!args.iter().any(|a| a.starts_with("--wid=")));
+        assert!(args.iter().any(|a| a == "--vo=null"));
     }
 
     #[test]

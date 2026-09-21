@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Stream } from '$lib/api/torrentio';
 import type { ExternalSubtitleEntry } from '$lib/types';
 import { createFakeRqbit, type FakeRqbit, type FakeTorrentFile } from './fakeRqbit';
+import type { NativeTrack } from '$lib/composables/useNativePlayer.svelte';
 
 export const ENGINE_ORIGIN = 'http://127.0.0.1:41000';
 export const PROXY_ORIGIN = 'http://127.0.0.1:42000';
@@ -17,6 +18,13 @@ export interface PlaybackBoundaryOptions {
   stallAdds?: number;
   /** Delays `upsert_cache_entry`, like the slower IPC on Windows. */
   cacheWriteDelayMs?: number;
+  /**
+   * What `start_native_player` reports back. Only the Windows backend asks,
+   * and mpv itself is never involved: these stand in for the sidecar the same
+   * way the fake rqbit stands in for the engine.
+   */
+  nativePlayback?: { tracks: NativeTrack[]; duration: number };
+  nativeStartError?: unknown;
 }
 
 export interface InvokeCall {
@@ -66,6 +74,21 @@ export function installPlaybackBoundary(options: PlaybackBoundaryOptions): Playb
       case 'fetch_torrent_subtitle':
       case 'fetch_external_subtitle':
         return FIXTURE_VTT;
+      case 'cache_native_subtitles':
+        return [];
+      case 'start_native_player':
+        if (options.nativeStartError !== undefined) throw options.nativeStartError;
+        return options.nativePlayback ?? { tracks: [], duration: 0 };
+      // The mid-playback controls: recorded in `invokeCalls`, answered with
+      // nothing, exactly as mpv answers a `set_property`.
+      case 'native_player_set_tracks':
+      case 'native_player_set_paused':
+      case 'native_player_seek':
+      case 'native_player_set_volume':
+      case 'native_player_select_audio':
+      case 'native_player_select_subtitle':
+      case 'stop_native_player':
+        return undefined;
       default:
         throw new Error(`Unexpected IPC command: ${command}`);
     }

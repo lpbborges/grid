@@ -4,7 +4,7 @@
   import { getSeriesStreams, parseSeedCount } from '$lib/api/torrentio';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
-  import NativePlaybackNotice from '$lib/components/NativePlaybackNotice.svelte';
+  import NativePlayerSurface from '$lib/components/NativePlayerSurface.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
   import { useNativePlayer } from '$lib/composables/useNativePlayer.svelte';
@@ -23,7 +23,7 @@
   let lastAttemptedEpisode = $state<Episode | null>(null);
 
   const streamPlayer = useStreamPlayer();
-  // Windows plays in mpv's own window; everywhere else mounts <video>.
+  // Windows plays through mpv embedded in this window; else mounts <video>.
   const isNative = playbackMode() === 'native';
   const nativePlayer = useNativePlayer();
 
@@ -273,10 +273,13 @@
           fileIdx={streamPlayer.fileIdx}
           totalBytes={streamPlayer.totalBytes}
         />
+      {:else if streamPlayer.isPlaying && isNative}
+        <NativePlayerSurface
+          player={nativePlayer}
+          engineStatus={streamPlayer.engineStatus}
+          onclose={streamPlayer.stop}
+        />
       {:else}
-        {#if streamPlayer.isPlaying && isNative}
-          <NativePlaybackNotice />
-        {/if}
         <MediaInfo
           id={series.id}
           title={translatedTitle}

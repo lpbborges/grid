@@ -101,3 +101,32 @@ video::cue {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Only while the embedded player is running: every layer from the document
+   down to the layout wrapper must be clear, or mpv's window - which sits
+   behind the webview, not inside it - is hidden by our own background.
+   `body > div > div` is the layout root: app.html wraps the body in a
+   `display: contents` div, so the opaque element is one level deeper than it
+   looks. */
+html:has(body.native-player-active),
+body.native-player-active,
+body.native-player-active > div,
+body.native-player-active > div > div {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+/* Clearing backgrounds is not enough: the poster, the backdrop image and the
+   rest of the page are opaque elements in their own right, and mpv is behind
+   the webview, so every one of them paints over the video. `visibility`
+   inherits and a descendant can override it, so hiding the layout root and
+   re-showing only the player and the titlebar works at any nesting depth and
+   without touching layout. */
+body.native-player-active > div > div {
+  visibility: hidden;
+}
+
+body.native-player-active [data-native-player],
+body.native-player-active [data-titlebar] {
+  visibility: visible;
+}

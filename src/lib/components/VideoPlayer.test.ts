@@ -614,9 +614,7 @@ describe('VideoPlayer component', () => {
 
     await fireEvent(video, new Event('error'));
 
-    expect(
-      getByText('Não foi possível decodificar este vídeo (codec não suportado).')
-    ).toBeDefined();
+    expect(getByText('Não foi possível decodificar este vídeo.')).toBeDefined();
     expect(queryByTestId('loading-spinner')).toBeNull();
   });
 
@@ -629,15 +627,21 @@ describe('VideoPlayer component', () => {
     });
 
     await fireEvent(video, new Event('error'));
-    expect(getByText('Formato de vídeo não suportado.')).toBeDefined();
+    expect(
+      getByText('Este vídeo precisa de componentes de vídeo que não estão instalados no sistema.')
+    ).toBeDefined();
 
     await fireEvent.playing(video);
-    expect(queryByText('Formato de vídeo não suportado.')).toBeNull();
+    expect(
+      queryByText('Este vídeo precisa de componentes de vídeo que não estão instalados no sistema.')
+    ).toBeNull();
 
     // A later buffering blip must not resurface the stale error message.
     await fireEvent.waiting(video);
     await vi.advanceTimersByTimeAsync(250);
-    expect(queryByText('Formato de vídeo não suportado.')).toBeNull();
+    expect(
+      queryByText('Este vídeo precisa de componentes de vídeo que não estão instalados no sistema.')
+    ).toBeNull();
   });
 
   it('shows the error overlay even if playback had already started', async () => {

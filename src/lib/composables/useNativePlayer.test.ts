@@ -6,6 +6,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import NativePlayerHarness from './__fixtures__/NativePlayerHarness.svelte';
 import {
   resolveNativeTracks,
+  withExternalLangs,
   nativeTrackLabel,
   type NativeTrack,
   type useNativePlayer
@@ -50,6 +51,37 @@ describe('nativeTrackLabel', () => {
 
   it('is empty when mpv reports neither a language nor a title', () => {
     expect(nativeTrackLabel(track({ id: 1, type: 'audio' }))).toBe('');
+  });
+});
+
+describe('withExternalLangs', () => {
+  it('names external subtitle tracks mpv reports no language for', () => {
+    const tracks = [
+      track({ id: 1, type: 'sub', lang: 'en' }),
+      track({ id: 2, type: 'sub', external: true }),
+      track({ id: 3, type: 'sub', external: true })
+    ];
+
+    const named = withExternalLangs(tracks, ['pob', 'eng']);
+
+    // Without this the menu shows "Legenda 2" and "Legenda 3" and the user
+    // cannot tell Portuguese from English.
+    expect(named[1].lang).toBe('pob');
+    expect(named[2].lang).toBe('eng');
+    // The embedded track already had one and keeps it.
+    expect(named[0].lang).toBe('en');
+  });
+
+  it('leaves audio tracks and unmatched externals alone', () => {
+    const tracks = [
+      track({ id: 1, type: 'audio', external: true }),
+      track({ id: 2, type: 'sub', external: true })
+    ];
+
+    const named = withExternalLangs(tracks, []);
+
+    expect(named[0].lang).toBeNull();
+    expect(named[1].lang).toBeNull();
   });
 });
 
@@ -164,16 +196,16 @@ describe('useNativePlayer', () => {
     return { player, ok };
   }
 
-  it('applies track preferences and minimizes only after mpv has loaded', async () => {
+  it('applies track preferences without touching the window', async () => {
     const { player, ok } = await start();
 
     expect(ok).toBe(true);
     expect(player.isRunning).toBe(true);
     const commands = vi.mocked(invoke).mock.calls.map((call) => call[0]);
     expect(commands).toEqual(['start_native_player', 'native_player_set_tracks']);
-    // mpv starts paused; minimizing before the tracks are applied would hide a
-    // still-paused player behind a minimized window.
-    expect(windowApi.minimize).toHaveBeenCalled();
+    // D4 is dropped: mpv renders inside this window, so minimizing it would
+    // hide the player itself.
+    expect(windowApi.minimize).not.toHaveBeenCalled();
   });
 
   it('passes the stored resume position to mpv', async () => {
@@ -205,7 +237,7 @@ describe('useNativePlayer', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('restores the window and releases the stream when mpv exits', async () => {
+  it('releases the stream when mpv exits', async () => {
     const onended = vi.fn();
     const { player } = await start({ onended });
 
@@ -213,11 +245,12 @@ describe('useNativePlayer', () => {
     await vi.waitFor(() => expect(onended).toHaveBeenCalled());
 
     expect(player.isRunning).toBe(false);
-    expect(windowApi.unminimize).toHaveBeenCalled();
     expect(unlisten).toHaveBeenCalled();
+    // Nothing was minimized, so there is nothing to restore.
+    expect(windowApi.unminimize).not.toHaveBeenCalled();
   });
 
-  it('reports a pt-BR error and restores the window when mpv fails', async () => {
+  it('reports a pt-BR error when mpv fails', async () => {
     const onended = vi.fn();
     const { player } = await start({ onended });
 
@@ -225,10 +258,10 @@ describe('useNativePlayer', () => {
     await vi.waitFor(() => expect(onended).toHaveBeenCalled());
 
     expect(player.error).toBe('Não foi possível reproduzir este vídeo.');
-    expect(windowApi.unminimize).toHaveBeenCalled();
+    expect(windowApi.unminimize).not.toHaveBeenCalled();
   });
 
-  it('does not minimize when the player fails to start', async () => {
+  it('reports a pt-BR error when the player cannot start', async () => {
     vi.mocked(invoke).mockRejectedValue('sidecar missing');
 
     const { player, ok } = await start();
@@ -239,7 +272,7 @@ describe('useNativePlayer', () => {
     expect(windowApi.minimize).not.toHaveBeenCalled();
   });
 
-  it('stops mpv and restores the window on stop()', async () => {
+  it('stops mpv on stop()', async () => {
     const { player } = await start();
     vi.mocked(invoke).mockClear();
 
@@ -247,7 +280,7 @@ describe('useNativePlayer', () => {
 
     expect(invoke).toHaveBeenCalledWith('stop_native_player');
     expect(player.isRunning).toBe(false);
-    expect(windowApi.unminimize).toHaveBeenCalled();
+    expect(windowApi.unminimize).not.toHaveBeenCalled();
   });
 
   it('leaves no mpv behind when a step after the spawn fails', async () => {
@@ -322,5 +355,161 @@ describe('useNativePlayer', () => {
       'native_player_set_tracks',
       expect.objectContaining({ aid: 2 })
     );
+  });
+
+  it('converts the DOM volume scale to mpv percent', async () => {
+    const { player } = await start();
+
+    await player.setVolume(0.65);
+
+    // mpv's `volume` property is 0-100. Passing 0.65 straight through would
+    // make every film nearly silent.
+    expect(invoke).toHaveBeenCalledWith('native_player_set_volume', { percent: 65 });
+    expect(player.volume).toBe(0.65);
+  });
+
+  it('tracks position from native-player-time', async () => {
+    const { player } = await start();
+
+    handlers['native-player-time']({ payload: 42 });
+
+    expect(player.currentTime).toBe(42);
+  });
+
+  it('reports the position even when mpv could not determine a duration', async () => {
+    vi.mocked(invoke).mockImplementation((async (command: string) =>
+      command === 'start_native_player' ? { duration: 0, tracks: [] } : undefined) as never);
+    const { player } = await start();
+
+    handlers['native-player-time']({ payload: 42 });
+
+    // Progress cannot be written without a duration, but the seek bar still
+    // has to move.
+    expect(player.currentTime).toBe(42);
+  });
+
+  it('follows mpv when it pauses itself', async () => {
+    const { player } = await start();
+
+    handlers['native-player-paused']({ payload: true });
+
+    expect(player.paused).toBe(true);
+  });
+
+  it('does not unpause when switching subtitles', async () => {
+    const { player } = await start();
+    vi.mocked(invoke).mockClear();
+
+    await player.selectSubtitle(3);
+
+    // set_tracks would write `aid` too and unpause; neither is wanted here.
+    expect(invoke).toHaveBeenCalledWith('native_player_select_subtitle', { sid: 3 });
+    expect(invoke).not.toHaveBeenCalledWith('native_player_set_tracks', expect.anything());
+  });
+
+  it('toggles pause through the command rather than guessing', async () => {
+    const { player } = await start();
+    vi.mocked(invoke).mockClear();
+
+    await player.togglePlay();
+
+    expect(invoke).toHaveBeenCalledWith('native_player_set_paused', { paused: true });
+    expect(player.paused).toBe(true);
+  });
+
+  it('clamps a seek to the file and reports the target', async () => {
+    const { player } = await start();
+
+    await player.seek(500);
+
+    // duration is 100; mpv rejects a seek past the end and pauses itself.
+    expect(invoke).toHaveBeenCalledWith('native_player_seek', { seconds: 100 });
+    expect(player.currentTime).toBe(100);
+  });
+
+  it('moves the selection when a track is switched', async () => {
+    vi.mocked(invoke).mockImplementation((async (command: string) =>
+      command === 'start_native_player'
+        ? {
+            duration: 100,
+            tracks: [
+              track({ id: 1, type: 'audio', lang: 'en', selected: true }),
+              track({ id: 2, type: 'audio', lang: 'pt' })
+            ]
+          }
+        : undefined) as never);
+    const { player } = await start();
+
+    await player.selectAudio(2);
+
+    // mpv is not asked for the track list again, so nothing else moves the
+    // flag and the menu would keep its check mark on the old row.
+    const audio = player.tracks.filter((t) => t.type === 'audio');
+    expect(audio.find((t) => t.selected)?.id).toBe(2);
+  });
+
+  it('leaves the audio selection alone when the subtitle changes', async () => {
+    const { player } = await start();
+
+    await player.selectSubtitle(null);
+
+    // Disabling subtitles must not read as disabling the audio track too.
+    expect(player.tracks.find((t) => t.type === 'audio')?.selected).toBe(true);
+  });
+
+  it('follows the duration mpv learns after loading', async () => {
+    vi.mocked(invoke).mockImplementation((async (command: string) =>
+      command === 'start_native_player' ? { duration: 0, tracks: [] } : undefined) as never);
+    const update = vi.spyOn(progressStore, 'update');
+    const { player } = await start();
+
+    handlers['native-player-duration']({ payload: 5025 });
+
+    // A streamed file often reports no length at first. Without following it
+    // the seek bar stays pinned at zero and no progress is ever written.
+    expect(player.duration).toBe(5025);
+
+    handlers['native-player-time']({ payload: 60 });
+    expect(update).toHaveBeenCalledWith('tt1', undefined, undefined, 60, 5025);
+  });
+
+  it('moves the selection onto the preferred tracks at startup', async () => {
+    settingsStore.subtitle = 'pt';
+    vi.mocked(invoke).mockImplementation((async (command: string) =>
+      command === 'start_native_player'
+        ? {
+            duration: 100,
+            tracks: [
+              track({ id: 1, type: 'sub', lang: 'en', selected: true }),
+              track({ id: 2, type: 'sub', lang: 'pt' })
+            ]
+          }
+        : undefined) as never);
+    const { player } = await start();
+
+    // set_tracks applied Portuguese to mpv, but the flags still came from
+    // mpv's own default, so the menu highlighted English while Portuguese
+    // played.
+    const subs = player.tracks.filter((t) => t.type === 'sub');
+    expect(subs.find((t) => t.selected)?.id).toBe(2);
+  });
+
+  it('reports no video until mpv actually paints', async () => {
+    const { player } = await start();
+
+    // file-loaded only means the file was parsed; mpv is still paused with
+    // nothing on screen, and going transparent then shows the desktop.
+    expect(player.hasVideo).toBe(false);
+
+    handlers['native-player-presenting']({ payload: undefined });
+
+    expect(player.hasVideo).toBe(true);
+  });
+
+  it('exposes the track list mpv reported', async () => {
+    const { player } = await start();
+
+    expect(player.tracks).toHaveLength(1);
+    expect(player.duration).toBe(100);
   });
 });

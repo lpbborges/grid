@@ -1,14 +1,14 @@
 <script lang="ts">
   import { logger } from '$lib/logger';
   import { getTorrentStats } from '$lib/engine/torrent';
+  import { describeMediaError } from '$lib/engine/codecSupport';
   import type { SubtitleTrack } from '$lib/api/subtitles';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { useAudioTrackSelection } from '$lib/composables/useAudioTrackSelection.svelte';
   import { useSubtitleSelection } from '$lib/composables/useSubtitleSelection.svelte';
   import { playerState } from '$lib/stores.svelte';
-  import AudioMenu from './AudioMenu.svelte';
-  import SubtitleMenu from './SubtitleMenu.svelte';
+  import PlayerControls from './PlayerControls.svelte';
 
   let {
     src,
@@ -87,18 +87,11 @@
   // network failure (unsupported codec, CORS rejection, torrent stream
   // aborting) left the loading overlay spinning forever with no way to tell
   // that apart from "still downloading". Surface it instead.
-  const MEDIA_ERROR_MESSAGES: Record<number, string> = {
-    1: 'O carregamento do vídeo foi interrompido.',
-    2: 'Falha de rede ao carregar o vídeo.',
-    3: 'Não foi possível decodificar este vídeo (codec não suportado).',
-    4: 'Formato de vídeo não suportado.'
-  };
-
   function handleVideoError() {
     const mediaError = videoElement?.error;
     playbackError = mediaError
-      ? (MEDIA_ERROR_MESSAGES[mediaError.code] ?? 'Erro desconhecido ao reproduzir o vídeo.')
-      : 'Erro desconhecido ao reproduzir o vídeo.';
+      ? describeMediaError(mediaError.code)
+      : 'Não foi possível reproduzir este vídeo.';
     // Otherwise an error firing after playback already started (isVideoPlaying
     // still true from an earlier 'playing'/'canplay') would leave the overlay
     // hidden (it's gated on !isVideoPlaying) and the video frozen on its last
@@ -275,18 +268,6 @@
     }
   }
 
-  function formatTime(seconds: number) {
-    if (isNaN(seconds)) return '0:00';
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-
-    if (h > 0) {
-      return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-    }
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  }
-
   const SEEK_STEP_SECONDS = 5;
 
   function handleGlobalKeydown(e: KeyboardEvent) {
@@ -364,33 +345,6 @@
   onfocusin={handleFocusIn}
   onfocusout={handleFocusOut}
 >
-  {#if onclose}
-    <button
-      onclick={onclose}
-      class="hover:text-green text-main focus-visible:ring-green absolute top-10 left-6 z-50 p-2 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {showControls ||
-      paused ||
-      subtitleSelection.showMenu
-        ? 'opacity-100'
-        : 'opacity-0'}"
-      aria-label="Fechar"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="26"
-        height="26"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        class="[filter:drop-shadow(0_1px_2px_rgba(0,0,0,0.8))]"
-      >
-        <path d="m15 18-6-6 6-6" />
-      </svg>
-    </button>
-  {/if}
-
   {#if !isVideoPlaying}
     <div
       class="absolute inset-0 z-40 flex flex-col items-center justify-center px-4 text-center select-none {hasStartedPlaying &&
@@ -493,200 +447,32 @@
     </video>
   {/if}
 
-  <!-- Custom Controls Bar -->
-  <div
-    class="from-backdrop absolute right-0 bottom-0 left-0 bg-gradient-to-t to-transparent p-4 transition-opacity duration-300 {showControls ||
-    paused ||
-    subtitleSelection.showMenu
-      ? 'opacity-100'
-      : 'opacity-0'}"
-  >
-    <div
-      class="group focus-visible:ring-green mb-3 flex w-full cursor-pointer items-center rounded py-2 focus-visible:ring-2 focus-visible:outline-none"
-      onclick={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        currentTime = fraction * (duration || 0);
-      }}
-      onkeydown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          e.stopPropagation();
-          togglePlay();
-        }
-      }}
-      onmousedown={(e) => {
-        const bar = e.currentTarget;
-        const rect = bar.getBoundingClientRect();
-        const onMove = (ev: MouseEvent) => {
-          const fraction = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
-          currentTime = fraction * (duration || 0);
-        };
-        const onUp = () => {
-          window.removeEventListener('mousemove', onMove);
-          window.removeEventListener('mouseup', onUp);
-        };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
-      }}
-      role="slider"
-      aria-label="Buscar posição"
-      aria-valuemin={0}
-      aria-valuemax={duration || 100}
-      aria-valuenow={currentTime}
-      aria-valuetext={formatTime(currentTime)}
-      tabindex={0}
-    >
-      <div class="bg-main/25 relative h-1 w-full rounded-full transition-all group-hover:h-2">
-        <div
-          class="bg-green absolute top-0 left-0 h-full rounded-full"
-          style="width: {duration ? (currentTime / duration) * 100 : 0}%"
-        ></div>
-        <div
-          class="bg-green absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 shadow-[0_0_6px_rgba(54,211,83,0.6)] transition-opacity group-hover:h-4 group-hover:w-4 group-hover:opacity-100"
-          style="left: {duration ? (currentTime / duration) * 100 : 0}%"
-        ></div>
-      </div>
-    </div>
-
-    <div class="text-main flex items-center justify-between font-mono">
-      <div class="flex items-center gap-4">
-        <button
-          onclick={togglePlay}
-          aria-label={paused ? 'Reproduzir' : 'Pausar'}
-          class="hover:text-green focus-visible:ring-green rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        >
-          {#if paused}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
-            >
-          {:else}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              stroke="none"
-              ><rect x="6" y="4" width="4" height="16" /><rect
-                x="14"
-                y="4"
-                width="4"
-                height="16"
-              /></svg
-            >
-          {/if}
-        </button>
-        <span class="text-sm font-bold tracking-wider"
-          >{formatTime(currentTime)} / {formatTime(duration)}</span
-        >
-
-        <div class="group relative ml-4 flex items-center gap-2">
-          <button
-            onclick={() => (volume = volume === 0 ? 1 : 0)}
-            aria-label="Ativar/desativar mudo"
-            class="hover:text-green focus-visible:ring-green rounded p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
-          >
-            {#if volume > 0}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path
-                  d="M15.54 8.46a5 5 0 0 1 0 7.07"
-                /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></svg
-              >
-            {:else}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line
-                  x1="23"
-                  y1="9"
-                  x2="17"
-                  y2="15"
-                /><line x1="17" y1="9" x2="23" y2="15" /></svg
-              >
-            {/if}
-          </button>
-          <div
-            class="flex w-0 items-center overflow-hidden transition-all duration-300 group-focus-within:w-20 group-focus-within:px-2 group-hover:w-20 group-hover:px-2"
-          >
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              bind:value={volume}
-              aria-label="Volume"
-              class="accent-green focus-visible:ring-green w-full cursor-pointer rounded focus-visible:ring-2 focus-visible:outline-none"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div class="relative flex items-center gap-4">
-        <AudioMenu
-          audioTracks={audioSelection.audioTracks}
-          activeAudioIndex={audioSelection.activeAudioIndex}
-          showAudioMenu={audioSelection.showAudioMenu}
-          ontoggle={() => (audioSelection.showAudioMenu = !audioSelection.showAudioMenu)}
-          onselect={(index) => audioSelection.selectAudioTrack(videoElement, index)}
-        />
-
-        <SubtitleMenu
-          {subtitles}
-          {torrentSubsGrouped}
-          {externalSubsGrouped}
-          activeIndex={subtitleSelection.activeIndex}
-          failedTrackIndexes={subtitleSelection.failedTrackIndexes}
-          expandedGroups={subtitleSelection.expandedGroups}
-          subtitleError={subtitleSelection.subtitleError}
-          showMenu={subtitleSelection.showMenu}
-          ontoggle={() => (subtitleSelection.showMenu = !subtitleSelection.showMenu)}
-          onselect={(index) => subtitleSelection.selectTrack(index)}
-          ontogglegroup={(groupKey, label) => subtitleSelection.toggleGroup(groupKey, label)}
-        />
-
-        <button
-          onclick={toggleFullscreen}
-          aria-label="Tela cheia"
-          class="hover:text-green focus-visible:ring-green ml-2 rounded p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path
-              d="M3 16v3a2 2 0 0 0 2 2h3"
-            /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></svg
-          >
-        </button>
-      </div>
-    </div>
-  </div>
+  <PlayerControls
+    {currentTime}
+    {duration}
+    {paused}
+    {volume}
+    visible={showControls || paused || subtitleSelection.showMenu}
+    {subtitles}
+    {torrentSubsGrouped}
+    {externalSubsGrouped}
+    activeSubtitleIndex={subtitleSelection.activeIndex}
+    failedTrackIndexes={subtitleSelection.failedTrackIndexes}
+    expandedGroups={subtitleSelection.expandedGroups}
+    subtitleError={subtitleSelection.subtitleError}
+    showSubtitleMenu={subtitleSelection.showMenu}
+    audioTracks={audioSelection.audioTracks}
+    activeAudioIndex={audioSelection.activeAudioIndex}
+    showAudioMenu={audioSelection.showAudioMenu}
+    onplaypause={togglePlay}
+    onseek={(seconds) => (currentTime = seconds)}
+    onvolume={(value) => (volume = value)}
+    onselectaudio={(index) => audioSelection.selectAudioTrack(videoElement, index)}
+    onselectsubtitle={(index) => subtitleSelection.selectTrack(index)}
+    ontogglesubtitlemenu={() => (subtitleSelection.showMenu = !subtitleSelection.showMenu)}
+    ontoggleaudiomenu={() => (audioSelection.showAudioMenu = !audioSelection.showAudioMenu)}
+    ontogglegroup={(groupKey, label) => subtitleSelection.toggleGroup(groupKey, label)}
+    {onclose}
+    onfullscreen={toggleFullscreen}
+  />
 </div>

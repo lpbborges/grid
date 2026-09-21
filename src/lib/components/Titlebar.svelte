@@ -36,6 +36,7 @@
 </script>
 
 <div
+  data-titlebar
   class="from-dark/90 via-dark/40 relative z-[110] flex h-8 items-center justify-between bg-gradient-to-b to-transparent transition-opacity duration-300 select-none {playerState.isPlaying &&
   !playerState.showControls
     ? 'pointer-events-none opacity-0'

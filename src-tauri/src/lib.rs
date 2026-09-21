@@ -7,6 +7,7 @@ mod mpv_player;
 mod playback_engine_tests;
 mod stream_proxy;
 mod subtitles;
+mod window_embed;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -594,7 +595,7 @@ async fn cache_native_subtitles(
         .collect())
 }
 
-/// Starts native playback in mpv's own window and returns its track list.
+/// Starts native playback inside Grid's own window and returns its track list.
 ///
 /// The track list comes back from the call rather than as an event: the
 /// frontend needs it before it can apply preferences, and a returned value
@@ -602,19 +603,30 @@ async fn cache_native_subtitles(
 #[tauri::command]
 async fn start_native_player(
     app: tauri::AppHandle,
+    window: tauri::Window,
     proxy: State<'_, StreamProxyState>,
     state: State<'_, mpv_player::NativePlayerState>,
     url: String,
     start_seconds: f64,
     subtitle_files: Vec<String>,
 ) -> Result<mpv_player::Playback, String> {
-    start_native_player_impl(app, proxy, state, url, start_seconds, subtitle_files).await
+    start_native_player_impl(
+        app,
+        window,
+        proxy,
+        state,
+        url,
+        start_seconds,
+        subtitle_files,
+    )
+    .await
 }
 
 /// Linux keeps the `<video>` element, and mpv only ships on Windows (D3).
 #[cfg(not(windows))]
 async fn start_native_player_impl(
     _app: tauri::AppHandle,
+    _window: tauri::Window,
     _proxy: State<'_, StreamProxyState>,
     _state: State<'_, mpv_player::NativePlayerState>,
     _url: String,
@@ -627,6 +639,7 @@ async fn start_native_player_impl(
 #[cfg(windows)]
 async fn start_native_player_impl(
     app: tauri::AppHandle,
+    window: tauri::Window,
     proxy: State<'_, StreamProxyState>,
     state: State<'_, mpv_player::NativePlayerState>,
     url: String,
@@ -654,15 +667,24 @@ async fn start_native_player_impl(
 
     stop_player(&state).await;
 
+    // Tauri hands back the `windows` crate's HWND newtype; the Win32 calls in
+    // window_embed take the raw pointer value.
+    let parent = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+
     // Randomised per launch and never logged: a guessable endpoint would
     // let any process running as this user issue mpv's `run` command.
     let endpoint = mpv_player::random_endpoint_name();
+    // `--vo=null` for the E2E job, which also means mpv creates no video
+    // window to order.
+    let headless = std::env::var("GRID_E2E").is_ok();
     let args = mpv_player::launch_args(&mpv_player::LaunchOptions {
         endpoint: &endpoint,
         url: &url,
         start_seconds,
         subtitle_files: &subtitle_files,
-        headless: std::env::var("GRID_E2E").is_ok(),
+        headless,
+        parent_window: Some(parent as i64),
+        software_gpu: false,
     });
 
     let mut command: std::process::Command = app
@@ -691,9 +713,85 @@ async fn start_native_player_impl(
         };
 
     let (reader, writer) = tokio::io::split(pipe);
-    let (client, events) = mpv_player::connect(reader, writer);
-    client.observe_time().await?;
+    let (mut events, client) = {
+        let (client, events) = mpv_player::connect(reader, writer);
+        client.observe_time().await?;
+        client.observe_pause().await?;
+        client.observe_duration().await?;
+        (events, client)
+    };
+
+    // Wait for mpv to parse the file before asking what is in it. `track-list`
+    // is empty and `duration` is null until `file-loaded`, so reading them on
+    // connect gives no tracks (no audio or subtitle menu) and a length of 0,
+    // which pins the seek bar at zero and blocks every progress write.
+    //
+    // Events that arrive first are dropped on purpose: mpv is still paused on
+    // the first frame, so there is no position worth keeping.
+    let loaded = tokio::time::timeout(std::time::Duration::from_secs(60), async {
+        while let Some(event) = events.recv().await {
+            match event {
+                mpv_player::PlayerEvent::Loaded => return Ok(()),
+                // The file failed before it ever loaded; report that rather
+                // than time out on it.
+                mpv_player::PlayerEvent::Failed(detail) => return Err(detail),
+                mpv_player::PlayerEvent::Ended => {
+                    return Err("mpv closed the file before it loaded".to_string())
+                }
+                _ => {}
+            }
+        }
+        Err("the mpv connection closed before the file loaded".to_string())
+    })
+    .await;
+
+    match loaded {
+        Ok(Ok(())) => {}
+        Ok(Err(detail)) => {
+            stop_player(&state).await;
+            return Err(format!("mpv could not load the stream: {detail}"));
+        }
+        Err(_) => {
+            stop_player(&state).await;
+            return Err("mpv did not load the stream in time".to_string());
+        }
+    }
+
     let playback = client.playback().await?;
+
+    // mpv's child window is created above the webview; the transparent webview
+    // only composites over it once it is at the bottom.
+    //
+    // Retried rather than done once: mpv creates the `--wid` child at VO
+    // reconfig, which can still trail the `file-loaded` waited on above, so
+    // the window may not exist yet on the first look. Losing this is not
+    // cosmetic - mpv stays above WebView2 and covers the whole UI, with no
+    // controls and no way out. Nothing re-raises it once ordered, so the loop
+    // stops at the first success.
+    //
+    // Skipped when headless: `--vo=null` means there is no video window, and
+    // ordering one would report it as missing and blame `--wid`, which was
+    // never passed in that case.
+    if !headless {
+        const Z_ORDER_ATTEMPTS: u32 = 40;
+        const Z_ORDER_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
+
+        let mut report = String::new();
+        for attempt in 0..Z_ORDER_ATTEMPTS {
+            report = window_embed::push_video_behind_ui(parent);
+            if window_embed::is_ordered(&report) {
+                break;
+            }
+            if attempt + 1 < Z_ORDER_ATTEMPTS {
+                tokio::time::sleep(Z_ORDER_INTERVAL).await;
+            }
+        }
+        if !window_embed::is_ordered(&report) {
+            // Not fatal in the sense that playback works, but the UI is behind
+            // the video. Loud in the log rather than a silently covered window.
+            eprintln!("Embedded player z-order failed after retrying: {report}");
+        }
+    }
 
     pump_player_events(app.clone(), events);
     *state.child.lock().unwrap() = Some(child);
@@ -703,8 +801,8 @@ async fn start_native_player_impl(
 
 /// Applies the preselected tracks, then starts playback.
 ///
-/// The only mid-session command. Everything else - play, pause, seek, volume,
-/// in-playback track switching - is mpv's own window and keybindings (D5).
+/// Startup only: it writes both track properties and unpauses as one step.
+/// The mid-session controls below are separate for exactly that reason.
 #[tauri::command]
 async fn native_player_set_tracks(
     state: State<'_, mpv_player::NativePlayerState>,
@@ -716,6 +814,81 @@ async fn native_player_set_tracks(
         .ok_or_else(|| "No native player is running".to_string())?;
     client.set_tracks(aid, sid).await?;
     client.set_paused(false).await
+}
+
+/// Pauses or resumes playback.
+///
+/// Separate from `native_player_set_tracks`, which unpauses as part of
+/// starting: that one applies preferences once, this one is the control the
+/// user presses.
+#[tauri::command]
+async fn native_player_set_paused(
+    state: State<'_, mpv_player::NativePlayerState>,
+    paused: bool,
+) -> Result<(), String> {
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.set_paused(paused).await
+}
+
+/// Seeks to an absolute position in seconds.
+#[tauri::command]
+async fn native_player_seek(
+    state: State<'_, mpv_player::NativePlayerState>,
+    seconds: f64,
+) -> Result<(), String> {
+    if !seconds.is_finite() || seconds < 0.0 {
+        return Err("Invalid seek position".to_string());
+    }
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.seek(seconds).await
+}
+
+/// Sets the output volume on mpv's 0-100 scale.
+#[tauri::command]
+async fn native_player_set_volume(
+    state: State<'_, mpv_player::NativePlayerState>,
+    percent: f64,
+) -> Result<(), String> {
+    if !percent.is_finite() || !(0.0..=100.0).contains(&percent) {
+        return Err("Invalid volume".to_string());
+    }
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.set_volume(percent).await
+}
+
+/// Switches the audio track mid-playback.
+///
+/// Distinct from `native_player_set_tracks`, which writes both properties and
+/// then unpauses. That is right when applying preferences at startup and wrong
+/// here twice over: changing the audio while paused must not start the film,
+/// and it must not disable the subtitles.
+#[tauri::command]
+async fn native_player_select_audio(
+    state: State<'_, mpv_player::NativePlayerState>,
+    aid: Option<i64>,
+) -> Result<(), String> {
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.set_audio_track(aid).await
+}
+
+/// Switches the subtitle track mid-playback. `None` means no subtitles.
+#[tauri::command]
+async fn native_player_select_subtitle(
+    state: State<'_, mpv_player::NativePlayerState>,
+    sid: Option<i64>,
+) -> Result<(), String> {
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.set_subtitle_track(sid).await
 }
 
 #[tauri::command]
@@ -757,6 +930,14 @@ fn pump_player_events(
         while let Some(event) = events.recv().await {
             let emitted = match event {
                 mpv_player::PlayerEvent::Time(seconds) => app.emit("native-player-time", seconds),
+                mpv_player::PlayerEvent::Paused(paused) => app.emit("native-player-paused", paused),
+                mpv_player::PlayerEvent::Duration(seconds) => {
+                    app.emit("native-player-duration", seconds)
+                }
+                // Consumed by start_native_player before this pump starts; a
+                // second one would only mean mpv reloaded the same file.
+                mpv_player::PlayerEvent::Loaded => Ok(()),
+                mpv_player::PlayerEvent::Presenting => app.emit("native-player-presenting", ()),
                 mpv_player::PlayerEvent::Ended => app.emit("native-player-ended", ()),
                 mpv_player::PlayerEvent::Failed(detail) => app.emit("native-player-error", detail),
             };
@@ -829,6 +1010,11 @@ pub fn run() {
             evict_for_space,
             start_native_player,
             native_player_set_tracks,
+            native_player_set_paused,
+            native_player_seek,
+            native_player_set_volume,
+            native_player_select_audio,
+            native_player_select_subtitle,
             stop_native_player,
             cache_native_subtitles
         ])

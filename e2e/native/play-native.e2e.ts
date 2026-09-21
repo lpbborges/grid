@@ -5,7 +5,8 @@ import { MKV_MOVIE } from '../support/catalog.ts';
 import { openTitle } from '../specs/helpers.ts';
 import { REPO_ROOT } from '../support/swarm.ts';
 
-// Windows plays in mpv's own window, which WebDriver cannot see into. So this
+// Windows draws the video in an mpv child window behind the webview, which
+// WebDriver cannot see into - only the controls on top are in the DOM. So this
 // asserts on what the frontend surfaces - the events mpv sends back over IPC,
 // the tracks it reported, and the progress they produce - rather than on pixels.
 // The IPC handshake, track-list parsing, preference application and cleanup are
@@ -49,9 +50,12 @@ describe('Native playback', () => {
     await play.waitForClickable({ timeout: 30000 });
     await play.click();
 
-    // The notice replaces the player UI on this path.
-    const notice = await $('*=Reproduzindo em uma janela separada');
-    await notice.waitForDisplayed({ timeout: 90000 });
+    // Grid's own controls, composited over mpv rather than beside it. The
+    // video itself is an mpv child window behind the webview and is not in
+    // the DOM, so the surface is what there is to assert on.
+    const surface = await $('[data-testid="native-player-surface"]');
+    await surface.waitForDisplayed({ timeout: 90000 });
+    await expect($('[aria-label="Buscar posição"]')).toBeDisplayed();
 
     // No <video> is mounted at all: that is the whole point of the branch.
     const videos = await browser.execute(() => document.querySelectorAll('video').length);
