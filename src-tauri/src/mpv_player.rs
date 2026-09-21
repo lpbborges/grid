@@ -69,6 +69,10 @@ pub struct Playback {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlayerEvent {
     Time(f64),
+    /// mpv's `pause` property changed. Grid's controls are the only thing that
+    /// can change it now, but mpv still pauses itself on EOF and on a failed
+    /// seek, so the UI follows the property rather than assuming.
+    Paused(bool),
     Ended,
     Failed(String),
 }
@@ -247,10 +251,58 @@ impl Client {
         Ok(())
     }
 
+    /// Seeks to an absolute position in seconds.
+    ///
+    /// `absolute` rather than `relative`: Grid's seek bar reports a target, not
+    /// a delta, and a relative seek would compound rounding on every drag.
+    pub async fn seek(&self, seconds: f64) -> Result<(), String> {
+        self.call(json!(["seek", seconds, "absolute"])).await?;
+        Ok(())
+    }
+
+    /// Sets the output volume.
+    ///
+    /// `percent` is mpv's own 0-100 scale, not the DOM's 0-1. The conversion
+    /// belongs to the caller so this stays a thin wrapper over the property.
+    pub async fn set_volume(&self, percent: f64) -> Result<(), String> {
+        self.call(json!(["set_property", "volume", percent]))
+            .await?;
+        Ok(())
+    }
+
+    /// Selects an audio track, leaving the subtitle track untouched.
+    ///
+    /// `set_tracks` writes both properties at once, which is right when applying
+    /// preferences at startup and wrong for a mid-playback switch: `None` there
+    /// means mpv's `no` sentinel and would disable the other track.
+    pub async fn set_audio_track(&self, id: Option<i64>) -> Result<(), String> {
+        self.call(json!(["set_property", "aid", track_value(id)]))
+            .await?;
+        Ok(())
+    }
+
+    /// Selects a subtitle track, leaving the audio track untouched.
+    ///
+    /// `None` is meaningful here and means "no subtitles".
+    pub async fn set_subtitle_track(&self, id: Option<i64>) -> Result<(), String> {
+        self.call(json!(["set_property", "sid", track_value(id)]))
+            .await?;
+        Ok(())
+    }
+
     /// Asks mpv to push `time-pos` changes instead of polling for them.
     pub async fn observe_time(&self) -> Result<(), String> {
         self.call(json!(["observe_property", 1, "time-pos"]))
             .await?;
+        Ok(())
+    }
+
+    /// Asks mpv to push `pause` changes instead of polling for them.
+    ///
+    /// Observer id `2` is deliberate: `observe_time` already uses `1`, and
+    /// reusing an id silently replaces the earlier observer.
+    pub async fn observe_pause(&self) -> Result<(), String> {
+        self.call(json!(["observe_property", 2, "pause"])).await?;
         Ok(())
     }
 
@@ -554,6 +606,11 @@ fn parse_event(message: &Value, throttle: &mut TimeThrottle) -> Option<PlayerEve
                 .accept(Instant::now())
                 .then_some(PlayerEvent::Time(seconds))
         }
+        // Deliberately not throttled, unlike `time-pos`: a pause change fires
+        // rarely and a dropped one leaves the button showing the wrong icon.
+        "property-change" if message.get("name")?.as_str()? == "pause" => {
+            Some(PlayerEvent::Paused(message.get("data")?.as_bool()?))
+        }
         "end-file" => match message.get("reason").and_then(Value::as_str) {
             Some("error") => {
                 let detail = message
@@ -727,6 +784,59 @@ mod tests {
         assert_eq!(aid["command"], json!(["set_property", "aid", 2]));
         assert_eq!(sid["command"], json!(["set_property", "sid", "no"]));
         set.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn seeks_to_an_absolute_position() {
+        let (client, _events, mut mpv) = MockMpv::connect();
+
+        let ask = tokio::spawn(async move { client.seek(42.5).await });
+        let command = mpv.answer_next(Value::Null).await;
+
+        assert_eq!(command["command"], json!(["seek", 42.5, "absolute"]));
+        ask.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn sets_volume_on_mpvs_own_scale() {
+        let (client, _events, mut mpv) = MockMpv::connect();
+
+        let ask = tokio::spawn(async move { client.set_volume(65.0).await });
+        let command = mpv.answer_next(Value::Null).await;
+
+        // mpv's `volume` property is 0-100, not the DOM's 0-1. Sending 0.65 here
+        // would make every film nearly silent.
+        assert_eq!(command["command"], json!(["set_property", "volume", 65.0]));
+        ask.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn forwards_pause_changes_as_events() {
+        let (_client, mut events, mut mpv) = MockMpv::connect();
+
+        mpv.push(json!({
+            "event": "property-change",
+            "id": 2,
+            "name": "pause",
+            "data": true
+        }))
+        .await;
+
+        assert_eq!(events.recv().await, Some(PlayerEvent::Paused(true)));
+    }
+
+    #[tokio::test]
+    async fn switching_one_track_leaves_the_other_alone() {
+        let (client, _events, mut mpv) = MockMpv::connect();
+
+        // `set_tracks` writes BOTH properties, and track_value(None) is mpv's
+        // "no" sentinel - which disables a track. Reusing it for a mid-playback
+        // subtitle switch would mute the film as a side effect.
+        let ask = tokio::spawn(async move { client.set_subtitle_track(Some(3)).await });
+        let command = mpv.answer_next(Value::Null).await;
+
+        assert_eq!(command["command"], json!(["set_property", "sid", 3]));
+        ask.await.unwrap().unwrap();
     }
 
     #[tokio::test]

@@ -865,6 +865,7 @@ fn pump_player_events(
         while let Some(event) = events.recv().await {
             let emitted = match event {
                 mpv_player::PlayerEvent::Time(seconds) => app.emit("native-player-time", seconds),
+                mpv_player::PlayerEvent::Paused(paused) => app.emit("native-player-paused", paused),
                 mpv_player::PlayerEvent::Ended => app.emit("native-player-ended", ()),
                 mpv_player::PlayerEvent::Failed(detail) => app.emit("native-player-error", detail),
             };
