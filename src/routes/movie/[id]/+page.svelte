@@ -5,7 +5,7 @@
   import { getMovieStreams, parseSeedCount } from '$lib/api/torrentio';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
-  import NativePlaybackNotice from '$lib/components/NativePlaybackNotice.svelte';
+  import NativePlayerSurface from '$lib/components/NativePlayerSurface.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
   import { useNativePlayer } from '$lib/composables/useNativePlayer.svelte';
@@ -312,10 +312,13 @@
           fileIdx={streamPlayer.fileIdx}
           totalBytes={streamPlayer.totalBytes}
         />
+      {:else if streamPlayer.isPlaying && isNative}
+        <NativePlayerSurface
+          player={nativePlayer}
+          engineStatus={streamPlayer.engineStatus}
+          onclose={streamPlayer.stop}
+        />
       {:else}
-        {#if streamPlayer.isPlaying && isNative}
-          <NativePlaybackNotice />
-        {/if}
         <MediaInfo
           id={movie.id}
           title={translatedTitle}
