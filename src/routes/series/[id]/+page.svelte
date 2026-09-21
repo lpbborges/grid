@@ -4,8 +4,11 @@
   import { getSeriesStreams, parseSeedCount } from '$lib/api/torrentio';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
+  import NativePlaybackNotice from '$lib/components/NativePlaybackNotice.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
+  import { useNativePlayer } from '$lib/composables/useNativePlayer.svelte';
+  import { playbackMode } from '$lib/engine/platform';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -20,6 +23,9 @@
   let lastAttemptedEpisode = $state<Episode | null>(null);
 
   const streamPlayer = useStreamPlayer();
+  // Windows plays in mpv's own window; everywhere else mounts <video>.
+  const isNative = playbackMode() === 'native';
+  const nativePlayer = useNativePlayer();
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
@@ -138,11 +144,36 @@
       if (!ok && streamPlayer.error) {
         error = streamPlayer.error;
         errorSource = 'play';
+        return;
       }
+      if (ok && isNative) await startNativePlayback(episode);
     } catch (e) {
       logger.error('Erro ao buscar fontes do episódio:', e);
       error = 'Não foi possível iniciar a reprodução. Tente novamente.';
       errorSource = 'play';
+    }
+  }
+
+  async function startNativePlayback(episode: Episode) {
+    const started = await nativePlayer.start({
+      url: streamPlayer.videoSrc,
+      subtitles: streamPlayer.subtitles,
+      mediaId: seriesId,
+      season: episode.season,
+      episode: episode.episode,
+      startSeconds: progressStore.get(seriesId, episode.season, episode.episode)?.time || 0,
+      originalLanguage: series?.language,
+      // mpv exiting ends the session: release the torrent exactly as closing
+      // the embedded player does.
+      onended: () => {
+        streamPlayer.stop();
+      }
+    });
+    if (!started) {
+      // No fallback to <video>: it cannot play this content on Windows.
+      error = nativePlayer.error;
+      errorSource = 'play';
+      await streamPlayer.stop();
     }
   }
 
@@ -217,7 +248,7 @@
     </div>
 
     <div class="w-full lg:w-1/2">
-      {#if streamPlayer.isPlaying}
+      {#if streamPlayer.isPlaying && !isNative}
         <VideoPlayer
           src={streamPlayer.videoSrc}
           subtitles={streamPlayer.subtitles}
@@ -243,6 +274,9 @@
           totalBytes={streamPlayer.totalBytes}
         />
       {:else}
+        {#if streamPlayer.isPlaying && isNative}
+          <NativePlaybackNotice />
+        {/if}
         <MediaInfo
           id={series.id}
           title={translatedTitle}

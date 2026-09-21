@@ -5,8 +5,11 @@
   import { getMovieStreams, parseSeedCount } from '$lib/api/torrentio';
   import VideoPlayer from '$lib/components/VideoPlayer.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
+  import NativePlaybackNotice from '$lib/components/NativePlaybackNotice.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
+  import { useNativePlayer } from '$lib/composables/useNativePlayer.svelte';
+  import { playbackMode } from '$lib/engine/platform';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -19,6 +22,10 @@
   let errorSource = $state<'load' | 'play' | null>(null);
 
   const streamPlayer = useStreamPlayer();
+  // Windows plays in mpv's own window; everywhere else mounts <video>. The
+  // branch lives here so VideoPlayer itself never has to know about it.
+  const isNative = playbackMode() === 'native';
+  const nativePlayer = useNativePlayer();
 
   $effect(() => {
     if (data.error) {
@@ -183,6 +190,29 @@
     if (!ok && streamPlayer.error) {
       error = streamPlayer.error;
       errorSource = 'play';
+      return;
+    }
+    if (ok && isNative) await startNativePlayback();
+  }
+
+  async function startNativePlayback() {
+    const started = await nativePlayer.start({
+      url: streamPlayer.videoSrc,
+      subtitles: streamPlayer.subtitles,
+      mediaId: movieId,
+      startSeconds: progressStore.get(movieId)?.time || 0,
+      originalLanguage: movie?.language,
+      // mpv exiting ends the session: release the torrent exactly as closing
+      // the embedded player does.
+      onended: () => {
+        streamPlayer.stop();
+      }
+    });
+    if (!started) {
+      // No fallback to <video>: it cannot play this content on Windows.
+      error = nativePlayer.error;
+      errorSource = 'play';
+      await streamPlayer.stop();
     }
   }
 
@@ -266,7 +296,7 @@
     </div>
 
     <div class="w-full lg:w-3/4">
-      {#if streamPlayer.isPlaying}
+      {#if streamPlayer.isPlaying && !isNative}
         <VideoPlayer
           src={streamPlayer.videoSrc}
           subtitles={streamPlayer.subtitles}
@@ -283,6 +313,9 @@
           totalBytes={streamPlayer.totalBytes}
         />
       {:else}
+        {#if streamPlayer.isPlaying && isNative}
+          <NativePlaybackNotice />
+        {/if}
         <MediaInfo
           id={movie.id}
           title={translatedTitle}
