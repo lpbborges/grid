@@ -116,6 +116,12 @@ export function getLanguageName(code: string, strict = false): string | null {
     indonesian: 'Indonésio',
     ukr: 'Ucraniano',
     ukrainian: 'Ucraniano',
+    slv: 'Esloveno',
+    sl: 'Esloveno',
+    slovenian: 'Esloveno',
+    vie: 'Vietnamita',
+    vi: 'Vietnamita',
+    vietnamese: 'Vietnamita',
     spl: 'Espanhol (América Latina)'
   };
   const normalized = (code || '').toLowerCase().trim();
