@@ -595,7 +595,7 @@ async fn cache_native_subtitles(
         .collect())
 }
 
-/// Starts native playback in mpv's own window and returns its track list.
+/// Starts native playback inside Grid's own window and returns its track list.
 ///
 /// The track list comes back from the call rather than as an event: the
 /// frontend needs it before it can apply preferences, and a returned value
@@ -603,19 +603,30 @@ async fn cache_native_subtitles(
 #[tauri::command]
 async fn start_native_player(
     app: tauri::AppHandle,
+    window: tauri::Window,
     proxy: State<'_, StreamProxyState>,
     state: State<'_, mpv_player::NativePlayerState>,
     url: String,
     start_seconds: f64,
     subtitle_files: Vec<String>,
 ) -> Result<mpv_player::Playback, String> {
-    start_native_player_impl(app, proxy, state, url, start_seconds, subtitle_files).await
+    start_native_player_impl(
+        app,
+        window,
+        proxy,
+        state,
+        url,
+        start_seconds,
+        subtitle_files,
+    )
+    .await
 }
 
 /// Linux keeps the `<video>` element, and mpv only ships on Windows (D3).
 #[cfg(not(windows))]
 async fn start_native_player_impl(
     _app: tauri::AppHandle,
+    _window: tauri::Window,
     _proxy: State<'_, StreamProxyState>,
     _state: State<'_, mpv_player::NativePlayerState>,
     _url: String,
@@ -628,6 +639,7 @@ async fn start_native_player_impl(
 #[cfg(windows)]
 async fn start_native_player_impl(
     app: tauri::AppHandle,
+    window: tauri::Window,
     proxy: State<'_, StreamProxyState>,
     state: State<'_, mpv_player::NativePlayerState>,
     url: String,
@@ -655,6 +667,10 @@ async fn start_native_player_impl(
 
     stop_player(&state).await;
 
+    // Tauri hands back the `windows` crate's HWND newtype; the Win32 calls in
+    // window_embed take the raw pointer value.
+    let parent = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+
     // Randomised per launch and never logged: a guessable endpoint would
     // let any process running as this user issue mpv's `run` command.
     let endpoint = mpv_player::random_endpoint_name();
@@ -664,7 +680,7 @@ async fn start_native_player_impl(
         start_seconds,
         subtitle_files: &subtitle_files,
         headless: std::env::var("GRID_E2E").is_ok(),
-        parent_window: None,
+        parent_window: Some(parent as i64),
         software_gpu: false,
     });
 
@@ -696,7 +712,18 @@ async fn start_native_player_impl(
     let (reader, writer) = tokio::io::split(pipe);
     let (client, events) = mpv_player::connect(reader, writer);
     client.observe_time().await?;
+    client.observe_pause().await?;
     let playback = client.playback().await?;
+
+    // mpv's child window is created above the webview; the transparent webview
+    // only composites over it once it is at the bottom. One call is enough -
+    // nothing re-raises mpv as it presents.
+    let report = window_embed::push_video_behind_ui(parent);
+    if !report.starts_with("video pushed behind the UI") {
+        // Not fatal: playback works, the UI is just in the wrong layer. Loud in
+        // the log rather than a silent black window.
+        eprintln!("Embedded player z-order: {report}");
+    }
 
     pump_player_events(app.clone(), events);
     *state.child.lock().unwrap() = Some(child);
