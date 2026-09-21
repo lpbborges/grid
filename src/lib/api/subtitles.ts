@@ -109,7 +109,14 @@ export function getLanguageName(code: string, strict = false): string | null {
     fas: 'Persa',
     fa: 'Persa',
     persian: 'Persa',
-    farsi: 'Persa'
+    farsi: 'Persa',
+    est: 'Estoniano',
+    estonian: 'Estoniano',
+    ind: 'Indonésio',
+    indonesian: 'Indonésio',
+    ukr: 'Ucraniano',
+    ukrainian: 'Ucraniano',
+    spl: 'Espanhol (América Latina)'
   };
   const normalized = (code || '').toLowerCase().trim();
   if (map[normalized]) return map[normalized];
