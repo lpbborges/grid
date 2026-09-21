@@ -2,6 +2,7 @@
 mod cache;
 mod engine_process;
 mod media_patch;
+mod mpv_player;
 #[cfg(test)]
 mod playback_engine_tests;
 mod stream_proxy;
@@ -568,6 +569,214 @@ async fn get_stream_proxy_url(state: State<'_, StreamProxyState>) -> Result<Stri
         .ok_or_else(|| "Stream proxy not running".to_string())
 }
 
+/// Writes the fetched subtitles where mpv can read them, replacing the previous
+/// playback's.
+///
+/// External subtitles reach the frontend as `blob:` URLs, which mpv cannot load,
+/// so the text is written to the app cache and passed as `--sub-file`. The
+/// strem.io allowlist and the rate limit stay on the fetch path, untouched:
+/// this only persists what those checks already approved.
+#[tauri::command]
+async fn cache_native_subtitles(
+    app: tauri::AppHandle,
+    contents: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    let dir = mpv_player::subtitle_cache_dir(&cache_dir);
+    let paths =
+        tauri::async_runtime::spawn_blocking(move || mpv_player::write_subtitles(&dir, &contents))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+    Ok(paths
+        .into_iter()
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect())
+}
+
+/// Starts native playback in mpv's own window and returns its track list.
+///
+/// The track list comes back from the call rather than as an event: the
+/// frontend needs it before it can apply preferences, and a returned value
+/// cannot race the listener being attached.
+#[tauri::command]
+async fn start_native_player(
+    app: tauri::AppHandle,
+    proxy: State<'_, StreamProxyState>,
+    state: State<'_, mpv_player::NativePlayerState>,
+    url: String,
+    start_seconds: f64,
+    subtitle_files: Vec<String>,
+) -> Result<mpv_player::Playback, String> {
+    start_native_player_impl(app, proxy, state, url, start_seconds, subtitle_files).await
+}
+
+/// Linux keeps the `<video>` element, and mpv only ships on Windows (D3).
+#[cfg(not(windows))]
+async fn start_native_player_impl(
+    _app: tauri::AppHandle,
+    _proxy: State<'_, StreamProxyState>,
+    _state: State<'_, mpv_player::NativePlayerState>,
+    _url: String,
+    _start_seconds: f64,
+    _subtitle_files: Vec<String>,
+) -> Result<mpv_player::Playback, String> {
+    Err("Native playback is only available on Windows".to_string())
+}
+
+#[cfg(windows)]
+async fn start_native_player_impl(
+    app: tauri::AppHandle,
+    proxy: State<'_, StreamProxyState>,
+    state: State<'_, mpv_player::NativePlayerState>,
+    url: String,
+    start_seconds: f64,
+    subtitle_files: Vec<String>,
+) -> Result<mpv_player::Playback, String> {
+    let port = proxy
+        .port
+        .lock()
+        .unwrap()
+        .ok_or_else(|| "Stream proxy not running".to_string())?;
+    // mpv never goes through the frontend fetch layer, so this is the only
+    // thing keeping it pointed at our own proxy.
+    if !mpv_player::is_local_stream_url(&url, port) {
+        return Err("Refusing to play a URL that is not the local stream proxy".to_string());
+    }
+    let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    if let Some(bad) = subtitle_files
+        .iter()
+        .find(|path| !mpv_player::is_cached_subtitle_path(&cache_dir, path))
+    {
+        eprintln!("Refusing a subtitle path outside the app cache: {bad}");
+        return Err("Refusing to load a subtitle from outside the cache".to_string());
+    }
+
+    stop_player(&state).await;
+
+    // Randomised per launch and never logged: a guessable endpoint would
+    // let any process running as this user issue mpv's `run` command.
+    let endpoint = mpv_player::random_endpoint_name();
+    let args = mpv_player::launch_args(&mpv_player::LaunchOptions {
+        endpoint: &endpoint,
+        url: &url,
+        start_seconds,
+        subtitle_files: &subtitle_files,
+        headless: std::env::var("GRID_E2E").is_ok(),
+    });
+
+    let mut command: std::process::Command = app
+        .shell()
+        .sidecar("mpv")
+        .map_err(|e| e.to_string())?
+        .args(args)
+        .into();
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    // spawn_tied_to_app puts mpv in the app's kill-on-close Job Object, so a
+    // crashed or force-quit Grid takes mpv with it. No second job object.
+    let child = engine_process::spawn_tied_to_app(&mut command).map_err(|e| e.to_string())?;
+
+    let pipe =
+        match mpv_player::connect_endpoint(&endpoint, std::time::Duration::from_secs(15)).await {
+            Ok(pipe) => pipe,
+            Err(e) => {
+                let mut child = child;
+                let _ = child.kill();
+                return Err(format!("mpv did not accept a connection: {e}"));
+            }
+        };
+
+    let (reader, writer) = tokio::io::split(pipe);
+    let (client, events) = mpv_player::connect(reader, writer);
+    client.observe_time().await?;
+    let playback = client.playback().await?;
+
+    pump_player_events(app.clone(), events);
+    *state.child.lock().unwrap() = Some(child);
+    *state.client.lock().unwrap() = Some(client);
+    Ok(playback)
+}
+
+/// Applies the preselected tracks, then starts playback.
+///
+/// The only mid-session command. Everything else - play, pause, seek, volume,
+/// in-playback track switching - is mpv's own window and keybindings (D5).
+#[tauri::command]
+async fn native_player_set_tracks(
+    state: State<'_, mpv_player::NativePlayerState>,
+    aid: Option<i64>,
+    sid: Option<i64>,
+) -> Result<(), String> {
+    let client = state
+        .client()
+        .ok_or_else(|| "No native player is running".to_string())?;
+    client.set_tracks(aid, sid).await?;
+    client.set_paused(false).await
+}
+
+#[tauri::command]
+async fn stop_native_player(
+    app: tauri::AppHandle,
+    state: State<'_, mpv_player::NativePlayerState>,
+) -> Result<(), String> {
+    stop_player(&state).await;
+    // Subtitles belong to the playback that just ended.
+    if let Ok(cache_dir) = app.path().app_cache_dir() {
+        let dir = mpv_player::subtitle_cache_dir(&cache_dir);
+        let _ =
+            tauri::async_runtime::spawn_blocking(move || mpv_player::clear_subtitles(&dir)).await;
+    }
+    Ok(())
+}
+
+/// Asks mpv to quit, then makes sure it is gone.
+async fn stop_player(state: &mpv_player::NativePlayerState) {
+    let (client, child) = state.take();
+    if let Some(client) = client {
+        // Best effort: mpv may already have exited on its own.
+        let _ = client.quit().await;
+    }
+    if let Some(mut child) = child {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
+/// Forwards mpv's events to the frontend for as long as mpv is alive.
+#[cfg(windows)]
+fn pump_player_events(
+    app: tauri::AppHandle,
+    mut events: tokio::sync::mpsc::UnboundedReceiver<mpv_player::PlayerEvent>,
+) {
+    use tauri::Emitter;
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = events.recv().await {
+            let emitted = match event {
+                mpv_player::PlayerEvent::Time(seconds) => app.emit("native-player-time", seconds),
+                mpv_player::PlayerEvent::Ended => app.emit("native-player-ended", ()),
+                mpv_player::PlayerEvent::Failed(detail) => app.emit("native-player-error", detail),
+            };
+            if let Err(e) = emitted {
+                eprintln!("Failed to forward a native player event: {e}");
+            }
+        }
+        // The IPC closed: mpv is gone, so drop the handle the frontend would
+        // otherwise keep calling into.
+        let state = app.state::<mpv_player::NativePlayerState>();
+        let (_, child) = state.take();
+        if let Some(mut child) = child {
+            let _ = child.wait();
+        }
+        if let Err(e) = app.emit("native-player-ended", ()) {
+            eprintln!("Failed to report the native player exiting: {e}");
+        }
+    });
+}
+
 fn start_stream_proxy(app: &tauri::AppHandle) -> std::io::Result<u16> {
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
@@ -606,6 +815,7 @@ pub fn run() {
         .manage(SubtitleRateLimit {
             counts: Mutex::new(HashMap::new()),
         })
+        .manage(mpv_player::NativePlayerState::default())
         .manage(StreamProxyState {
             port: Mutex::new(None),
         })
@@ -616,7 +826,11 @@ pub fn run() {
             fetch_external_subtitle,
             get_cache_manifest,
             upsert_cache_entry,
-            evict_for_space
+            evict_for_space,
+            start_native_player,
+            native_player_set_tracks,
+            stop_native_player,
+            cache_native_subtitles
         ])
         .setup(|app| {
             match start_stream_proxy(app.handle()) {

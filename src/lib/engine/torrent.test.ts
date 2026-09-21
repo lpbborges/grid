@@ -36,6 +36,17 @@ describe('torrent engine', () => {
     expect(url).toBe(`http://127.0.0.1:3030/torrents/${'a'.repeat(40)}/stream/2`);
   });
 
+  it('opts out of the header patch with raw', () => {
+    const url = torrent.getStreamUrl('a'.repeat(40), 2, { raw: true });
+    expect(url).toBe(`http://127.0.0.1:3030/torrents/${'a'.repeat(40)}/stream/2?raw=1`);
+  });
+
+  it('keeps the patched URL when raw is false or omitted', () => {
+    const plain = `http://127.0.0.1:3030/torrents/${'a'.repeat(40)}/stream/2`;
+    expect(torrent.getStreamUrl('a'.repeat(40), 2, { raw: false })).toBe(plain);
+    expect(torrent.getStreamUrl('a'.repeat(40), 2, {})).toBe(plain);
+  });
+
   it('streams through the proxy URL and keeps the engine URL for API calls', async () => {
     (invoke as any).mockImplementation(async (command: string) =>
       command === 'start_torrent_engine' ? 'http://127.0.0.1:41349' : 'http://127.0.0.1:45000'

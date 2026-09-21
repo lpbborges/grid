@@ -1,0 +1,138 @@
+# Builds the LGPL mpv sidecar that Grid ships on Windows.
+#
+# Upstream publishes no LGPL mpv.exe - the community `lgpl` artifacts are FFmpeg
+# libraries and the libmpv DLL - so Grid builds its own. See
+# src-tauri/licenses/README.md for why this exists.
+#
+# UNVERIFIED: this workflow has never completed a run. The patch steps below
+# assert on upstream's current content and fail loudly if it has drifted, but the
+# build itself needs at least one successful run (several hours) before the
+# artifact can be trusted. Treat the first run as the real authoring step.
+name: Build mpv (LGPL)
+
+on:
+  workflow_dispatch:
+    inputs:
+      winbuild_ref:
+        description: Revision of shinchiro/mpv-winbuild-cmake to build from
+        required: true
+        default: master
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 720
+
+    steps:
+      - name: Install host toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build gyp yasm nasm \
+            gcc-multilib g++-multilib clang lld python3-pip git \
+            autoconf automake libtool pkg-config gperf
+          pip3 install --user meson
+
+      - name: Fetch the build system
+        run: |
+          git clone https://github.com/shinchiro/mpv-winbuild-cmake.git
+          cd mpv-winbuild-cmake
+          git checkout "${{ inputs.winbuild_ref }}"
+          git rev-parse HEAD > "$GITHUB_WORKSPACE/winbuild-revision.txt"
+
+      # Every removal below asserts first, so an upstream rename fails the job
+      # rather than silently producing a GPL binary.
+      - name: Strip GPL components from FFmpeg
+        working-directory: mpv-winbuild-cmake/packages
+        run: |
+          set -euo pipefail
+          for needle in -- --enable-gpl --enable-libx264 --enable-libx265 \
+                          --enable-libdvdnav --enable-libdvdread \
+                          --enable-librubberband --enable-libzvbi \
+                          --enable-libssh --enable-libsrt; do
+            [ "$needle" = "--" ] && continue
+            grep -q -- "$needle" ffmpeg.cmake || {
+              echo "::error::ffmpeg.cmake no longer contains $needle - upstream changed, review before trusting this build"
+              exit 1
+            }
+            sed -i "\|$needle|d" ffmpeg.cmake
+          done
+          # OpenSSL is Apache-2.0, whose patent clause is incompatible with
+          # LGPLv2.1 - that is what --enable-version3 upstream is for. libssh and
+          # libsrt pull it in, and Grid only ever streams plain HTTP from its own
+          # 127.0.0.1 proxy, so all three go and the build can target LGPLv2.1.
+          sed -i '/--enable-openssl/d;/--enable-version3/d' ffmpeg.cmake
+          # Drop the dependencies themselves so they are never built or linked.
+          for dep in x264 '${ffmpeg_x265}' libdvdnav libdvdread rubberband \
+                     libzvbi '${ffmpeg_davs2}' openssl libssh libsrt; do
+            sed -i "\|^ *${dep}$|d" ffmpeg.cmake
+          done
+          sed -i '/${ffmpeg_davs2_cmd}/d' ffmpeg.cmake
+          ! grep -qE -- '--enable-gpl|--enable-version3|x264|x265|openssl' ffmpeg.cmake
+
+      - name: Build mpv without GPL components
+        working-directory: mpv-winbuild-cmake/packages
+        run: |
+          set -euo pipefail
+          grep -q -- '-Dlibmpv=true' mpv.cmake || {
+            echo "::error::mpv.cmake layout changed - review before trusting this build"
+            exit 1
+          }
+          sed -i '/-Ddvdnav=enabled/d;/-Drubberband=enabled/d' mpv.cmake
+          # mpv is GPLv2+ unless this is set (mpv's Copyright file).
+          sed -i "s|-Dlibmpv=true|-Dgpl=false\n        -Dlibmpv=true|" mpv.cmake
+          grep -q -- '-Dgpl=false' mpv.cmake
+
+      - name: Configure
+        run: |
+          mkdir -p packages install_rustup
+          cmake -DTARGET_ARCH=x86_64-w64-mingw32 \
+            -DGCC_ARCH=x86-64-v3 \
+            -DSINGLE_SOURCE_LOCATION="$PWD/packages" \
+            -DRUSTUP_LOCATION="$PWD/install_rustup" \
+            -G Ninja -B build64 -S mpv-winbuild-cmake
+
+      - name: Build
+        run: ninja -C build64 mpv
+
+      # The licence gate. Checks the generated build configuration rather than
+      # the binary, so it cannot be fooled by a stale artifact, and needs no wine.
+      - name: Verify the build carries no GPL components
+        run: |
+          set -euo pipefail
+          config=$(find . -path '*ffmpeg*' -name config.h | head -n1)
+          [ -n "$config" ] || { echo "::error::no FFmpeg config.h found"; exit 1; }
+          echo "checking $config"
+          grep -q '^#define CONFIG_GPL 0$' "$config" || {
+            echo "::error::FFmpeg was configured with GPL enabled"; exit 1;
+          }
+          for gpl_lib in LIBX264 LIBX265 LIBXVID LIBDAVS2 LIBRUBBERBAND LIBZVBI; do
+            if grep -q "^#define CONFIG_${gpl_lib} 1$" "$config"; then
+              echo "::error::GPL component ${gpl_lib} is enabled"; exit 1
+            fi
+          done
+          # The decoders Grid actually needs must survive the strip.
+          for decoder in HEVC_DECODER H264_DECODER EAC3_DECODER AC3_DECODER \
+                         AAC_DECODER MATROSKA_DEMUXER D3D11VA; do
+            grep -q "^#define CONFIG_${decoder} 1$" "$config" || {
+              echo "::error::required component ${decoder} was lost"; exit 1;
+            }
+          done
+
+      - name: Collect the sidecar
+        run: |
+          mpv_exe=$(find build64 -name mpv.exe | head -n1)
+          [ -n "$mpv_exe" ] || { echo "::error::mpv.exe not found"; exit 1; }
+          cp "$mpv_exe" mpv-x86_64-pc-windows-msvc.exe
+          ls -l mpv-x86_64-pc-windows-msvc.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mpv-lgpl-x86_64-pc-windows-msvc
+          path: |
+            mpv-x86_64-pc-windows-msvc.exe
+            winbuild-revision.txt
+          if-no-files-found: error

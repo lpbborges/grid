@@ -13,6 +13,7 @@ import {
   deleteTorrent,
   getTorrentStats
 } from '$lib/engine/torrent';
+import { playbackMode } from '$lib/engine/platform';
 import {
   getCacheManifest,
   upsertCacheEntry,
@@ -208,7 +209,12 @@ export async function prepareStream({
     onStatus('Carregando vídeo...');
     revokeBlobUrls(activeBlobUrls);
     activeBlobUrls = subtitles.map((s) => s.url);
-    const videoSrc = getStreamUrl(details.info_hash, bestFileIdx);
+    // mpv demuxes Matroska correctly, so it must get the unpatched stream: the
+    // header patch voids every embedded subtitle track, which would leave it
+    // with an empty subtitle menu. The <video> element needs the patch.
+    const videoSrc = getStreamUrl(details.info_hash, bestFileIdx, {
+      raw: playbackMode() === 'native'
+    });
 
     return {
       infoHash,
