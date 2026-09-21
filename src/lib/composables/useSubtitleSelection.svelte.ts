@@ -9,7 +9,15 @@ export interface SubtitleGroup {
   subs: SubtitleTrack[];
 }
 
-function groupByLanguage(subs: SubtitleTrack[]): SubtitleGroup[] {
+/**
+ * Groups subtitles by their label, so several releases of one language
+ * collapse into a single expandable row.
+ *
+ * Exported because the native player builds its menu from mpv's track list
+ * rather than from DOM `<track>` elements, and both paths must group the same
+ * way or the two menus drift apart.
+ */
+export function groupByLanguage(subs: SubtitleTrack[]): SubtitleGroup[] {
   const groups: Record<string, SubtitleTrack[]> = {};
   for (const sub of subs) {
     if (!groups[sub.label]) groups[sub.label] = [];
