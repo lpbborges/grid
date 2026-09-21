@@ -1,11 +1,13 @@
 # Spike: mpv `--wid` overlay on Windows
 
 **Result: pass.** mpv reparents into Grid's top-level window via `--wid`, the Svelte
-UI composites on top of it, and the overlay keeps receiving clicks. Measured on
-2026-09-20 against `spike/windows-mpv-wid-overlay` at `5d4acd7`.
+UI composites on top of it, and the overlay keeps receiving clicks.
 
-One line of CSS in the spike page had to be corrected first: as committed, the
-spike produced a false negative that looked exactly like broken compositing.
+First measured 2026-09-20 at `5d4acd7`, then re-measured 2026-09-21 at `121a461`
+with mpv actually playing. The first run only ever showed a still frame, so it
+could not rule out a presenting swapchain behaving differently from a static one.
+It does now: the video plays continuously under the UI and mpv stays at the
+bottom of the child z-order the whole time.
 
 ## The question
 
@@ -33,6 +35,17 @@ parent 0x6027e; 2 track(s); video pushed behind the UI. children: [TAURI_DRAG_RE
 mpv created class `mpv` as a direct child of Grid's top-level window, sibling to
 WebView2's `Chrome_WidgetWin_*`. `classify` matched both, so `plan_z_order`
 returned `PushVideoBehind` rather than either missing-window case.
+
+`EnumChildWindows` walks children from the top of the z-order down, and mpv came
+last on every probe:
+
+```
+TAURI_DRAG_RESIZE_BORDERS > WRY_WEBVIEW > Chrome_WidgetWin_0 > Chrome_WidgetWin_1
+  > Chrome_RenderWidgetHostHWND > Intermediate D3D Window > mpv
+```
+
+The single `SetWindowPos(HWND_BOTTOM)` at start is enough; nothing re-raises mpv
+as it presents.
 
 P5 confirms the Job Object in `engine_process::spawn_tied_to_app` holds for an
 mpv started with `--wid`: no orphan survived.
@@ -85,21 +98,26 @@ file.
 
 ## Running it
 
-Two corrections were needed at the command line; neither is a source change.
+Both defects below were found by the first run and fixed in `121a461`; the spike
+now runs as committed. They are recorded because the workarounds appear in the
+first run's notes.
 
-1. `npm run spike:embed` fails outright as committed:
+1. `npm run spike:embed` failed outright before that commit:
 
    ```
    error: invalid value 'tauri.spike.conf.json' for '--config <CONFIG>': failed to read configuration file tauri.spike.conf.json: The system cannot find the file specified. (os error 2)
    ```
 
-   The path is resolved against the repo root, but the file lives in `src-tauri/`.
-   Pass `--config src-tauri/tauri.spike.conf.json` instead.
+   The path was resolved against the repo root, but the file lives in
+   `src-tauri/`. The script now passes `src-tauri/tauri.spike.conf.json`.
 
-2. Nothing navigates to `/spike` — decorations are off, so there is no address
-   bar. A second `--config` was merged setting the window's `url` to `spike`,
-   restating the spike window's `transparent` and `decorations` properties
-   verbatim so transparency was not altered.
+2. Nothing navigated to `/spike` — decorations are off, so there is no address
+   bar. `tauri.spike.conf.json` now sets the window's `url` to `spike`.
+
+A third, still open: the clip is 120s and `launch_args` sets `--keep-open=no`, so
+mpv exits at EOF. Any measurement pass has to finish inside that window, or
+re-press EMBED MPV. A run that outlasts the clip sees no `mpv` child and looks
+exactly like a reparenting failure.
 
 No local media was available, so the test clip was generated with the mpv sidecar
 itself — real codec path, synthetic content:
