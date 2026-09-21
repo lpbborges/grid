@@ -15,7 +15,7 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
 - **Global Playback Preferences:** Audio, Subtitle, and Quality preferences set once and remembered across the app (persisted locally). Grid ranks and picks the best matching source from YTS + Torrentio behind the scenes and silently enables the right embedded audio/subtitle track when playback starts, resolving the movie/show's real original language instead of guessing.
 - **Frameless Design:** Desktop window with custom controls and a draggable header.
 - **Cyberpunk Theme:** A unique visual identity built with Tailwind CSS v4 featuring neon glows, digital grid backgrounds, and cyberpunk typography (Orbitron/Rajdhani, bundled locally).
-- **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles.
+- **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles. The same controls drive both backends: a `<video>` element on Linux and macOS, and the mpv sidecar rendering inside Grid's own window on Windows, where the webview cannot decode what releases actually ship.
 - **Test-Driven:** Vitest and Svelte Testing Library tests for the frontend, plus Rust unit tests for the backend. Run `npm run test:frontend:cov` for the current coverage report.
 - **Robust Error Handling:** Resilient polling for engine startup, a specific error when the engine cannot start, dynamic port allocation to prevent address conflicts, and timeouts on external API calls; starting playback automatically retries with a fresh request when a source stops responding. Metadata translation tries Google Translate first and MyMemory as a backup; if both fail, the original English text is shown.
 
@@ -162,8 +162,11 @@ To update it:
 
 WebView2 cannot decode the codecs torrent releases actually ship (HEVC, AC3/E-AC3)
 and cannot demux Matroska over range requests, so Windows playback runs through
-[mpv](https://mpv.io/) in its own window instead of a `<video>` element. Linux
-keeps the `<video>` element and bundles no player.
+[mpv](https://mpv.io/) instead of a `<video>` element. mpv is launched with
+`--wid` so it renders **inside** Grid's own window, beneath the transparent
+webview, with Grid's Svelte controls composited on top — the same player UI as
+on Linux, driven over IPC rather than through a DOM element. Linux keeps the
+`<video>` element and bundles no player.
 
 | File in `src-tauri/bin/`         | Platform       |
 | -------------------------------- | -------------- |
