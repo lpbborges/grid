@@ -99,7 +99,8 @@
     background: transparent !important;
     background-image: none !important;
   }
-  :global(body > div) {
+  :global(body > div),
+  :global(body > div > div) {
     background: transparent !important;
   }
 
