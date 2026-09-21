@@ -11,7 +11,17 @@ const result = spawnSync(
     shell: process.platform === 'win32',
     env: process.argv.includes('--live')
       ? { ...process.env }
-      : { ...process.env, VITE_E2E_API_BASE: MOCK_BASE }
+      : {
+          ...process.env,
+          VITE_E2E_API_BASE: MOCK_BASE,
+          // Keep the existing specs on the <video> element, including on
+          // Windows, where playback would otherwise open mpv in its own window
+          // that WebDriver cannot see into. A dedicated spec covers the native
+          // path with VITE_GRID_NATIVE_PLAYER=on.
+          VITE_GRID_NATIVE_PLAYER: process.argv.includes('--native')
+            ? 'on'
+            : (process.env.VITE_GRID_NATIVE_PLAYER ?? 'off')
+        }
   }
 );
 process.exit(result.status ?? 1);
