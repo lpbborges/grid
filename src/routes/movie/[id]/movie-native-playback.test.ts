@@ -89,13 +89,27 @@ describe('Movie native playback wiring', () => {
     expect(boundary.unhandledRequests).toEqual([]);
   });
 
-  it('clears the page background so mpv is visible behind the webview', async () => {
+  it('stays opaque while the stream is still being prepared', async () => {
     await openAndPlay();
     await screen.findByTestId('native-player-surface', {}, { timeout: 5000 });
 
+    // The surface mounts as soon as preparation starts, before mpv exists.
+    // Clearing the background then leaves nothing behind the webview and the
+    // desktop shows through the whole window.
+    expect(screen.getByTestId('native-loading')).toBeInTheDocument();
+    expect(document.body.classList.contains('native-player-active')).toBe(false);
+  });
+
+  it('clears the page background once mpv is running', async () => {
+    await openAndPlay();
+
     // Without this the layout's own bg-dark hides mpv completely, and the
     // failure looks like broken compositing rather than a CSS bug.
-    expect(document.body.classList.contains('native-player-active')).toBe(true);
+    await waitFor(
+      () => expect(document.body.classList.contains('native-player-active')).toBe(true),
+      { timeout: 5000 }
+    );
+    expect(screen.queryByTestId('native-loading')).toBeNull();
   });
 
   it('unmounts the surface when mpv exits at the end of the file', async () => {

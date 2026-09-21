@@ -75,8 +75,14 @@
   );
 
   // Every layer from the document down to the layout wrapper has to be clear
-  // while this is up, or our own background hides mpv's window completely.
+  // for mpv's window to show through, but ONLY once mpv is actually up.
+  //
+  // The surface mounts as soon as the stream starts being prepared, which is
+  // well before `start_native_player` runs. Clearing the background then
+  // leaves nothing behind the webview at all and the desktop shows through
+  // the whole window.
   $effect(() => {
+    if (!player.isRunning) return;
     document.body.classList.add('native-player-active');
     return () => document.body.classList.remove('native-player-active');
   });
@@ -168,15 +174,39 @@
 <div
   role="region"
   aria-label="Reprodutor de Vídeo"
-  class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden"
+  class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden {player.isRunning
+    ? ''
+    : 'bg-backdrop'}"
   data-testid="native-player-surface"
   onmousemove={revealControls}
 >
-  <!--
-    No background, no child that paints one: mpv's window sits directly behind
-    this element and any fill hides it completely.
-  -->
-  <div class="flex-1" data-testid="native-video-hole"></div>
+  {#if player.isRunning}
+    <!--
+      No background, no child that paints one: mpv's window sits directly
+      behind this element and any fill hides it completely.
+    -->
+    <div class="flex-1" data-testid="native-video-hole"></div>
+  {:else}
+    <!-- Nothing is behind the webview yet, so this has to paint. -->
+    <div
+      class="flex flex-1 flex-col items-center justify-center px-4 text-center select-none"
+      data-testid="native-loading"
+    >
+      <div class="relative mb-6 h-16 w-16" data-testid="loading-spinner">
+        <div
+          class="border-t-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
+        ></div>
+        <div
+          class="border-l-primary border-r-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
+        ></div>
+      </div>
+      <div
+        class="font-cyber text-green mb-2 text-xl tracking-widest uppercase [text-shadow:0_0_10px_rgba(54,211,83,0.8)]"
+      >
+        {engineStatus || 'Carregando...'}
+      </div>
+    </div>
+  {/if}
 
   <PlayerControls
     currentTime={player.currentTime}

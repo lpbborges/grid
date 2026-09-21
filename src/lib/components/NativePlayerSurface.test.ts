@@ -89,6 +89,30 @@ describe('NativePlayerSurface', () => {
     expect(typeof vi.mocked(player.seek).mock.calls[0][0]).toBe('number');
   });
 
+  it('stays opaque until mpv is actually up', () => {
+    // The surface mounts as soon as the stream starts being prepared, long
+    // before start_native_player runs. Going transparent then shows the
+    // desktop through the window, because there is no mpv behind it yet.
+    const { container } = render(NativePlayerSurface, {
+      player: fakePlayer({ isRunning: false }),
+      engineStatus: 'Preparando stream...'
+    });
+
+    expect(document.body.classList.contains('native-player-active')).toBe(false);
+    expect(container.querySelector('[data-testid="native-video-hole"]')).toBeNull();
+    expect(screen.getByTestId('native-loading')).toBeInTheDocument();
+  });
+
+  it('opens the hole once mpv is running', () => {
+    const { container } = render(NativePlayerSurface, {
+      player: fakePlayer({ isRunning: true })
+    });
+
+    expect(document.body.classList.contains('native-player-active')).toBe(true);
+    expect(container.querySelector('[data-testid="native-video-hole"]')).toBeTruthy();
+    expect(screen.queryByTestId('native-loading')).toBeNull();
+  });
+
   it('makes the document transparent only while it is mounted', () => {
     const { unmount } = render(NativePlayerSurface, { player: fakePlayer() });
 
