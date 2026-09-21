@@ -159,8 +159,9 @@ keeps the `<video>` element and bundles no player.
 | -------------------------------- | -------------- |
 | `mpv-x86_64-pc-windows-msvc.exe` | Windows x86-64 |
 
-> **Not committed yet.** `src-tauri/bin/mpv-*` is gitignored while the licensing
-> route is settled: the only Windows build published upstream is GPLv2+, and
+> **Not committed yet.** `src-tauri/bin/mpv-*` and `src-tauri/tauri.windows.conf.json`
+> are both gitignored while the licensing route is settled, and must land together —
+> the config registers the binary, and Tauri's build script fails when it is absent: the only Windows build published upstream is GPLv2+, and
 > bundling it would put a source-distribution obligation on every release. The
 > plan is to ship an LGPL build instead — see
 > [`src-tauri/licenses/README.md`](src-tauri/licenses/README.md). Put a local copy

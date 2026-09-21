@@ -7,6 +7,24 @@ Grid itself is MIT licensed (see `LICENSE` at the repository root).
 `src-tauri/bin/mpv-*` is gitignored on purpose. A local copy is fine for
 development, but no mpv binary is committed or distributed while this is open.
 
+`src-tauri/tauri.windows.conf.json` is gitignored for the same reason and **must
+land in the same commit as the binary**. It registers `bin/mpv` as an
+`externalBin`, and Tauri's build script fails with `resource path
+bin\mpv-x86_64-pc-windows-msvc.exe doesn't exist` when the file is missing -
+which breaks every Windows build, not just bundling. Its contents are:
+
+```json
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "externalBin": ["bin/rqbit", "bin/mpv"]
+  }
+}
+```
+
+It repeats `bin/rqbit` because Tauri's platform merge replaces arrays rather
+than concatenating them.
+
 **The decision: ship an LGPL build, not a GPL one.**
 
 ### Why
