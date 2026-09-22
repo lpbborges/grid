@@ -29,7 +29,7 @@
       aria-label="Menu de Faixas de Áudio"
       aria-haspopup="menu"
       aria-expanded={showAudioMenu}
-      class="hover:text-primary focus-visible:ring-primary rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors focus-visible:ring-2 focus-visible:outline-none {showAudioMenu
+      class="hover:text-primary rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors {showAudioMenu
         ? 'text-primary'
         : ''}"
     >
@@ -51,7 +51,7 @@
         {#each audioTracks as track}
           <button
             role="menuitem"
-            class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-primary w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeAudioIndex ===
+            class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeAudioIndex ===
             track.index
               ? 'bg-primary/30 text-primary font-bold'
               : ''}"

@@ -44,7 +44,7 @@
       {#if group.subs.length === 1}
         <button
           role="menuitem"
-          class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-primary w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
+          class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
           subtitles.indexOf(group.subs[0])
             ? 'bg-primary/30 text-primary font-bold'
             : ''}"
@@ -59,7 +59,7 @@
         <button
           aria-haspopup="true"
           aria-expanded={expandedGroups[`${groupKey}-${group.label}`] ?? false}
-          class="hover:bg-main/10 hover:text-main focus-visible:ring-primary flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {isActiveGroup
+          class="hover:bg-main/10 hover:text-main flex w-full justify-between rounded px-3 py-1.5 text-left text-sm transition-colors {isActiveGroup
             ? 'text-primary font-bold'
             : 'text-muted'}"
           onclick={() => ontogglegroup(groupKey, group.label)}
@@ -74,7 +74,7 @@
             {#each group.subs as sub, index}
               <button
                 role="menuitem"
-                class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-primary w-full truncate rounded px-3 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
+                class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 {activeIndex ===
                 subtitles.indexOf(sub)
                   ? 'bg-primary/30 text-primary font-bold'
                   : ''}"
@@ -103,7 +103,7 @@
       aria-label="Menu de Legendas"
       aria-haspopup="menu"
       aria-expanded={showMenu}
-      class="hover:text-primary focus-visible:ring-primary rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors focus-visible:ring-2 focus-visible:outline-none {showMenu
+      class="hover:text-primary rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors {showMenu
         ? 'text-primary'
         : ''}"
     >
@@ -119,7 +119,7 @@
       >
         <button
           role="menuitem"
-          class="text-muted hover:bg-main/10 hover:text-main focus-visible:ring-primary w-full rounded px-3 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none {activeIndex ===
+          class="text-muted hover:bg-main/10 hover:text-main w-full rounded px-3 py-1.5 text-left text-sm transition-colors {activeIndex ===
           -1
             ? 'bg-main/10 text-main'
             : ''}"

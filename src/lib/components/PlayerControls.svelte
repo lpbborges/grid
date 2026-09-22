@@ -99,7 +99,7 @@
 {#if onclose}
   <button
     onclick={onclose}
-    class="hover:text-primary text-main focus-visible:ring-primary absolute top-10 left-6 z-50 p-2 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {visible
+    class="hover:text-primary text-main absolute top-10 left-6 z-50 p-2 transition-all duration-300 {visible
       ? 'opacity-100'
       : 'opacity-0'}"
     aria-label="Fechar"
@@ -128,7 +128,7 @@
     : 'opacity-0'}"
 >
   <div
-    class="group focus-visible:ring-primary mb-3 flex w-full cursor-pointer items-center rounded py-2 focus-visible:ring-2 focus-visible:outline-none"
+    class="group mb-3 flex w-full cursor-pointer items-center rounded py-2"
     onclick={(e) => seekFromPointer(e.currentTarget, e.clientX)}
     onkeydown={(e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -172,7 +172,7 @@
       <button
         onclick={onplaypause}
         aria-label={paused ? 'Reproduzir' : 'Pausar'}
-        class="hover:text-primary focus-visible:ring-primary rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        class="hover:text-primary rounded transition-colors"
       >
         {#if paused}
           <svg
@@ -208,7 +208,7 @@
         <button
           onclick={() => onvolume(volume === 0 ? 1 : 0)}
           aria-label="Ativar/desativar mudo"
-          class="hover:text-primary focus-visible:ring-primary rounded p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          class="hover:text-primary rounded p-2 transition-colors"
         >
           {#if volume > 0}
             <svg
@@ -256,7 +256,7 @@
             value={volume}
             oninput={(e) => onvolume(Number(e.currentTarget.value))}
             aria-label="Volume"
-            class="accent-primary focus-visible:ring-primary w-full cursor-pointer rounded focus-visible:ring-2 focus-visible:outline-none"
+            class="accent-primary w-full cursor-pointer rounded"
           />
         </div>
       </div>
@@ -289,7 +289,7 @@
         <button
           onclick={onfullscreen}
           aria-label="Tela cheia"
-          class="hover:text-primary focus-visible:ring-primary ml-2 rounded p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          class="hover:text-primary ml-2 rounded p-2 transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

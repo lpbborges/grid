@@ -661,19 +661,4 @@ describe('VideoPlayer component', () => {
 
     expect(getByText('Falha de rede ao carregar o vídeo.')).toBeDefined();
   });
-
-  it('applies focus-visible ring styling to key interactive controls', () => {
-    const { getByLabelText, getByRole } = render(VideoPlayer, {
-      src: 'test.mp4',
-      onclose: vi.fn()
-    });
-
-    expect(getByLabelText('Fechar').className).toContain('focus-visible:ring-2');
-    expect(getByRole('button', { name: /Reproduzir|Pausar/i }).className).toContain(
-      'focus-visible:ring-2'
-    );
-    expect(getByLabelText('Tela cheia').className).toContain('focus-visible:ring-2');
-    expect(getByLabelText('Ativar/desativar mudo').className).toContain('focus-visible:ring-2');
-    expect(getByLabelText('Buscar posição').className).toContain('focus-visible:ring-2');
-  });
 });
