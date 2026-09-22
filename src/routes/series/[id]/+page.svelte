@@ -2,14 +2,13 @@
   import { logger } from '$lib/logger';
   import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
   import { getSeriesStreams, parseSeedCount } from '$lib/api/torrentio';
-  import VideoPlayer from '$lib/components/VideoPlayer.svelte';
+  import Player from '$lib/components/Player.svelte';
+  import { createPlayerBackend } from '$lib/components/playerBackend';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
-  import NativePlayerSurface from '$lib/components/NativePlayerSurface.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
-  import { useMpvBackend } from '$lib/composables/useMpvBackend.svelte';
   import { playbackMode } from '$lib/engine/platform';
-  import { watchedStore } from '$lib/stores/watched.svelte';
+
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
@@ -25,7 +24,8 @@
   const streamPlayer = useStreamPlayer();
   // Windows plays through mpv embedded in this window; else mounts <video>.
   const isNative = playbackMode() === 'native';
-  const nativePlayer = useMpvBackend();
+  let videoElement = $state<HTMLVideoElement | null>(null);
+  const backend = createPlayerBackend(() => videoElement);
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
@@ -146,7 +146,21 @@
         errorSource = 'play';
         return;
       }
-      if (ok && isNative) await startNativePlayback(episode);
+      if (ok) {
+        if (isNative) {
+          await startNativePlayback(episode);
+        } else {
+          await backend.start({
+            url: streamPlayer.videoSrc,
+            subtitles: streamPlayer.subtitles,
+            mediaId: seriesId.toString(),
+            season: episode.season,
+            episode: episode.episode,
+            startSeconds: progressStore.get(seriesId, episode.season, episode.episode)?.time || 0,
+            originalLanguage: series?.language
+          });
+        }
+      }
     } catch (e) {
       logger.error('Erro ao buscar fontes do episódio:', e);
       error = 'Não foi possível iniciar a reprodução. Tente novamente.';
@@ -155,7 +169,7 @@
   }
 
   async function startNativePlayback(episode: Episode) {
-    const started = await nativePlayer.start({
+    const started = await backend.start({
       url: streamPlayer.videoSrc,
       subtitles: streamPlayer.subtitles,
       mediaId: seriesId,
@@ -163,15 +177,13 @@
       episode: episode.episode,
       startSeconds: progressStore.get(seriesId, episode.season, episode.episode)?.time || 0,
       originalLanguage: series?.language,
-      // mpv exiting ends the session: release the torrent exactly as closing
-      // the embedded player does.
       onended: () => {
         streamPlayer.stop();
       }
     });
     if (!started) {
       // No fallback to <video>: it cannot play this content on Windows.
-      error = nativePlayer.error;
+      error = backend.error;
       errorSource = 'play';
       await streamPlayer.stop();
     }
@@ -247,36 +259,16 @@
     </div>
 
     <div class="w-full lg:w-1/2">
-      {#if streamPlayer.isPlaying && !isNative}
-        <VideoPlayer
-          src={streamPlayer.videoSrc}
-          subtitles={streamPlayer.subtitles}
-          mediaId={seriesId}
-          season={lastAttemptedEpisode?.season}
-          episode={lastAttemptedEpisode?.episode}
-          originalLanguage={series?.language}
-          initialTime={progressStore.get(
-            seriesId,
-            lastAttemptedEpisode?.season,
-            lastAttemptedEpisode?.episode
-          )?.time || 0}
-          onclose={streamPlayer.stop}
-          onwatched={() => {
-            watchedStore.add(seriesId);
-            if (lastAttemptedEpisode) {
-              watchedStore.add(seriesId, lastAttemptedEpisode.season, lastAttemptedEpisode.episode);
-            }
+      {#if streamPlayer.isPlaying}
+        <Player
+          {backend}
+          bind:videoElement
+          engineStatus={streamPlayer.engineStatus}
+          downloadPercent={0}
+          onclose={() => {
+            streamPlayer.stop();
+            backend.stop();
           }}
-          engineStatus={streamPlayer.engineStatus}
-          infoHash={streamPlayer.infoHash}
-          fileIdx={streamPlayer.fileIdx}
-          totalBytes={streamPlayer.totalBytes}
-        />
-      {:else if streamPlayer.isPlaying && isNative}
-        <NativePlayerSurface
-          player={nativePlayer}
-          engineStatus={streamPlayer.engineStatus}
-          onclose={streamPlayer.stop}
         />
       {:else}
         <MediaInfo

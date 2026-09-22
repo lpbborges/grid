@@ -178,7 +178,11 @@
       !backend.error
         ? 'bg-backdrop/60'
         : 'bg-backdrop'}"
-      data-testid={backend.buffering && !backend.error ? 'buffering-overlay' : 'loading-overlay'}
+      data-testid={backend.buffering && !backend.error
+        ? 'buffering-overlay'
+        : transparent
+          ? 'native-loading'
+          : 'loading-overlay'}
     >
       {#if backend.error}
         <svg

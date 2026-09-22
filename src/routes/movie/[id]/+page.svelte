@@ -3,14 +3,13 @@
   import { logger } from '$lib/logger';
   import { translateMediaInfo } from '$lib/api/translate';
   import { getMovieStreams, parseSeedCount } from '$lib/api/torrentio';
-  import VideoPlayer from '$lib/components/VideoPlayer.svelte';
+  import Player from '$lib/components/Player.svelte';
+  import { createPlayerBackend } from '$lib/components/playerBackend';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
-  import NativePlayerSurface from '$lib/components/NativePlayerSurface.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
-  import { useMpvBackend } from '$lib/composables/useMpvBackend.svelte';
   import { playbackMode } from '$lib/engine/platform';
-  import { watchedStore } from '$lib/stores/watched.svelte';
+
   import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
@@ -25,7 +24,8 @@
   // Windows plays through mpv embedded in this window; everywhere else mounts
   // <video>. The branch lives here so VideoPlayer never has to know about it.
   const isNative = playbackMode() === 'native';
-  const nativePlayer = useMpvBackend();
+  let videoElement = $state<HTMLVideoElement | null>(null);
+  const backend = createPlayerBackend(() => videoElement);
 
   $effect(() => {
     if (data.error) {
@@ -192,25 +192,35 @@
       errorSource = 'play';
       return;
     }
-    if (ok && isNative) await startNativePlayback();
+    if (ok) {
+      if (isNative) {
+        await startNativePlayback();
+      } else {
+        await backend.start({
+          url: streamPlayer.videoSrc,
+          subtitles: streamPlayer.subtitles,
+          mediaId: movieId.toString(),
+          startSeconds: progressStore.get(movieId)?.time || 0,
+          originalLanguage: movie?.language
+        });
+      }
+    }
   }
 
   async function startNativePlayback() {
-    const started = await nativePlayer.start({
+    const started = await backend.start({
       url: streamPlayer.videoSrc,
       subtitles: streamPlayer.subtitles,
       mediaId: movieId,
       startSeconds: progressStore.get(movieId)?.time || 0,
       originalLanguage: movie?.language,
-      // mpv exiting ends the session: release the torrent exactly as closing
-      // the embedded player does.
       onended: () => {
         streamPlayer.stop();
       }
     });
     if (!started) {
       // No fallback to <video>: it cannot play this content on Windows.
-      error = nativePlayer.error;
+      error = backend.error;
       errorSource = 'play';
       await streamPlayer.stop();
     }
@@ -295,27 +305,16 @@
     </div>
 
     <div class="w-full lg:w-3/4">
-      {#if streamPlayer.isPlaying && !isNative}
-        <VideoPlayer
-          src={streamPlayer.videoSrc}
-          subtitles={streamPlayer.subtitles}
-          mediaId={movieId}
-          originalLanguage={movie?.language}
-          initialTime={progressStore.get(movieId)?.time || 0}
-          onclose={streamPlayer.stop}
-          onwatched={() => {
-            watchedStore.add(movieId);
+      {#if streamPlayer.isPlaying}
+        <Player
+          {backend}
+          bind:videoElement
+          engineStatus={streamPlayer.engineStatus}
+          downloadPercent={0}
+          onclose={() => {
+            streamPlayer.stop();
+            backend.stop();
           }}
-          engineStatus={streamPlayer.engineStatus}
-          infoHash={streamPlayer.infoHash}
-          fileIdx={streamPlayer.fileIdx}
-          totalBytes={streamPlayer.totalBytes}
-        />
-      {:else if streamPlayer.isPlaying && isNative}
-        <NativePlayerSurface
-          player={nativePlayer}
-          engineStatus={streamPlayer.engineStatus}
-          onclose={streamPlayer.stop}
         />
       {:else}
         <MediaInfo

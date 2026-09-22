@@ -97,6 +97,7 @@ export interface PlaybackRequest {
   episode?: number;
   startSeconds: number;
   originalLanguage?: string;
+  onended?: () => void;
 }
 
 /**
