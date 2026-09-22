@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Stream } from '$lib/api/torrentio';
 import type { ExternalSubtitleEntry } from '$lib/types';
 import { createFakeRqbit, type FakeRqbit, type FakeTorrentFile } from './fakeRqbit';
-import type { NativeTrack } from '$lib/composables/useNativePlayer.svelte';
+import type { NativeTrack } from '$lib/composables/useMpvBackend.svelte';
 
 export const ENGINE_ORIGIN = 'http://127.0.0.1:41000';
 export const PROXY_ORIGIN = 'http://127.0.0.1:42000';

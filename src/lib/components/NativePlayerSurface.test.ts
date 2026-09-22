@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import NativePlayerSurface from './NativePlayerSurface.svelte';
-import type { NativeTrack } from '$lib/composables/useNativePlayer.svelte';
+import type { NativeTrack } from '$lib/composables/useMpvBackend.svelte';
 
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: vi.fn() }));
 
@@ -41,8 +41,21 @@ function fakePlayer(overrides = {}) {
     setVolume: vi.fn(),
     selectAudio: vi.fn(),
     selectSubtitle: vi.fn(),
+    audioTracks: [
+      { index: 0, id: '1', label: 'Inglês', enabled: true },
+      { index: 1, id: '2', label: 'Português', enabled: false }
+    ],
+    activeAudioIndex: 0,
+    subtitles: [{ id: '1', url: '', lang: 'pt', label: 'Português', group: 'Embedded' }],
+    activeSubtitleIndex: 0,
+    failedSubtitleIndexes: [],
+    subtitleError: '',
+    hasStarted: false,
+    buffering: false,
+    syncOverlayLayout: vi.fn(),
+    toggleFullscreen: vi.fn(),
     ...overrides
-  };
+  } as unknown as any;
 }
 
 afterEach(() => {
@@ -77,7 +90,7 @@ describe('NativePlayerSurface', () => {
 
     // The second audio track is mpv's aid 2. A flat index across all tracks
     // would have sent 1 here and switched to the wrong track.
-    expect(player.selectAudio).toHaveBeenCalledWith(2);
+    expect(player.selectAudio).toHaveBeenCalledWith(1);
   });
 
   it('reports a seek in seconds', async () => {

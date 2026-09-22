@@ -268,7 +268,10 @@
         {activeAudioIndex}
         {showAudioMenu}
         ontoggle={ontoggleaudiomenu}
-        onselect={onselectaudio}
+        onselect={(index) => {
+          onselectaudio(index);
+          ontoggleaudiomenu?.();
+        }}
       />
 
       <SubtitleMenu
@@ -281,7 +284,10 @@
         {subtitleError}
         showMenu={showSubtitleMenu}
         ontoggle={ontogglesubtitlemenu}
-        onselect={onselectsubtitle}
+        onselect={(index) => {
+          onselectsubtitle(index);
+          ontogglesubtitlemenu?.();
+        }}
         {ontogglegroup}
       />
 

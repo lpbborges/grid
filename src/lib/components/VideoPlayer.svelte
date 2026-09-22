@@ -7,8 +7,8 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { useAudioTrackSelection } from '$lib/composables/useAudioTrackSelection.svelte';
   import { useSubtitleSelection } from '$lib/composables/useSubtitleSelection.svelte';
-  import { playerState } from '$lib/stores.svelte';
-  import PlayerControls from './PlayerControls.svelte';
+  import PlayerShell from './PlayerShell.svelte';
+  import type { PlayerBackend } from '$lib/types';
 
   let {
     src,
@@ -39,35 +39,32 @@
     originalLanguage?: string;
     initialTime?: number;
   }>();
+
   let videoElement = $state<HTMLVideoElement | null>(null);
-  let containerElement = $state<HTMLElement | null>(null);
 
   let paused = $state(false);
   let currentTime = $state(0);
   let duration = $state(0);
   let volume = $state(1);
-  let showControls = $state(true);
-  let controlsTimeout: number | undefined;
-
-  const audioSelection = useAudioTrackSelection();
-  const subtitleSelection = useSubtitleSelection({
-    getVideoElement: () => videoElement,
-    getSubtitles: () => subtitles,
-    getControlsVisible: () => controlsVisible,
-    getAudioMenuOpen: () => audioSelection.showAudioMenu
-  });
 
   let downloadPercent = $state<number>(0);
   let isVideoPlaying = $state(false);
-  // Once true, playback has shown at least one real frame. Kept true through
-  // later rebuffering ('waiting' events) so a mid-playback stall shows a
-  // lightweight overlay on top of the still-visible video instead of the
-  // opaque first-load screen re-covering it.
   let hasStartedPlaying = $state(false);
   let statsInterval: number | undefined;
   let waitingTimeout: number | undefined;
   let watchedTriggered = $state(false);
   let playbackError = $state('');
+
+  const audioSelection = useAudioTrackSelection();
+  let shellControlsVisible = $state(true);
+  let shellMenusOpen = $state(false);
+
+  const subtitleSelection = useSubtitleSelection({
+    getVideoElement: () => videoElement,
+    getSubtitles: () => subtitles,
+    getControlsVisible: () => shellControlsVisible,
+    getAudioMenuOpen: () => shellMenusOpen
+  });
 
   function markPlaying() {
     window.clearTimeout(waitingTimeout);
@@ -83,19 +80,11 @@
     }, 250);
   }
 
-  // The <video> element previously had no error handler at all: a decode or
-  // network failure (unsupported codec, CORS rejection, torrent stream
-  // aborting) left the loading overlay spinning forever with no way to tell
-  // that apart from "still downloading". Surface it instead.
   function handleVideoError() {
     const mediaError = videoElement?.error;
     playbackError = mediaError
       ? describeMediaError(mediaError.code)
       : 'Não foi possível reproduzir este vídeo.';
-    // Otherwise an error firing after playback already started (isVideoPlaying
-    // still true from an earlier 'playing'/'canplay') would leave the overlay
-    // hidden (it's gated on !isVideoPlaying) and the video frozen on its last
-    // frame with no visible indication anything went wrong.
     isVideoPlaying = false;
     logger.error('Video playback error:', {
       code: mediaError?.code,
@@ -103,18 +92,6 @@
     });
   }
 
-  let torrentSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Embedded'));
-  let externalSubs = $derived(subtitles.filter((s: SubtitleTrack) => s.group === 'Extra'));
-  let torrentSubsGrouped = $derived(subtitleSelection.groupByLanguage(torrentSubs));
-  let externalSubsGrouped = $derived(subtitleSelection.groupByLanguage(externalSubs));
-
-  // Two different "the browser will tell us when tracks are ready" signals
-  // ('loadedmetadata', then the TextTrackList's 'addtrack' event) both proved
-  // unreliable in practice — in this WebView, videoElement.textTracks doesn't
-  // dependably reflect the just-rendered <track> elements by the time either
-  // fires. Since subtitle selection isn't time-critical (unlike, say, audio
-  // sync), polling actual readiness sidesteps needing to know which signal
-  // (if any) this platform actually honors.
   $effect(() => {
     if (
       subtitles.length === 0 ||
@@ -176,37 +153,12 @@
     };
   });
 
-  let controlsVisible = $derived(
-    showControls || paused || subtitleSelection.showMenu || audioSelection.showAudioMenu
-  );
-
-  $effect(() => {
-    playerState.showControls = controlsVisible;
-    return () => {
-      playerState.showControls = true;
-    };
-  });
-
-  $effect(() => {
-    // Re-apply layout when controls visibility or menu state changes
-    if (
-      controlsVisible !== undefined ||
-      subtitleSelection.showMenu ||
-      audioSelection.showAudioMenu
-    ) {
-      subtitleSelection.applyCueLayout();
-    }
-  });
-
   $effect(() => {
     return () => {
       subtitleSelection.disposeTrackListListener();
     };
   });
 
-  // Resets per-track load-failure state whenever the set of subtitles
-  // changes (a new stream/episode), so a failure from a previous stream
-  // doesn't linger and disable an unrelated track by coincidence of index.
   $effect(() => {
     void subtitles;
     subtitleSelection.resetTrackErrorState();
@@ -217,50 +169,14 @@
     subtitleSelection.applyDefaultSubtitle();
   }
 
-  let isFocused = $state(false);
-
-  function scheduleHideControls() {
-    window.clearTimeout(controlsTimeout);
-    controlsTimeout = window.setTimeout(() => {
-      if (!paused) showControls = false;
-    }, 2500);
-  }
-
-  function handleMouseMove() {
-    showControls = true;
-    scheduleHideControls();
-  }
-
-  function handleMouseLeave() {
-    if (!paused && !isFocused) showControls = false;
-  }
-
-  function handleFocusIn() {
-    isFocused = true;
-    showControls = true;
-    scheduleHideControls();
-  }
-
-  function handleFocusOut(e: FocusEvent) {
-    if (!containerElement?.contains(e.relatedTarget as Node)) {
-      isFocused = false;
-      if (!paused) scheduleHideControls();
-    }
-  }
-
   function togglePlay() {
-    if (subtitleSelection.showMenu || audioSelection.showAudioMenu) {
-      subtitleSelection.showMenu = false;
-      audioSelection.showAudioMenu = false;
-      return;
-    }
     if (paused) videoElement?.play();
     else videoElement?.pause();
   }
 
   function toggleFullscreen() {
     if (!document.fullscreenElement) {
-      containerElement?.requestFullscreen().catch((err) => {
+      document.documentElement.requestFullscreen().catch((err) => {
         logger.error(`Error attempting to enable full-screen mode: ${err.message}`);
       });
     } else {
@@ -268,211 +184,110 @@
     }
   }
 
-  const SEEK_STEP_SECONDS = 5;
-
-  function handleGlobalKeydown(e: KeyboardEvent) {
-    const active = document.activeElement as HTMLElement;
-    const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
-    const isButton = active && active.tagName === 'BUTTON';
-    const isSlider = active && active.getAttribute('role') === 'slider';
-
-    if (isInput) return;
-
-    switch (e.key) {
-      case ' ':
-        if (isButton || isSlider) return;
-        e.preventDefault();
-        togglePlay();
-        showControls = true;
-        scheduleHideControls();
-        break;
-      case 'ArrowLeft':
-        if (active && active.tagName === 'INPUT' && (active as HTMLInputElement).type === 'range')
-          return;
-        e.preventDefault();
-        currentTime = Math.max(0, currentTime - SEEK_STEP_SECONDS);
-        showControls = true;
-        scheduleHideControls();
-        break;
-      case 'ArrowRight':
-        if (active && active.tagName === 'INPUT' && (active as HTMLInputElement).type === 'range')
-          return;
-        e.preventDefault();
-        currentTime = Math.min(duration || 0, currentTime + SEEK_STEP_SECONDS);
-        showControls = true;
-        scheduleHideControls();
-        break;
-      case 'Escape':
-        if (document.fullscreenElement) {
-          e.preventDefault();
-          document.exitFullscreen().catch((err) => {
-            logger.error(`Error attempting to exit full-screen mode: ${err.message}`);
-          });
-        } else if (onclose) {
-          e.preventDefault();
-          onclose();
-        }
-        break;
-      case 'Home':
-        e.preventDefault();
-        currentTime = 0;
-        break;
-      case 'End':
-        e.preventDefault();
-        currentTime = duration || 0;
-        break;
-    }
-  }
-  function handleGlobalClick(e: MouseEvent) {
-    if (!subtitleSelection.showMenu && !audioSelection.showAudioMenu) return;
-    const target = e.target as HTMLElement;
-    if (target.closest('[data-menu-element]')) return;
-    subtitleSelection.showMenu = false;
-    audioSelection.showAudioMenu = false;
-  }
+  const backend: PlayerBackend = $derived({
+    get hasStarted() {
+      return hasStartedPlaying;
+    },
+    get buffering() {
+      return hasStartedPlaying && !isVideoPlaying && !playbackError;
+    },
+    get error() {
+      return playbackError;
+    },
+    get currentTime() {
+      return currentTime;
+    },
+    get duration() {
+      return duration;
+    },
+    get paused() {
+      return paused;
+    },
+    get volume() {
+      return volume;
+    },
+    get audioTracks() {
+      return audioSelection.audioTracks;
+    },
+    get activeAudioIndex() {
+      return audioSelection.activeAudioIndex;
+    },
+    get subtitles() {
+      return subtitles;
+    },
+    get activeSubtitleIndex() {
+      return subtitleSelection.activeIndex;
+    },
+    get failedSubtitleIndexes() {
+      return subtitleSelection.failedTrackIndexes;
+    },
+    get subtitleError() {
+      return subtitleSelection.subtitleError;
+    },
+    start: async () => true,
+    stop: async () => {},
+    togglePlay,
+    seek: (seconds) => {
+      currentTime = seconds;
+    },
+    setVolume: (value) => {
+      volume = value;
+    },
+    selectAudio: (index) => audioSelection.selectAudioTrack(videoElement, index),
+    selectSubtitle: (index) => subtitleSelection.selectTrack(index),
+    syncOverlayLayout: (controlsVisible, menusOpen) => {
+      shellControlsVisible = controlsVisible;
+      shellMenusOpen = menusOpen;
+      subtitleSelection.applyCueLayout();
+    },
+    toggleFullscreen
+  });
 </script>
 
-<svelte:window onkeydown={handleGlobalKeydown} onclick={handleGlobalClick} />
-
-<div
-  bind:this={containerElement}
-  role="region"
-  aria-label="Reprodutor de Vídeo"
-  class="bg-backdrop fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden"
-  data-testid="video-player-container"
-  onmousemove={handleMouseMove}
-  onmouseleave={handleMouseLeave}
-  onfocusin={handleFocusIn}
-  onfocusout={handleFocusOut}
->
-  {#if !isVideoPlaying}
-    <div
-      class="absolute inset-0 z-40 flex flex-col items-center justify-center px-4 text-center select-none {hasStartedPlaying &&
-      !playbackError
-        ? 'bg-backdrop/60'
-        : 'bg-backdrop'}"
-      data-testid={hasStartedPlaying && !playbackError ? 'buffering-overlay' : 'loading-overlay'}
-    >
-      {#if playbackError}
-        <svg
-          class="text-error mb-6 h-16 w-16 [filter:drop-shadow(0_0_10px_rgba(239,68,68,0.8))]"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="1.5"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M12 9v3.75m0 3.75h.008v.008H12v-.008ZM21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+<PlayerShell {backend} {engineStatus} {downloadPercent} {onclose}>
+  {#snippet surface()}
+    {#if src}
+      <!-- svelte-ignore a11y_media_has_caption -->
+      <video
+        bind:this={videoElement}
+        bind:paused
+        bind:currentTime
+        bind:duration
+        bind:volume
+        {src}
+        autoplay
+        class="h-full w-full cursor-pointer object-contain {hasStartedPlaying
+          ? 'opacity-100'
+          : 'opacity-0'}"
+        data-testid="video-element"
+        onclick={togglePlay}
+        onloadedmetadata={handleLoadedMetadata}
+        onplaying={markPlaying}
+        onwaiting={markWaiting}
+        oncanplay={markPlaying}
+        onseeked={markPlaying}
+        onerror={handleVideoError}
+        ontimeupdate={() => {
+          if (!isVideoPlaying && !paused) markPlaying();
+          if (mediaId && duration > 0) {
+            progressStore.update(mediaId, season, episode, currentTime, duration);
+          }
+          if (duration > 0 && currentTime / duration > 0.95 && onwatched && !watchedTriggered) {
+            watchedTriggered = true;
+            onwatched();
+          }
+        }}
+      >
+        {#each subtitles as sub, index}
+          <track
+            kind="subtitles"
+            src={sub.url}
+            srclang={sub.lang}
+            label={sub.label}
+            onerror={() => subtitleSelection.handleTrackError(index)}
           />
-        </svg>
-      {:else}
-        <div class="relative mb-6 h-16 w-16" data-testid="loading-spinner">
-          <div
-            class="border-t-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
-          ></div>
-          <div
-            class="border-l-primary border-r-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
-          ></div>
-        </div>
-      {/if}
-      {#if playbackError || !hasStartedPlaying}
-        <div
-          class="font-cyber mb-2 text-xl tracking-widest uppercase {playbackError
-            ? 'text-error [text-shadow:0_0_10px_rgba(239,68,68,0.8)]'
-            : 'text-green [text-shadow:0_0_10px_rgba(54,211,83,0.8)]'}"
-        >
-          {playbackError || engineStatus || 'Carregando...'}
-        </div>
-      {/if}
-      {#if !playbackError && infoHash && downloadPercent > 0}
-        <div class="text-main font-mono text-sm">
-          {downloadPercent.toFixed(2)}%
-        </div>
-      {/if}
-    </div>
-  {/if}
-
-  <!--
-    Captions/subtitles are an optional, per-torrent feature (see P0-5): tracks are
-    fetched via Tauri IPC and rendered below from the `subtitles` prop when the
-    source provides them. There is no reliable "always on" caption file to fall
-    back to by default (a fake <track kind="captions" src="..."> would 404 and
-    mislead assistive tech into thinking captions exist when they don't), so this
-    a11y gap is acknowledged and intentionally suppressed rather than papered over
-    with a broken fallback. See VideoPlayer.test.ts for the covered behavior.
-  -->
-  {#if src}
-    <!-- svelte-ignore a11y_media_has_caption -->
-    <video
-      bind:this={videoElement}
-      bind:paused
-      bind:currentTime
-      bind:duration
-      bind:volume
-      {src}
-      autoplay
-      class="h-full w-full cursor-pointer object-contain {hasStartedPlaying
-        ? 'opacity-100'
-        : 'opacity-0'}"
-      data-testid="video-element"
-      onclick={togglePlay}
-      onloadedmetadata={handleLoadedMetadata}
-      onplaying={markPlaying}
-      onwaiting={markWaiting}
-      oncanplay={markPlaying}
-      onseeked={markPlaying}
-      onerror={handleVideoError}
-      ontimeupdate={() => {
-        if (!isVideoPlaying && !paused) markPlaying();
-        if (mediaId && duration > 0) {
-          progressStore.update(mediaId, season, episode, currentTime, duration);
-        }
-        if (duration > 0 && currentTime / duration > 0.95 && onwatched && !watchedTriggered) {
-          watchedTriggered = true;
-          onwatched();
-        }
-      }}
-    >
-      {#each subtitles as sub, index}
-        <track
-          kind="subtitles"
-          src={sub.url}
-          srclang={sub.lang}
-          label={sub.label}
-          onerror={() => subtitleSelection.handleTrackError(index)}
-        />
-      {/each}
-    </video>
-  {/if}
-
-  <PlayerControls
-    {currentTime}
-    {duration}
-    {paused}
-    {volume}
-    visible={showControls || paused || subtitleSelection.showMenu}
-    {subtitles}
-    {torrentSubsGrouped}
-    {externalSubsGrouped}
-    activeSubtitleIndex={subtitleSelection.activeIndex}
-    failedTrackIndexes={subtitleSelection.failedTrackIndexes}
-    expandedGroups={subtitleSelection.expandedGroups}
-    subtitleError={subtitleSelection.subtitleError}
-    showSubtitleMenu={subtitleSelection.showMenu}
-    audioTracks={audioSelection.audioTracks}
-    activeAudioIndex={audioSelection.activeAudioIndex}
-    showAudioMenu={audioSelection.showAudioMenu}
-    onplaypause={togglePlay}
-    onseek={(seconds) => (currentTime = seconds)}
-    onvolume={(value) => (volume = value)}
-    onselectaudio={(index) => audioSelection.selectAudioTrack(videoElement, index)}
-    onselectsubtitle={(index) => subtitleSelection.selectTrack(index)}
-    ontogglesubtitlemenu={() => (subtitleSelection.showMenu = !subtitleSelection.showMenu)}
-    ontoggleaudiomenu={() => (audioSelection.showAudioMenu = !audioSelection.showAudioMenu)}
-    ontogglegroup={(groupKey, label) => subtitleSelection.toggleGroup(groupKey, label)}
-    {onclose}
-    onfullscreen={toggleFullscreen}
-  />
-</div>
+        {/each}
+      </video>
+    {/if}
+  {/snippet}
+</PlayerShell>
