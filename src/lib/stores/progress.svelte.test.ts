@@ -66,4 +66,16 @@ describe('progressStore persistence', () => {
     expect(progressStore.get('tt1')).toBeUndefined();
     expect(storedProgress()).toEqual({});
   });
+
+  it('does not mark the entire series as watched when a single episode is completed', async () => {
+    const { progressStore } = await loadStore();
+    const { watchedStore } = await import('./watched.svelte');
+
+    watchedStore.watchedIds = []; // reset state
+
+    progressStore.update('tt1', 1, 1, 96, 100);
+
+    expect(watchedStore.has('tt1', 1, 1)).toBe(true);
+    expect(watchedStore.has('tt1')).toBe(false);
+  });
 });

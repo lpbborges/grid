@@ -82,9 +82,6 @@ class ProgressStore {
         this.persistNow();
       }
       watchedStore.add(id, season, episode);
-      if (season !== undefined && episode !== undefined) {
-        watchedStore.add(id);
-      }
     } else {
       this.progress[key] = {
         time,
