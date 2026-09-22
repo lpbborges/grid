@@ -148,6 +148,32 @@ video::cue {
   scrollbar-width: none;
 }
 
+/* Global Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-purple-600);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-purple-600) var(--surface);
+}
+
 /* Only while the embedded player is running: every layer from the document
    down to the layout wrapper must be clear, or mpv's window - which sits
    behind the webview, not inside it - is hidden by our own background.

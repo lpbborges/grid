@@ -2,6 +2,7 @@ import { logger } from '$lib/logger';
 import type { CinemetaMeta, Movie, Series } from '../types';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { endpoints } from './endpoints';
+import { enrichMovieWithTmdb, enrichSeriesWithTmdb } from './tmdb';
 
 function mapCinemetaMeta(m: CinemetaMeta): Movie {
   return {
@@ -157,7 +158,7 @@ export async function getMovieDetails(
   // so callers can compare against 'pt'/'en'/'es' regardless of media type.
   movie.language = mapLanguageWordToCode(movie.language);
 
-  return movie;
+  return enrichMovieWithTmdb(movie.id as string, movie, customFetch);
 }
 
 const LANGUAGE_WORD_TO_CODE: Record<string, string> = {
@@ -217,7 +218,7 @@ export async function getSeriesDetails(
   }
 
   const meta: CinemetaMeta = data.meta;
-  return {
+  const series = {
     id: meta.imdb_id || meta.id || seriesId,
     title: meta.name,
     year: parseInt(meta.year || '') || 0,
@@ -228,7 +229,10 @@ export async function getSeriesDetails(
     summary: meta.description || '',
     description_full: meta.description || '',
     cast: (meta.cast || []).map((c) => ({
-      name: c,
+      name: c
+        .replace(/&apos;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&'),
       character_name: '',
       url_small_image: null,
       imdb_code: ''
@@ -238,4 +242,6 @@ export async function getSeriesDetails(
     videos: meta.videos || [],
     torrents: []
   };
+
+  return enrichSeriesWithTmdb(series.id as string, series, customFetch);
 }
