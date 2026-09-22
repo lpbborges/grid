@@ -84,3 +84,61 @@ export interface TorrentEngineDetails {
     length: number;
   }[];
 }
+
+import type { SubtitleTrack } from '$lib/api/subtitles';
+import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
+
+/** Everything a backend needs to start one stream. */
+export interface PlaybackRequest {
+  url: string;
+  subtitles: SubtitleTrack[];
+  mediaId: string | number;
+  season?: number;
+  episode?: number;
+  startSeconds: number;
+  originalLanguage?: string;
+}
+
+/**
+ * One playback backend: a `<video>` element, or the mpv sidecar.
+ *
+ * The shape is the one `PlayerControls` already consumes, plus lifecycle.
+ * Track selection is index-based on both sides on purpose: mpv numbers tracks
+ * per type, and letting an mpv id reach a component silently selects the wrong
+ * track. Mapping an index to whatever the backend uses is the backend's job.
+ */
+export interface PlayerBackend {
+  readonly currentTime: number;
+  readonly duration: number;
+  readonly paused: boolean;
+  readonly volume: number;
+  /** Latched once a frame has been painted. Gates the opaque loading overlay. */
+  readonly hasStarted: boolean;
+  /** Stalled after playback began: the translucent overlay, not the opaque one. */
+  readonly buffering: boolean;
+  readonly error: string;
+
+  readonly audioTracks: ParsedAudioTrack[];
+  readonly activeAudioIndex: number;
+  readonly subtitles: SubtitleTrack[];
+  readonly activeSubtitleIndex: number;
+  /** DOM-only. Always `[]` for mpv, which reports no per-track failures. */
+  readonly failedSubtitleIndexes: number[];
+  /** DOM-only. Always `''` for mpv. */
+  readonly subtitleError: string;
+
+  start(request: PlaybackRequest): Promise<boolean>;
+  stop(): Promise<void>;
+  togglePlay(): void | Promise<void>;
+  seek(seconds: number): void | Promise<void>;
+  setVolume(value: number): void | Promise<void>;
+  selectAudio(index: number): void | Promise<void>;
+  selectSubtitle(index: number): void | Promise<void>;
+  /** DOM: element fullscreen. mpv: the Tauri window's. */
+  toggleFullscreen(): void | Promise<void>;
+  /**
+   * The shell owns menu visibility, and the DOM backend has to lift subtitle
+   * cues above an open menu. Empty for mpv, which renders its own cues.
+   */
+  syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean): void;
+}

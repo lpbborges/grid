@@ -7,7 +7,7 @@
   import NativePlayerSurface from '$lib/components/NativePlayerSurface.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
-  import { useNativePlayer } from '$lib/composables/useNativePlayer.svelte';
+  import { useMpvBackend } from '$lib/composables/useMpvBackend.svelte';
   import { playbackMode } from '$lib/engine/platform';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
@@ -25,7 +25,7 @@
   const streamPlayer = useStreamPlayer();
   // Windows plays through mpv embedded in this window; else mounts <video>.
   const isNative = playbackMode() === 'native';
-  const nativePlayer = useNativePlayer();
+  const nativePlayer = useMpvBackend();
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');

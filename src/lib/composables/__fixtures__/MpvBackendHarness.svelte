@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { useNativePlayer } from '../useNativePlayer.svelte';
+  import { useMpvBackend } from '../useMpvBackend.svelte';
 
-  let { onReady }: { onReady: (np: ReturnType<typeof useNativePlayer>) => void } = $props();
-  const nativePlayer = useNativePlayer();
+  let { onReady }: { onReady: (np: ReturnType<typeof useMpvBackend>) => void } = $props();
+  const nativePlayer = useMpvBackend();
   $effect(() => {
     onReady(nativePlayer);
   });

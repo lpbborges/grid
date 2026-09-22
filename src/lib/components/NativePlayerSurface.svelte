@@ -1,14 +1,8 @@
 <script lang="ts">
-  import { getCurrentWindow } from '@tauri-apps/api/window';
-  import { logger } from '$lib/logger';
   import { playerState } from '$lib/stores.svelte';
   import PlayerControls from './PlayerControls.svelte';
   import { groupByLanguage } from '$lib/composables/useSubtitleSelection.svelte';
-  import {
-    nativeTrackLabel,
-    type NativeTrack,
-    type useNativePlayer
-  } from '$lib/composables/useNativePlayer.svelte';
+  import { type useMpvBackend } from '$lib/composables/useMpvBackend.svelte';
   import type { SubtitleTrack } from '$lib/api/subtitles';
 
   /**
@@ -23,7 +17,7 @@
     engineStatus = '',
     onclose
   } = $props<{
-    player: ReturnType<typeof useNativePlayer>;
+    player: ReturnType<typeof useMpvBackend>;
     engineStatus?: string;
     onclose?: () => void;
   }>();
@@ -38,36 +32,18 @@
   // an mpv track id is this component's job, exactly as mapping it to a DOM
   // track is VideoPlayer's. mpv numbers tracks per type, so the audio list and
   // the subtitle list are indexed separately.
-  const audioTracks = $derived(player.tracks.filter((t: NativeTrack) => t.type === 'audio'));
-  const subtitleTracks = $derived(player.tracks.filter((t: NativeTrack) => t.type === 'sub'));
 
   // nativeTrackLabel is reused rather than re-derived: a second labelling rule
   // would drift from the one the preference resolvers already match against.
-  const audioOptions = $derived(
-    audioTracks.map((track: NativeTrack, index: number) => ({
-      index,
-      id: String(track.id),
-      label: nativeTrackLabel(track) || `Faixa ${index + 1}`,
-      enabled: track.selected
-    }))
-  );
 
   // Shaped as SubtitleTrack so the shared menu can render mpv's tracks, and
   // grouped with the same helper the <video> path uses.
-  const subtitleOptions = $derived<SubtitleTrack[]>(
-    subtitleTracks.map((track: NativeTrack, index: number) => ({
-      id: String(track.id),
-      url: '',
-      lang: track.lang ?? '',
-      label: nativeTrackLabel(track) || `Legenda ${index + 1}`,
-      group: track.external ? 'Extra' : 'Embedded'
-    }))
-  );
+
   const embeddedSubsGrouped = $derived(
-    groupByLanguage(subtitleOptions.filter((s: SubtitleTrack) => s.group === 'Embedded'))
+    groupByLanguage(player.subtitles.filter((s: SubtitleTrack) => s.group === 'Embedded'))
   );
   const externalSubsGrouped = $derived(
-    groupByLanguage(subtitleOptions.filter((s: SubtitleTrack) => s.group === 'Extra'))
+    groupByLanguage(player.subtitles.filter((s: SubtitleTrack) => s.group === 'Extra'))
   );
 
   const controlsVisible = $derived(
@@ -97,14 +73,6 @@
    * mpv follows the Tauri window, so fullscreen here is the window's, not a
    * DOM fullscreen request - there is no element to expand.
    */
-  async function toggleFullscreen() {
-    try {
-      const window = getCurrentWindow();
-      await window.setFullscreen(!(await window.isFullscreen()));
-    } catch (e) {
-      logger.error('Erro ao alternar tela cheia', e);
-    }
-  }
 
   function handleKeydown(e: KeyboardEvent) {
     const active = document.activeElement as HTMLElement | null;
@@ -216,24 +184,24 @@
     paused={player.paused}
     volume={player.volume}
     visible={controlsVisible}
-    subtitles={subtitleOptions}
+    subtitles={player.subtitles}
     torrentSubsGrouped={embeddedSubsGrouped}
     {externalSubsGrouped}
-    activeSubtitleIndex={subtitleTracks.findIndex((t: NativeTrack) => t.selected)}
+    activeSubtitleIndex={player.activeSubtitleIndex}
     {expandedGroups}
     {showSubtitleMenu}
-    audioTracks={audioOptions}
-    activeAudioIndex={audioTracks.findIndex((t: NativeTrack) => t.selected)}
+    audioTracks={player.audioTracks}
+    activeAudioIndex={player.activeAudioIndex}
     {showAudioMenu}
     onplaypause={() => void player.togglePlay()}
     onseek={(seconds) => void player.seek(seconds)}
     onvolume={(value) => void player.setVolume(value)}
-    onselectaudio={(index) => void player.selectAudio(audioTracks[index]?.id ?? null)}
-    onselectsubtitle={(index) => void player.selectSubtitle(subtitleTracks[index]?.id ?? null)}
+    onselectaudio={(index) => void player.selectAudio(index)}
+    onselectsubtitle={(index) => void player.selectSubtitle(index)}
     ontoggleaudiomenu={() => (showAudioMenu = !showAudioMenu)}
     ontogglesubtitlemenu={() => (showSubtitleMenu = !showSubtitleMenu)}
     ontogglegroup={toggleGroup}
-    onfullscreen={toggleFullscreen}
+    onfullscreen={() => void player.toggleFullscreen()}
     onclose={close}
   />
 </div>

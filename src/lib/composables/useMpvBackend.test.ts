@@ -3,14 +3,14 @@ import { render } from '@testing-library/svelte';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import NativePlayerHarness from './__fixtures__/NativePlayerHarness.svelte';
+import MpvBackendHarness from './__fixtures__/MpvBackendHarness.svelte';
 import {
   resolveNativeTracks,
   withExternalLangs,
   nativeTrackLabel,
   type NativeTrack,
-  type useNativePlayer
-} from './useNativePlayer.svelte';
+  type useMpvBackend
+} from './useMpvBackend.svelte';
 import { progressStore } from '$lib/stores/progress.svelte';
 import { settingsStore } from '$lib/stores/settings.svelte';
 
@@ -160,13 +160,13 @@ describe('resolveNativeTracks', () => {
   });
 });
 
-function mount(): Promise<ReturnType<typeof useNativePlayer>> {
+function mount(): Promise<ReturnType<typeof useMpvBackend>> {
   return new Promise((resolve) => {
-    render(NativePlayerHarness, { props: { onReady: resolve } });
+    render(MpvBackendHarness, { props: { onReady: resolve } });
   });
 }
 
-describe('useNativePlayer', () => {
+describe('useMpvBackend', () => {
   const unlisten = vi.fn();
   const windowApi = { minimize: vi.fn(), unminimize: vi.fn(), setFocus: vi.fn() };
   let handlers: Record<string, (event: { payload: unknown }) => void>;
@@ -192,7 +192,13 @@ describe('useNativePlayer', () => {
 
   async function start(overrides = {}) {
     const player = await mount();
-    const ok = await player.start({ url: 'http://127.0.0.1:1/x', mediaId: 'tt1', ...overrides });
+    const ok = await player.start({
+      url: 'http://127.0.0.1:1/x',
+      mediaId: 'tt1',
+      subtitles: [],
+      startSeconds: 0,
+      ...overrides
+    });
     return { player, ok };
   }
 
@@ -397,10 +403,14 @@ describe('useNativePlayer', () => {
   });
 
   it('does not unpause when switching subtitles', async () => {
+    vi.mocked(invoke).mockImplementation((async (command: string) =>
+      command === 'start_native_player'
+        ? { duration: 100, tracks: [track({ id: 3, type: 'sub', lang: 'por' })] }
+        : undefined) as never);
     const { player } = await start();
     vi.mocked(invoke).mockClear();
 
-    await player.selectSubtitle(3);
+    await player.selectSubtitle(0);
 
     // set_tracks would write `aid` too and unpause; neither is wanted here.
     expect(invoke).toHaveBeenCalledWith('native_player_select_subtitle', { sid: 3 });
@@ -440,21 +450,21 @@ describe('useNativePlayer', () => {
         : undefined) as never);
     const { player } = await start();
 
-    await player.selectAudio(2);
+    await player.selectAudio(1);
 
     // mpv is not asked for the track list again, so nothing else moves the
     // flag and the menu would keep its check mark on the old row.
-    const audio = player.tracks.filter((t) => t.type === 'audio');
-    expect(audio.find((t) => t.selected)?.id).toBe(2);
+    const audio = player.tracks.filter((t: any) => t.type === 'audio');
+    expect(audio.find((t: any) => t.selected)?.id).toBe(2);
   });
 
   it('leaves the audio selection alone when the subtitle changes', async () => {
     const { player } = await start();
 
-    await player.selectSubtitle(null);
+    await player.selectSubtitle(-1);
 
     // Disabling subtitles must not read as disabling the audio track too.
-    expect(player.tracks.find((t) => t.type === 'audio')?.selected).toBe(true);
+    expect(player.tracks.find((t: any) => t.type === 'audio')?.selected).toBe(true);
   });
 
   it('follows the duration mpv learns after loading', async () => {
@@ -490,8 +500,8 @@ describe('useNativePlayer', () => {
     // set_tracks applied Portuguese to mpv, but the flags still came from
     // mpv's own default, so the menu highlighted English while Portuguese
     // played.
-    const subs = player.tracks.filter((t) => t.type === 'sub');
-    expect(subs.find((t) => t.selected)?.id).toBe(2);
+    const subs = player.tracks.filter((t: any) => t.type === 'sub');
+    expect(subs.find((t: any) => t.selected)?.id).toBe(2);
   });
 
   it('reports no video until mpv actually paints', async () => {
@@ -511,5 +521,62 @@ describe('useNativePlayer', () => {
 
     expect(player.tracks).toHaveLength(1);
     expect(player.duration).toBe(100);
+  });
+
+  async function startWithTracks(tracksData: any[]) {
+    settingsStore.audio = 'original';
+    settingsStore.subtitle = 'none';
+    vi.mocked(invoke).mockImplementation((async (command: string) =>
+      command === 'start_native_player'
+        ? { duration: 120, tracks: tracksData.map(track) }
+        : undefined) as never);
+    const { player } = await start({ subtitles: [], startSeconds: 0 });
+    return player as any;
+  }
+
+  it('exposes mpv audio tracks as ParsedAudioTrack rows, indexed per type', async () => {
+    const backend = await startWithTracks([
+      { id: 1, type: 'video', lang: null, title: null },
+      { id: 1, type: 'audio', lang: 'eng', title: null, selected: true },
+      { id: 2, type: 'audio', lang: 'por', title: null },
+      { id: 1, type: 'sub', lang: 'por', title: null, external: false }
+    ]);
+
+    expect(backend.audioTracks.map((t: any) => t.index)).toEqual([0, 1]);
+    expect(backend.audioTracks[1].label).toBe('Português');
+    expect(backend.activeAudioIndex).toBe(0);
+    expect(backend.subtitles).toHaveLength(1);
+    expect(backend.subtitles[0].group).toBe('Embedded');
+  });
+
+  it('maps a selected row index onto mpv per-type track id', async () => {
+    const backend = await startWithTracks([
+      { id: 1, type: 'audio', lang: 'eng', title: null, selected: true },
+      { id: 2, type: 'audio', lang: 'por', title: null }
+    ]);
+
+    await backend.selectAudio(1);
+
+    expect(invoke).toHaveBeenCalledWith('native_player_select_audio', { aid: 2 });
+    expect(backend.activeAudioIndex).toBe(1);
+  });
+
+  it('sends mpv the no-subtitle sentinel when the row index is -1', async () => {
+    const backend = await startWithTracks([
+      { id: 1, type: 'sub', lang: 'por', title: null, selected: true }
+    ]);
+
+    await backend.selectSubtitle(-1);
+
+    expect(invoke).toHaveBeenCalledWith('native_player_select_subtitle', { sid: null });
+    expect(backend.activeSubtitleIndex).toBe(-1);
+  });
+
+  it('reports no DOM-only subtitle failures and never buffers', async () => {
+    const backend = await startWithTracks([]);
+
+    expect(backend.failedSubtitleIndexes).toEqual([]);
+    expect(backend.subtitleError).toBe('');
+    expect(backend.buffering).toBe(false);
   });
 });

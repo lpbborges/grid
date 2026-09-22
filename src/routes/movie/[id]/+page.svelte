@@ -8,7 +8,7 @@
   import NativePlayerSurface from '$lib/components/NativePlayerSurface.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
-  import { useNativePlayer } from '$lib/composables/useNativePlayer.svelte';
+  import { useMpvBackend } from '$lib/composables/useMpvBackend.svelte';
   import { playbackMode } from '$lib/engine/platform';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
@@ -25,7 +25,7 @@
   // Windows plays through mpv embedded in this window; everywhere else mounts
   // <video>. The branch lives here so VideoPlayer never has to know about it.
   const isNative = playbackMode() === 'native';
-  const nativePlayer = useNativePlayer();
+  const nativePlayer = useMpvBackend();
 
   $effect(() => {
     if (data.error) {

@@ -1,7 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { logger } from '$lib/logger';
 import { progressStore } from '$lib/stores/progress.svelte';
+import type { PlaybackRequest } from '$lib/types';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { findPreferredSubtitleIndex, getLanguageName } from '$lib/api/subtitles';
 import { resolvePreferredAudioTrack, type ParsedAudioTrack } from '$lib/utils/audioTrack';
@@ -141,7 +143,7 @@ async function cacheSubtitles(subtitles: SubtitleTrack[]): Promise<string[]> {
   }
 }
 
-export function useNativePlayer() {
+export function useMpvBackend() {
   let isRunning = $state(false);
   let error = $state('');
   let currentTime = $state(0);
@@ -156,7 +158,7 @@ export function useNativePlayer() {
   // guards progress writes before mpv reports a length, and reading a rune
   // inside `onTime` would subscribe the caller to it.
   let duration = 0;
-  let current: NativePlayOptions | undefined;
+  let current: (PlaybackRequest & { onended?: () => void }) | undefined;
 
   async function detach() {
     const pending = unlisteners;
@@ -197,7 +199,7 @@ export function useNativePlayer() {
     tracks = tracks.map((t) => (t.type === kind ? { ...t, selected: t.id === id } : t));
   }
 
-  async function start(options: NativePlayOptions): Promise<boolean> {
+  async function start(options: PlaybackRequest & { onended?: () => void }): Promise<boolean> {
     error = '';
     current = options;
     duration = 0;
@@ -281,6 +283,23 @@ export function useNativePlayer() {
     }
   }
 
+  function audioTrackList(): NativeTrack[] {
+    return tracks.filter((t) => t.type === 'audio');
+  }
+
+  function subtitleTrackList(): NativeTrack[] {
+    return tracks.filter((t) => t.type === 'sub');
+  }
+
+  async function toggleFullscreen() {
+    try {
+      const window = getCurrentWindow();
+      await window.setFullscreen(!(await window.isFullscreen()));
+    } catch (e) {
+      logger.error('Erro ao alternar tela cheia', e);
+    }
+  }
+
   function onTime(seconds: number) {
     if (!current || !Number.isFinite(seconds)) return;
     // The seek bar follows mpv even when progress cannot be written.
@@ -333,7 +352,8 @@ export function useNativePlayer() {
     }
   }
 
-  async function selectAudio(id: number | null): Promise<void> {
+  async function selectAudio(index: number): Promise<void> {
+    const id = audioTrackList()[index]?.id ?? null;
     try {
       await invoke('native_player_select_audio', { aid: id });
       markSelected('audio', id);
@@ -342,7 +362,8 @@ export function useNativePlayer() {
     }
   }
 
-  async function selectSubtitle(id: number | null): Promise<void> {
+  async function selectSubtitle(index: number): Promise<void> {
+    const id = subtitleTrackList()[index]?.id ?? null;
     try {
       await invoke('native_player_select_subtitle', { sid: id });
       markSelected('sub', id);
@@ -385,12 +406,49 @@ export function useNativePlayer() {
     get hasVideo() {
       return hasVideo;
     },
+    get audioTracks(): ParsedAudioTrack[] {
+      return audioTrackList().map((track, index) => ({
+        index,
+        id: String(track.id),
+        label: nativeTrackLabel(track) || `Faixa ${index + 1}`,
+        enabled: track.selected
+      }));
+    },
+    get activeAudioIndex() {
+      return audioTrackList().findIndex((t) => t.selected);
+    },
+    get subtitles(): SubtitleTrack[] {
+      return subtitleTrackList().map((track, index) => ({
+        id: String(track.id),
+        url: '',
+        lang: track.lang ?? '',
+        label: nativeTrackLabel(track) || `Legenda ${index + 1}`,
+        group: track.external ? 'Extra' : 'Embedded'
+      }));
+    },
+    get activeSubtitleIndex() {
+      return subtitleTrackList().findIndex((t) => t.selected);
+    },
+    get failedSubtitleIndexes(): number[] {
+      return [];
+    },
+    get subtitleError() {
+      return '';
+    },
+    get hasStarted() {
+      return hasVideo;
+    },
+    get buffering() {
+      return false;
+    },
     start,
     stop,
     togglePlay,
     seek,
     setVolume,
     selectAudio,
-    selectSubtitle
+    selectSubtitle,
+    toggleFullscreen,
+    syncOverlayLayout() {}
   };
 }
