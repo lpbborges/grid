@@ -1,14 +1,8 @@
 <script lang="ts">
-  import { logger } from '$lib/logger';
-  import { getTorrentStats } from '$lib/engine/torrent';
-  import { describeMediaError } from '$lib/engine/codecSupport';
   import type { SubtitleTrack } from '$lib/api/subtitles';
   import { progressStore } from '$lib/stores/progress.svelte';
-  import { settingsStore } from '$lib/stores/settings.svelte';
-  import { useAudioTrackSelection } from '$lib/composables/useAudioTrackSelection.svelte';
-  import { useSubtitleSelection } from '$lib/composables/useSubtitleSelection.svelte';
   import PlayerShell from './PlayerShell.svelte';
-  import type { PlayerBackend } from '$lib/types';
+  import { useDomBackend } from '$lib/composables/useDomBackend.svelte';
 
   let {
     src,
@@ -41,88 +35,34 @@
   }>();
 
   let videoElement = $state<HTMLVideoElement | null>(null);
+  const backend = useDomBackend(() => videoElement);
 
-  let paused = $state(false);
-  let currentTime = $state(0);
-  let duration = $state(0);
-  let volume = $state(1);
+  // We still need to call backend.start() when props change.
+  // Wait, does VideoPlayer still need to handle downloadPercent and onwatched?
+  // The plan says: "Its mediaId/season/episode/onwatched/infoHash/totalBytes props stay for now; Task 5 and Task 6 remove them."
 
+  import { getTorrentStats } from '$lib/engine/torrent';
   let downloadPercent = $state<number>(0);
-  let isVideoPlaying = $state(false);
-  let hasStartedPlaying = $state(false);
   let statsInterval: number | undefined;
-  let waitingTimeout: number | undefined;
   let watchedTriggered = $state(false);
-  let playbackError = $state('');
-
-  const audioSelection = useAudioTrackSelection();
-  let shellControlsVisible = $state(true);
-  let shellMenusOpen = $state(false);
-
-  const subtitleSelection = useSubtitleSelection({
-    getVideoElement: () => videoElement,
-    getSubtitles: () => subtitles,
-    getControlsVisible: () => shellControlsVisible,
-    getAudioMenuOpen: () => shellMenusOpen
-  });
-
-  function markPlaying() {
-    window.clearTimeout(waitingTimeout);
-    isVideoPlaying = true;
-    hasStartedPlaying = true;
-    playbackError = '';
-  }
-
-  function markWaiting() {
-    window.clearTimeout(waitingTimeout);
-    waitingTimeout = window.setTimeout(() => {
-      isVideoPlaying = false;
-    }, 250);
-  }
-
-  function handleVideoError() {
-    const mediaError = videoElement?.error;
-    playbackError = mediaError
-      ? describeMediaError(mediaError.code)
-      : 'Não foi possível reproduzir este vídeo.';
-    isVideoPlaying = false;
-    logger.error('Video playback error:', {
-      code: mediaError?.code,
-      message: mediaError?.message
-    });
-  }
 
   $effect(() => {
-    if (
-      subtitles.length === 0 ||
-      subtitleSelection.subtitleAutoApplied ||
-      settingsStore.subtitle === 'none'
-    ) {
-      return;
+    if (src) {
+      backend.start({
+        url: src,
+        subtitles,
+        mediaId: mediaId?.toString() || '',
+        startSeconds: initialTime,
+        originalLanguage
+      });
+    } else {
+      backend.stop();
     }
-    subtitleSelection.applyDefaultSubtitle();
-    if (subtitleSelection.subtitleAutoApplied) return;
-
-    const interval = window.setInterval(() => {
-      subtitleSelection.applyDefaultSubtitle();
-      if (subtitleSelection.subtitleAutoApplied) window.clearInterval(interval);
-    }, 200);
-    const giveUpAfter = window.setTimeout(() => window.clearInterval(interval), 10000);
-
-    return () => {
-      window.clearInterval(interval);
-      window.clearTimeout(giveUpAfter);
-    };
+    return () => backend.stop();
   });
 
   $effect(() => {
-    if (initialTime > 0 && videoElement && duration > 0) {
-      currentTime = initialTime;
-      initialTime = 0; // Prevent resetting
-    }
-  });
-
-  $effect(() => {
+    const isVideoPlaying = backend.hasStarted && !backend.buffering && !backend.error;
     if (infoHash && !isVideoPlaying) {
       if (!statsInterval) {
         statsInterval = window.setInterval(async () => {
@@ -153,138 +93,55 @@
     };
   });
 
-  $effect(() => {
-    return () => {
-      subtitleSelection.disposeTrackListListener();
-    };
-  });
-
-  $effect(() => {
-    void subtitles;
-    subtitleSelection.resetTrackErrorState();
-  });
-
-  function handleLoadedMetadata() {
-    audioSelection.handleLoadedMetadata(videoElement, settingsStore.audio, originalLanguage);
-    subtitleSelection.applyDefaultSubtitle();
-  }
-
-  function togglePlay() {
-    if (paused) videoElement?.play();
-    else videoElement?.pause();
-  }
-
-  function toggleFullscreen() {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch((err) => {
-        logger.error(`Error attempting to enable full-screen mode: ${err.message}`);
-      });
-    } else {
-      document.exitFullscreen();
+  function handleTimeUpdate() {
+    backend.handleTimeUpdate();
+    if (mediaId && backend.duration > 0) {
+      progressStore.update(mediaId, season, episode, backend.currentTime, backend.duration);
+    }
+    if (
+      backend.duration > 0 &&
+      backend.currentTime / backend.duration > 0.95 &&
+      onwatched &&
+      !watchedTriggered
+    ) {
+      watchedTriggered = true;
+      onwatched();
     }
   }
-
-  const backend: PlayerBackend = $derived({
-    get hasStarted() {
-      return hasStartedPlaying;
-    },
-    get buffering() {
-      return hasStartedPlaying && !isVideoPlaying && !playbackError;
-    },
-    get error() {
-      return playbackError;
-    },
-    get currentTime() {
-      return currentTime;
-    },
-    get duration() {
-      return duration;
-    },
-    get paused() {
-      return paused;
-    },
-    get volume() {
-      return volume;
-    },
-    get audioTracks() {
-      return audioSelection.audioTracks;
-    },
-    get activeAudioIndex() {
-      return audioSelection.activeAudioIndex;
-    },
-    get subtitles() {
-      return subtitles;
-    },
-    get activeSubtitleIndex() {
-      return subtitleSelection.activeIndex;
-    },
-    get failedSubtitleIndexes() {
-      return subtitleSelection.failedTrackIndexes;
-    },
-    get subtitleError() {
-      return subtitleSelection.subtitleError;
-    },
-    start: async () => true,
-    stop: async () => {},
-    togglePlay,
-    seek: (seconds) => {
-      currentTime = seconds;
-    },
-    setVolume: (value) => {
-      volume = value;
-    },
-    selectAudio: (index) => audioSelection.selectAudioTrack(videoElement, index),
-    selectSubtitle: (index) => subtitleSelection.selectTrack(index),
-    syncOverlayLayout: (controlsVisible, menusOpen) => {
-      shellControlsVisible = controlsVisible;
-      shellMenusOpen = menusOpen;
-      subtitleSelection.applyCueLayout();
-    },
-    toggleFullscreen
-  });
 </script>
 
 <PlayerShell {backend} {engineStatus} {downloadPercent} {onclose}>
   {#snippet surface()}
-    {#if src}
+    {#if backend.src}
       <!-- svelte-ignore a11y_media_has_caption -->
       <video
         bind:this={videoElement}
-        bind:paused
-        bind:currentTime
-        bind:duration
-        bind:volume
-        {src}
+        src={backend.src}
         autoplay
-        class="h-full w-full cursor-pointer object-contain {hasStartedPlaying
+        class="h-full w-full cursor-pointer object-contain {backend.hasStarted
           ? 'opacity-100'
           : 'opacity-0'}"
         data-testid="video-element"
-        onclick={togglePlay}
-        onloadedmetadata={handleLoadedMetadata}
-        onplaying={markPlaying}
-        onwaiting={markWaiting}
-        oncanplay={markPlaying}
-        onseeked={markPlaying}
-        onerror={handleVideoError}
-        ontimeupdate={() => {
-          if (!isVideoPlaying && !paused) markPlaying();
-          if (mediaId && duration > 0) {
-            progressStore.update(mediaId, season, episode, currentTime, duration);
-          }
-          if (duration > 0 && currentTime / duration > 0.95 && onwatched && !watchedTriggered) {
-            watchedTriggered = true;
-            onwatched();
-          }
-        }}
+        onclick={backend.togglePlay}
+        onloadedmetadata={backend.handleLoadedMetadata}
+        onplaying={backend.handlePlaying}
+        onwaiting={backend.handleWaiting}
+        oncanplay={backend.handlePlaying}
+        onseeked={backend.handlePlaying}
+        onerror={backend.handleError}
+        ondurationchange={handleTimeUpdate}
+        ontimeupdate={handleTimeUpdate}
+        onvolumechange={backend.handleVolumeChange}
+        onplay={backend.handlePauseChange}
+        onpause={backend.handlePauseChange}
       >
-        {#each subtitles as sub, index}
+        {#each backend.subtitles as sub, index}
           <track
             kind="subtitles"
             src={sub.url}
             srclang={sub.lang}
             label={sub.label}
-            onerror={() => subtitleSelection.handleTrackError(index)}
+            onerror={() => backend.handleTrackError(index)}
           />
         {/each}
       </video>
