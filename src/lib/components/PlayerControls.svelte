@@ -99,7 +99,7 @@
 {#if onclose}
   <button
     onclick={onclose}
-    class="hover:text-green text-main focus-visible:ring-green absolute top-10 left-6 z-50 p-2 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {visible
+    class="hover:text-primary text-main focus-visible:ring-primary absolute top-10 left-6 z-50 p-2 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none {visible
       ? 'opacity-100'
       : 'opacity-0'}"
     aria-label="Fechar"
@@ -128,7 +128,7 @@
     : 'opacity-0'}"
 >
   <div
-    class="group focus-visible:ring-green mb-3 flex w-full cursor-pointer items-center rounded py-2 focus-visible:ring-2 focus-visible:outline-none"
+    class="group focus-visible:ring-primary mb-3 flex w-full cursor-pointer items-center rounded py-2 focus-visible:ring-2 focus-visible:outline-none"
     onclick={(e) => seekFromPointer(e.currentTarget, e.clientX)}
     onkeydown={(e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -157,11 +157,11 @@
   >
     <div class="bg-main/25 relative h-1 w-full rounded-full transition-all group-hover:h-2">
       <div
-        class="bg-green absolute top-0 left-0 h-full rounded-full"
+        class="bg-primary absolute top-0 left-0 h-full rounded-full"
         style="width: {duration ? (currentTime / duration) * 100 : 0}%"
       ></div>
       <div
-        class="bg-green absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 shadow-[0_0_6px_rgba(54,211,83,0.6)] transition-opacity group-hover:h-4 group-hover:w-4 group-hover:opacity-100"
+        class="bg-primary absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 shadow-[0_0_6px_rgba(168,85,247,0.6)] transition-opacity group-hover:h-4 group-hover:w-4 group-hover:opacity-100"
         style="left: {duration ? (currentTime / duration) * 100 : 0}%"
       ></div>
     </div>
@@ -172,7 +172,7 @@
       <button
         onclick={onplaypause}
         aria-label={paused ? 'Reproduzir' : 'Pausar'}
-        class="hover:text-green focus-visible:ring-green rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        class="hover:text-primary focus-visible:ring-primary rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
       >
         {#if paused}
           <svg
@@ -208,7 +208,7 @@
         <button
           onclick={() => onvolume(volume === 0 ? 1 : 0)}
           aria-label="Ativar/desativar mudo"
-          class="hover:text-green focus-visible:ring-green rounded p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          class="hover:text-primary focus-visible:ring-primary rounded p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           {#if volume > 0}
             <svg
@@ -256,7 +256,7 @@
             value={volume}
             oninput={(e) => onvolume(Number(e.currentTarget.value))}
             aria-label="Volume"
-            class="accent-green focus-visible:ring-green w-full cursor-pointer rounded focus-visible:ring-2 focus-visible:outline-none"
+            class="accent-primary focus-visible:ring-primary w-full cursor-pointer rounded focus-visible:ring-2 focus-visible:outline-none"
           />
         </div>
       </div>
@@ -289,7 +289,7 @@
         <button
           onclick={onfullscreen}
           aria-label="Tela cheia"
-          class="hover:text-green focus-visible:ring-green ml-2 rounded p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          class="hover:text-primary focus-visible:ring-primary ml-2 rounded p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

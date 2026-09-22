@@ -229,8 +229,7 @@
   <div class="relative z-20 mb-8">
     <a
       href="/"
-      class="group hover:text-green text-main flex w-fit items-center gap-2 text-sm font-bold tracking-wider uppercase transition-colors"
-      style="text-shadow: 0 2px 4px rgba(0,0,0,0.8);"
+      class="border-primary/50 bg-surface/50 hover:border-green hover:text-green text-main group hover:shadow-green/20 flex w-fit items-center gap-2 rounded-sm border px-4 py-2 text-sm font-bold tracking-wider uppercase shadow-sm backdrop-blur-sm transition-all hover:shadow-md"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
