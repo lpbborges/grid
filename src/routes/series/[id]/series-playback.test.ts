@@ -72,7 +72,7 @@ describe('Series playback wiring', () => {
       expect(video.getAttribute('src')).toBe(`${PROXY_ORIGIN}/torrents/${HASH}/stream/0`)
     );
     expect(requestedUrls()).toContain(
-      'https://torrentio.strem.fun/stream/series/tt0000002:1:1.json'
+      'https://torrentio.strem.fun/language=portuguese/stream/series/tt0000002:1:1.json'
     );
     const update = boundary.rqbit.requests.find(
       (r) => r.method === 'POST' && r.path === `/torrents/${HASH}/update_only_files`

@@ -1,6 +1,7 @@
 import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { endpoints } from './endpoints';
+import { settingsStore } from '../stores/settings.svelte';
 
 export interface Stream {
   name?: string;
@@ -17,9 +18,19 @@ export function parseSeedCount(title: string | undefined): number {
   return match ? Number(match[1]) : 0;
 }
 
+const AUDIO_TO_TORRENTIO_LANG: Record<string, string> = {
+  pt: 'portuguese',
+  en: 'english',
+  es: 'spanish'
+};
+
 async function fetchTorrentioStreams(path: string): Promise<Stream[]> {
   try {
-    const res = await fetchWithTimeout(`${endpoints.torrentio}/stream/${path}.json`);
+    const prefLang =
+      settingsStore.audio === 'original' ? settingsStore.subtitle : settingsStore.audio;
+    const lang = AUDIO_TO_TORRENTIO_LANG[prefLang];
+    const prefix = lang ? `/language=${lang}` : '';
+    const res = await fetchWithTimeout(`${endpoints.torrentio}${prefix}/stream/${path}.json`);
     if (!res.ok) {
       throw new Error(`Failed to fetch streams: ${res.statusText}`);
     }

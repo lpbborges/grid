@@ -46,7 +46,7 @@ describe('torrentio api', () => {
 
       const streams = await getSeriesStreams('tt123456', 1, 1);
       expect(fetch).toHaveBeenCalledWith(
-        'https://torrentio.strem.fun/stream/series/tt123456:1:1.json',
+        'https://torrentio.strem.fun/language=portuguese/stream/series/tt123456:1:1.json',
         expect.objectContaining({ signal: expect.anything() })
       );
       expect(streams).toHaveLength(1);
@@ -86,7 +86,7 @@ describe('torrentio api', () => {
 
       const streams = await getMovieStreams('tt123456');
       expect(fetch).toHaveBeenCalledWith(
-        'https://torrentio.strem.fun/stream/movie/tt123456.json',
+        'https://torrentio.strem.fun/language=portuguese/stream/movie/tt123456.json',
         expect.objectContaining({ signal: expect.anything() })
       );
       expect(streams).toHaveLength(1);

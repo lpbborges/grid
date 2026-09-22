@@ -52,6 +52,7 @@ export function getLanguageName(code: string, strict = false): string | null {
     chi: 'Chinês',
     zho: 'Chinês',
     zh: 'Chinês',
+    zht: 'Chinês Tradicional',
     chinese: 'Chinês',
     jpn: 'Japonês',
     ja: 'Japonês',

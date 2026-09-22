@@ -101,7 +101,7 @@ export function installPlaybackBoundary(options: PlaybackBoundaryOptions): Playb
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : input.toString());
       if (url.origin === ENGINE_ORIGIN) return rqbit.handle(url, init);
-      if (url.href.startsWith('https://torrentio.strem.fun/stream/')) {
+      if (url.href.startsWith('https://torrentio.strem.fun/language=portuguese/stream/')) {
         return json({ streams: options.streams });
       }
       if (url.href.startsWith('https://opensubtitles-v3.strem.io/subtitles/')) {
