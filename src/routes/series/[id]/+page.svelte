@@ -3,13 +3,10 @@
   import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
   import { getSeriesStreams, parseSeedCount } from '$lib/api/torrentio';
   import Player from '$lib/components/Player.svelte';
-  import { createPlayerBackend } from '$lib/components/playerBackend';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
-  import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
-  import { playbackMode } from '$lib/engine/platform';
+  import { usePlayer } from '$lib/composables/usePlayer.svelte';
 
-  import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
   import type { Episode } from '$lib/types';
@@ -21,11 +18,10 @@
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
 
-  const streamPlayer = useStreamPlayer();
+  const player = usePlayer(() => videoElement);
+  const backend = player.backend;
   // Windows plays through mpv embedded in this window; else mounts <video>.
-  const isNative = playbackMode() === 'native';
   let videoElement = $state<HTMLVideoElement | null>(null);
-  const backend = createPlayerBackend(() => videoElement);
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
@@ -54,7 +50,7 @@
       selectedSeason = null;
       translatedEpisodes = {};
       if (hasMountedTorrentEffect) {
-        streamPlayer.stop();
+        player.stop();
       }
       hasMountedTorrentEffect = true;
     }
@@ -131,61 +127,24 @@
 
       const magnet = `magnet:?xt=urn:btih:${bestStream.infoHash}&dn=${encodeURIComponent(`${series.title} S${episode.season}E${episode.episode}`)}`;
 
-      const ok = await streamPlayer.play(magnet, {
+      const ok = await player.play(magnet, {
         mediaId: seriesId,
         season: episode.season,
         episode: episode.episode,
-        fileIdx: bestStream.fileIdx
+        fileIdx: bestStream.fileIdx,
+        originalLanguage: series?.language
       });
 
       // The route moved to another series while the stream was being prepared.
       if (seriesId !== requestedId) return;
-      // A play cancelled by closing the player fails without an error.
-      if (!ok && streamPlayer.error) {
-        error = streamPlayer.error;
+      if (!ok && player.error) {
+        error = player.error;
         errorSource = 'play';
-        return;
-      }
-      if (ok) {
-        if (isNative) {
-          await startNativePlayback(episode);
-        } else {
-          await backend.start({
-            url: streamPlayer.videoSrc,
-            subtitles: streamPlayer.subtitles,
-            mediaId: seriesId.toString(),
-            season: episode.season,
-            episode: episode.episode,
-            startSeconds: progressStore.get(seriesId, episode.season, episode.episode)?.time || 0,
-            originalLanguage: series?.language
-          });
-        }
       }
     } catch (e) {
       logger.error('Erro ao buscar fontes do episódio:', e);
       error = 'Não foi possível iniciar a reprodução. Tente novamente.';
       errorSource = 'play';
-    }
-  }
-
-  async function startNativePlayback(episode: Episode) {
-    const started = await backend.start({
-      url: streamPlayer.videoSrc,
-      subtitles: streamPlayer.subtitles,
-      mediaId: seriesId,
-      season: episode.season,
-      episode: episode.episode,
-      startSeconds: progressStore.get(seriesId, episode.season, episode.episode)?.time || 0,
-      originalLanguage: series?.language,
-      onended: () => {
-        streamPlayer.stop();
-      }
-    });
-    if (!started) {
-      // No fallback to <video>: it cannot play this content on Windows.
-      error = backend.error;
-      errorSource = 'play';
-      await streamPlayer.stop();
     }
   }
 
@@ -198,7 +157,7 @@
   }
 </script>
 
-{#if !streamPlayer.isPlaying}
+{#if !player.isPlaying}
   <div class="relative z-20 mb-8">
     <a
       href="/"
@@ -235,7 +194,7 @@
     </button>
   </div>
 {:else if series}
-  {#if (series.background_image_original || series.background_image) && !streamPlayer.isPlaying}
+  {#if (series.background_image_original || series.background_image) && !player.isPlaying}
     <div class="pointer-events-none fixed inset-0">
       <img
         src={series.background_image_original || series.background_image}
@@ -259,15 +218,14 @@
     </div>
 
     <div class="w-full lg:w-1/2">
-      {#if streamPlayer.isPlaying}
+      {#if player.isPlaying}
         <Player
           {backend}
           bind:videoElement
-          engineStatus={streamPlayer.engineStatus}
+          engineStatus={player.engineStatus}
           downloadPercent={0}
           onclose={() => {
-            streamPlayer.stop();
-            backend.stop();
+            player.stop();
           }}
         />
       {:else}
@@ -285,7 +243,7 @@
 
     <!-- Episodes Right Column -->
     <div class="w-full lg:w-1/4">
-      {#if !streamPlayer.isPlaying}
+      {#if !player.isPlaying}
         <EpisodeList
           {seriesId}
           episodes={series.videos}

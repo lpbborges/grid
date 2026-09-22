@@ -103,7 +103,7 @@ export function useStreamPlayer() {
   $effect(() => {
     return () => {
       preparation?.abort();
-      finalizeStream({ infoHash, isCacheable, cacheEntry }).catch((e) =>
+      finalizeStream({ infoHash, fileIdx, isCacheable, cacheEntry }).catch((e) =>
         logger.error('Erro ao limpar torrents no unmount', e)
       );
     };

@@ -313,7 +313,6 @@
           downloadPercent={0}
           onclose={() => {
             streamPlayer.stop();
-            backend.stop();
           }}
         />
       {:else}

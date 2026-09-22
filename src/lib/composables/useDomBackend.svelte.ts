@@ -1,9 +1,13 @@
-import type { PlaybackRequest } from '$lib/types';
+import type { PlaybackRequest, PlayerBackend } from '$lib/types';
 import { useAudioTrackSelection } from './useAudioTrackSelection.svelte';
 import { useSubtitleSelection } from './useSubtitleSelection.svelte';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { describeMediaError } from '$lib/engine/codecSupport';
 import { logger } from '$lib/logger';
+
+export function isDomBackend(backend: PlayerBackend): backend is ReturnType<typeof useDomBackend> {
+  return 'src' in backend;
+}
 
 export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
   let request = $state<PlaybackRequest | undefined>(undefined);

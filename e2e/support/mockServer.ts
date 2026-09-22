@@ -144,10 +144,12 @@ export function startMockServer(catalog: Catalog, options: MockServerOptions): P
     }
 
     if (service === 'torrentio') {
-      const movieStream = route.match(/^stream\/movie\/(tt\d+)\.json$/);
+      const movieStream = route.match(/^(?:language=[^/]+\/)?stream\/movie\/(tt\d+)\.json$/);
       const foundMovie = movieStream && movie(movieStream[1]);
       if (foundMovie) return send(200, { streams: [foundMovie.stream] });
-      const episodeStream = route.match(/^stream\/series\/(tt\d+):(\d+):(\d+)\.json$/);
+      const episodeStream = route.match(
+        /^(?:language=[^/]+\/)?stream\/series\/(tt\d+):(\d+):(\d+)\.json$/
+      );
       if (episodeStream) {
         const episode = series(episodeStream[1])?.episodes.find(
           (e) => e.season === Number(episodeStream[2]) && e.episode === Number(episodeStream[3])
