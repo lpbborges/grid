@@ -206,15 +206,19 @@ unsafe fn decode(event: &libmpv2_sys::mpv_event) -> RawEvent {
             let name = unsafe { std::ffi::CStr::from_ptr(property.name) }
                 .to_string_lossy()
                 .into_owned();
+            // `data` should be non-null whenever `format` isn't NONE, but is
+            // checked before every dereference below defensively.
             let value = match property.format {
                 // Unavailable or errored: nothing meaningful to report.
                 FORMAT_NONE => return RawEvent::Other,
-                FORMAT_DOUBLE => {
-                    // SAFETY: format says `data` points to a live f64.
+                FORMAT_DOUBLE if !property.data.is_null() => {
+                    // SAFETY: just checked non-null; format says `data`
+                    // points to a live f64.
                     PropertyValue::Double(unsafe { *(property.data as *const f64) })
                 }
-                FORMAT_FLAG => {
-                    // SAFETY: format says `data` points to a live C int used as a bool.
+                FORMAT_FLAG if !property.data.is_null() => {
+                    // SAFETY: just checked non-null; format says `data`
+                    // points to a live C int used as a bool.
                     PropertyValue::Flag(
                         unsafe { *(property.data as *const std::os::raw::c_int) } != 0,
                     )
@@ -275,16 +279,6 @@ enum Sink {
     },
 }
 
-/// `sink` and `last_started` are updated together, under the same lock: a
-/// `load` installing its sink must see an up-to-date `last_started` to
-/// decide whether mpv's `StartFile` for it already came and went (see
-/// `Controller::load`).
-#[derive(Default)]
-struct Routing {
-    sink: Sink,
-    last_started: Option<i64>,
-}
-
 fn route(sink: &mut Sink, event: &RawEvent, mapped: Option<PlayerEvent>) {
     match sink {
         Sink::Idle => {}
@@ -319,14 +313,28 @@ fn route(sink: &mut Sink, event: &RawEvent, mapped: Option<PlayerEvent>) {
 
 /// Runs for the life of the process. Never panics: it is not joined, and a
 /// panic here would silently stop every event.
-fn run_events(mpv: &'static Mpv, routing: Arc<Mutex<Routing>>) {
+///
+/// Only ever holds `routing` briefly, to call `route` - never while blocked
+/// inside `mpv_wait_event`. `Controller::load` relies on that: it holds the
+/// same lock across issuing `loadfile` and installing the sink, and that is
+/// only safe to do (without deadlocking this thread or stalling every other
+/// load's events) because this thread never needs the lock while waiting for
+/// the next event, only after it already has one.
+fn run_events(mpv: &'static Mpv, routing: Arc<Mutex<Sink>>) {
     let mut throttle = TimeThrottle::new();
     loop {
-        // SAFETY: `mpv.ctx` is a valid, live handle for the whole process;
-        // `mpv_wait_event` returns a pointer to an `mpv_event` owned by mpv
-        // that stays valid until the next call on this handle, which is
-        // exactly as long as this iteration holds onto it.
-        let event = unsafe { &*libmpv2_sys::mpv_wait_event(mpv.ctx.as_ptr(), -1.0) };
+        // SAFETY: `mpv.ctx` is a valid, live handle for the whole process.
+        // `mpv_wait_event` returns a pointer to an `mpv_event` owned by mpv,
+        // valid until the next call on this handle - as long as this
+        // iteration holds onto it - but it can be null (e.g. the handle is
+        // being torn down), so it's checked before dereferencing.
+        let event_ptr = unsafe { libmpv2_sys::mpv_wait_event(mpv.ctx.as_ptr(), -1.0) };
+        if event_ptr.is_null() {
+            continue;
+        }
+        // SAFETY: just checked non-null above; the pointer is valid per the
+        // comment on the call.
+        let event = unsafe { &*event_ptr };
         if event.event_id == libmpv2_sys::mpv_event_id_MPV_EVENT_NONE {
             // Only possible with a finite timeout; -1.0 blocks until a real
             // event, but there is no reason to trust that absolutely.
@@ -338,12 +346,9 @@ fn run_events(mpv: &'static Mpv, routing: Arc<Mutex<Routing>>) {
         let mapped = map_event(&raw, &mut throttle, Instant::now());
         let is_shutdown = matches!(raw, RawEvent::Shutdown);
 
-        let mut routing = routing.lock().unwrap_or_else(PoisonError::into_inner);
-        if let RawEvent::StartFile { entry } = raw {
-            routing.last_started = Some(entry);
-        }
-        route(&mut routing.sink, &raw, mapped);
-        drop(routing);
+        let mut sink = routing.lock().unwrap_or_else(PoisonError::into_inner);
+        route(&mut sink, &raw, mapped);
+        drop(sink);
 
         if is_shutdown {
             break;
@@ -412,8 +417,16 @@ unsafe fn find_playlist_entry_id(node: &libmpv2_sys::mpv_node) -> Option<i64> {
     if node.format != libmpv2_sys::mpv_format_MPV_FORMAT_NODE_MAP {
         return None;
     }
-    // SAFETY: format is NODE_MAP, so `u.list` is a valid, populated `mpv_node_list`.
-    let list = unsafe { &*node.u.list };
+    // SAFETY: format is NODE_MAP, so reading the `list` union member itself
+    // is valid; the pointer it holds is still checked for null below before
+    // any dereference, defensively.
+    let list_ptr = unsafe { node.u.list };
+    if list_ptr.is_null() {
+        return None;
+    }
+    // SAFETY: just checked non-null above; format NODE_MAP guarantees a
+    // valid, populated `mpv_node_list` otherwise.
+    let list = unsafe { &*list_ptr };
     for i in 0..list.num {
         // SAFETY: `i` is within `0..list.num`, which `mpv_node_list` guarantees
         // indexes valid `keys` and `values` entries.
@@ -439,7 +452,7 @@ unsafe fn find_playlist_entry_id(node: &libmpv2_sys::mpv_node) -> Option<i64> {
 #[derive(Clone)]
 pub struct Controller {
     mpv: &'static Mpv,
-    routing: Arc<Mutex<Routing>>,
+    routing: Arc<Mutex<Sink>>,
     /// Serializes each `load`'s pause+loadfile+install-sink sequence, and
     /// each `stop`/`abandon`'s check-and-clear+stop-command sequence,
     /// against one another. Never held across an `.await`. Without it, one
@@ -471,7 +484,7 @@ impl Controller {
                 .map_err(|e| format!("mpv could not observe {name}: {}", describe_error(&e)))?;
         }
 
-        let routing = Arc::new(Mutex::new(Routing::default()));
+        let routing = Arc::new(Mutex::new(Sink::default()));
         let thread_routing = routing.clone();
         std::thread::Builder::new()
             .name("mpv-events".into())
@@ -521,19 +534,23 @@ impl Controller {
                 .set_property("pause", true)
                 .map_err(|e| format!("mpv could not load the stream: {}", describe_error(&e)))?;
 
+            // Held across `loadfile_with_entry_id` and the sink install
+            // below, so the event thread cannot route this entry's
+            // `StartFile`/`FileLoaded` (or an immediate `EndFile` for a bad
+            // URL) against the old sink in the gap between mpv assigning the
+            // entry and this sink existing to catch it. This is safe to do
+            // without deadlocking or stalling other loads' events: mpv's
+            // core never blocks a command on a client draining its event
+            // queue, and `run_events` only ever takes this same lock briefly
+            // to route an already-received event - never while blocked
+            // inside `mpv_wait_event` waiting for the next one (see
+            // `run_events`'s doc comment).
+            let mut routing = self.routing.lock().unwrap_or_else(PoisonError::into_inner);
+
             // SAFETY: `self.mpv` is a valid, live handle for the whole process.
             let entry = unsafe { loadfile_with_entry_id(self.mpv, url, start_seconds) }?;
 
-            let mut routing = self.routing.lock().unwrap_or_else(PoisonError::into_inner);
-            // If the event thread already saw this entry's `StartFile` (mpv
-            // can be that fast), install straight into `Forwarding` -
-            // otherwise this load would wait forever for a `StartFile` that
-            // already came and went before the sink existed to catch it.
-            routing.sink = if routing.last_started == Some(entry) {
-                Sink::Forwarding { entry, tx }
-            } else {
-                Sink::AwaitingStart { entry, tx }
-            };
+            *routing = Sink::AwaitingStart { entry, tx };
         }
 
         match tokio::time::timeout(LOAD_TIMEOUT, wait_until_loaded(&mut rx)).await {
@@ -627,7 +644,7 @@ impl Controller {
             .unwrap_or_else(PoisonError::into_inner);
         {
             let mut routing = self.routing.lock().unwrap_or_else(PoisonError::into_inner);
-            routing.sink = Sink::Idle;
+            *routing = Sink::Idle;
         }
         let _ = self.mpv.command("stop", &[]);
     }
@@ -653,7 +670,7 @@ impl Controller {
                 // No strong sender for our channel remains anywhere,
                 // including in the sink: definitely not current.
                 None => false,
-                Some(own_upgraded) => match &routing.sink {
+                Some(own_upgraded) => match &*routing {
                     Sink::Idle => false,
                     Sink::AwaitingStart { tx, .. } | Sink::Forwarding { tx, .. } => {
                         tx.same_channel(&own_upgraded)
@@ -661,7 +678,7 @@ impl Controller {
                 },
             };
             if is_current {
-                routing.sink = Sink::Idle;
+                *routing = Sink::Idle;
             }
             is_current
         };
@@ -674,9 +691,9 @@ impl Controller {
     /// frontend as `native-player-error` if something is playing.
     pub fn report_failure(&self, detail: String) {
         let mut routing = self.routing.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Sink::Forwarding { tx, .. } = &routing.sink {
+        if let Sink::Forwarding { tx, .. } = &*routing {
             if tx.send(PlayerEvent::Failed(detail)).is_err() {
-                routing.sink = Sink::Idle;
+                *routing = Sink::Idle;
             }
         }
     }
@@ -922,26 +939,6 @@ mod tests {
         );
         assert!(rx.try_recv().is_err());
         assert!(matches!(sink, Sink::Forwarding { entry: 2, .. }));
-    }
-
-    #[test]
-    fn installing_when_last_started_already_equals_the_entry_yields_forwarding() {
-        // Mirrors `Controller::load`'s own install logic: if the event
-        // thread already observed this entry's `StartFile` before the sink
-        // was installed, install straight into `Forwarding` so that
-        // now-unrepeatable `StartFile` is not waited for forever.
-        let routing = Routing {
-            sink: Sink::Idle,
-            last_started: Some(7),
-        };
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let entry = 7;
-        let sink = if routing.last_started == Some(entry) {
-            Sink::Forwarding { entry, tx }
-        } else {
-            Sink::AwaitingStart { entry, tx }
-        };
-        assert!(matches!(sink, Sink::Forwarding { entry: 7, .. }));
     }
 
     #[test]
