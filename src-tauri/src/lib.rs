@@ -5,6 +5,7 @@ mod media_patch;
 mod mpv_player;
 #[cfg(test)]
 mod playback_engine_tests;
+mod player;
 mod stream_proxy;
 mod subtitles;
 mod window_embed;
@@ -583,12 +584,13 @@ async fn cache_native_subtitles(
     contents: Vec<String>,
 ) -> Result<Vec<String>, String> {
     let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
-    let dir = mpv_player::subtitle_cache_dir(&cache_dir);
-    let paths =
-        tauri::async_runtime::spawn_blocking(move || mpv_player::write_subtitles(&dir, &contents))
-            .await
-            .map_err(|e| e.to_string())?
-            .map_err(|e| e.to_string())?;
+    let dir = player::model::subtitle_cache_dir(&cache_dir);
+    let paths = tauri::async_runtime::spawn_blocking(move || {
+        player::model::write_subtitles(&dir, &contents)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
     Ok(paths
         .into_iter()
         .map(|path| path.to_string_lossy().into_owned())
@@ -609,7 +611,7 @@ async fn start_native_player(
     url: String,
     start_seconds: f64,
     subtitle_files: Vec<String>,
-) -> Result<mpv_player::Playback, String> {
+) -> Result<player::model::Playback, String> {
     start_native_player_impl(
         app,
         window,
@@ -632,7 +634,7 @@ async fn start_native_player_impl(
     _url: String,
     _start_seconds: f64,
     _subtitle_files: Vec<String>,
-) -> Result<mpv_player::Playback, String> {
+) -> Result<player::model::Playback, String> {
     Err("Native playback is only available on Windows".to_string())
 }
 
@@ -645,7 +647,7 @@ async fn start_native_player_impl(
     url: String,
     start_seconds: f64,
     subtitle_files: Vec<String>,
-) -> Result<mpv_player::Playback, String> {
+) -> Result<player::model::Playback, String> {
     let port = proxy
         .port
         .lock()
@@ -653,13 +655,13 @@ async fn start_native_player_impl(
         .ok_or_else(|| "Stream proxy not running".to_string())?;
     // mpv never goes through the frontend fetch layer, so this is the only
     // thing keeping it pointed at our own proxy.
-    if !mpv_player::is_local_stream_url(&url, port) {
+    if !player::model::is_local_stream_url(&url, port) {
         return Err("Refusing to play a URL that is not the local stream proxy".to_string());
     }
     let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
     if let Some(bad) = subtitle_files
         .iter()
-        .find(|path| !mpv_player::is_cached_subtitle_path(&cache_dir, path))
+        .find(|path| !player::model::is_cached_subtitle_path(&cache_dir, path))
     {
         eprintln!("Refusing a subtitle path outside the app cache: {bad}");
         return Err("Refusing to load a subtitle from outside the cache".to_string());
@@ -731,11 +733,11 @@ async fn start_native_player_impl(
     let loaded = tokio::time::timeout(std::time::Duration::from_secs(60), async {
         while let Some(event) = events.recv().await {
             match event {
-                mpv_player::PlayerEvent::Loaded => return Ok(()),
+                player::model::PlayerEvent::Loaded => return Ok(()),
                 // The file failed before it ever loaded; report that rather
                 // than time out on it.
-                mpv_player::PlayerEvent::Failed(detail) => return Err(detail),
-                mpv_player::PlayerEvent::Ended => {
+                player::model::PlayerEvent::Failed(detail) => return Err(detail),
+                player::model::PlayerEvent::Ended => {
                     return Err("mpv closed the file before it loaded".to_string())
                 }
                 _ => {}
@@ -899,9 +901,9 @@ async fn stop_native_player(
     stop_player(&state).await;
     // Subtitles belong to the playback that just ended.
     if let Ok(cache_dir) = app.path().app_cache_dir() {
-        let dir = mpv_player::subtitle_cache_dir(&cache_dir);
-        let _ =
-            tauri::async_runtime::spawn_blocking(move || mpv_player::clear_subtitles(&dir)).await;
+        let dir = player::model::subtitle_cache_dir(&cache_dir);
+        let _ = tauri::async_runtime::spawn_blocking(move || player::model::clear_subtitles(&dir))
+            .await;
     }
     Ok(())
 }
@@ -923,23 +925,29 @@ async fn stop_player(state: &mpv_player::NativePlayerState) {
 #[cfg(windows)]
 fn pump_player_events(
     app: tauri::AppHandle,
-    mut events: tokio::sync::mpsc::UnboundedReceiver<mpv_player::PlayerEvent>,
+    mut events: tokio::sync::mpsc::UnboundedReceiver<player::model::PlayerEvent>,
 ) {
     use tauri::Emitter;
     tauri::async_runtime::spawn(async move {
         while let Some(event) = events.recv().await {
             let emitted = match event {
-                mpv_player::PlayerEvent::Time(seconds) => app.emit("native-player-time", seconds),
-                mpv_player::PlayerEvent::Paused(paused) => app.emit("native-player-paused", paused),
-                mpv_player::PlayerEvent::Duration(seconds) => {
+                player::model::PlayerEvent::Time(seconds) => {
+                    app.emit("native-player-time", seconds)
+                }
+                player::model::PlayerEvent::Paused(paused) => {
+                    app.emit("native-player-paused", paused)
+                }
+                player::model::PlayerEvent::Duration(seconds) => {
                     app.emit("native-player-duration", seconds)
                 }
                 // Consumed by start_native_player before this pump starts; a
                 // second one would only mean mpv reloaded the same file.
-                mpv_player::PlayerEvent::Loaded => Ok(()),
-                mpv_player::PlayerEvent::Presenting => app.emit("native-player-presenting", ()),
-                mpv_player::PlayerEvent::Ended => app.emit("native-player-ended", ()),
-                mpv_player::PlayerEvent::Failed(detail) => app.emit("native-player-error", detail),
+                player::model::PlayerEvent::Loaded => Ok(()),
+                player::model::PlayerEvent::Presenting => app.emit("native-player-presenting", ()),
+                player::model::PlayerEvent::Ended => app.emit("native-player-ended", ()),
+                player::model::PlayerEvent::Failed(detail) => {
+                    app.emit("native-player-error", detail)
+                }
             };
             if let Err(e) = emitted {
                 eprintln!("Failed to forward a native player event: {e}");
