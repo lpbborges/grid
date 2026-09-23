@@ -208,6 +208,15 @@ fn build(
                                     if let Ok(slot) = slot.try_borrow() {
                                         if let Some(area) = slot.as_ref() {
                                             area.queue_render();
+                                            // The webview covers the whole area. On X11,
+                                            // invalidating the GLArea alone let GTK
+                                            // recomposite only where the webview itself
+                                            // changed: CI captured the new frame as a strip
+                                            // under the controls, the rest left black.
+                                            // Redrawing the overlay repaints the stack.
+                                            if let Some(overlay) = area.parent() {
+                                                overlay.queue_draw();
+                                            }
                                         }
                                     }
                                 });
