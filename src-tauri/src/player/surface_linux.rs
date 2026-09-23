@@ -23,6 +23,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use tokio::sync::oneshot;
 
+// Process-global on purpose: `attach` runs exactly once per app run
+// (guaranteed by `NativePlayerState` in Task 6), so there is only ever one
+// GLArea/render context to coalesce frames or latch a render failure for.
 /// Coalesces mpv's "new frame" callbacks into one queued redraw.
 static FRAME_QUEUED: AtomicBool = AtomicBool::new(false);
 /// A failing render call is reported to the frontend once, not per frame.
@@ -126,8 +129,10 @@ fn build(
     // Resolves `attach` exactly once, from whichever path finishes first.
     let done = RefCell::new(Some(done));
     let finish: Rc<dyn Fn(Result<(), String>)> = Rc::new(move |result| {
-        if let Some(done) = done.borrow_mut().take() {
-            let _ = done.send(result);
+        if let Ok(mut slot) = done.try_borrow_mut() {
+            if let Some(done) = slot.take() {
+                let _ = done.send(result);
+            }
         }
     });
 
