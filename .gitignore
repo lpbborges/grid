@@ -29,3 +29,6 @@ e2e/artifacts/
 # build script fails outright when that file is missing.
 src-tauri/bin/mpv-*
 src-tauri/tauri.windows.conf.json
+
+# Pinned libmpv, downloaded by `npm run setup:libmpv` (scripts/libmpv.lock.json).
+src-tauri/lib/

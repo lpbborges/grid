@@ -30,6 +30,8 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
     libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
   ```
 
+- The libmpv development files, for native playback. Linux: `sudo apt install libmpv-dev` (Debian/Ubuntu) or the `mpv` package (Arch, which ships the headers alongside the player). Windows: 7-Zip and the MSVC build tools, then run `npm run setup:libmpv` once to fetch the pinned DLL and generate its import library.
+
 - On Linux, the GStreamer decoders the webview plays through. They are not installed by default on a clean Ubuntu or Fedora, and without them 4K HEVC and E-AC3 releases fail with "este vídeo precisa de componentes de vídeo que não estão instalados no sistema". The `.deb` declares them; for `tauri dev` or another package format, install them yourself (Debian/Ubuntu):
 
   ```sh
@@ -79,6 +81,7 @@ Bundles are written to `src-tauri/target/release/bundle/`.
 - `npm run check:watch` - Verify TypeScript typings in watch mode.
 - `npm run lint` - Lint the codebase using ESLint.
 - `npm run format` - Format the codebase using Prettier.
+- `npm run setup:libmpv` - Download the pinned LGPL libmpv (Windows; pass `--bundle` for Linux release packaging).
 
 ## Testing Playback
 

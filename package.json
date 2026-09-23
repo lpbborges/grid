@@ -25,7 +25,8 @@
     "test:frontend": "vitest run",
     "test:frontend:cov": "vitest run --coverage",
     "test:backend": "cd src-tauri && cargo test",
-    "test:backend:cov": "cd src-tauri && cargo llvm-cov"
+    "test:backend:cov": "cd src-tauri && cargo llvm-cov",
+    "setup:libmpv": "node scripts/setup-libmpv.mjs"
   },
   "lint-staged": {
     "*.{js,ts,svelte}": [
