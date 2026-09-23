@@ -15,12 +15,12 @@
 
 /// Which child of Grid's top-level window a class name identifies.
 ///
-/// Both windows are created for us - mpv by the sidecar, the webview by Tauri -
-/// so the only handle we get is the parent's. Everything else is found by
+/// Both windows are created for us - mpv's by in-process libmpv (`wid`), the
+/// webview by Tauri - so the only handle we get is the parent's. Everything else is found by
 /// walking its children.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Child {
-    /// mpv's video output window, created by `--wid`.
+    /// mpv's video output window, created by libmpv's `wid` option.
     Video,
     /// WebView2's render widget, created by Tauri.
     WebView,

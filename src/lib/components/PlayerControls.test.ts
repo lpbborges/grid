@@ -27,8 +27,8 @@ describe('PlayerControls', () => {
 
     await fireEvent.click(screen.getByLabelText('Buscar posição'), { clientX: 50 });
 
-    // The host decides what a seek means: assigning to a <video> on Linux,
-    // an IPC call to mpv on Windows.
+    // The host decides what a seek means: assigning to a <video> on macOS,
+    // a seek in in-process libmpv on Linux and Windows.
     expect(onseek).toHaveBeenCalled();
     expect(typeof onseek.mock.calls[0][0]).toBe('number');
   });

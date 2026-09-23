@@ -101,7 +101,8 @@ export interface PlaybackRequest {
 }
 
 /**
- * One playback backend: a `<video>` element, or the mpv sidecar.
+ * One playback backend: a `<video>` element (macOS), or libmpv running
+ * in-process (Linux and Windows).
  *
  * The shape is the one `PlayerControls` already consumes, plus lifecycle.
  * Track selection is index-based on both sides on purpose: mpv numbers tracks
