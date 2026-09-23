@@ -363,57 +363,100 @@ fn track_value(id: Option<i64>) -> String {
     id.map_or_else(|| "no".to_string(), |id| id.to_string())
 }
 
-/// Issues `loadfile` through `mpv_command_ret` and returns the playlist entry
-/// id mpv assigned to it, read back from the command's own
-/// `MPV_FORMAT_NODE_MAP` reply (documented since mpv 0.33). Reading the id
-/// from the command's own reply - rather than, say, `playlist-current-pos`
-/// afterward - is what makes this safe to call from multiple threads at
-/// once: each call gets back the exact id mpv assigned to *that* call,
-/// whatever order the calls and mpv's processing of them interleave in.
+/// Issues `loadfile` and returns the playlist entry id mpv assigned to it,
+/// read back from the command's own `MPV_FORMAT_NODE_MAP` reply (documented
+/// since mpv 0.33). Reading the id from the command's own reply - rather
+/// than, say, `playlist-current-pos` afterward - is what makes this safe to
+/// call from multiple threads at once: each call gets back the exact id mpv
+/// assigned to *that* call, whatever order the calls and mpv's processing of
+/// them interleave in.
 ///
-/// # Safety
-/// `mpv` must be a valid, live `Mpv` handle.
-unsafe fn loadfile_with_entry_id(mpv: &Mpv, url: &str, start_seconds: f64) -> Result<i64, String> {
+/// The arguments are passed *by name* (`url`, `flags`, `options`), never by
+/// position. mpv 0.38 inserted an `index` argument before `options`, so the
+/// positional form that works there (`loadfile <url> replace -1 start=...`)
+/// fails on every older libmpv, including Ubuntu 24.04's 0.37, and the form
+/// that works on 0.37 would hand `start=...` to `index` on 0.38+. Named
+/// arguments mean the same thing on both.
+fn loadfile_with_entry_id(mpv: &Mpv, url: &str, start_seconds: f64) -> Result<i64, String> {
+    let fail = |detail: String| format!("mpv could not load the stream: {detail}");
     let start = format!("start={start_seconds}");
-    let args = ["loadfile", url, "replace", "-1", start.as_str()];
-    let cstrings: Vec<CString> = args
-        .iter()
-        .map(|a| CString::new(*a))
-        .collect::<Result<_, _>>()
-        .map_err(|e| format!("mpv could not load the stream: {e}"))?;
-    let mut ptrs: Vec<*const std::os::raw::c_char> = cstrings.iter().map(|c| c.as_ptr()).collect();
-    ptrs.push(std::ptr::null());
+    let pairs = [
+        ("name", "loadfile"),
+        ("url", url),
+        ("flags", "replace"),
+        ("options", start.as_str()),
+    ];
+    let mut reply = command_node_map(mpv, &pairs).map_err(fail)?;
+    // SAFETY: `reply` is the populated node the successful command above
+    // handed over; it is freed right after this read.
+    let entry = unsafe { find_playlist_entry_id(&reply) };
+    // SAFETY: `reply` was populated by mpv and has not been freed yet; this
+    // is the only free, so it happens exactly once on every path.
+    unsafe { libmpv2_sys::mpv_free_node_contents(&mut reply) };
+    entry.ok_or_else(|| fail("loadfile's reply had no playlist_entry_id".to_string()))
+}
 
-    let mut node: libmpv2_sys::mpv_node = unsafe { std::mem::zeroed() };
-    // SAFETY: `mpv.ctx` is valid; `ptrs` is a NUL-terminated array of valid
-    // C strings kept alive (via `cstrings`) for this call; `mpv_command_ret`
-    // only writes to `node` on success.
-    let err =
-        unsafe { libmpv2_sys::mpv_command_ret(mpv.ctx.as_ptr(), ptrs.as_mut_ptr(), &mut node) };
-    if err < 0 {
-        return Err(format!(
-            "mpv could not load the stream: {}",
-            describe_error(&libmpv2::Error::Raw(err))
-        ));
+/// Runs one mpv command given as a `MPV_FORMAT_NODE_MAP` of string
+/// arguments (`name` plus named arguments) through `mpv_command_node`, and
+/// returns mpv's reply node on success. The caller owns the reply and must
+/// free it with `mpv_free_node_contents`; on failure there is nothing to free.
+///
+/// The only unsafe FFI for building a command node lives here: every C
+/// string and both arrays are locals of this function, so they outlive the
+/// call, and mpv copies what it keeps before returning.
+fn command_node_map(mpv: &Mpv, pairs: &[(&str, &str)]) -> Result<libmpv2_sys::mpv_node, String> {
+    use libmpv2_sys::{
+        mpv_format_MPV_FORMAT_NODE_MAP as FORMAT_NODE_MAP,
+        mpv_format_MPV_FORMAT_STRING as FORMAT_STRING, mpv_node, mpv_node__bindgen_ty_1,
+        mpv_node_list,
+    };
+    use std::os::raw::{c_char, c_int};
+
+    let mut keys: Vec<CString> = Vec::with_capacity(pairs.len());
+    let mut values: Vec<CString> = Vec::with_capacity(pairs.len());
+    for (key, value) in pairs {
+        keys.push(CString::new(*key).map_err(|e| e.to_string())?);
+        values.push(CString::new(*value).map_err(|e| e.to_string())?);
     }
+    // mpv's node types take `*mut` but never write through an argument node.
+    let mut key_ptrs: Vec<*mut c_char> = keys.iter().map(|k| k.as_ptr() as *mut c_char).collect();
+    let mut value_nodes: Vec<mpv_node> = values
+        .iter()
+        .map(|v| mpv_node {
+            u: mpv_node__bindgen_ty_1 {
+                string: v.as_ptr() as *mut c_char,
+            },
+            format: FORMAT_STRING,
+        })
+        .collect();
+    let mut list = mpv_node_list {
+        num: c_int::try_from(pairs.len()).map_err(|e| e.to_string())?,
+        values: value_nodes.as_mut_ptr(),
+        keys: key_ptrs.as_mut_ptr(),
+    };
+    let mut args = mpv_node {
+        u: mpv_node__bindgen_ty_1 { list: &mut list },
+        format: FORMAT_NODE_MAP,
+    };
 
-    // SAFETY: `mpv_command_ret` returned success, so `node` is a valid,
-    // populated node this call now owns and must free below.
-    let entry = unsafe { find_playlist_entry_id(&node) };
-    // SAFETY: `node` was populated by the successful call above and not
-    // freed yet.
-    unsafe { libmpv2_sys::mpv_free_node_contents(&mut node) };
-
-    entry.ok_or_else(|| {
-        "mpv could not load the stream: loadfile's reply had no playlist_entry_id".to_string()
-    })
+    // SAFETY: an all-zero `mpv_node` is a valid MPV_FORMAT_NONE node.
+    let mut reply: mpv_node = unsafe { std::mem::zeroed() };
+    // SAFETY: `mpv.ctx` is a live handle for the whole process. `args` is a
+    // well-formed NODE_MAP whose `list`, key and value arrays, and every C
+    // string they point to (`keys`, `values`), are locals that outlive this
+    // call. `mpv_command_node` writes `reply` only on success.
+    let err = unsafe { libmpv2_sys::mpv_command_node(mpv.ctx.as_ptr(), &mut args, &mut reply) };
+    if err < 0 {
+        return Err(describe_error(&libmpv2::Error::Raw(err)));
+    }
+    Ok(reply)
 }
 
 /// Reads the `playlist_entry_id` key out of `loadfile`'s `MPV_FORMAT_NODE_MAP`
 /// reply.
 ///
 /// # Safety
-/// `node` must be a valid, populated `mpv_node` (as `mpv_command_ret` leaves
+/// `node` must be a valid, populated `mpv_node` (as `mpv_command_node` leaves
 /// it on success) that has not been freed yet.
 unsafe fn find_playlist_entry_id(node: &libmpv2_sys::mpv_node) -> Option<i64> {
     if node.format != libmpv2_sys::mpv_format_MPV_FORMAT_NODE_MAP {
@@ -549,8 +592,7 @@ impl Controller {
             // `run_events`'s doc comment).
             let mut routing = self.routing.lock().unwrap_or_else(PoisonError::into_inner);
 
-            // SAFETY: `self.mpv` is a valid, live handle for the whole process.
-            let entry = unsafe { loadfile_with_entry_id(self.mpv, url, start_seconds) }?;
+            let entry = loadfile_with_entry_id(self.mpv, url, start_seconds)?;
 
             *routing = Sink::AwaitingStart { entry, tx };
         }
@@ -1049,6 +1091,25 @@ mod tests {
             |e| matches!(e, PlayerEvent::Time(t) if *t >= 4.5),
         )
         .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn loads_paused_at_the_requested_start_position() {
+        // `start` travels as loadfile's named `options` argument; a positional
+        // form that libmpv misread would silently start at zero instead.
+        let player = Controller::new(VideoOutput::Null).unwrap();
+        let (_playback, _events) = player.load(&fixture_mkv(), 5.0, &[]).await.unwrap();
+        let position: f64 = player.mpv().get_property("time-pos").unwrap();
+        assert!((4.5..=5.5).contains(&position), "time-pos {position}");
+        assert!(player.mpv().get_property::<bool>("pause").unwrap());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_second_load_gets_a_new_playlist_entry() {
+        let player = Controller::new(VideoOutput::Null).unwrap();
+        let first = loadfile_with_entry_id(player.mpv(), &fixture_mkv(), 0.0).unwrap();
+        let second = loadfile_with_entry_id(player.mpv(), &fixture_mkv(), 0.0).unwrap();
+        assert!(second > first, "entry ids {first} then {second}");
     }
 
     #[tokio::test(flavor = "multi_thread")]
