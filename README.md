@@ -15,7 +15,7 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
 - **Global Playback Preferences:** Audio, Subtitle, and Quality preferences set once and remembered across the app (persisted locally). Grid ranks and picks the best matching source from YTS + Torrentio behind the scenes and silently enables the right embedded audio/subtitle track when playback starts, resolving the movie/show's real original language instead of guessing.
 - **Frameless Design:** Desktop window with custom controls and a draggable header.
 - **Cyberpunk Theme:** A unique visual identity built with Tailwind CSS v4 featuring neon glows, digital grid backgrounds, and cyberpunk typography (Orbitron/Rajdhani, bundled locally).
-- **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles. The same controls drive both backends: a `<video>` element on Linux and macOS, and the mpv sidecar rendering inside Grid's own window on Windows, where the webview cannot decode what releases actually ship.
+- **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles. The same Svelte UI and playback orchestration (`usePlayer`) drives both backends: a `<video>` element on Linux and macOS, and the mpv sidecar rendering inside Grid's own window on Windows, where the webview cannot decode what releases actually ship.
 - **Test-Driven:** Vitest and Svelte Testing Library tests for the frontend, plus Rust unit tests for the backend. Run `npm run test:frontend:cov` for the current coverage report.
 - **Robust Error Handling:** Resilient polling for engine startup, a specific error when the engine cannot start, dynamic port allocation to prevent address conflicts, and timeouts on external API calls; starting playback automatically retries with a fresh request when a source stops responding. Metadata translation tries Google Translate first and MyMemory as a backup; if both fail, the original English text is shown.
 
@@ -120,8 +120,9 @@ SvelteKit UI (static build, runs in the Tauri webview)
   │                      └─ start_native_player / native_player_set_tracks /
   │                         stop_native_player    (Windows: drives the mpv sidecar)
   ├─ fetch ──────────► rqbit HTTP API on 127.0.0.1 (add, stats)
-  ├─ <video> ────────► stream proxy on 127.0.0.1 ──► rqbit stream endpoint  (Linux/macOS)
-  └─ mpv sidecar ────► stream proxy on 127.0.0.1 ?raw=1                     (Windows, in-window)
+  └─ usePlayer() ────► PlayerBackend
+                         ├─ useDomBackend ──► stream proxy on 127.0.0.1  (Linux/macOS)
+                         └─ useMpvBackend ──► mpv sidecar (IPC)          (Windows, in-window)
 ```
 
 - **Stream proxy:** WebKitGTK does not start MP4 or Matroska files that carry embedded subtitle tracks while the rest of the file is still downloading, so the `<video>` element streams through a small proxy in `src-tauri/src/stream_proxy.rs`. It forwards range requests to rqbit and hides every embedded subtitle track in the file header without changing its size (a `Void` element in Matroska, a `free` atom in MP4; see `src-tauri/src/media_patch/`), leaving every byte offset intact. Subtitles are still shown from separate `.srt`/`.vtt` files.
