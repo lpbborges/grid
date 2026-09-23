@@ -48,9 +48,19 @@ describe('Native render (Linux)', () => {
 
     // The fixture lasts 10 s. On a busy runner most of that can pass before the
     // first frame, and once it ends the player closes, so sampling a playing
-    // clip raced its length. Pause on the first frame instead: mpv keeps it on
-    // screen, and a failure capture then shows the real state.
+    // clip raced its length. Pause instead: mpv keeps the frame on screen, and
+    // a failure capture then shows the real state.
+    //
+    // Not on the very first frame, though: with software GL mpv can drop it
+    // (late against the audio clock), and pausing then leaves nothing shown -
+    // CI logged pause=yes, time-pos=0, frame-drop=1 on a black screen. Once the
+    // clock has moved, a frame has been displayed.
     await $('[data-testid="native-loading"]').waitForExist({ reverse: true, timeout: 60000 });
+    await browser.waitUntil(
+      async () =>
+        Number(await $('[aria-label="Buscar posição"]').getAttribute('aria-valuenow')) >= 1,
+      { timeout: 30000, timeoutMsg: 'playback never advanced past the first second' }
+    );
     await browser.execute(() => {
       (document.querySelector('[aria-label="Pausar"]') as HTMLElement | null)?.click();
     });
