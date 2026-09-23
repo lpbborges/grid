@@ -28,6 +28,30 @@ async function watchedEntries(): Promise<number> {
   });
 }
 
+/**
+ * What PlayerShell's overlay shows: its pt-BR error text (every player error
+ * starts "Não foi possível"), the native loading overlay, or nothing at all
+ * once libmpv has presented a frame.
+ */
+async function playerOverlay(): Promise<{ state: 'error' | 'loading' | 'started'; text: string }> {
+  return browser.execute(() => {
+    const text = document.body.innerText;
+    const error = /Não foi possível[^\n]*/.exec(text);
+    if (error) return { state: 'error' as const, text: error[0] };
+    if (document.querySelector('[data-testid="native-loading"]')) {
+      return { state: 'loading' as const, text: '' };
+    }
+    return { state: 'started' as const, text: '' };
+  });
+}
+
+async function expectNoPlayerError(): Promise<void> {
+  const overlay = await playerOverlay();
+  if (overlay.state === 'error') {
+    throw new Error(`the native player showed its error overlay: "${overlay.text}"`);
+  }
+}
+
 describe('Native playback', () => {
   it('plays through mpv instead of mounting a video element', async () => {
     await openTitle('movie', MKV_MOVIE.id);
@@ -37,10 +61,25 @@ describe('Native playback', () => {
 
     // Grid's own controls, composited over mpv rather than beside it. The
     // video itself is drawn by mpv underneath the webview and is not in
-    // the DOM, so the surface is what there is to assert on.
+    // the DOM, so the surface is what there is to assert on. A libmpv that
+    // failed to start shows a pt-BR error instead - on the player's overlay
+    // or on the title page - so wait for either, and fail with the error's
+    // own text rather than a timeout.
     const surface = await $('[data-testid="native-player-surface"]');
-    await surface.waitForDisplayed({ timeout: 90000 });
+    await browser.waitUntil(
+      async () => (await playerOverlay()).state === 'error' || (await surface.isDisplayed()),
+      { timeout: 90000, timeoutMsg: 'the native player surface never appeared' }
+    );
+    await expectNoPlayerError();
     await expect($('[aria-label="Buscar posição"]')).toBeDisplayed();
+
+    // The overlay stays up until libmpv presents a frame, and a load that
+    // fails after the surface mounted turns it into the error overlay.
+    await browser.waitUntil(async () => (await playerOverlay()).state !== 'loading', {
+      timeout: 90000,
+      timeoutMsg: 'the native player never left its loading overlay'
+    });
+    await expectNoPlayerError();
 
     // No <video> is mounted at all: that is the whole point of the branch.
     const videos = await browser.execute(() => document.querySelectorAll('video').length);
