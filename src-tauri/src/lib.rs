@@ -633,6 +633,13 @@ async fn start_native_player(
         return Err("Refusing to load a subtitle from outside the cache".to_string());
     }
 
+    // Resolved before anything is stopped or loaded, so failing here cannot
+    // leave a file loaded that nothing will ever order behind the UI.
+    #[cfg(windows)]
+    let video_parent = (!player::is_headless())
+        .then(|| player::surface_windows::parent_handle(&window))
+        .transpose()?;
+
     let controller = state.controller(&window).await?;
     controller.stop();
     // Whatever the previous playback left unpumped belongs to a stopped file.
@@ -646,8 +653,7 @@ async fn start_native_player(
     // mpv creates its `wid` child above WebView2; with no video output there
     // is no window to order.
     #[cfg(windows)]
-    if !player::is_headless() {
-        let parent = player::surface_windows::parent_handle(&window)?;
+    if let Some(parent) = video_parent {
         player::surface_windows::order_video_behind_ui(parent).await;
     }
 
