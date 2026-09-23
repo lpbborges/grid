@@ -51,10 +51,11 @@ export interface NativePlayOptions {
  * than codes. It is also the label the audio and subtitle menus show.
  */
 export function nativeTrackLabel(track: NativeTrack): string {
+  const code = trackLanguage(track);
   // Without a language the release's own title is all there is to go on.
-  if (!track.lang) return track.title?.trim() ?? '';
+  if (!code) return track.title?.trim() ?? '';
 
-  const language = languageName(track.lang);
+  const language = languageName(code);
   // Release titles mostly restate the language ("German (Germany)"), which
   // next to the Portuguese name reads as the language twice. Only a variant
   // of the language itself is shown - never track details such as SDH or
@@ -69,10 +70,30 @@ export function nativeTrackLabel(track: NativeTrack): string {
 const LANGUAGE_VARIANTS: [RegExp, string][] = [
   [/latin|latino|latam|419|mexic/i, 'Latino'],
   [/canad/i, 'Canadá'],
-  [/brazil|brasil/i, 'Brasil'],
   [/simplified|\bhans\b/i, 'Simplificado'],
   [/traditional|\bhant\b/i, 'Tradicional']
 ];
+
+/**
+ * The track's language code, with Brazilian and European Portuguese told
+ * apart: they are two languages, not a variant of one.
+ *
+ * Matroska often tags both "por" and only the title says which one it is;
+ * newer files carry the region in the tag ("pt-BR", "pt-PT"). Brazilian comes
+ * back as "pob" and European as "por" - the codes getLanguageName names
+ * "Português BR" and "Português", and the 'pt' subtitle preference ranks
+ * Brazilian first.
+ */
+export function trackLanguage(track: NativeTrack): string | null {
+  if (!track.lang) return null;
+  const code = track.lang.toLowerCase().replace('_', '-');
+  if (['pob', 'pb', 'ptbr', 'pt-br'].includes(code)) return 'pob';
+  if (code === 'pt-pt') return 'por';
+  if ((code === 'por' || code === 'pt') && /brazil|brasil|\bpt-?br\b/i.test(track.title ?? '')) {
+    return 'pob';
+  }
+  return track.lang;
+}
 
 /**
  * Grid's own Portuguese names first (they match what the preference resolvers
@@ -130,7 +151,7 @@ export function resolveNativeTracks(
   const parsedSubs: SubtitleTrack[] = subs.map((track) => ({
     id: String(track.id),
     url: '',
-    lang: track.external ? (externalLangs[externalSeen++] ?? '') : (track.lang ?? ''),
+    lang: track.external ? (externalLangs[externalSeen++] ?? '') : (trackLanguage(track) ?? ''),
     label: nativeTrackLabel(track),
     group: track.external ? 'Extra' : 'Embedded'
   }));
@@ -412,7 +433,7 @@ export function useMpvBackend() {
     subtitleTrackList().map((track, index) => ({
       id: String(track.id),
       url: '',
-      lang: track.lang ?? '',
+      lang: trackLanguage(track) ?? '',
       label: nativeTrackLabel(track) || `Legenda ${index + 1}`,
       group: track.external ? 'Extra' : 'Embedded'
     }))

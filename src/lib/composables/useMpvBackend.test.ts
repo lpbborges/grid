@@ -74,6 +74,19 @@ describe('nativeTrackLabel', () => {
     ).toBe('Inglês');
   });
 
+  it('tells Brazilian from European Portuguese, as two languages', () => {
+    // Matroska often tags both "por" and only the title says which one it is;
+    // newer files carry the region in the tag itself.
+    const label = (lang: string, title: string | null = null) =>
+      nativeTrackLabel(track({ id: 1, type: 'sub', lang, title }));
+    expect(label('por', 'Portuguese (Brazil)')).toBe('Português BR');
+    expect(label('por', 'Brazilian')).toBe('Português BR');
+    expect(label('pt-BR')).toBe('Português BR');
+    expect(label('por', 'Portuguese (Portugal)')).toBe('Português');
+    expect(label('pt-PT')).toBe('Português');
+    expect(label('por')).toBe('Português');
+  });
+
   it('names languages missing from the table in Portuguese', () => {
     expect(
       nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'bg', title: 'Bulgarian (Bulgaria)' }))
@@ -190,6 +203,20 @@ describe('resolveNativeTracks', () => {
 
     // The embedded Portuguese track wins; the external one is French.
     expect(sid).toBe(1);
+  });
+
+  it('picks Brazilian Portuguese for the pt preference even when both are tagged "por"', () => {
+    const portuguese = [
+      track({ id: 1, type: 'audio', lang: 'por', title: 'Portuguese (Portugal)', selected: true }),
+      track({ id: 2, type: 'audio', lang: 'por', title: 'Portuguese (Brazil)' }),
+      track({ id: 1, type: 'sub', lang: 'por', title: 'Portuguese (Portugal)' }),
+      track({ id: 2, type: 'sub', lang: 'por', title: 'Portuguese (Brazil)' })
+    ];
+
+    expect(resolveNativeTracks(portuguese, { audio: 'pt', subtitle: 'pt' })).toEqual({
+      aid: 2,
+      sid: 2
+    });
   });
 
   it('copes with a file that has no audio or subtitle tracks at all', () => {
