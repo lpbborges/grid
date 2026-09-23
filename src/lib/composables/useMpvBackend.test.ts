@@ -12,6 +12,7 @@ import {
   type useMpvBackend
 } from './useMpvBackend.svelte';
 import { settingsStore } from '$lib/stores/settings.svelte';
+import { groupByLanguage } from './useSubtitleSelection.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
@@ -39,9 +40,48 @@ describe('nativeTrackLabel', () => {
     expect(nativeTrackLabel(track({ id: 1, type: 'audio', lang: 'en' }))).toContain('ngl');
   });
 
-  it('folds in the track title when mpv provides one', () => {
-    const label = nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'en', title: 'SDH' }));
-    expect(label).toContain('SDH');
+  it('does not repeat the language when the title only restates it', () => {
+    // Releases title their tracks "German (Germany)"; next to "Alemão" that
+    // reads as the language twice.
+    expect(
+      nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'ger', title: 'German (Germany)' }))
+    ).toBe('Alemão');
+    expect(
+      nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'spa', title: 'Spanish (Spain)' }))
+    ).toBe('Espanhol');
+  });
+
+  it('keeps the variant a title names, in Portuguese', () => {
+    expect(
+      nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'spa', title: 'Spanish (Latin America)' }))
+    ).toBe('Espanhol (Latino)');
+    expect(nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'chi', title: 'Simplified' }))).toBe(
+      'Chinês (Simplificado)'
+    );
+    expect(nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'en', title: 'SDH' }))).toBe(
+      'Inglês (SDH)'
+    );
+  });
+
+  it('marks forced and hearing-impaired tracks from their flags', () => {
+    expect(nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'en', forced: true }))).toBe(
+      'Inglês (Forçada)'
+    );
+    expect(
+      nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'en', hearing_impaired: true }))
+    ).toBe('Inglês (SDH)');
+  });
+
+  it('names languages missing from the table in Portuguese', () => {
+    expect(
+      nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'bg', title: 'Bulgarian (Bulgaria)' }))
+    ).toBe('Búlgaro');
+  });
+
+  it('falls back to the title when mpv reports no language', () => {
+    expect(nativeTrackLabel(track({ id: 1, type: 'audio', title: 'Commentary' }))).toBe(
+      'Commentary'
+    );
   });
 
   it('keeps an unrecognised language code as a usable label', () => {
@@ -578,6 +618,35 @@ describe('useMpvBackend', () => {
     expect(backend.activeAudioIndex).toBe(0);
     expect(backend.subtitles).toHaveLength(1);
     expect(backend.subtitles[0].group).toBe('Embedded');
+  });
+
+  it('hands the menu the same track rows on every read', async () => {
+    // SubtitleMenu finds a row with `subtitles.indexOf(sub)` across separate
+    // reads (the list, the grouped lists). Fresh objects per read made every
+    // lookup -1: nothing highlighted, and a click selected "no subtitles".
+    const backend = await startWithTracks([
+      { id: 1, type: 'audio', lang: 'eng', title: null, selected: true },
+      { id: 1, type: 'sub', lang: 'ger', title: 'German (Germany)' },
+      { id: 2, type: 'sub', lang: 'spa', title: 'Spanish (Spain)' },
+      { id: 3, type: 'sub', lang: 'spa', title: 'Spanish (Spain)' }
+    ]);
+
+    const [german, spanish] = groupByLanguage(backend.subtitles);
+    expect(german.label).toBe('Alemão');
+    // Two tracks with the same label share one group, like external subtitles.
+    expect(spanish.label).toBe('Espanhol');
+    expect(spanish.subs).toHaveLength(2);
+
+    // What the menu does on a click: resolve the row, then select it.
+    const clicked = backend.subtitles.indexOf(spanish.subs[1]);
+    expect(clicked).toBe(2);
+    await backend.selectSubtitle(clicked);
+    expect(invoke).toHaveBeenCalledWith('native_player_select_subtitle', { sid: 3 });
+
+    // And after the click the same lookup finds the highlighted row.
+    const [, regrouped] = groupByLanguage(backend.subtitles);
+    expect(backend.subtitles.indexOf(regrouped.subs[1])).toBe(backend.activeSubtitleIndex);
+    expect(backend.audioTracks).toBe(backend.audioTracks);
   });
 
   it('maps a selected row index onto mpv per-type track id', async () => {

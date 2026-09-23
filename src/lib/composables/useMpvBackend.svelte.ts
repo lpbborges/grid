@@ -48,13 +48,59 @@ export interface NativePlayOptions {
  *
  * That function was extracted from `VideoPlayer`, where it worked on DOM
  * `audioTracks` labels, so it matches on human-readable language names rather
- * than codes. mpv gives a code and an optional title, so both are folded in.
+ * than codes. It is also the label the audio and subtitle menus show.
  */
 export function nativeTrackLabel(track: NativeTrack): string {
+  // Without a language the release's own title is all there is to go on.
+  if (!track.lang) return track.title?.trim() ?? '';
+
+  const language = languageName(track.lang);
+  // Release titles mostly restate the language ("German (Germany)"), which
+  // next to the Portuguese name reads as the language twice. Only a real
+  // variant is worth showing; tracks that still share a label end up grouped
+  // as "Opção 1 / Opção 2" in the menu, like external subtitles.
+  const details = TITLE_VARIANTS.filter(([pattern]) => pattern.test(track.title ?? '')).map(
+    ([, detail]) => detail
+  );
+  if (track.forced) details.push('Forçada');
+  if (track.hearing_impaired) details.push('SDH');
+  const unique = details.filter((detail, index) => details.indexOf(detail) === index);
+  // A table entry like "Espanhol (América Latina)" already names its variant.
+  return unique.length > 0 && !language.includes('(')
+    ? `${language} (${unique.join(', ')})`
+    : language;
+}
+
+/** Variants a release title can name, and how the menus show them. */
+const TITLE_VARIANTS: [RegExp, string][] = [
+  [/latin|latino|latam|419|mexic/i, 'Latino'],
+  [/canad/i, 'Canadá'],
+  [/brazil|brasil/i, 'Brasil'],
+  [/simplified|\bhans\b/i, 'Simplificado'],
+  [/traditional|\bhant\b/i, 'Tradicional'],
+  [/\bsdh\b|hearing impaired/i, 'SDH'],
+  [/forced/i, 'Forçada']
+];
+
+/**
+ * Grid's own Portuguese names first (they match what the preference resolvers
+ * expect), then the platform's for everything the table lacks - "bg" becomes
+ * "Búlgaro" rather than "Bg".
+ */
+function languageName(code: string): string {
+  const known = getLanguageName(code, true);
+  if (known) return known;
+  try {
+    const name = new Intl.DisplayNames(['pt-BR'], { type: 'language' }).of(code);
+    if (name && name.toLowerCase() !== code.toLowerCase()) {
+      return name.charAt(0).toUpperCase() + name.slice(1);
+    }
+  } catch {
+    // Not a valid language tag; fall through to the capitalised code.
+  }
   // Non-strict getLanguageName never returns null: an unrecognised code comes
   // back capitalised, which is still a usable label.
-  const language = track.lang ? getLanguageName(track.lang) : '';
-  return [language, track.title].filter(Boolean).join(' ').trim();
+  return getLanguageName(code) ?? code;
 }
 
 /**
@@ -359,6 +405,27 @@ export function useMpvBackend() {
     }
   }
 
+  // Derived, not rebuilt per read: SubtitleMenu finds a row with
+  // `subtitles.indexOf(sub)` across separate reads (the list and the grouped
+  // lists PlayerShell builds from it), which only works on the same objects.
+  const audioRows: ParsedAudioTrack[] = $derived(
+    audioTrackList().map((track, index) => ({
+      index,
+      id: String(track.id),
+      label: nativeTrackLabel(track) || `Faixa ${index + 1}`,
+      enabled: track.selected
+    }))
+  );
+  const subtitleRows: SubtitleTrack[] = $derived(
+    subtitleTrackList().map((track, index) => ({
+      id: String(track.id),
+      url: '',
+      lang: track.lang ?? '',
+      label: nativeTrackLabel(track) || `Legenda ${index + 1}`,
+      group: track.external ? 'Extra' : 'Embedded'
+    }))
+  );
+
   $effect(() => {
     return () => {
       void detach();
@@ -394,24 +461,13 @@ export function useMpvBackend() {
       return hasVideo;
     },
     get audioTracks(): ParsedAudioTrack[] {
-      return audioTrackList().map((track, index) => ({
-        index,
-        id: String(track.id),
-        label: nativeTrackLabel(track) || `Faixa ${index + 1}`,
-        enabled: track.selected
-      }));
+      return audioRows;
     },
     get activeAudioIndex() {
       return audioTrackList().findIndex((t) => t.selected);
     },
     get subtitles(): SubtitleTrack[] {
-      return subtitleTrackList().map((track, index) => ({
-        id: String(track.id),
-        url: '',
-        lang: track.lang ?? '',
-        label: nativeTrackLabel(track) || `Legenda ${index + 1}`,
-        group: track.external ? 'Extra' : 'Embedded'
-      }));
+      return subtitleRows;
     },
     get activeSubtitleIndex() {
       return subtitleTrackList().findIndex((t) => t.selected);
