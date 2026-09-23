@@ -68,7 +68,11 @@
     scheduleHideControls();
   }
 
-  function handleMouseLeave() {
+  function handleMouseLeave(e: MouseEvent) {
+    // The titlebar sits above the player, outside it. Moving onto it is not
+    // leaving: hiding the controls there would hide the titlebar with them,
+    // right under the pointer that is reaching for its buttons.
+    if ((e.relatedTarget as Element | null)?.closest?.('[data-titlebar]')) return;
     if (!backend.paused && !menusOpen) {
       showControls = false;
     }
