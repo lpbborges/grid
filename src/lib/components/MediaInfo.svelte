@@ -63,7 +63,9 @@
     >
       Elenco
     </h3>
-    <div class="flex snap-x gap-4 overflow-x-auto pb-4">
+    <div
+      class="-mx-4 flex snap-x gap-4 overflow-x-auto [mask-image:linear-gradient(to_right,transparent,black_1rem,black_calc(100%-1rem),transparent)] px-4 pb-4"
+    >
       {#each cast as actor}
         <div class="flex w-32 flex-none snap-start flex-col items-center text-center">
           {#if actor.url_small_image}
