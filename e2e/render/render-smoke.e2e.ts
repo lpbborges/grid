@@ -1,5 +1,7 @@
 import { $, browser, expect } from '@wdio/globals';
 import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { ARTIFACTS } from '../support/driver.ts';
 import { MKV_MOVIE } from '../support/catalog.ts';
 import { openTitle } from '../specs/helpers.ts';
 
@@ -46,21 +48,29 @@ describe('Native render (Linux)', () => {
 
     const { width, height } = await browser.getWindowSize();
     let seen = new Set<string>();
-    await browser.waitUntil(
-      async () => {
-        seen = new Set(
-          screenRow(Math.floor(height / 2), width)
-            .map(barColour)
-            .filter((c): c is string => c !== null)
-        );
-        return seen.size >= 3;
-      },
-      {
-        timeout: 60000,
-        interval: 1000,
-        timeoutMsg: 'no colour bars on screen: the video is not drawn'
-      }
-    );
+    try {
+      await browser.waitUntil(
+        async () => {
+          seen = new Set(
+            screenRow(Math.floor(height / 2), width)
+              .map(barColour)
+              .filter((c): c is string => c !== null)
+          );
+          return seen.size >= 3;
+        },
+        {
+          timeout: 60000,
+          interval: 1000,
+          timeoutMsg: 'no colour bars on screen: the video is not drawn'
+        }
+      );
+    } catch (error) {
+      // WebDriver's own screenshot only sees the webview, never mpv: keep what
+      // the X server actually showed, so a failure can be told apart from a
+      // capture or geometry problem.
+      execFileSync('import', ['-window', 'root', path.join(ARTIFACTS, 'render-smoke-screen.png')]);
+      throw error;
+    }
     expect(seen.size).toBeGreaterThanOrEqual(3);
   });
 });
