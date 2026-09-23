@@ -28,8 +28,20 @@ use tokio::sync::oneshot;
 // GLArea/render context to coalesce frames or latch a render failure for.
 /// Coalesces mpv's "new frame" callbacks into one queued redraw.
 static FRAME_QUEUED: AtomicBool = AtomicBool::new(false);
-/// A failing render call is reported to the frontend once, not per frame.
+/// A failing render call is reported to the frontend once per playback, not
+/// per frame. Re-armed by [`rearm_render_failure`] when a new load starts.
 static RENDER_FAILED: AtomicBool = AtomicBool::new(false);
+
+/// Lets the next playback report its own render failure.
+///
+/// Called by `start_native_player` right after it stops the previous file
+/// and before it loads the next one: the latch then covers exactly one
+/// playback. Re-arming later (after `load` returns) would drop a failure
+/// raised while the new file was still loading; never re-arming would
+/// silence every playback after the first failed one.
+pub fn rearm_render_failure() {
+    RENDER_FAILED.store(false, Ordering::Release);
+}
 
 thread_local! {
     // Main-thread only. The update callback runs on an mpv thread and reaches
@@ -69,21 +81,38 @@ fn get_proc_address(_ctx: &(), name: &str) -> *mut c_void {
     }
 }
 
+type GetIntegerv = unsafe extern "C" fn(u32, *mut i32);
+/// Resolved once: the lookup is a dlsym/eglGetProcAddress round trip, and
+/// `current_framebuffer` runs on every frame.
+static GL_GET_INTEGERV: OnceLock<Option<GetIntegerv>> = OnceLock::new();
+
+fn gl_get_integerv() -> Option<GetIntegerv> {
+    *GL_GET_INTEGERV.get_or_init(|| {
+        let found = get_proc_address(&(), "glGetIntegerv");
+        if found.is_null() {
+            // Logged once, here, rather than per frame below.
+            eprintln!(
+                "Native player: glGetIntegerv is unavailable; drawing into framebuffer 0, \
+                 where GtkGLArea may not show the video"
+            );
+            return None;
+        }
+        // SAFETY: `found` is the non-null address of glGetIntegerv, whose C
+        // signature is `void (GLenum, GLint *)`.
+        Some(unsafe { std::mem::transmute::<*mut c_void, GetIntegerv>(found) })
+    })
+}
+
 /// GtkGLArea renders into its own framebuffer, not 0.
 fn current_framebuffer() -> i32 {
     const GL_FRAMEBUFFER_BINDING: u32 = 0x8CA6;
-    type GetIntegerv = unsafe extern "C" fn(u32, *mut i32);
-    let found = get_proc_address(&(), "glGetIntegerv");
-    if found.is_null() {
+    let Some(get_integerv) = gl_get_integerv() else {
         return 0;
-    }
-    let mut framebuffer = 0;
-    unsafe {
-        std::mem::transmute::<*mut c_void, GetIntegerv>(found)(
-            GL_FRAMEBUFFER_BINDING,
-            &mut framebuffer,
-        )
     };
+    let mut framebuffer = 0;
+    // SAFETY: called from the render callback, where GTK has made the
+    // area's GL context current; `framebuffer` is a live GLint to write to.
+    unsafe { get_integerv(GL_FRAMEBUFFER_BINDING, &mut framebuffer) };
     framebuffer
 }
 

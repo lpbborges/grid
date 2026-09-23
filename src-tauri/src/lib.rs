@@ -637,6 +637,8 @@ async fn start_native_player(
     controller.stop();
     // Whatever the previous playback left unpumped belongs to a stopped file.
     state.discard_events();
+    #[cfg(target_os = "linux")]
+    player::surface_linux::rearm_render_failure();
     let (playback, events) = controller
         .load(&url, start_seconds, &subtitle_files)
         .await?;
