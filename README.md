@@ -15,7 +15,7 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
 - **Global Playback Preferences:** Audio, Subtitle, and Quality preferences set once and remembered across the app (persisted locally). Grid ranks and picks the best matching source from YTS + Torrentio behind the scenes and silently enables the right embedded audio/subtitle track when playback starts, resolving the movie/show's real original language instead of guessing.
 - **Frameless Design:** Desktop window with custom controls and a draggable header.
 - **Cyberpunk Theme:** A unique visual identity built with Tailwind CSS v4 featuring neon glows, digital grid backgrounds, and cyberpunk typography (Orbitron/Rajdhani, bundled locally).
-- **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles. The same Svelte UI and playback orchestration (`usePlayer`) drives both backends: a `<video>` element on Linux and macOS, and the mpv sidecar rendering inside Grid's own window on Windows, where the webview cannot decode what releases actually ship.
+- **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles. The same Svelte UI and playback orchestration (`usePlayer`) drives both backends: a `<video>` element on macOS, and libmpv running inside Grid on Linux and Windows, drawing beneath the same Svelte controls (Linux: behind `VITE_GRID_NATIVE_PLAYER=on` until release packaging ships libmpv).
 - **Test-Driven:** Vitest and Svelte Testing Library tests for the frontend, plus Rust unit tests for the backend. Run `npm run test:frontend:cov` for the current coverage report.
 - **Robust Error Handling:** Resilient polling for engine startup, a specific error when the engine cannot start, dynamic port allocation to prevent address conflicts, and timeouts on external API calls; starting playback automatically retries with a fresh request when a source stops responding. Metadata translation tries Google Translate first and MyMemory as a backup; if both fail, the original English text is shown.
 
@@ -72,7 +72,7 @@ Bundles are written to `src-tauri/target/release/bundle/`.
 - `npm run test:e2e` - Build the app against local mock services and play fixture movies and episodes in the real window (Linux/Windows).
 - `npm run test:e2e:run` - Run the E2E specs against the last `build:e2e` without rebuilding.
 - `npm run build:e2e` - Build the debug app used by the E2E specs.
-- `npm run test:e2e:native` - Build with the native Windows player enabled and exercise it (Windows only). Skipped automatically when the mpv sidecar is absent; see [Sidecars](#sidecars).
+- `npm run test:e2e:native` - Build with the native player enabled and exercise it (Linux and Windows). `npm run test:e2e:native:run` reruns the specs without rebuilding.
 - `npm run build:e2e:native` - Build the debug app with the native player enabled, without running the specs.
 - `npm run test:e2e:live` - Manual smoke test that plays a public-domain title through the real services. Needs internet access; never required to pass.
 - `npm run check:e2e` - Type-check the `e2e/` folder.
@@ -121,18 +121,18 @@ SvelteKit UI (static build, runs in the Tauri webview)
   │                      ├─ fetch_*_subtitle        fetches subtitles, converts SRT to VTT
   │                      ├─ get_cache_manifest / upsert_cache_entry / evict_for_space
   │                      └─ start_native_player / native_player_set_tracks /
-  │                         stop_native_player    (Windows: drives the mpv sidecar)
+  │                         stop_native_player    (Linux/Windows: drives libmpv)
   ├─ fetch ──────────► rqbit HTTP API on 127.0.0.1 (add, stats)
   └─ usePlayer() ────► PlayerBackend
                          ├─ useDomBackend ──► stream proxy on 127.0.0.1  (Linux/macOS)
-                         └─ useMpvBackend ──► mpv sidecar (IPC)          (Windows, in-window)
+                         └─ useMpvBackend ──► libmpv (in-process)        (Linux/Windows)
 ```
 
 - **Stream proxy:** WebKitGTK does not start MP4 or Matroska files that carry embedded subtitle tracks while the rest of the file is still downloading, so the `<video>` element streams through a small proxy in `src-tauri/src/stream_proxy.rs`. It forwards range requests to rqbit and hides every embedded subtitle track in the file header without changing its size (a `Void` element in Matroska, a `free` atom in MP4; see `src-tauri/src/media_patch/`), leaving every byte offset intact. Subtitles are still shown from separate `.srt`/`.vtt` files.
 
-  The patch exists only for WebKitGTK. Anything that demuxes Matroska correctly would see an empty subtitle menu instead, so the proxy also serves an unpatched variant at `?raw=1`, which is what the Windows mpv path asks for.
+  The patch exists only for WebKitGTK. Anything that demuxes Matroska correctly would see an empty subtitle menu instead, so the proxy also serves an unpatched variant at `?raw=1`, which is what the libmpv path asks for.
 
-- **Decoding:** Linux and macOS play in a `<video>` element, which decodes through GStreamer in WebKitGTK — hence the plugin requirement above. Windows cannot: the webview decodes neither HEVC nor E-AC3 and cannot demux Matroska, so it plays through the mpv sidecar instead, reparented into Grid's own window so the same Svelte controls sit on top (see [Player](#player-windows-only)).
+- **Decoding:** macOS plays in a `<video>` element; so does Linux until release packaging ships libmpv, decoding through GStreamer in WebKitGTK — hence the plugin requirement above. WebView2 decodes neither HEVC nor E-AC3 and cannot demux Matroska, so Windows plays through libmpv inside Grid's own window, with the same Svelte controls on top; Linux does the same with `VITE_GRID_NATIVE_PLAYER=on` (see [Player](#player-linux-and-windows)).
 
 - `src/lib/api/` wraps external services, `src/lib/engine/` drives playback (engine, cache, ranking), `src/lib/composables/` and `src/lib/stores/` hold reactive state, and `src/lib/components/` holds the UI.
 - **Where state lives:**
@@ -143,7 +143,7 @@ SvelteKit UI (static build, runs in the Tauri webview)
 
 ## Sidecars
 
-Grid ships two sidecar binaries. Both are declared as [Tauri sidecars](https://v2.tauri.app/develop/sidecar/) under `bundle.externalBin`, and Tauri expects one binary per target, named `<name>-<target-triple>`.
+Grid ships one sidecar binary, the streaming engine. It is declared as a [Tauri sidecar](https://v2.tauri.app/develop/sidecar/) under `bundle.externalBin`, and Tauri expects one binary per target, named `<name>-<target-triple>`. The player is a library linked into Grid, not a sidecar; it is described here because it ships alongside it.
 
 ### Streaming engine (all platforms)
 
@@ -162,49 +162,24 @@ To update it:
 2. Rename each binary to `rqbit-<target-triple>` (`rustc --print host-tuple` prints the triple of your machine) and replace the file in `src-tauri/bin/`. On Linux/macOS, make sure it is executable (`chmod +x`).
 3. Run `src-tauri/bin/rqbit-<your-triple> --version`, then `npm run tauri dev` and play something to confirm the HTTP API is still compatible.
 
-### Player (Windows only)
+### Player (Linux and Windows)
 
-WebView2 cannot decode the codecs torrent releases actually ship (HEVC, AC3/E-AC3)
-and cannot demux Matroska over range requests, so Windows playback runs through
-[mpv](https://mpv.io/) instead of a `<video>` element. mpv is launched with
-`--wid` so it renders **inside** Grid's own window, beneath the transparent
-webview, with Grid's Svelte controls composited on top — the same player UI as
-on Linux, driven over IPC rather than through a DOM element. Linux keeps the
-`<video>` element and bundles no player.
+WebView2 cannot decode the codecs releases actually ship (HEVC, AC3/E-AC3) and
+cannot demux Matroska over range requests, so native playback runs through
+[libmpv](https://mpv.io/) **in-process** (`src-tauri/src/player/`): one instance
+per app run, created on the first playback, with Grid's own Svelte controls on
+top. The commands are the only way in; there is no generic mpv passthrough.
 
-| File in `src-tauri/bin/`         | Platform       |
-| -------------------------------- | -------------- |
-| `mpv-x86_64-pc-windows-msvc.exe` | Windows x86-64 |
+- **Linux:** libmpv draws through its render API into a `GtkGLArea` placed under
+  the transparent WebKitGTK webview, so GTK composites the controls over the video
+  in-process, which works on Wayland as well as X11. Development builds link the
+  system libmpv (see [Prerequisites](#prerequisites)).
+- **Windows:** libmpv is given Grid's window handle (`wid`) and creates its own
+  child window, which `window_embed.rs` pushes beneath WebView2. Run
+  `npm run setup:libmpv` once to fetch the pinned LGPL `libmpv-2.dll`.
 
-> **Not committed yet.** `src-tauri/bin/mpv-*` and `src-tauri/tauri.windows.conf.json`
-> are both gitignored while the licensing route is settled, and must land together —
-> the config registers the binary, and Tauri's build script fails when it is absent: the only Windows build published upstream is GPLv2+, and
-> bundling it would put a source-distribution obligation on every release. The
-> plan is to ship an LGPL build instead — see
-> [`src-tauri/licenses/README.md`](src-tauri/licenses/README.md). Put a local copy
-> there to run native playback during development.
-
-Because it is Windows-only, it is declared in `src-tauri/tauri.windows.conf.json`
-rather than the shared `tauri.conf.json` — Tauri resolves `externalBin` per target
-triple, so listing `bin/mpv` in the shared config would make `npm run tauri build`
-fail on Linux and macOS with a missing `mpv-<triple>`. Tauri v2 merges
-`tauri.<platform>.conf.json` automatically, replacing arrays rather than
-concatenating them, which is why that file repeats `bin/rqbit`.
-
-mpv is driven as a **separate process** over a JSON IPC pipe
-(`src-tauri/src/mpv_player.rs`), never by linking `libmpv-2.dll`. That distinction
-is a licensing one, not a technical preference — see
-[`src-tauri/licenses/README.md`](src-tauri/licenses/README.md).
-
-To update it:
-
-1. Put the binary at `src-tauri/bin/mpv-x86_64-pc-windows-msvc.exe`.
-2. Confirm it is self-contained: copy it alone to an empty directory and run
-   `mpv.exe --version` there. A good build needs no sibling DLLs.
-3. Confirm it still decodes what Grid needs: `mpv.exe --vd=help` must list `h264`
-   and `hevc`.
-4. Update the version, licence and source links in
-   `src-tauri/licenses/README.md`.
+Release packages must ship an LGPL libmpv build with its licence and source
+offer; see [`src-tauri/licenses/README.md`](src-tauri/licenses/README.md).
 
 ## Data Sources & Privacy
 
@@ -237,4 +212,4 @@ Grid does not host, index, or distribute any content. It only plays streams that
 
 [MIT](LICENSE) © 2026 LP
 
-The Windows build will additionally bundle mpv (and the FFmpeg linked into it). Grid runs it as a separate process and ships no third-party player code inside its own executable. No mpv binary is committed or distributed yet — see [`src-tauri/licenses/`](src-tauri/licenses/) for the licensing route and what it still needs.
+The Linux and Windows builds link libmpv (and the FFmpeg it uses) in-process, and their release packages will bundle an LGPL build of it. No mpv code is committed or distributed yet — see [`src-tauri/licenses/`](src-tauri/licenses/) for the licensing route and what it still needs.

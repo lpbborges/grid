@@ -1,5 +1,7 @@
 //! What every native-playback platform shares: the shapes handed to the
 //! frontend, `track-list` parsing, and the checks that gate every load.
+// Most of this is produced only by the libmpv controller, which macOS lacks.
+#![cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
 
 use serde::Serialize;
 use serde_json::Value;
@@ -68,10 +70,6 @@ pub enum PlayerEvent {
 /// mpv bypasses the frontend fetch layer entirely, so `playbackBoundary.ts`
 /// and `endpoints.ts` give no protection here - this is the only check. Mirrors
 /// `is_allowed_subtitle_url` in `subtitles.rs`.
-///
-/// Only the Windows build calls this (see `mpv_player.rs`'s module docs), so
-/// it is legitimately unreferenced on Linux and macOS.
-#[allow(dead_code)]
 pub fn is_local_stream_url(raw_url: &str, proxy_port: u16) -> bool {
     let Ok(parsed) = reqwest::Url::parse(raw_url) else {
         return false;
@@ -154,10 +152,6 @@ fn bool_field(entry: &Value, key: &str) -> bool {
 /// The frontend hands over paths, so without this a crafted path could make mpv
 /// open an arbitrary file. Rejects traversal rather than resolving it: these
 /// paths are ours, and a `..` in one means something is wrong.
-///
-/// Only the Windows build calls this (see `mpv_player.rs`'s module docs), so
-/// it is legitimately unreferenced on Linux and macOS.
-#[allow(dead_code)]
 pub fn is_cached_subtitle_path(cache_dir: &std::path::Path, path: &str) -> bool {
     let path = std::path::Path::new(path);
     let traverses = path

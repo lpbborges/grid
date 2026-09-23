@@ -139,6 +139,15 @@ jobs:
       - name: Run E2E specs (Windows)
         if: runner.os == 'Windows'
         run: npm run test:e2e:run
+      - run: npm run build:e2e:native
+      - name: Run native E2E (Linux, under a decimal-comma locale)
+        if: runner.os == 'Linux'
+        run: |
+          sudo locale-gen de_DE.UTF-8
+          LC_ALL=de_DE.UTF-8 xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run test:e2e:native:run
+      - name: Run native E2E (Windows)
+        if: runner.os == 'Windows'
+        run: npm run test:e2e:native:run
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

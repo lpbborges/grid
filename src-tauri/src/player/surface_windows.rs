@@ -2,8 +2,6 @@
 //! see `VideoOutput::Window`), which must sit beneath WebView2 for the
 //! transparent webview to composite over it. `window_embed` does the ordering.
 
-#![allow(dead_code)] // Wired into the Tauri commands in Task 6.
-
 use crate::window_embed;
 
 /// Tauri hands back the `windows` crate's HWND newtype; mpv and window_embed

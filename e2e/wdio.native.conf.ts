@@ -1,7 +1,7 @@
 import { config as offline } from './wdio.conf.ts';
 
-// Tells the Rust side to launch mpv with --vo=null --ao=null: WebDriver cannot
-// see into mpv's window anyway, and the CI runner has no GPU for --vo=gpu.
+// Tells the Rust side to create libmpv with vo=null ao=null: WebDriver cannot
+// see what mpv draws anyway, and the CI runners have no GPU to draw with.
 // startTauriDriver spreads process.env into the app, so setting it here is
 // enough. The frontend skips minimizing on its own when the build was made with
 // VITE_GRID_NATIVE_PLAYER=on, since minimizing can break the WebDriver session.

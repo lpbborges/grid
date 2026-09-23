@@ -2,10 +2,10 @@
 
 Grid itself is MIT licensed (see `LICENSE` at the repository root).
 
-## Status: the mpv sidecar is not shipped yet
+## Status: libmpv is not shipped yet
 
-`src-tauri/bin/mpv-*` is gitignored on purpose. A local copy is fine for
-development, but no mpv binary is committed or distributed while this is open.
+Grid links libmpv in-process on Linux and Windows. Release packages must ship an
+LGPL build (PR 2 of the libmpv plan); until then no mpv code is distributed.
 
 `src-tauri/tauri.windows.conf.json` is gitignored for the same reason and **must
 land in the same commit as the binary**. It registers `bin/mpv` as an

@@ -24,7 +24,7 @@ use std::sync::OnceLock;
 use tokio::sync::oneshot;
 
 // Process-global on purpose: `attach` runs exactly once per app run
-// (guaranteed by `NativePlayerState` in Task 6), so there is only ever one
+// (guaranteed by `NativePlayerState`), so there is only ever one
 // GLArea/render context to coalesce frames or latch a render failure for.
 /// Coalesces mpv's "new frame" callbacks into one queued redraw.
 static FRAME_QUEUED: AtomicBool = AtomicBool::new(false);
@@ -109,7 +109,6 @@ fn take_over_layout(webview: &webkit2gtk::WebView) -> Result<(gtk::Window, gtk::
     Ok((window, vbox))
 }
 
-#[allow(dead_code)] // Wired in Task 6.
 pub async fn attach(window: &tauri::WebviewWindow, controller: Controller) -> Result<(), String> {
     let (done, ready) = oneshot::channel::<Result<(), String>>();
     window

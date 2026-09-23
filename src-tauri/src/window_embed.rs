@@ -1,20 +1,16 @@
 //! Win32 window plumbing for the embedded player.
 //!
-//! mpv is launched with `--wid=<Grid's HWND>`, so it creates a window of class
-//! `mpv` as a direct child of Grid's top-level window, sibling to WebView2's
-//! `Chrome_WidgetWin_*`. It has to sit at the bottom of that z-order for the
-//! transparent webview to composite over it.
+//! libmpv is given Grid's HWND as `wid` (see `player::surface_windows`), so it
+//! creates a window of class `mpv` as a direct child of Grid's top-level
+//! window, sibling to WebView2's `Chrome_WidgetWin_*`. It has to sit at the
+//! bottom of that z-order for the transparent webview to composite over it.
 //!
 //! One `SetWindowPos(HWND_BOTTOM)` at startup is enough. Measured against a
 //! live Windows build: mpv stayed last on every probe while presenting, so
 //! nothing re-raises it and no watchdog is needed.
-//!
-//! `--wid` is a command-line option on the stock `mpv.exe`, so the sidecar
-//! stays a separate process over JSON IPC and D7 ("never link `libmpv-2.dll`")
-//! holds. Grid's licence does not change.
 
-// This Windows plumbing is unreferenced on Linux and macOS, the same way
-// mpv_player.rs keeps its protocol layer compiled everywhere.
+// The pure planning below is unit-tested on every platform but only called on
+// Windows.
 #![allow(dead_code)]
 
 /// Which child of Grid's top-level window a class name identifies.

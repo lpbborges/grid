@@ -22,7 +22,6 @@
 //! B's "the file closed before it loaded". Every raw mpv event the event
 //! thread sees is decoded with its entry id attached (`RawEvent`), and
 //! `route` drops anything whose id doesn't match the sink it would apply to.
-#![allow(dead_code)] // Wired into the Tauri commands in Task 6.
 
 use crate::player::model::{parse_tracks, Playback, PlayerEvent, TimeThrottle};
 use libmpv2::{Format, Mpv};
@@ -44,8 +43,11 @@ pub enum VideoOutput {
     /// No video or audio output: the E2E job, where nothing can see mpv anyway.
     Null,
     /// Linux: frames go through the render API into Grid's GtkGLArea.
+    // Each OS constructs only its own variant; `options_for`'s tests cover both.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     RenderApi,
     /// Windows: mpv creates its own child of this HWND (`wid`).
+    #[cfg_attr(not(windows), allow(dead_code))]
     Window(i64),
 }
 
