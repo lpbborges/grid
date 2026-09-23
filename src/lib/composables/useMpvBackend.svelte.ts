@@ -56,30 +56,22 @@ export function nativeTrackLabel(track: NativeTrack): string {
 
   const language = languageName(track.lang);
   // Release titles mostly restate the language ("German (Germany)"), which
-  // next to the Portuguese name reads as the language twice. Only a real
-  // variant is worth showing; tracks that still share a label end up grouped
-  // as "Opção 1 / Opção 2" in the menu, like external subtitles.
-  const details = TITLE_VARIANTS.filter(([pattern]) => pattern.test(track.title ?? '')).map(
-    ([, detail]) => detail
-  );
-  if (track.forced) details.push('Forçada');
-  if (track.hearing_impaired) details.push('SDH');
-  const unique = details.filter((detail, index) => details.indexOf(detail) === index);
+  // next to the Portuguese name reads as the language twice. Only a variant
+  // of the language itself is shown - never track details such as SDH or
+  // forced. Tracks that still share a label end up grouped as
+  // "Opção 1 / Opção 2" in the menu, like external subtitles.
+  const variant = LANGUAGE_VARIANTS.find(([pattern]) => pattern.test(track.title ?? ''))?.[1];
   // A table entry like "Espanhol (América Latina)" already names its variant.
-  return unique.length > 0 && !language.includes('(')
-    ? `${language} (${unique.join(', ')})`
-    : language;
+  return variant && !language.includes('(') ? `${language} (${variant})` : language;
 }
 
-/** Variants a release title can name, and how the menus show them. */
-const TITLE_VARIANTS: [RegExp, string][] = [
+/** Variants of a language a release title can name, as the menus show them. */
+const LANGUAGE_VARIANTS: [RegExp, string][] = [
   [/latin|latino|latam|419|mexic/i, 'Latino'],
   [/canad/i, 'Canadá'],
   [/brazil|brasil/i, 'Brasil'],
   [/simplified|\bhans\b/i, 'Simplificado'],
-  [/traditional|\bhant\b/i, 'Tradicional'],
-  [/\bsdh\b|hearing impaired/i, 'SDH'],
-  [/forced/i, 'Forçada']
+  [/traditional|\bhant\b/i, 'Tradicional']
 ];
 
 /**

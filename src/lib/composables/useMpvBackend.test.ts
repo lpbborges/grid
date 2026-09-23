@@ -51,25 +51,27 @@ describe('nativeTrackLabel', () => {
     ).toBe('Espanhol');
   });
 
-  it('keeps the variant a title names, in Portuguese', () => {
+  it('keeps a variant of the language itself, in Portuguese', () => {
     expect(
       nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'spa', title: 'Spanish (Latin America)' }))
     ).toBe('Espanhol (Latino)');
     expect(nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'chi', title: 'Simplified' }))).toBe(
       'Chinês (Simplificado)'
     );
-    expect(nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'en', title: 'SDH' }))).toBe(
-      'Inglês (SDH)'
-    );
   });
 
-  it('marks forced and hearing-impaired tracks from their flags', () => {
-    expect(nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'en', forced: true }))).toBe(
-      'Inglês (Forçada)'
+  it('shows no detail that is not a variant of the language', () => {
+    // SDH and forced describe the track, not the language; tracks that end
+    // up with the same label are told apart as "Opção 1 / Opção 2".
+    expect(nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'en', title: 'English SDH' }))).toBe(
+      'Inglês'
     );
     expect(
+      nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'en', title: 'Forced', forced: true }))
+    ).toBe('Inglês');
+    expect(
       nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'en', hearing_impaired: true }))
-    ).toBe('Inglês (SDH)');
+    ).toBe('Inglês');
   });
 
   it('names languages missing from the table in Portuguese', () => {
