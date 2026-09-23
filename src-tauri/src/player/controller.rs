@@ -1036,6 +1036,42 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn a_selected_external_webvtt_subtitle_is_shown() {
+        // Grid writes every external subtitle as WebVTT (write_subtitles).
+        let dir = std::env::temp_dir().join(format!("grid-vtt-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let vtt = dir.join("sub-0.vtt");
+        std::fs::write(
+            &vtt,
+            "WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nGrid VTT fixture\n",
+        )
+        .unwrap();
+
+        let player = Controller::new(VideoOutput::Null).unwrap();
+        let (playback, mut events) = player
+            .load(&fixture_mkv(), 2.0, &[vtt.to_string_lossy().into_owned()])
+            .await
+            .unwrap();
+        let external = playback
+            .tracks
+            .iter()
+            .find(|t| t.kind == "sub" && t.external)
+            .expect("the WebVTT file is listed");
+
+        player.set_subtitle_track(Some(external.id)).unwrap();
+        player.set_paused(false).unwrap();
+        next_matching(
+            &mut events,
+            |e| matches!(e, PlayerEvent::Time(t) if *t >= 2.0),
+        )
+        .await;
+
+        let text: String = player.mpv().get_property("sub-text").unwrap_or_default();
+        assert_eq!(text, "Grid VTT fixture");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn adds_external_subtitles_as_external_tracks() {
         let player = Controller::new(VideoOutput::Null).unwrap();
         let (playback, _events) = player
