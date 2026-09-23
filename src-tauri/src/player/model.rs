@@ -183,8 +183,12 @@ pub fn subtitle_cache_dir(app_cache_dir: &std::path::Path) -> std::path::PathBuf
 
 /// Refuses a subtitle larger than this, mirroring `MAX_SUBTITLE_RESPONSE_BYTES`.
 pub const MAX_SUBTITLE_FILE_BYTES: usize = 5 * 1024 * 1024;
-/// More external subtitles than any one playback selects.
-pub const MAX_SUBTITLE_FILES: usize = 20;
+/// Every external subtitle one playback can fetch: the frontend's
+/// `MAX_EXTERNAL_SUBTITLE_FETCHES` (src/lib/api/subtitles.ts). Change both
+/// together - over this, the whole batch is refused and playback has no
+/// external subtitles at all. Pinned by
+/// `accepts_every_external_subtitle_the_frontend_can_fetch`.
+pub const MAX_SUBTITLE_FILES: usize = 25;
 
 /// Replaces the cached subtitles with `contents`, returning the written paths.
 ///
@@ -417,6 +421,28 @@ mod tests {
         let too_large = vec!["x".repeat(MAX_SUBTITLE_FILE_BYTES + 1)];
         assert!(write_subtitles(&dir, &too_large).is_err());
         let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
+    fn accepts_every_external_subtitle_the_frontend_can_fetch() {
+        // write_subtitles refuses the whole batch over the limit, and the
+        // frontend then plays with no external subtitles at all - so the
+        // limit must hold everything selectSubtitlesToFetch can hand over.
+        let source = include_str!("../../../src/lib/api/subtitles.ts");
+        let fetch_cap: usize = source
+            .lines()
+            .find_map(|line| {
+                line.trim()
+                    .strip_prefix("const MAX_EXTERNAL_SUBTITLE_FETCHES = ")?
+                    .trim_end_matches(';')
+                    .parse()
+                    .ok()
+            })
+            .expect("MAX_EXTERNAL_SUBTITLE_FETCHES is declared in subtitles.ts");
+        assert!(
+            MAX_SUBTITLE_FILES >= fetch_cap,
+            "MAX_SUBTITLE_FILES ({MAX_SUBTITLE_FILES}) is below the frontend's fetch cap ({fetch_cap})"
+        );
     }
 
     #[test]
