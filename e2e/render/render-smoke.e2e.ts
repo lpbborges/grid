@@ -46,6 +46,16 @@ describe('Native render (Linux)', () => {
     await play.click();
     await $('[data-testid="native-player-surface"]').waitForDisplayed({ timeout: 90000 });
 
+    // The fixture lasts 10 s. On a busy runner most of that can pass before the
+    // first frame, and once it ends the player closes, so sampling a playing
+    // clip raced its length. Pause on the first frame instead: mpv keeps it on
+    // screen, and a failure capture then shows the real state.
+    await $('[data-testid="native-loading"]').waitForExist({ reverse: true, timeout: 60000 });
+    await browser.execute(() => {
+      (document.querySelector('[aria-label="Pausar"]') as HTMLElement | null)?.click();
+    });
+    await $('[aria-label="Pausar"]').waitForExist({ reverse: true, timeout: 10000 });
+
     const { width, height } = await browser.getWindowSize();
     let seen = new Set<string>();
     try {
