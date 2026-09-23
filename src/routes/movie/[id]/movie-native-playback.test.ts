@@ -56,6 +56,8 @@ async function openAndPlay() {
   });
   render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
   await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
+
+  vi.useFakeTimers({ shouldAdvanceTime: true });
 }
 
 describe('Movie native playback wiring', () => {
@@ -155,7 +157,6 @@ describe('Movie native playback wiring', () => {
   });
 
   it('shows download progress during preparation', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     boundary = installPlaybackBoundary({
       ...baseOptions,
       nativePlayback: { tracks: [], duration: 100 }
@@ -163,6 +164,8 @@ describe('Movie native playback wiring', () => {
 
     render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
     await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
 
     // Wait for the poll tick
     await vi.advanceTimersByTimeAsync(1000);
