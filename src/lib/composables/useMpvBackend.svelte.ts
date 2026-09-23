@@ -61,7 +61,9 @@ export function nativeTrackLabel(track: NativeTrack): string {
   // of the language itself is shown - never track details such as SDH or
   // forced. Tracks that still share a label end up grouped as
   // "Opção 1 / Opção 2" in the menu, like external subtitles.
-  const variant = LANGUAGE_VARIANTS.find(([pattern]) => pattern.test(track.title ?? ''))?.[1];
+  // The tag's region counts too: "es-419" is Latin American Spanish.
+  const source = `${track.title ?? ''} ${track.lang ?? ''}`;
+  const variant = LANGUAGE_VARIANTS.find(([pattern]) => pattern.test(source))?.[1];
   // A table entry like "Espanhol (América Latina)" already names its variant.
   return variant && !language.includes('(') ? `${language} (${variant})` : language;
 }
@@ -69,14 +71,17 @@ export function nativeTrackLabel(track: NativeTrack): string {
 /** Variants of a language a release title can name, as the menus show them. */
 const LANGUAGE_VARIANTS: [RegExp, string][] = [
   [/latin|latino|latam|419|mexic/i, 'Latino'],
-  [/canad/i, 'Canadá'],
+  [/canad|-ca\b/i, 'Canadá'],
   [/simplified|\bhans\b/i, 'Simplificado'],
   [/traditional|\bhant\b/i, 'Tradicional']
 ];
 
 /**
  * The track's language code, with Brazilian and European Portuguese told
- * apart: they are two languages, not a variant of one.
+ * apart: they are two languages, not a variant of one. Any other region tag
+ * ("en-US", "es-419") is reduced to its language, which is what the menus
+ * name and the preferences match on; nativeTrackLabel still reads the region
+ * for a variant.
  *
  * Matroska often tags both "por" and only the title says which one it is;
  * newer files carry the region in the tag ("pt-BR", "pt-PT"). Brazilian comes
@@ -92,7 +97,8 @@ export function trackLanguage(track: NativeTrack): string | null {
   if ((code === 'por' || code === 'pt') && /brazil|brasil|\bpt-?br\b/i.test(track.title ?? '')) {
     return 'pob';
   }
-  return track.lang;
+  const [base] = code.split('-');
+  return base !== code ? base : track.lang;
 }
 
 /**

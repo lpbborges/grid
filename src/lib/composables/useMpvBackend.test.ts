@@ -87,6 +87,16 @@ describe('nativeTrackLabel', () => {
     expect(label('por')).toBe('Português');
   });
 
+  it('drops a region that is not a variant of the language', () => {
+    const label = (lang: string, title: string | null = null) =>
+      nativeTrackLabel(track({ id: 1, type: 'sub', lang, title }));
+    expect(label('en-US')).toBe('Inglês');
+    expect(label('de-DE', 'German (Germany)')).toBe('Alemão');
+    // A region that is a variant still names it.
+    expect(label('es-419')).toBe('Espanhol (Latino)');
+    expect(label('fr-CA')).toBe('Francês (Canadá)');
+  });
+
   it('names languages missing from the table in Portuguese', () => {
     expect(
       nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'bg', title: 'Bulgarian (Bulgaria)' }))
@@ -217,6 +227,15 @@ describe('resolveNativeTracks', () => {
       aid: 2,
       sid: 2
     });
+  });
+
+  it('matches a region-tagged track to its language preference', () => {
+    // The en preference accepts "eng"/"en"; a track tagged "en-US" is still English.
+    const tagged = [
+      track({ id: 1, type: 'sub', lang: 'fre' }),
+      track({ id: 2, type: 'sub', lang: 'en-US' })
+    ];
+    expect(resolveNativeTracks(tagged, { audio: 'none', subtitle: 'en' }).sid).toBe(2);
   });
 
   it('copes with a file that has no audio or subtitle tracks at all', () => {
