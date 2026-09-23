@@ -8,12 +8,26 @@
 //! includes `run` and `load-script`; the app injects translated metadata and
 //! third-party subtitle text into the DOM, so a generic passthrough would turn
 //! any future XSS into code execution.
+//!
+//! ## Attributing events to the load that started them
+//!
+//! Two loads can race: `load` B can be called while `load` A is still
+//! waiting on mpv. mpv's own playlist entry id (returned by `loadfile`
+//! itself, see [`loadfile_with_entry_id`]) is the only thing that reliably
+//! tells A's events apart from B's, because mpv's event queue can still
+//! deliver a stale `StartFile`/`EndFile` for A *after* B has already
+//! installed its own sink (A's `StartFile` was already queued when B
+//! replaced the sink). Without checking the entry id, that stale event would
+//! either wrongly promote B's sink or - worse - forward A's `EndFile` as
+//! B's "the file closed before it loaded". Every raw mpv event the event
+//! thread sees is decoded with its entry id attached (`RawEvent`), and
+//! `route` drops anything whose id doesn't match the sink it would apply to.
 #![allow(dead_code)] // Wired into the Tauri commands in Task 6.
 
 use crate::player::model::{parse_tracks, Playback, PlayerEvent, TimeThrottle};
-use libmpv2::events::{Event, PropertyData};
 use libmpv2::{Format, Mpv};
-use std::sync::{Arc, Mutex};
+use std::ffi::CString;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
@@ -94,57 +108,207 @@ pub fn describe_error(error: &libmpv2::Error) -> String {
     }
 }
 
-/// Translates one libmpv event into what the frontend is told, if anything.
-pub fn map_event(
-    event: &Event<'_>,
-    throttle: &mut TimeThrottle,
-    now: Instant,
-) -> Option<PlayerEvent> {
+/// A property's value, decoded from a `PROPERTY_CHANGE` event. Only the two
+/// formats this controller observes (`time-pos`/`duration` as `Double`,
+/// `pause` as `Flag`) are meaningful; anything else is `Other`.
+#[derive(Debug, Clone, PartialEq)]
+enum PropertyValue {
+    Double(f64),
+    Flag(bool),
+    Other,
+}
+
+/// One mpv event, decoded from the raw C struct into what this controller
+/// needs, notably the playlist entry id on `StartFile`/`EndFile` (see the
+/// module docs on attributing events to the load that started them).
+#[derive(Debug, Clone, PartialEq)]
+enum RawEvent {
+    StartFile {
+        entry: i64,
+    },
+    EndFile {
+        entry: i64,
+        error: Option<String>,
+    },
+    FileLoaded,
+    PlaybackRestart,
+    Shutdown,
+    Property {
+        name: String,
+        value: PropertyValue,
+    },
+    /// Anything this controller does not act on (reconfigs, seeks, the
+    /// initial `MPV_EVENT_NONE` some timeouts produce, ...).
+    Other,
+}
+
+/// Decodes one raw mpv event into the shape this controller understands.
+///
+/// # Safety
+/// `event` must be a valid `mpv_event` as returned by `mpv_wait_event` on a
+/// live handle: its `data` pointer, when non-null, must point to the struct
+/// `client.h` documents for `event.event_id` (`mpv_event_start_file`,
+/// `mpv_event_end_file`, or `mpv_event_property`), and that data must remain
+/// valid for the duration of this call. `mpv_wait_event`'s contract keeps it
+/// valid until the next call on the same handle, and the caller here never
+/// retains it past this call.
+unsafe fn decode(event: &libmpv2_sys::mpv_event) -> RawEvent {
+    use libmpv2_sys::{
+        mpv_end_file_reason_MPV_END_FILE_REASON_ERROR as REASON_ERROR, mpv_event_end_file,
+        mpv_event_id_MPV_EVENT_END_FILE as END_FILE,
+        mpv_event_id_MPV_EVENT_FILE_LOADED as FILE_LOADED,
+        mpv_event_id_MPV_EVENT_PLAYBACK_RESTART as PLAYBACK_RESTART,
+        mpv_event_id_MPV_EVENT_PROPERTY_CHANGE as PROPERTY_CHANGE,
+        mpv_event_id_MPV_EVENT_SHUTDOWN as SHUTDOWN,
+        mpv_event_id_MPV_EVENT_START_FILE as START_FILE, mpv_event_property, mpv_event_start_file,
+        mpv_format_MPV_FORMAT_DOUBLE as FORMAT_DOUBLE, mpv_format_MPV_FORMAT_FLAG as FORMAT_FLAG,
+        mpv_format_MPV_FORMAT_NONE as FORMAT_NONE,
+    };
+
+    match event.event_id {
+        SHUTDOWN => RawEvent::Shutdown,
+        FILE_LOADED => RawEvent::FileLoaded,
+        PLAYBACK_RESTART => RawEvent::PlaybackRestart,
+        START_FILE => {
+            if event.data.is_null() {
+                return RawEvent::Other;
+            }
+            // SAFETY: event_id says `data` points to a live mpv_event_start_file.
+            let start = unsafe { &*(event.data as *const mpv_event_start_file) };
+            RawEvent::StartFile {
+                entry: start.playlist_entry_id,
+            }
+        }
+        END_FILE => {
+            if event.data.is_null() {
+                return RawEvent::Other;
+            }
+            // SAFETY: event_id says `data` points to a live mpv_event_end_file.
+            let end = unsafe { &*(event.data as *const mpv_event_end_file) };
+            let error = (end.reason == REASON_ERROR)
+                .then(|| describe_error(&libmpv2::Error::Raw(end.error)));
+            RawEvent::EndFile {
+                entry: end.playlist_entry_id,
+                error,
+            }
+        }
+        PROPERTY_CHANGE => {
+            if event.data.is_null() {
+                return RawEvent::Other;
+            }
+            // SAFETY: event_id says `data` points to a live mpv_event_property.
+            let property = unsafe { &*(event.data as *const mpv_event_property) };
+            if property.name.is_null() {
+                return RawEvent::Other;
+            }
+            // SAFETY: mpv guarantees a NUL-terminated name for the event's
+            // lifetime, which this call does not outlive.
+            let name = unsafe { std::ffi::CStr::from_ptr(property.name) }
+                .to_string_lossy()
+                .into_owned();
+            let value = match property.format {
+                // Unavailable or errored: nothing meaningful to report.
+                FORMAT_NONE => return RawEvent::Other,
+                FORMAT_DOUBLE => {
+                    // SAFETY: format says `data` points to a live f64.
+                    PropertyValue::Double(unsafe { *(property.data as *const f64) })
+                }
+                FORMAT_FLAG => {
+                    // SAFETY: format says `data` points to a live C int used as a bool.
+                    PropertyValue::Flag(
+                        unsafe { *(property.data as *const std::os::raw::c_int) } != 0,
+                    )
+                }
+                _ => PropertyValue::Other,
+            };
+            RawEvent::Property { name, value }
+        }
+        _ => RawEvent::Other,
+    }
+}
+
+/// Translates one decoded libmpv event into what the frontend is told, if
+/// anything. Entry-id matching (whether this event even belongs to the
+/// current load) is `route`'s job, not this function's - `map_event` only
+/// answers "what would this mean if it applies".
+fn map_event(event: &RawEvent, throttle: &mut TimeThrottle, now: Instant) -> Option<PlayerEvent> {
     match event {
-        Event::FileLoaded => Some(PlayerEvent::Loaded),
-        Event::PlaybackRestart => Some(PlayerEvent::Presenting),
-        // An end-file *with* an error arrives as Err from wait_event instead.
-        Event::EndFile(_) | Event::Shutdown => Some(PlayerEvent::Ended),
-        Event::PropertyChange {
-            name,
-            change: PropertyData::Double(seconds),
+        RawEvent::FileLoaded => Some(PlayerEvent::Loaded),
+        RawEvent::PlaybackRestart => Some(PlayerEvent::Presenting),
+        RawEvent::EndFile {
+            error: Some(detail),
             ..
-        } if *name == "time-pos" => throttle.accept(now).then_some(PlayerEvent::Time(*seconds)),
+        } => Some(PlayerEvent::Failed(detail.clone())),
+        RawEvent::EndFile { error: None, .. } | RawEvent::Shutdown => Some(PlayerEvent::Ended),
+        RawEvent::Property {
+            name,
+            value: PropertyValue::Double(seconds),
+        } if name == "time-pos" => throttle.accept(now).then_some(PlayerEvent::Time(*seconds)),
         // Not throttled: a dropped pause change leaves the button showing the wrong icon.
-        Event::PropertyChange {
+        RawEvent::Property {
             name,
-            change: PropertyData::Flag(paused),
-            ..
-        } if *name == "pause" => Some(PlayerEvent::Paused(*paused)),
+            value: PropertyValue::Flag(paused),
+        } if name == "pause" => Some(PlayerEvent::Paused(*paused)),
         // Not throttled: it fires once or twice per file, and dropping it pins the seek bar at zero.
-        Event::PropertyChange {
+        RawEvent::Property {
             name,
-            change: PropertyData::Double(seconds),
-            ..
-        } if *name == "duration" => Some(PlayerEvent::Duration(*seconds)),
+            value: PropertyValue::Double(seconds),
+        } if name == "duration" => Some(PlayerEvent::Duration(*seconds)),
         _ => None,
     }
 }
 
-/// Where the event thread sends what it maps. See the task notes in the plan.
+/// Where the event thread sends what it maps, tagged with the mpv playlist
+/// entry id it belongs to so a stale event from a superseded load can never
+/// be mistaken for the current one's.
 #[derive(Default)]
 enum Sink {
     #[default]
     Idle,
-    AwaitingStart(mpsc::UnboundedSender<PlayerEvent>),
-    Forwarding(mpsc::UnboundedSender<PlayerEvent>),
+    AwaitingStart {
+        entry: i64,
+        tx: mpsc::UnboundedSender<PlayerEvent>,
+    },
+    Forwarding {
+        entry: i64,
+        tx: mpsc::UnboundedSender<PlayerEvent>,
+    },
 }
 
-fn route(sink: &mut Sink, is_start_file: bool, event: Option<PlayerEvent>) {
+/// `sink` and `last_started` are updated together, under the same lock: a
+/// `load` installing its sink must see an up-to-date `last_started` to
+/// decide whether mpv's `StartFile` for it already came and went (see
+/// `Controller::load`).
+#[derive(Default)]
+struct Routing {
+    sink: Sink,
+    last_started: Option<i64>,
+}
+
+fn route(sink: &mut Sink, event: &RawEvent, mapped: Option<PlayerEvent>) {
     match sink {
         Sink::Idle => {}
-        Sink::AwaitingStart(tx) => {
-            if is_start_file {
-                *sink = Sink::Forwarding(tx.clone());
+        Sink::AwaitingStart { entry, tx } => {
+            if let RawEvent::StartFile { entry: started } = event {
+                if started == entry {
+                    *sink = Sink::Forwarding {
+                        entry: *entry,
+                        tx: tx.clone(),
+                    };
+                }
             }
         }
-        Sink::Forwarding(tx) => {
-            if let Some(event) = event {
+        Sink::Forwarding { entry, tx } => {
+            // A `StartFile`/`EndFile` for a different, already-superseded
+            // entry must never reach this load - see the module docs.
+            let stale = match event {
+                RawEvent::StartFile { entry: e } | RawEvent::EndFile { entry: e, .. } => e != entry,
+                _ => false,
+            };
+            if stale {
+                return;
+            }
+            if let Some(event) = mapped {
                 if tx.send(event).is_err() {
                     *sink = Sink::Idle;
                 }
@@ -155,30 +319,32 @@ fn route(sink: &mut Sink, is_start_file: bool, event: Option<PlayerEvent>) {
 
 /// Runs for the life of the process. Never panics: it is not joined, and a
 /// panic here would silently stop every event.
-fn run_events(mpv: &'static Mpv, sink: Arc<Mutex<Sink>>) {
+fn run_events(mpv: &'static Mpv, routing: Arc<Mutex<Routing>>) {
     let mut throttle = TimeThrottle::new();
     loop {
-        // None is a timeout or an unavailable observed property; neither matters.
-        let Some(result) = mpv.wait_event(-1.0) else {
+        // SAFETY: `mpv.ctx` is a valid, live handle for the whole process;
+        // `mpv_wait_event` returns a pointer to an `mpv_event` owned by mpv
+        // that stays valid until the next call on this handle, which is
+        // exactly as long as this iteration holds onto it.
+        let event = unsafe { &*libmpv2_sys::mpv_wait_event(mpv.ctx.as_ptr(), -1.0) };
+        if event.event_id == libmpv2_sys::mpv_event_id_MPV_EVENT_NONE {
+            // Only possible with a finite timeout; -1.0 blocks until a real
+            // event, but there is no reason to trust that absolutely.
             continue;
-        };
-        let (is_start_file, is_shutdown, event) = match &result {
-            Ok(event) => (
-                matches!(event, Event::StartFile),
-                matches!(event, Event::Shutdown),
-                map_event(event, &mut throttle, Instant::now()),
-            ),
-            // The only errors wait_event reports for events we do not request
-            // replies to are end-file failures: the stream could not be played.
-            Err(error) => (
-                false,
-                false,
-                Some(PlayerEvent::Failed(describe_error(error))),
-            ),
-        };
-        if let Ok(mut sink) = sink.lock() {
-            route(&mut sink, is_start_file, event);
         }
+        // SAFETY: `event` was just produced by `mpv_wait_event` above and is
+        // not retained past this call.
+        let raw = unsafe { decode(event) };
+        let mapped = map_event(&raw, &mut throttle, Instant::now());
+        let is_shutdown = matches!(raw, RawEvent::Shutdown);
+
+        let mut routing = routing.lock().unwrap_or_else(PoisonError::into_inner);
+        if let RawEvent::StartFile { entry } = raw {
+            routing.last_started = Some(entry);
+        }
+        route(&mut routing.sink, &raw, mapped);
+        drop(routing);
+
         if is_shutdown {
             break;
         }
@@ -190,10 +356,98 @@ fn track_value(id: Option<i64>) -> String {
     id.map_or_else(|| "no".to_string(), |id| id.to_string())
 }
 
+/// Issues `loadfile` through `mpv_command_ret` and returns the playlist entry
+/// id mpv assigned to it, read back from the command's own
+/// `MPV_FORMAT_NODE_MAP` reply (documented since mpv 0.33). Reading the id
+/// from the command's own reply - rather than, say, `playlist-current-pos`
+/// afterward - is what makes this safe to call from multiple threads at
+/// once: each call gets back the exact id mpv assigned to *that* call,
+/// whatever order the calls and mpv's processing of them interleave in.
+///
+/// # Safety
+/// `mpv` must be a valid, live `Mpv` handle.
+unsafe fn loadfile_with_entry_id(mpv: &Mpv, url: &str, start_seconds: f64) -> Result<i64, String> {
+    let start = format!("start={start_seconds}");
+    let args = ["loadfile", url, "replace", "-1", start.as_str()];
+    let cstrings: Vec<CString> = args
+        .iter()
+        .map(|a| CString::new(*a))
+        .collect::<Result<_, _>>()
+        .map_err(|e| format!("mpv could not load the stream: {e}"))?;
+    let mut ptrs: Vec<*const std::os::raw::c_char> = cstrings.iter().map(|c| c.as_ptr()).collect();
+    ptrs.push(std::ptr::null());
+
+    let mut node: libmpv2_sys::mpv_node = unsafe { std::mem::zeroed() };
+    // SAFETY: `mpv.ctx` is valid; `ptrs` is a NUL-terminated array of valid
+    // C strings kept alive (via `cstrings`) for this call; `mpv_command_ret`
+    // only writes to `node` on success.
+    let err =
+        unsafe { libmpv2_sys::mpv_command_ret(mpv.ctx.as_ptr(), ptrs.as_mut_ptr(), &mut node) };
+    if err < 0 {
+        return Err(format!(
+            "mpv could not load the stream: {}",
+            describe_error(&libmpv2::Error::Raw(err))
+        ));
+    }
+
+    // SAFETY: `mpv_command_ret` returned success, so `node` is a valid,
+    // populated node this call now owns and must free below.
+    let entry = unsafe { find_playlist_entry_id(&node) };
+    // SAFETY: `node` was populated by the successful call above and not
+    // freed yet.
+    unsafe { libmpv2_sys::mpv_free_node_contents(&mut node) };
+
+    entry.ok_or_else(|| {
+        "mpv could not load the stream: loadfile's reply had no playlist_entry_id".to_string()
+    })
+}
+
+/// Reads the `playlist_entry_id` key out of `loadfile`'s `MPV_FORMAT_NODE_MAP`
+/// reply.
+///
+/// # Safety
+/// `node` must be a valid, populated `mpv_node` (as `mpv_command_ret` leaves
+/// it on success) that has not been freed yet.
+unsafe fn find_playlist_entry_id(node: &libmpv2_sys::mpv_node) -> Option<i64> {
+    if node.format != libmpv2_sys::mpv_format_MPV_FORMAT_NODE_MAP {
+        return None;
+    }
+    // SAFETY: format is NODE_MAP, so `u.list` is a valid, populated `mpv_node_list`.
+    let list = unsafe { &*node.u.list };
+    for i in 0..list.num {
+        // SAFETY: `i` is within `0..list.num`, which `mpv_node_list` guarantees
+        // indexes valid `keys` and `values` entries.
+        let key_ptr = unsafe { *list.keys.offset(i as isize) };
+        if key_ptr.is_null() {
+            continue;
+        }
+        // SAFETY: mpv guarantees NUL-terminated keys.
+        let key = unsafe { std::ffi::CStr::from_ptr(key_ptr) };
+        if key.to_bytes() != b"playlist_entry_id" {
+            continue;
+        }
+        // SAFETY: same bound as `keys` above.
+        let value = unsafe { &*list.values.offset(i as isize) };
+        if value.format == libmpv2_sys::mpv_format_MPV_FORMAT_INT64 {
+            // SAFETY: format says `u.int64` is the active union member.
+            return Some(unsafe { value.u.int64 });
+        }
+    }
+    None
+}
+
 #[derive(Clone)]
 pub struct Controller {
     mpv: &'static Mpv,
-    sink: Arc<Mutex<Sink>>,
+    routing: Arc<Mutex<Routing>>,
+    /// Serializes each `load`'s pause+loadfile+install-sink sequence, and
+    /// each `stop`/`abandon`'s check-and-clear+stop-command sequence,
+    /// against one another. Never held across an `.await`. Without it, one
+    /// call's steps could interleave with another's - e.g. a stale `abandon`
+    /// clearing a `load` that has since taken over the sink, or issuing
+    /// mpv's `stop` command after a newer `load` has already started a
+    /// different file.
+    command_lock: Arc<Mutex<()>>,
 }
 
 impl Controller {
@@ -217,22 +471,22 @@ impl Controller {
                 .map_err(|e| format!("mpv could not observe {name}: {}", describe_error(&e)))?;
         }
 
-        let sink = Arc::new(Mutex::new(Sink::Idle));
-        let thread_sink = sink.clone();
+        let routing = Arc::new(Mutex::new(Routing::default()));
+        let thread_routing = routing.clone();
         std::thread::Builder::new()
             .name("mpv-events".into())
-            .spawn(move || run_events(mpv, thread_sink))
+            .spawn(move || run_events(mpv, thread_routing))
             .map_err(|e| format!("could not start the mpv event thread: {e}"))?;
 
-        Ok(Self { mpv, sink })
+        Ok(Self {
+            mpv,
+            routing,
+            command_lock: Arc::new(Mutex::new(())),
+        })
     }
 
     pub fn mpv(&self) -> &'static Mpv {
         self.mpv
-    }
-
-    fn set_sink(&self, next: Sink) {
-        *self.sink.lock().unwrap() = next;
     }
 
     /// Loads `url` paused at `start_seconds`, adds `subtitle_files`, and returns
@@ -247,25 +501,40 @@ impl Controller {
         subtitle_files: &[String],
     ) -> Result<(Playback, mpsc::UnboundedReceiver<PlayerEvent>), String> {
         let (tx, mut rx) = mpsc::unbounded_channel();
-        // Kept to identify this load's sink later: a load that was itself
-        // superseded must not clear a newer one's sink when it cleans up.
         // A weak reference: it must not keep this load's own sender alive, or
         // a superseded load would sit on the closed-channel detection below
         // for the full `LOAD_TIMEOUT` instead of failing as soon as the
         // channel closes.
         let own_tx = tx.downgrade();
-        self.set_sink(Sink::AwaitingStart(tx));
 
-        // Paused so track preferences apply before the first frame;
-        // native_player_set_tracks unpauses.
-        self.mpv
-            .set_property("pause", true)
-            .map_err(|e| format!("mpv could not load the stream: {}", describe_error(&e)))?;
-        let start = format!("start={start_seconds}");
-        // `replace -1 <options>`: the index argument exists since mpv 0.38.
-        self.mpv
-            .command("loadfile", &[url, "replace", "-1", start.as_str()])
-            .map_err(|e| format!("mpv could not load the stream: {}", describe_error(&e)))?;
+        {
+            // Held only across these synchronous FFI calls - never across
+            // the `.await` below. See `command_lock`'s doc comment.
+            let _command_guard = self
+                .command_lock
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+
+            // Paused so track preferences apply before the first frame;
+            // native_player_set_tracks unpauses.
+            self.mpv
+                .set_property("pause", true)
+                .map_err(|e| format!("mpv could not load the stream: {}", describe_error(&e)))?;
+
+            // SAFETY: `self.mpv` is a valid, live handle for the whole process.
+            let entry = unsafe { loadfile_with_entry_id(self.mpv, url, start_seconds) }?;
+
+            let mut routing = self.routing.lock().unwrap_or_else(PoisonError::into_inner);
+            // If the event thread already saw this entry's `StartFile` (mpv
+            // can be that fast), install straight into `Forwarding` -
+            // otherwise this load would wait forever for a `StartFile` that
+            // already came and went before the sink existed to catch it.
+            routing.sink = if routing.last_started == Some(entry) {
+                Sink::Forwarding { entry, tx }
+            } else {
+                Sink::AwaitingStart { entry, tx }
+            };
+        }
 
         match tokio::time::timeout(LOAD_TIMEOUT, wait_until_loaded(&mut rx)).await {
             Ok(Ok(())) => {}
@@ -283,10 +552,15 @@ impl Controller {
             // `auto` adds without selecting; preferences pick the track later.
             self.mpv
                 .command("sub-add", &[file.as_str(), "auto"])
-                .map_err(|e| format!("mpv could not add a subtitle: {}", describe_error(&e)))?;
+                .map_err(|e| {
+                    self.abandon(&own_tx);
+                    format!("mpv could not add a subtitle: {}", describe_error(&e))
+                })?;
         }
 
-        Ok((self.playback()?, rx))
+        let playback = self.playback().inspect_err(|_| self.abandon(&own_tx))?;
+
+        Ok((playback, rx))
     }
 
     /// Tracks and duration. `track-list` read as a string is mpv's JSON.
@@ -347,36 +621,63 @@ impl Controller {
     /// Ends the current file. The sink goes idle first so the resulting
     /// end-file never reaches the frontend as "ended".
     pub fn stop(&self) {
-        self.set_sink(Sink::Idle);
+        let _command_guard = self
+            .command_lock
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        {
+            let mut routing = self.routing.lock().unwrap_or_else(PoisonError::into_inner);
+            routing.sink = Sink::Idle;
+        }
         let _ = self.mpv.command("stop", &[]);
     }
 
     /// Cleans up after a load that failed or was itself superseded before it
     /// finished. A superseded load's own sender is no longer the one
-    /// installed in `self.sink` - a newer `load` already replaced it - so
-    /// this only calls `stop` when `own` is still the current sink. Without
-    /// this check, a stale load's cleanup would clear the newer load's sink
-    /// and drop its event channel out from under it.
+    /// installed in `self.routing` - a newer `load` already replaced it - so
+    /// this only clears the sink and tells mpv to stop when `own` is still
+    /// current. Without this check, a stale load's cleanup would clear the
+    /// newer load's sink and drop its event channel out from under it.
+    ///
+    /// The ownership check and the clear happen under one guard of the
+    /// routing lock, so nothing can install a new sink between "this is
+    /// still mine" and actually clearing it.
     fn abandon(&self, own: &mpsc::WeakUnboundedSender<PlayerEvent>) {
-        let is_current = match own.upgrade() {
-            // No strong sender for our channel remains anywhere, including in
-            // the sink: definitely not current.
-            None => false,
-            Some(own_upgraded) => match &*self.sink.lock().unwrap() {
-                Sink::Idle => false,
-                Sink::AwaitingStart(tx) | Sink::Forwarding(tx) => tx.same_channel(&own_upgraded),
-            },
+        let _command_guard = self
+            .command_lock
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let cleared = {
+            let mut routing = self.routing.lock().unwrap_or_else(PoisonError::into_inner);
+            let is_current = match own.upgrade() {
+                // No strong sender for our channel remains anywhere,
+                // including in the sink: definitely not current.
+                None => false,
+                Some(own_upgraded) => match &routing.sink {
+                    Sink::Idle => false,
+                    Sink::AwaitingStart { tx, .. } | Sink::Forwarding { tx, .. } => {
+                        tx.same_channel(&own_upgraded)
+                    }
+                },
+            };
+            if is_current {
+                routing.sink = Sink::Idle;
+            }
+            is_current
         };
-        if is_current {
-            self.stop();
+        if cleared {
+            let _ = self.mpv.command("stop", &[]);
         }
     }
 
     /// A failure mpv cannot see (the Linux GL render call). Reaches the
     /// frontend as `native-player-error` if something is playing.
     pub fn report_failure(&self, detail: String) {
-        if let Ok(mut sink) = self.sink.lock() {
-            route(&mut sink, false, Some(PlayerEvent::Failed(detail)));
+        let mut routing = self.routing.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Sink::Forwarding { tx, .. } = &routing.sink {
+            if tx.send(PlayerEvent::Failed(detail)).is_err() {
+                routing.sink = Sink::Idle;
+            }
         }
     }
 }
@@ -398,18 +699,23 @@ async fn wait_until_loaded(rx: &mut mpsc::UnboundedReceiver<PlayerEvent>) -> Res
 mod tests {
     use super::*;
     use crate::player::model::PlayerEvent;
-    use libmpv2::events::{Event, PropertyData};
     use std::time::{Duration, Instant};
 
-    const SECURITY: [(&str, &str); 8] = [
+    const GLOBAL_OPTIONS: [(&str, &str); 14] = [
         ("config", "no"),
         ("load-scripts", "no"),
         ("ytdl", "no"),
         ("input-default-bindings", "no"),
         ("input-vo-keyboard", "no"),
+        ("input-cursor", "no"),
         ("osc", "no"),
         ("terminal", "no"),
         ("sub-auto", "no"),
+        ("keep-open", "no"),
+        ("network-timeout", "60"),
+        ("cache", "yes"),
+        ("cache-secs", "30"),
+        ("demuxer-max-bytes", "32MiB"),
     ];
 
     fn has(options: &[(&'static str, String)], key: &str, value: &str) -> bool {
@@ -417,14 +723,14 @@ mod tests {
     }
 
     #[test]
-    fn every_output_isolates_mpv_from_user_config_and_input() {
+    fn every_output_sets_every_global_option() {
         for output in [
             VideoOutput::Null,
             VideoOutput::RenderApi,
             VideoOutput::Window(42),
         ] {
             let options = options_for(output);
-            for (key, value) in SECURITY {
+            for (key, value) in GLOBAL_OPTIONS {
                 assert!(
                     has(&options, key, value),
                     "{output:?} is missing {key}={value}"
@@ -460,37 +766,56 @@ mod tests {
         let mut throttle = TimeThrottle::new();
         let now = Instant::now();
         assert_eq!(
-            map_event(&Event::FileLoaded, &mut throttle, now),
+            map_event(&RawEvent::FileLoaded, &mut throttle, now),
             Some(PlayerEvent::Loaded)
         );
         assert_eq!(
-            map_event(&Event::PlaybackRestart, &mut throttle, now),
+            map_event(&RawEvent::PlaybackRestart, &mut throttle, now),
             Some(PlayerEvent::Presenting)
         );
         assert_eq!(
-            map_event(&Event::EndFile(0), &mut throttle, now),
+            map_event(
+                &RawEvent::EndFile {
+                    entry: 1,
+                    error: None
+                },
+                &mut throttle,
+                now
+            ),
             Some(PlayerEvent::Ended)
         );
         assert_eq!(
-            map_event(&Event::Shutdown, &mut throttle, now),
+            map_event(
+                &RawEvent::EndFile {
+                    entry: 1,
+                    error: Some("loading failed".to_string())
+                },
+                &mut throttle,
+                now
+            ),
+            Some(PlayerEvent::Failed("loading failed".to_string()))
+        );
+        assert_eq!(
+            map_event(&RawEvent::Shutdown, &mut throttle, now),
             Some(PlayerEvent::Ended)
         );
-        assert_eq!(map_event(&Event::StartFile, &mut throttle, now), None);
+        assert_eq!(
+            map_event(&RawEvent::StartFile { entry: 1 }, &mut throttle, now),
+            None
+        );
     }
 
     #[test]
     fn maps_observed_properties() {
         let mut throttle = TimeThrottle::new();
         let now = Instant::now();
-        let pause = Event::PropertyChange {
-            name: "pause",
-            change: PropertyData::Flag(true),
-            reply_userdata: 2,
+        let pause = RawEvent::Property {
+            name: "pause".to_string(),
+            value: PropertyValue::Flag(true),
         };
-        let duration = Event::PropertyChange {
-            name: "duration",
-            change: PropertyData::Double(90.5),
-            reply_userdata: 3,
+        let duration = RawEvent::Property {
+            name: "duration".to_string(),
+            value: PropertyValue::Double(90.5),
         };
         assert_eq!(
             map_event(&pause, &mut throttle, now),
@@ -506,10 +831,9 @@ mod tests {
     fn throttles_time_but_not_pause() {
         let mut throttle = TimeThrottle::new();
         let now = Instant::now();
-        let time = |s| Event::PropertyChange {
-            name: "time-pos",
-            change: PropertyData::Double(s),
-            reply_userdata: 1,
+        let time = |s| RawEvent::Property {
+            name: "time-pos".to_string(),
+            value: PropertyValue::Double(s),
         };
         assert_eq!(
             map_event(&time(1.0), &mut throttle, now),
@@ -528,10 +852,19 @@ mod tests {
     #[test]
     fn awaiting_sink_drops_the_previous_files_events_until_the_new_one_starts() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let mut sink = Sink::AwaitingStart(tx);
-        route(&mut sink, false, Some(PlayerEvent::Ended)); // the old file's end-file
-        route(&mut sink, true, None); // start-file of the new one
-        route(&mut sink, false, Some(PlayerEvent::Loaded));
+        let mut sink = Sink::AwaitingStart { entry: 2, tx };
+        // the old file's (entry 1) end-file must not leak through
+        route(
+            &mut sink,
+            &RawEvent::EndFile {
+                entry: 1,
+                error: None,
+            },
+            Some(PlayerEvent::Ended),
+        );
+        // start-file of the new one (entry 2)
+        route(&mut sink, &RawEvent::StartFile { entry: 2 }, None);
+        route(&mut sink, &RawEvent::FileLoaded, Some(PlayerEvent::Loaded));
         assert_eq!(rx.try_recv(), Ok(PlayerEvent::Loaded));
         assert!(rx.try_recv().is_err());
     }
@@ -539,7 +872,11 @@ mod tests {
     #[test]
     fn idle_sink_drops_everything() {
         let mut sink = Sink::Idle;
-        route(&mut sink, true, Some(PlayerEvent::Loaded));
+        route(
+            &mut sink,
+            &RawEvent::StartFile { entry: 1 },
+            Some(PlayerEvent::Loaded),
+        );
         assert!(matches!(sink, Sink::Idle));
     }
 
@@ -547,9 +884,64 @@ mod tests {
     fn forwarding_sink_goes_idle_when_the_receiver_is_gone() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         drop(rx);
-        let mut sink = Sink::Forwarding(tx);
-        route(&mut sink, false, Some(PlayerEvent::Time(1.0)));
+        let mut sink = Sink::Forwarding { entry: 1, tx };
+        route(
+            &mut sink,
+            &RawEvent::Property {
+                name: "time-pos".to_string(),
+                value: PropertyValue::Double(1.0),
+            },
+            Some(PlayerEvent::Time(1.0)),
+        );
         assert!(matches!(sink, Sink::Idle));
+    }
+
+    #[test]
+    fn a_start_file_for_another_entry_does_not_promote_awaiting_start() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut sink = Sink::AwaitingStart { entry: 2, tx };
+        route(&mut sink, &RawEvent::StartFile { entry: 1 }, None);
+        assert!(matches!(sink, Sink::AwaitingStart { entry: 2, .. }));
+        // Still waiting, not forwarding: an event that would otherwise map to
+        // something must not reach the receiver either.
+        route(&mut sink, &RawEvent::FileLoaded, Some(PlayerEvent::Loaded));
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn an_end_file_for_another_entry_is_not_forwarded_from_forwarding() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut sink = Sink::Forwarding { entry: 2, tx };
+        route(
+            &mut sink,
+            &RawEvent::EndFile {
+                entry: 1,
+                error: None,
+            },
+            Some(PlayerEvent::Ended),
+        );
+        assert!(rx.try_recv().is_err());
+        assert!(matches!(sink, Sink::Forwarding { entry: 2, .. }));
+    }
+
+    #[test]
+    fn installing_when_last_started_already_equals_the_entry_yields_forwarding() {
+        // Mirrors `Controller::load`'s own install logic: if the event
+        // thread already observed this entry's `StartFile` before the sink
+        // was installed, install straight into `Forwarding` so that
+        // now-unrepeatable `StartFile` is not waited for forever.
+        let routing = Routing {
+            sink: Sink::Idle,
+            last_started: Some(7),
+        };
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let entry = 7;
+        let sink = if routing.last_started == Some(entry) {
+            Sink::Forwarding { entry, tx }
+        } else {
+            Sink::AwaitingStart { entry, tx }
+        };
+        assert!(matches!(sink, Sink::Forwarding { entry: 7, .. }));
     }
 
     #[test]
@@ -705,29 +1097,58 @@ mod tests {
         assert!(again.duration > 9.0);
     }
 
+    /// A TCP listener that accepts a connection and then never answers.
+    /// mpv's network demuxer will connect and then block reading a response
+    /// that never comes, which keeps a `load` genuinely, deterministically
+    /// mid-load for as long as the test needs - no sleep-based timing
+    /// guesses about when mpv "should" have started.
+    async fn spawn_stuck_listener() -> (u16, Arc<tokio::sync::Notify>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let accepted = Arc::new(tokio::sync::Notify::new());
+        let accepted_task = accepted.clone();
+        tokio::spawn(async move {
+            if let Ok((socket, _)) = listener.accept().await {
+                accepted_task.notify_one();
+                // Never close it: forgetting (rather than dropping) leaks the
+                // fd instead of closing it, so mpv's read stays blocked.
+                std::mem::forget(socket);
+            }
+        });
+        (port, accepted)
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn a_second_load_supersedes_the_first() {
+        let (port, accepted) = spawn_stuck_listener().await;
+
         let player = Controller::new(VideoOutput::Null).unwrap();
         let first = player.clone();
-        let fixture = fixture_mkv();
+        let stuck_url = format!("http://127.0.0.1:{port}/a.mkv");
         let first_load =
-            tokio::spawn(async move { first.load(&fixture, 0.0, &[]).await.map(|(p, _)| p) });
-        // A single `yield_now` only guarantees this task is *polled again*; on
-        // the multi-thread runtime the spawned task can run truly in parallel
-        // on another OS thread, so it is not guaranteed to have issued its
-        // `loadfile` yet. A short sleep gives it that time deterministically,
-        // so "second" really is the later of the two loads.
-        tokio::time::sleep(Duration::from_millis(20)).await;
+            tokio::spawn(async move { first.load(&stuck_url, 0.0, &[]).await.map(|(p, _)| p) });
+
+        // Proof load A is genuinely mid-load: mpv's demuxer has connected
+        // and is now stuck reading a response that will never arrive.
+        tokio::time::timeout(Duration::from_secs(10), accepted.notified())
+            .await
+            .expect("mpv never connected to the stuck listener");
+
         let second = player.load(&fixture_mkv(), 0.0, &[]).await;
         assert!(
             second.is_ok(),
             "the newer load must play: {:?}",
             second.err()
         );
-        // The first either finished before the second began, or was superseded:
-        // what it must never do is hang.
-        let first = tokio::time::timeout(Duration::from_secs(10), first_load).await;
-        assert!(first.is_ok(), "the superseded load hung");
+
+        let first = tokio::time::timeout(Duration::from_secs(10), first_load)
+            .await
+            .expect("the superseded load hung")
+            .expect("the spawned task panicked");
+        assert!(
+            first.is_err(),
+            "the superseded load must fail cleanly, not succeed: {first:?}"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
