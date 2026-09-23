@@ -618,9 +618,9 @@ async fn start_native_player(
         .ok_or_else(|| "Stream proxy not running".to_string())?;
     // libmpv never goes through the frontend fetch layer, so this is the only
     // thing keeping it pointed at our own proxy.
-    if !player::model::is_local_stream_url(&url, port) {
+    let Some(url) = player::model::local_stream_url(&url, port) else {
         return Err("Refusing to play a URL that is not the local stream proxy".to_string());
-    }
+    };
     if !start_seconds.is_finite() || start_seconds < 0.0 {
         return Err("Invalid start position".to_string());
     }

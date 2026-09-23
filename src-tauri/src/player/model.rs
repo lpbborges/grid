@@ -65,27 +65,35 @@ pub enum PlayerEvent {
     Failed(String),
 }
 
-/// Rejects any URL that is not this app's local stream proxy.
+/// Returns the canonical form of `raw_url` if it is this app's local stream
+/// proxy, and `None` for anything else.
 ///
 /// mpv bypasses the frontend fetch layer entirely, so `playbackBoundary.ts`
 /// and `endpoints.ts` give no protection here - this is the only check. Mirrors
 /// `is_allowed_subtitle_url` in `subtitles.rs`.
-pub fn is_local_stream_url(raw_url: &str, proxy_port: u16) -> bool {
-    let Ok(parsed) = reqwest::Url::parse(raw_url) else {
-        return false;
-    };
-    if parsed.scheme() != "http" {
-        return false;
+///
+/// The caller must hand mpv the returned string, never `raw_url`: that way
+/// mpv loads exactly what was checked. `\`, `@` and ASCII whitespace are
+/// refused outright rather than normalised, because they are where URL
+/// parsers disagree - WHATWG parsing (this check) reads `\` as `/` and drops
+/// tabs and newlines, while FFmpeg's URL handling inside mpv need not. A
+/// stream URL Grid builds itself never contains any of them.
+pub fn local_stream_url(raw_url: &str, proxy_port: u16) -> Option<String> {
+    if raw_url
+        .chars()
+        .any(|c| c == '\\' || c == '@' || c.is_ascii_whitespace())
+    {
+        return None;
     }
-    if parsed.host_str() != Some("127.0.0.1") {
-        return false;
-    }
-    if parsed.port() != Some(proxy_port) {
-        return false;
-    }
-    // Credentials in the authority would let a crafted URL point the request
-    // somewhere else while still reading as localhost.
-    parsed.username().is_empty() && parsed.password().is_none()
+    let parsed = reqwest::Url::parse(raw_url).ok()?;
+    let local = parsed.scheme() == "http"
+        && parsed.host_str() == Some("127.0.0.1")
+        && parsed.port() == Some(proxy_port)
+        // Credentials in the authority would let a crafted URL point the
+        // request somewhere else while still reading as localhost.
+        && parsed.username().is_empty()
+        && parsed.password().is_none();
+    local.then(|| parsed.into())
 }
 
 /// Rate-limits `time-pos` updates to one per [`TIME_EVENT_INTERVAL`].
@@ -233,6 +241,10 @@ mod tests {
         )
     }
 
+    fn is_local_stream_url(raw_url: &str, proxy_port: u16) -> bool {
+        local_stream_url(raw_url, proxy_port).is_some()
+    }
+
     #[test]
     fn accepts_only_the_local_stream_proxy_origin() {
         assert!(is_local_stream_url(&stream_url(PROXY_PORT), PROXY_PORT));
@@ -257,6 +269,36 @@ mod tests {
         ));
         assert!(!is_local_stream_url("file:///etc/passwd", PROXY_PORT));
         assert!(!is_local_stream_url("not a url", PROXY_PORT));
+    }
+
+    #[test]
+    fn rejects_characters_parsers_disagree_on() {
+        // WHATWG parsing reads `\` as `/` and strips tabs, newlines and outer
+        // spaces, so these would pass the host check - while FFmpeg's own URL
+        // handling inside mpv may read the authority differently.
+        for raw in [
+            "http://127.0.0.1:45000\\@evil.com/",
+            "http://127.0.0.1:45000/torrents/x@evil.com/stream/0",
+            "http://127.0.0.1:45000/torrents/x/stream/0 ",
+            " http://127.0.0.1:45000/torrents/x/stream/0",
+            "http://127.0.0.1:45000/torrents/x/stre\tam/0",
+            "http://127.0.0.1:45000/torrents/x/stre\nam/0",
+            "http://127.0.0.1:45000/torrents/x/stream/0\r",
+        ] {
+            assert_eq!(local_stream_url(raw, PROXY_PORT), None, "{raw:?}");
+        }
+    }
+
+    #[test]
+    fn hands_mpv_the_canonical_form_of_an_accepted_url() {
+        assert_eq!(
+            local_stream_url(
+                "HTTP://127.0.0.1:45000/torrents/x/stream/0?raw=1",
+                PROXY_PORT
+            )
+            .as_deref(),
+            Some("http://127.0.0.1:45000/torrents/x/stream/0?raw=1")
+        );
     }
 
     #[test]
