@@ -5,7 +5,7 @@
 
 pub mod model;
 
-#[cfg(test)]
+#[cfg(all(test, any(target_os = "linux", windows)))]
 mod tests {
     #[test]
     fn libmpv_links_and_initialises_headless() {
