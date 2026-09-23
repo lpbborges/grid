@@ -48,6 +48,7 @@ describe('usePlayer', () => {
     const { unmount } = render(PlayerHarness, {
       props: {
         mode: options.mode || 'native',
+        onwatched: options.onwatched,
         onMount: (p: any) => {
           playerRef = p;
           backendRef = p.backend;
@@ -100,5 +101,56 @@ describe('usePlayer', () => {
     backend.emitEnded();
 
     expect(streamPlayer.stop).toHaveBeenCalled();
+  });
+
+  it('marks the title watched past 95% on the mpv backend too', async () => {
+    const onwatched = vi.fn();
+    const { player, backend } = await mountPlayer({ mode: 'native', onwatched });
+    await player.play('magnet:?xt=urn:btih:abc', { mediaId: 'tt1' });
+
+    backend.duration = 100;
+    backend.currentTime = 96;
+    await tick();
+
+    expect(onwatched).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onwatched at most once per stream', async () => {
+    const onwatched = vi.fn();
+    const { player, backend } = await mountPlayer({ mode: 'native', onwatched });
+    await player.play('magnet:?xt=urn:btih:abc', { mediaId: 'tt1' });
+
+    backend.duration = 100;
+    backend.currentTime = 96;
+    await tick();
+    backend.currentTime = 97;
+    await tick();
+
+    expect(onwatched).toHaveBeenCalledTimes(1);
+  });
+
+  it('polls download progress until the first frame paints, on both backends', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mocks.streamPlayer.infoHash = 'abc123' + '0'.repeat(34);
+    mocks.streamPlayer.totalBytes = 1000;
+    mocks.streamPlayer.fileIdx = 0;
+    mocks.streamPlayer.isPlaying = true;
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ file_progress: [500] }), { status: 200 })
+    );
+
+    const { player, backend } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:abc', { mediaId: 'tt1' });
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await tick();
+    expect(player.downloadPercent).toBeCloseTo(50);
+
+    backend.hasStarted = true;
+    await tick();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    vi.useRealTimers();
   });
 });

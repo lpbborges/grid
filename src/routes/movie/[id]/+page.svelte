@@ -4,14 +4,12 @@
   import { translateMediaInfo } from '$lib/api/translate';
   import { getMovieStreams, parseSeedCount } from '$lib/api/torrentio';
   import Player from '$lib/components/Player.svelte';
-  import { createPlayerBackend } from '$lib/components/playerBackend';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
-  import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
-  import { playbackMode } from '$lib/engine/platform';
+  import { usePlayer } from '$lib/composables/usePlayer.svelte';
 
-  import { progressStore } from '$lib/stores/progress.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { watchedStore } from '$lib/stores/watched.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
 
   let { data } = $props();
@@ -20,12 +18,11 @@
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
 
-  const streamPlayer = useStreamPlayer();
-  // Windows plays through mpv embedded in this window; everywhere else mounts
-  // <video>. The branch lives here so VideoPlayer never has to know about it.
-  const isNative = playbackMode() === 'native';
   let videoElement = $state<HTMLVideoElement | null>(null);
-  const backend = createPlayerBackend(() => videoElement);
+  const player = usePlayer(() => videoElement, {
+    onwatched: () => watchedStore.add(movieId)
+  });
+  const backend = player.backend;
 
   $effect(() => {
     if (data.error) {
@@ -53,7 +50,7 @@
       selectedTorrentHash = '';
       combinedTorrents = [];
       if (hasMountedTorrentEffect) {
-        streamPlayer.stop();
+        player.stop();
       }
       hasMountedTorrentEffect = true;
     }
@@ -183,46 +180,16 @@
     const magnet = `magnet:?xt=urn:btih:${selectedTorrent.hash}&dn=${encodeURIComponent(movie?.title || '')}`;
 
     const requestedId = movieId;
-    const ok = await streamPlayer.play(magnet, { mediaId: movieId, fileIdx });
+    const ok = await player.play(magnet, {
+      mediaId: movieId,
+      fileIdx,
+      originalLanguage: movie?.language
+    });
     // The route moved to another title while the stream was being prepared.
     if (movieId !== requestedId) return;
-    // A play cancelled by closing the player fails without an error.
-    if (!ok && streamPlayer.error) {
-      error = streamPlayer.error;
+    if (!ok && player.error) {
+      error = player.error;
       errorSource = 'play';
-      return;
-    }
-    if (ok) {
-      if (isNative) {
-        await startNativePlayback();
-      } else {
-        await backend.start({
-          url: streamPlayer.videoSrc,
-          subtitles: streamPlayer.subtitles,
-          mediaId: movieId.toString(),
-          startSeconds: progressStore.get(movieId)?.time || 0,
-          originalLanguage: movie?.language
-        });
-      }
-    }
-  }
-
-  async function startNativePlayback() {
-    const started = await backend.start({
-      url: streamPlayer.videoSrc,
-      subtitles: streamPlayer.subtitles,
-      mediaId: movieId,
-      startSeconds: progressStore.get(movieId)?.time || 0,
-      originalLanguage: movie?.language,
-      onended: () => {
-        streamPlayer.stop();
-      }
-    });
-    if (!started) {
-      // No fallback to <video>: it cannot play this content on Windows.
-      error = backend.error;
-      errorSource = 'play';
-      await streamPlayer.stop();
     }
   }
 
@@ -235,7 +202,7 @@
   }
 </script>
 
-{#if !streamPlayer.isPlaying}
+{#if !player.isPlaying}
   <div class="relative z-20 mb-8">
     <a
       href="/"
@@ -272,7 +239,7 @@
     </button>
   </div>
 {:else if movie}
-  {#if (movie.background_image_original || movie.background_image) && !streamPlayer.isPlaying}
+  {#if (movie.background_image_original || movie.background_image) && !player.isPlaying}
     <div class="pointer-events-none fixed inset-0">
       <img
         src={movie.background_image_original || movie.background_image}
@@ -294,7 +261,7 @@
         />
       </div>
 
-      {#if !streamPlayer.isPlaying}
+      {#if !player.isPlaying}
         <PlayerSelection
           torrents={combinedTorrents}
           bind:selectedTorrentHash
@@ -305,14 +272,14 @@
     </div>
 
     <div class="w-full lg:w-3/4">
-      {#if streamPlayer.isPlaying}
+      {#if player.isPlaying}
         <Player
           {backend}
           bind:videoElement
-          engineStatus={streamPlayer.engineStatus}
-          downloadPercent={0}
+          engineStatus={player.engineStatus}
+          downloadPercent={player.downloadPercent}
           onclose={() => {
-            streamPlayer.stop();
+            player.stop();
           }}
         />
       {:else}

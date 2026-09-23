@@ -8,6 +8,7 @@
   import { usePlayer } from '$lib/composables/usePlayer.svelte';
 
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { watchedStore } from '$lib/stores/watched.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
   import type { Episode } from '$lib/types';
 
@@ -18,7 +19,14 @@
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
 
-  const player = usePlayer(() => videoElement);
+  const player = usePlayer(() => videoElement, {
+    onwatched: () => {
+      watchedStore.add(seriesId);
+      if (lastAttemptedEpisode) {
+        watchedStore.add(seriesId, lastAttemptedEpisode.season, lastAttemptedEpisode.episode);
+      }
+    }
+  });
   const backend = player.backend;
   // Windows plays through mpv embedded in this window; else mounts <video>.
   let videoElement = $state<HTMLVideoElement | null>(null);
@@ -223,7 +231,7 @@
           {backend}
           bind:videoElement
           engineStatus={player.engineStatus}
-          downloadPercent={0}
+          downloadPercent={player.downloadPercent}
           onclose={() => {
             player.stop();
           }}

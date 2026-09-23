@@ -2,7 +2,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { logger } from '$lib/logger';
-import { progressStore } from '$lib/stores/progress.svelte';
 import type { PlaybackRequest } from '$lib/types';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { findPreferredSubtitleIndex, getLanguageName } from '$lib/api/subtitles';
@@ -154,10 +153,6 @@ export function useMpvBackend() {
   let durationState = $state(0);
 
   let unlisteners: UnlistenFn[] = [];
-  // Non-reactive, and deliberately separate from `durationState`: this one
-  // guards progress writes before mpv reports a length, and reading a rune
-  // inside `onTime` would subscribe the caller to it.
-  let duration = 0;
   let current: (PlaybackRequest & { onended?: () => void }) | undefined;
 
   async function detach() {
@@ -202,7 +197,6 @@ export function useMpvBackend() {
   async function start(options: PlaybackRequest & { onended?: () => void }): Promise<boolean> {
     error = '';
     current = options;
-    duration = 0;
     currentTime = 0;
     paused = false;
     hasVideo = false;
@@ -215,7 +209,6 @@ export function useMpvBackend() {
         startSeconds: options.startSeconds ?? 0,
         subtitleFiles
       });
-      duration = playback.duration;
       durationState = playback.duration;
       tracks = withExternalLangs(
         playback.tracks,
@@ -236,10 +229,8 @@ export function useMpvBackend() {
         }),
         listen<number>('native-player-duration', (event) => {
           // A streamed file often reports no length until mpv has demuxed
-          // enough of it. Both copies move: `duration` guards progress
-          // writes, `durationState` is what the seek bar renders.
+          // enough of it.
           if (!Number.isFinite(event.payload) || event.payload <= 0) return;
-          duration = event.payload;
           durationState = event.payload;
         }),
         listen('native-player-ended', () => {
@@ -304,10 +295,6 @@ export function useMpvBackend() {
     if (!current || !Number.isFinite(seconds)) return;
     // The seek bar follows mpv even when progress cannot be written.
     currentTime = seconds;
-    // mpv reports position, never length, so a duration is needed before this
-    // can mean anything. `native-player-time` is throttled to ~1 Hz in Rust.
-    if (duration <= 0) return;
-    progressStore.update(current.mediaId, current.season, current.episode, seconds, duration);
   }
 
   async function stop(): Promise<void> {

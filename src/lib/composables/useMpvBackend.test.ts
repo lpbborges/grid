@@ -11,7 +11,6 @@ import {
   type NativeTrack,
   type useMpvBackend
 } from './useMpvBackend.svelte';
-import { progressStore } from '$lib/stores/progress.svelte';
 import { settingsStore } from '$lib/stores/settings.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
@@ -222,25 +221,24 @@ describe('useMpvBackend', () => {
     );
   });
 
-  it('writes progress from mpv time events', async () => {
-    const update = vi.spyOn(progressStore, 'update');
-    await start();
+  it('updates currentTime from mpv time events', async () => {
+    const { player } = await start();
 
     handlers['native-player-time']({ payload: 30 });
 
-    expect(update).toHaveBeenCalledWith('tt1', undefined, undefined, 30, 100);
+    expect(player.currentTime).toBe(30);
   });
 
-  it('ignores time events when mpv could not determine a duration', async () => {
+  it('still updates currentTime even when mpv could not determine a duration', async () => {
     vi.mocked(invoke).mockImplementation((async (command: string) =>
       command === 'start_native_player' ? { duration: 0, tracks: [] } : undefined) as never);
-    const update = vi.spyOn(progressStore, 'update');
-    await start();
+    const { player } = await start();
 
     handlers['native-player-time']({ payload: 30 });
 
-    // A 0 duration would make every position look like 100% watched.
-    expect(update).not.toHaveBeenCalled();
+    // The seek bar still follows mpv's reported position; usePlayer decides
+    // whether to write progress based on duration.
+    expect(player.currentTime).toBe(30);
   });
 
   it('releases the stream when mpv exits', async () => {
@@ -470,17 +468,16 @@ describe('useMpvBackend', () => {
   it('follows the duration mpv learns after loading', async () => {
     vi.mocked(invoke).mockImplementation((async (command: string) =>
       command === 'start_native_player' ? { duration: 0, tracks: [] } : undefined) as never);
-    const update = vi.spyOn(progressStore, 'update');
     const { player } = await start();
 
     handlers['native-player-duration']({ payload: 5025 });
 
     // A streamed file often reports no length at first. Without following it
-    // the seek bar stays pinned at zero and no progress is ever written.
+    // the seek bar stays pinned at zero.
     expect(player.duration).toBe(5025);
 
     handlers['native-player-time']({ payload: 60 });
-    expect(update).toHaveBeenCalledWith('tt1', undefined, undefined, 60, 5025);
+    expect(player.currentTime).toBe(60);
   });
 
   it('moves the selection onto the preferred tracks at startup', async () => {

@@ -20,6 +20,7 @@ export function usePlayer(
 
   let error = $state('');
   let currentRequest = $state<PlaybackRequest | undefined>(undefined);
+  let watchedTriggered = false;
   let downloadPercent = $state(0);
 
   $effect(() => {
@@ -45,6 +46,8 @@ export function usePlayer(
 
   async function play(magnet: string, playOptions: PlayOptions & { originalLanguage?: string }) {
     error = '';
+    watchedTriggered = false;
+    downloadPercent = 0;
     const ok = await streamPlayer.play(magnet, playOptions);
     // A play cancelled by closing the player fails without an error.
     if (!ok) {
@@ -89,6 +92,10 @@ export function usePlayer(
   $effect(() => {
     const request = currentRequest;
     if (!request || backend.duration <= 0) return;
+    if (!watchedTriggered && backend.currentTime / backend.duration > 0.95) {
+      watchedTriggered = true;
+      options.onwatched?.();
+    }
     progressStore.update(
       request.mediaId,
       request.season,

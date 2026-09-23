@@ -9,6 +9,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { settingsStore } from '$lib/stores/settings.svelte';
+import { watchedStore } from '$lib/stores/watched.svelte';
 import { clearExternalSubtitleCache } from '$lib/api/subtitles';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
@@ -129,5 +130,44 @@ describe('Movie native playback wiring', () => {
     // Otherwise the controls float over a transparent hole with no video.
     await waitFor(() => expect(screen.queryByTestId('native-player-surface')).toBeNull());
     expect(document.body.classList.contains('native-player-active')).toBe(false);
+  });
+
+  it('marks the movie as watched when passing 95% on mpv', async () => {
+    await openAndPlay();
+    await waitFor(() => expect(handlers['native-player-duration']).toBeDefined(), {
+      timeout: 5000
+    });
+
+    handlers['native-player-duration']({ payload: 100 });
+    handlers['native-player-time']({ payload: 96 });
+
+    await waitFor(() => expect(watchedStore.has(movie.id)).toBe(true));
+  });
+
+  it('surfaces mid-playback errors on the overlay rather than tearing down silently', async () => {
+    await openAndPlay();
+    await waitFor(() => expect(handlers['native-player-error']).toBeDefined(), { timeout: 5000 });
+
+    handlers['native-player-error']({ payload: 'mpv crashed' });
+
+    // The surface shouldn't unmount (unlike end-of-file), it shows the error overlay instead
+    await screen.findByText('Não foi possível reproduzir este vídeo.');
+  });
+
+  it('shows download progress during preparation', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    boundary = installPlaybackBoundary({
+      ...baseOptions,
+      nativePlayback: { tracks: [], duration: 100 }
+    });
+
+    render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+    await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
+
+    // Wait for the poll tick
+    await vi.advanceTimersByTimeAsync(1000);
+
+    // fakeRqbit returns stats with 100% file_progress
+    await screen.findByText('100.00%');
   });
 });
