@@ -5,6 +5,9 @@
 
 pub mod model;
 
+use model::PlayerEvent;
+use tokio::sync::mpsc::UnboundedReceiver;
+
 #[cfg(any(target_os = "linux", windows))]
 pub mod controller;
 
@@ -38,6 +41,40 @@ use controller::VideoOutput;
 pub struct NativePlayerState {
     #[cfg(any(target_os = "linux", windows))]
     controller: tokio::sync::OnceCell<Result<Controller, String>>,
+    /// The loaded playback's events, held until the frontend is listening.
+    ///
+    /// Tauri drops an event nobody listens to, and `useMpvBackend` attaches
+    /// its listeners only after `start_native_player` resolves. Pumping from
+    /// `start_native_player` could therefore emit `native-player-presenting`
+    /// into the void and leave the UI waiting for a frame forever. The
+    /// channel is unbounded, so mpv's events simply queue here until
+    /// `native_player_set_tracks` - which the frontend calls only after every
+    /// listener is attached - takes the receiver and starts the pump.
+    pending_events: std::sync::Mutex<Option<UnboundedReceiver<PlayerEvent>>>,
+}
+
+impl NativePlayerState {
+    /// Keeps a freshly loaded playback's events until someone listens,
+    /// replacing (and so dropping) any previous playback's unpumped ones.
+    pub fn hold_events(&self, events: UnboundedReceiver<PlayerEvent>) {
+        *self.pending_slot() = Some(events);
+    }
+
+    /// Hands over the held events, once.
+    pub fn take_events(&self) -> Option<UnboundedReceiver<PlayerEvent>> {
+        self.pending_slot().take()
+    }
+
+    /// Drops events nobody will pump because their playback ended.
+    pub fn discard_events(&self) {
+        self.pending_slot().take();
+    }
+
+    fn pending_slot(&self) -> std::sync::MutexGuard<'_, Option<UnboundedReceiver<PlayerEvent>>> {
+        self.pending_events
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
 }
 
 #[cfg(any(target_os = "linux", windows))]
@@ -113,5 +150,37 @@ mod tests {
             version.starts_with("mpv "),
             "unexpected version string {version}"
         );
+    }
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::{NativePlayerState, PlayerEvent};
+
+    #[test]
+    fn held_events_are_handed_over_once_with_what_queued_meanwhile() {
+        let state = NativePlayerState::default();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        state.hold_events(rx);
+        // Emitted before anyone listens: must still be there for the pump.
+        tx.send(PlayerEvent::Presenting).unwrap();
+
+        let mut events = state.take_events().expect("held events");
+        assert_eq!(events.try_recv(), Ok(PlayerEvent::Presenting));
+        assert!(state.take_events().is_none());
+    }
+
+    #[test]
+    fn a_new_playback_replaces_and_stop_discards_unpumped_events() {
+        let state = NativePlayerState::default();
+        let (old_tx, old_rx) = tokio::sync::mpsc::unbounded_channel::<PlayerEvent>();
+        let (new_tx, new_rx) = tokio::sync::mpsc::unbounded_channel::<PlayerEvent>();
+        state.hold_events(old_rx);
+        state.hold_events(new_rx);
+        assert!(old_tx.is_closed(), "the replaced receiver was dropped");
+
+        state.discard_events();
+        assert!(new_tx.is_closed(), "stop dropped the unpumped receiver");
+        assert!(state.take_events().is_none());
     }
 }

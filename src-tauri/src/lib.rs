@@ -635,6 +635,8 @@ async fn start_native_player(
 
     let controller = state.controller(&window).await?;
     controller.stop();
+    // Whatever the previous playback left unpumped belongs to a stopped file.
+    state.discard_events();
     let (playback, events) = controller
         .load(&url, start_seconds, &subtitle_files)
         .await?;
@@ -647,7 +649,9 @@ async fn start_native_player(
         player::surface_windows::order_video_behind_ui(parent).await;
     }
 
-    pump_player_events(app, events);
+    // Not pumped yet: nothing is listening until this call has returned.
+    // `native_player_set_tracks` starts the pump (see `NativePlayerState`).
+    state.hold_events(events);
     Ok(playback)
 }
 
@@ -661,13 +665,24 @@ fn running_player(state: &player::NativePlayerState) -> Result<player::Controlle
 ///
 /// Startup only: it writes both track properties and unpauses as one step.
 /// The mid-session controls below are separate for exactly that reason.
+///
+/// Also where the playback's events start flowing to the frontend.
+/// `useMpvBackend.start` (src/lib/composables/useMpvBackend.svelte.ts)
+/// awaits every `listen()` (lines 218-245) before it invokes this command
+/// (line 255), so nothing emitted from here on can be dropped for lack of a
+/// listener. Pumped before the tracks are applied so a failure below still
+/// leaves mpv's own events (e.g. an error) reaching the UI.
 #[tauri::command]
 async fn native_player_set_tracks(
+    app: tauri::AppHandle,
     state: State<'_, player::NativePlayerState>,
     aid: Option<i64>,
     sid: Option<i64>,
 ) -> Result<(), String> {
     let player = running_player(&state)?;
+    if let Some(events) = state.take_events() {
+        pump_player_events(app, events);
+    }
     player.set_tracks(aid, sid)?;
     player.set_paused(false)
 }
@@ -741,6 +756,8 @@ async fn stop_native_player(
     if let Some(player) = state.running() {
         player.stop();
     }
+    // A playback stopped before `native_player_set_tracks` was never pumped.
+    state.discard_events();
     // Subtitles belong to the playback that just ended.
     if let Ok(cache_dir) = app.path().app_cache_dir() {
         let dir = player::model::subtitle_cache_dir(&cache_dir);

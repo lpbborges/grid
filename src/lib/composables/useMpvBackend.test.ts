@@ -213,6 +213,40 @@ describe('useMpvBackend', () => {
     expect(windowApi.minimize).not.toHaveBeenCalled();
   });
 
+  it('listens for every mpv event before asking Rust to start sending them', async () => {
+    // Rust holds the playback's events until native_player_set_tracks and
+    // Tauri drops an event nobody listens to, so a listener still registering
+    // at that call could miss native-player-presenting and leave the UI opaque.
+    const registered: string[] = [];
+    let registeredAtSetTracks: string[] | undefined;
+    vi.mocked(listen).mockImplementation((async (name: string, handler: never) => {
+      await Promise.resolve();
+      handlers[name] = handler;
+      registered.push(name);
+      return unlisten;
+    }) as never);
+    vi.mocked(invoke).mockImplementation((async (command: string) => {
+      if (command === 'start_native_player') return { duration: 100, tracks: [] };
+      if (command === 'native_player_set_tracks') registeredAtSetTracks = [...registered];
+      return undefined;
+    }) as never);
+
+    const { ok } = await start();
+
+    expect(ok).toBe(true);
+    expect(registeredAtSetTracks).toEqual(
+      expect.arrayContaining([
+        'native-player-time',
+        'native-player-paused',
+        'native-player-presenting',
+        'native-player-duration',
+        'native-player-ended',
+        'native-player-error'
+      ])
+    );
+    expect(registeredAtSetTracks).toHaveLength(vi.mocked(listen).mock.calls.length);
+  });
+
   it('passes the stored resume position to mpv', async () => {
     await start({ startSeconds: 42 });
     expect(invoke).toHaveBeenCalledWith(
