@@ -108,7 +108,8 @@ jobs:
             build-essential curl wget file libxdo-dev libssl-dev \
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
             webkit2gtk-driver xvfb pulseaudio libmpv-dev \
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav \
+            imagemagick libgl1-mesa-dri
           pulseaudio -D --exit-idle-time=-1
       - name: Install Edge WebDriver matching WebView2
         if: runner.os == 'Windows'
@@ -148,6 +149,9 @@ jobs:
       - name: Run native E2E (Windows)
         if: runner.os == 'Windows'
         run: npm run test:e2e:native:run
+      - name: Run render smoke E2E (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24 +extension GLX" npm run test:e2e:render:run
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

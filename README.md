@@ -74,6 +74,7 @@ Bundles are written to `src-tauri/target/release/bundle/`.
 - `npm run build:e2e` - Build the debug app used by the E2E specs.
 - `npm run test:e2e:native` - Build with the native player enabled and exercise it (Linux and Windows). `npm run test:e2e:native:run` reruns the specs without rebuilding.
 - `npm run build:e2e:native` - Build the debug app with the native player enabled, without running the specs.
+- `npm run test:e2e:render:run` - Linux only: plays the fixture through libmpv under Xvfb and checks the video is drawn beneath the webview (needs `npm run build:e2e:native` and ImageMagick).
 - `npm run test:e2e:live` - Manual smoke test that plays a public-domain title through the real services. Needs internet access; never required to pass.
 - `npm run check:e2e` - Type-check the `e2e/` folder.
 - `npm run e2e:services` - Start the E2E mock services and fixture seeders on their own, for debugging.
