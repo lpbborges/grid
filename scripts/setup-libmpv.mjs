@@ -10,6 +10,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
   writeFileSync,
   copyFileSync
 } from 'node:fs';
@@ -71,30 +72,50 @@ function defFromExports(dll, defPath) {
   writeFileSync(defPath, `LIBRARY libmpv-2\nEXPORTS\n${names.map((n) => `  ${n}`).join('\n')}\n`);
 }
 
+/** Records which lock entry the extracted files came from. */
+const STAMP = '.libmpv-sha256';
+
 async function setupWindows() {
+  const entry = lock['windows-x86_64'];
   const out = path.join(root, 'src-tauri', 'lib', 'windows');
-  if (existsSync(path.join(out, 'mpv.lib')) && existsSync(path.join(out, 'libmpv-2.dll'))) {
+  const stamp = path.join(out, STAMP);
+  const current = existsSync(stamp) ? readFileSync(stamp, 'utf8').trim() : '';
+  if (
+    current === entry.sha256 &&
+    existsSync(path.join(out, 'mpv.lib')) &&
+    existsSync(path.join(out, 'libmpv-2.dll'))
+  ) {
     console.log('libmpv already set up in', out);
     return;
+  }
+  if (current && current !== entry.sha256) {
+    console.log('libmpv.lock.json changed; replacing the libmpv in', out);
   }
   mkdirSync(out, { recursive: true });
   const work = path.join(tmpdir(), `grid-libmpv-${Date.now()}`);
   mkdirSync(work, { recursive: true });
-  const archive = path.join(work, 'libmpv.7z');
-  await fetchVerified(lock['windows-x86_64'], archive);
-  execFileSync('7z', ['x', archive, `-o${work}`, '-y'], { stdio: 'inherit' });
+  try {
+    const archive = path.join(work, 'libmpv.7z');
+    await fetchVerified(entry, archive);
+    execFileSync('7z', ['x', archive, `-o${work}`, '-y'], { stdio: 'inherit' });
 
-  const dll = findFile(work, 'libmpv-2.dll');
-  if (!dll) throw new Error('libmpv-2.dll not found in the archive');
-  copyFileSync(dll, path.join(out, 'libmpv-2.dll'));
+    const dll = findFile(work, 'libmpv-2.dll');
+    if (!dll) throw new Error('libmpv-2.dll not found in the archive');
+    copyFileSync(dll, path.join(out, 'libmpv-2.dll'));
 
-  const def = findFile(work, 'mpv.def') ?? path.join(work, 'mpv.def');
-  if (!existsSync(def)) defFromExports(dll, def);
-  execFileSync(
-    msvcTool('lib.exe'),
-    [`/def:${def}`, `/out:${path.join(out, 'mpv.lib')}`, '/machine:x64', '/name:libmpv-2.dll'],
-    { stdio: 'inherit' }
-  );
+    const def = findFile(work, 'mpv.def') ?? path.join(work, 'mpv.def');
+    if (!existsSync(def)) defFromExports(dll, def);
+    execFileSync(
+      msvcTool('lib.exe'),
+      [`/def:${def}`, `/out:${path.join(out, 'mpv.lib')}`, '/machine:x64', '/name:libmpv-2.dll'],
+      { stdio: 'inherit' }
+    );
+    // Written last: a run that fails halfway leaves no stamp, so the next
+    // run starts over instead of trusting a partial set of files.
+    writeFileSync(stamp, `${entry.sha256}\n`);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
   console.log('libmpv set up in', out);
 }
 
