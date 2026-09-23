@@ -31,6 +31,9 @@ static FRAME_QUEUED: AtomicBool = AtomicBool::new(false);
 /// A failing render call is reported to the frontend once per playback, not
 /// per frame. Re-armed by [`rearm_render_failure`] when a new load starts.
 static RENDER_FAILED: AtomicBool = AtomicBool::new(false);
+/// The first frame mpv draws is logged once, with its size and framebuffer:
+/// the one sign in a log that video reaches the window at all.
+static FIRST_FRAME_LOGGED: AtomicBool = AtomicBool::new(false);
 
 /// Lets the next playback report its own render failure.
 ///
@@ -243,12 +246,14 @@ fn build(
                 let Ok(slot) = slot.try_borrow() else { return };
                 let Some(context) = slot.as_ref() else { return };
                 let scale = area.scale_factor();
-                let rendered = context.render::<()>(
-                    current_framebuffer(),
-                    area.allocated_width() * scale,
-                    area.allocated_height() * scale,
-                    true,
-                );
+                let (width, height) = (area.allocated_width() * scale, area.allocated_height() * scale);
+                let framebuffer = current_framebuffer();
+                let rendered = context.render::<()>(framebuffer, width, height, true);
+                if rendered.is_ok() && !FIRST_FRAME_LOGGED.swap(true, Ordering::AcqRel) {
+                    eprintln!(
+                        "Native player surface: first frame drawn ({width}x{height}, framebuffer {framebuffer})"
+                    );
+                }
                 if let Err(e) = rendered {
                     if !RENDER_FAILED.swap(true, Ordering::AcqRel) {
                         let detail = super::controller::describe_error(&e);
