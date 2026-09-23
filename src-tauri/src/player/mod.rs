@@ -8,6 +8,9 @@ pub mod model;
 #[cfg(any(target_os = "linux", windows))]
 pub mod controller;
 
+#[cfg(target_os = "linux")]
+pub mod surface_linux;
+
 #[cfg(all(test, any(target_os = "linux", windows)))]
 mod tests {
     #[test]
