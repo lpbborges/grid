@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -95,10 +96,16 @@ function sonameOf(file) {
 function buildRuntimeDir(linkDir, runtimeDir) {
   rmSync(runtimeDir, { recursive: true, force: true });
   mkdirSync(runtimeDir, { recursive: true });
+  // A symlink chain that escapes linkDir (a malformed or malicious archive)
+  // must not be silently followed into an arbitrary path on disk.
+  const resolvedLinkDir = realpathSync(linkDir);
   const seen = new Set();
   for (const entry of readdirSync(linkDir, { withFileTypes: true })) {
     if (entry.name === STAMP || entry.name === 'LICENSES') continue;
     const real = realpathSync(path.join(linkDir, entry.name));
+    if (real !== resolvedLinkDir && !real.startsWith(resolvedLinkDir + path.sep)) {
+      throw new Error(`${entry.name} resolves outside ${linkDir}: ${real}`);
+    }
     const soname = sonameOf(real);
     if (seen.has(soname)) continue;
     seen.add(soname);
@@ -174,9 +181,18 @@ async function setupLinuxBundle() {
   if (current && current !== entry.sha256) {
     console.log('libmpv.lock.json changed; replacing the bundled libmpv in', out);
   }
+  // Clear the stamp and both directories before extracting: `cp -a` alone
+  // only overwrites files the new archive still has under the same name, so
+  // a file dropped or renamed between releases (e.g. libavcodec.so.60 ->
+  // .so.61) would otherwise survive, and buildRuntimeDir could then ship it
+  // under a current SONAME depending on directory read order. Doing this
+  // before the stamp is rewritten means an interrupted run leaves neither a
+  // stamp nor a stale directory to trust.
+  rmSync(stamp, { force: true });
+  rmSync(out, { recursive: true, force: true });
+  rmSync(runtimeOut, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
-  const work = path.join(tmpdir(), `grid-libmpv-${Date.now()}`);
-  mkdirSync(work, { recursive: true });
+  const work = mkdtempSync(path.join(tmpdir(), 'grid-libmpv-'));
   try {
     const archive = path.join(work, 'libmpv.tar.gz');
     await fetchVerified(entry, archive);
