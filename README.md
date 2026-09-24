@@ -186,7 +186,7 @@ top. The commands are the only way in; there is no generic mpv passthrough.
 
 libmpv is a library **linked into Grid's own process**, not a sidecar. Both
 platforms use a pinned **LGPL** build, recorded by URL and SHA256 in
-`scripts/libmpv.lock.json` and mirrored as an immutable prerelease in Grid's own
+`scripts/libmpv.lock.json` and mirrored as a never-overwritten prerelease in Grid's own
 repository; `npm run setup:libmpv` downloads and verifies it.
 
 - **Linux** development links the system libmpv. Release packages use Grid's

@@ -19,9 +19,9 @@ export interface PlaybackBoundaryOptions {
   /** Delays `upsert_cache_entry`, like the slower IPC on Windows. */
   cacheWriteDelayMs?: number;
   /**
-   * What `start_native_player` reports back. Only the Windows backend asks,
-   * and mpv itself is never involved: these stand in for the sidecar the same
-   * way the fake rqbit stands in for the engine.
+   * What `start_native_player` reports back. Only the native (libmpv) backend
+   * asks, and mpv itself is never involved: these stand in for the in-process
+   * libmpv the same way the fake rqbit stands in for the engine.
    */
   nativePlayback?: { tracks: NativeTrack[]; duration: number };
   nativeStartError?: unknown;

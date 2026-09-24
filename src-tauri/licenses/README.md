@@ -33,7 +33,7 @@ provided users can swap in their own build of the library (see
   link it: they link and ship the pinned LGPL build below.
 - Both platforms' builds are pinned by URL and SHA256 in
   `scripts/libmpv.lock.json` and fetched by `npm run setup:libmpv`
-  (`--bundle` on Linux). Each pinned artifact is an immutable prerelease in
+  (`--bundle` on Linux). Each pinned artifact is a never-overwritten prerelease in
   Grid's own repository, so a pin never disappears from under a release.
 
 ### What an LGPL build gives up
@@ -57,7 +57,7 @@ libass (subtitle rendering) is ISC.
 `.github/workflows/build-libmpv-linux.yml` builds mpv (`-Dgpl=false`), FFmpeg
 (no `--enable-gpl`, no `--enable-nonfree`), libplacebo and dav1d from their
 upstream tags as shared libraries, asserts the LGPL configuration from the
-configured builds themselves, and publishes the result as an immutable
+configured builds themselves, and publishes the result as a never-overwritten
 prerelease:
 
 - **Release:** [`libmpv-linux-v0.41.0-b4`](https://github.com/lpbborges/grid/releases/tag/libmpv-linux-v0.41.0-b4),
@@ -120,14 +120,18 @@ For each package it is:
   `.github/workflows/build-libmpv-linux.yml` at commit
   `b3198752697a351a61cfabb166fe37ec23b7b683` with the listed flags. The
   release [`libmpv-linux-v0.41.0-b4`](https://github.com/lpbborges/grid/releases/tag/libmpv-linux-v0.41.0-b4)
-  holds the exact binaries and their `BUILD-INFO.txt`.
+  holds the exact binaries and their `BUILD-INFO.txt`. The `.deb` and `.rpm`
+  ship those binaries unchanged; the AppImage's copy is identical except that
+  linuxdeploy rewrites its rpath (to `$ORIGIN`).
 - **Windows:** the upstream build recipe at tag `2026-09-23-bdefd6cb42` of
   [`zhongfly/mpv-winbuild`](https://github.com/zhongfly/mpv-winbuild) (on top of
   `shinchiro/mpv-winbuild-cmake`), mpv commit
   `bdefd6cb4284b35d6d902ef82a0322e0b684f21c`, with the dependency revisions its
   build run records. The mirror
   [`libmpv-windows-2026-09-23-bdefd6cb42`](https://github.com/lpbborges/grid/releases/tag/libmpv-windows-2026-09-23-bdefd6cb42)
-  holds the exact archive.
+  holds the exact archive. This source record is provisional: it relies on
+  the upstream build recipe and its build run's logs, which can expire. A
+  durable source archive is a pending pre-release item.
 
 To request the complete corresponding source for the build shipped in any Grid
 release, open an issue on the Grid repository.
