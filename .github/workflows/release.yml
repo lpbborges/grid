@@ -21,19 +21,6 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
-      # Grid links libmpv in-process on Linux and Windows, and nothing here
-      # packages it yet. Adding the missing piece alone does not fix that:
-      # installing libmpv-dev makes the Linux build link Ubuntu's libmpv, a GPL
-      # build the package would then depend on, and running setup:libmpv
-      # builds Windows against a DLL the installer does not ship, so the app
-      # fails to start. Packaging an LGPL-2.1+ libmpv, with its licence text
-      # and source offer, is PR 2 of the libmpv plan; remove this step there.
-      - name: Block releases until libmpv is packaged
-        shell: bash
-        run: |
-          echo "::error::Releases are blocked until libmpv is packaged (PR 2 of the libmpv plan)"
-          exit 1
-
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -75,6 +62,11 @@ jobs:
       - name: Fetch the bundled libmpv (Linux)
         if: matrix.platform == 'ubuntu-latest'
         run: npm run setup:libmpv -- --bundle
+
+      # tauri.windows.conf.json bundles the DLL beside grid.exe.
+      - name: Set up libmpv (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: npm run setup:libmpv
 
       - name: Build and Publish Tauri app
         uses: tauri-apps/tauri-action@v0

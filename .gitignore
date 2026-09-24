@@ -19,16 +19,5 @@ docs/superpowers/
 
 e2e/artifacts/
 
-# The mpv sidecar is deliberately NOT committed yet. The only Windows build
-# available upstream is GPLv2+, and bundling it would put a source-distribution
-# obligation on every Grid release (see src-tauri/licenses/README.md). A local
-# copy is fine for development; remove these rules once an LGPL build exists.
-#
-# tauri.windows.conf.json is ignored for the same reason and must land in the
-# same commit as the binary: it registers bin/mpv as an externalBin, and Tauri's
-# build script fails outright when that file is missing.
-src-tauri/bin/mpv-*
-src-tauri/tauri.windows.conf.json
-
 # Pinned libmpv, downloaded by `npm run setup:libmpv` (scripts/libmpv.lock.json).
 src-tauri/lib/

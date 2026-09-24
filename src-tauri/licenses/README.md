@@ -19,8 +19,9 @@ Grid ships, not just to a separate program Grid happens to launch:
   (https://www.ffmpeg.org/legal.html).
 
 Linking a GPL libmpv would make the distributed Grid binary a GPL derivative.
-Dynamically linking an LGPL one keeps Grid's own code MIT, provided users can
-swap in their own build of the library.
+Dynamically linking an **LGPL-2.1-or-later** one keeps Grid's own code MIT,
+provided users can swap in their own build of the library (see
+[Replacing the library](#replacing-the-library)).
 
 ### The rule
 
@@ -28,11 +29,12 @@ swap in their own build of the library.
   build, on any platform.
 - **Development may link the system libmpv.** On Linux that is the
   distribution's package (`libmpv-dev`, or Arch's `mpv`), which is usually a GPL
-  build. That is fine for a local build nobody receives; it is not fine for a
-  release.
-- **No mpv code is distributed yet.** Release packaging that bundles libmpv is
-  PR 2 of the libmpv plan; until it lands, `.github/workflows/release.yml` fails
-  on purpose before building anything.
+  build. That is fine for a local build nobody receives; release packages never
+  link it: they link and ship the pinned LGPL build below.
+- Both platforms' builds are pinned by URL and SHA256 in
+  `scripts/libmpv.lock.json` and fetched by `npm run setup:libmpv`
+  (`--bundle` on Linux). Each pinned artifact is an immutable prerelease in
+  Grid's own repository, so a pin never disappears from under a release.
 
 ### What an LGPL build gives up
 
@@ -50,57 +52,112 @@ Nothing in the decode path is GPL. H.264, HEVC, VP9, AV1, AC3, E-AC3, DTS and
 AAC decoding is FFmpeg's own LGPL code, `d3d11va` hardware decoding is core, and
 libass (subtitle rendering) is ISC.
 
-### Windows: the pinned DLL
+### Linux: built by Grid
 
-`npm run setup:libmpv` downloads a prebuilt LGPL libmpv for Windows builds,
-pinned in `scripts/libmpv.lock.json` and verified by SHA256 before it is used:
+`.github/workflows/build-libmpv-linux.yml` builds mpv (`-Dgpl=false`), FFmpeg
+(no `--enable-gpl`, no `--enable-nonfree`), libplacebo and dav1d from their
+upstream tags as shared libraries, asserts the LGPL configuration from the
+configured builds themselves, and publishes the result as an immutable
+prerelease:
 
-- **Source:** [`zhongfly/mpv-winbuild`](https://github.com/zhongfly/mpv-winbuild),
+- **Release:** [`libmpv-linux-v0.41.0-b4`](https://github.com/lpbborges/grid/releases/tag/libmpv-linux-v0.41.0-b4),
+  asset `libmpv-linux-x86_64.tar.gz`
+- **Built by:** [workflow run 4](https://github.com/lpbborges/grid/actions/runs/35948741224),
+  from commit `b3198752697a351a61cfabb166fe37ec23b7b683`
+- **SHA256:** `2972a7c1ee0ee30d5c932a67f0e3656e303eff16ebbb1d662d3e01a4d29e1417`
+- **Licence:** LGPL-2.1-or-later (dav1d: BSD-2-Clause)
+
+The archive's `BUILD-INFO.txt` (also the release notes) records the exact
+upstream revisions and the flags each one was built with:
+
+| Component  | Tag        | Commit                                     | Built with                                                                                                                                                    |
+| ---------- | ---------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| mpv        | `v0.41.0`  | `41f6a645068483470267271e1d09966ca3b9f413` | `meson setup -Dgpl=false -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled -Djpeg=disabled -Dlcms2=disabled`                                 |
+| FFmpeg     | `n7.1`     | `b08d7969c550a804a59511c7b83f2dd8cc0499b8` | `configure --enable-shared --disable-static --disable-programs --disable-doc --disable-debug --enable-libdav1d --enable-vaapi --disable-bzlib --disable-lzma` |
+| libplacebo | `v7.351.0` | `3188549fba13bbdf3a5a98de2a38c2e71f04e21e` | `meson setup -Dvulkan=enabled -Dopengl=enabled -Dshaderc=disabled -Dglslang=enabled -Dlcms=disabled -Ddemos=false -Dtests=false`                              |
+| dav1d      | `1.5.1`    | `42b2b24fb8819f1ed3643aa9cf2a62f03868e3aa` | `meson setup --buildtype=release -Denable_tools=false -Denable_tests=false -Denable_examples=false`                                                           |
+
+### Windows: the mirrored `mpv-dev-lgpl` DLL
+
+The Windows build links a prebuilt `libmpv-2.dll` from the community
+[`zhongfly/mpv-winbuild`](https://github.com/zhongfly/mpv-winbuild) project
+(which builds with [`shinchiro/mpv-winbuild-cmake`](https://github.com/shinchiro/mpv-winbuild-cmake)).
+That repository is a rolling nightly that publishes a build per mpv commit and
+may drop old tags, so Grid mirrors the exact archive, unchanged:
+
+- **Mirror:** [`libmpv-windows-2026-09-23-bdefd6cb42`](https://github.com/lpbborges/grid/releases/tag/libmpv-windows-2026-09-23-bdefd6cb42),
   asset `mpv-dev-lgpl-x86_64-20260923-git-bdefd6cb42.7z`
-- **Tag:** `2026-09-23-bdefd6cb42`
+- **Upstream:** tag [`2026-09-23-bdefd6cb42`](https://github.com/zhongfly/mpv-winbuild/releases/tag/2026-09-23-bdefd6cb42)
+  of `zhongfly/mpv-winbuild`, built by its
+  [workflow run 35871217838](https://github.com/zhongfly/mpv-winbuild/actions/runs/35871217838)
+  from mpv commit [`bdefd6cb4284b35d6d902ef82a0322e0b684f21c`](https://github.com/mpv-player/mpv/commit/bdefd6cb4284b35d6d902ef82a0322e0b684f21c)
+  (`v0.41.0-1070-gbdefd6cb4`)
 - **SHA256:** `f44eb9a2e3a187af66e16bd7d8be37bfa46ac0c894297145937bab9116f2aec1`
+  (identical upstream and in the mirror)
 - **Licence:** LGPL-2.1-or-later
 
-Checked when it was pinned:
+Checked when it was pinned, and again when it was mirrored:
 
-- `strings libmpv-2.dll | grep -c -- '--enable-gpl'` prints `0`: FFmpeg's
-  recorded configuration has no `--enable-gpl`.
+- `strings libmpv-2.dll | grep -c -- '--enable-gpl'` prints `0`, and so does
+  `--enable-nonfree`: FFmpeg's recorded configuration is neither GPL nor
+  non-free.
 - The licence notices embedded in the DLL are the LGPL 2.1 "or (at your option)
-  any later version" wording throughout; no GPL notice was found.
+  any later version" wording throughout; `grep -ci 'GNU General Public License'`
+  prints `0`.
 - The archive ships no `mpv.def`, so `setup:libmpv` generates the import
   library from the DLL's export table.
 
-**Caveat:** `zhongfly/mpv-winbuild` is a rolling nightly repository that
-publishes a new build on every mpv commit. The pin keeps builds reproducible
-for as long as that tag exists, but it is not a versioned release and nothing
-guarantees it stays published. Whether to mirror the artifact somewhere Grid
-controls is a PR 2 decision. Community LGPL builds also carry their authors'
-own disclaimer that they cannot guarantee every LGPL-incompatible component was
-disabled, so the checks above are evidence, not a guarantee.
+Community LGPL builds carry their authors' own disclaimer that they cannot
+guarantee every LGPL-incompatible component was disabled, so the checks above
+are evidence, not a guarantee.
 
-`.github/workflows/build-mpv-lgpl.yml` predates the in-process player: it builds
-an LGPL mpv _executable_ from `shinchiro/mpv-winbuild-cmake`, which Grid no
-longer runs. Whether it is retired or turned into a libmpv build is also left to
-PR 2.
+## Source offer
 
-### Left to PR 2
+The LGPL requires the corresponding source of the library Grid distributes.
+For each package it is:
 
-Shipping an LGPL library carries obligations that land together with the first
-release that bundles it:
+- **Linux:** the upstream sources at the commits in the table above, built by
+  `.github/workflows/build-libmpv-linux.yml` at commit
+  `b3198752697a351a61cfabb166fe37ec23b7b683` with the listed flags. The
+  release [`libmpv-linux-v0.41.0-b4`](https://github.com/lpbborges/grid/releases/tag/libmpv-linux-v0.41.0-b4)
+  holds the exact binaries and their `BUILD-INFO.txt`.
+- **Windows:** the upstream build recipe at tag `2026-09-23-bdefd6cb42` of
+  [`zhongfly/mpv-winbuild`](https://github.com/zhongfly/mpv-winbuild) (on top of
+  `shinchiro/mpv-winbuild-cmake`), mpv commit
+  `bdefd6cb4284b35d6d902ef82a0322e0b684f21c`, with the dependency revisions its
+  build run records. The mirror
+  [`libmpv-windows-2026-09-23-bdefd6cb42`](https://github.com/lpbborges/grid/releases/tag/libmpv-windows-2026-09-23-bdefd6cb42)
+  holds the exact archive.
 
-- ship the LGPL-2.1 licence text alongside the library in every package;
-- provide the corresponding source for the exact libmpv (and FFmpeg) build
-  shipped, or a written offer for it;
-- bundle the library on Linux as well, so releases never depend on the
-  distribution's (usually GPL) libmpv.
+To request the complete corresponding source for the build shipped in any Grid
+release, open an issue on the Grid repository.
 
-None of that is done here, because nothing is distributed yet.
+## Replacing the library
 
-## Licence texts
+libmpv is never linked statically. Each package installs it as a separate
+shared library that Grid loads at startup, so users can replace it with their
+own build (for example, one compiled from the sources above) — that is the
+LGPL's relinking requirement:
 
-- `COPYING.GPLv2.txt` — GNU General Public License v2, left over from an
-  earlier prototype. Grid distributes no GPL code. PR 2 replaces it with the
-  LGPL-2.1 text that ships with the bundled library.
+- **Linux `.deb` / `.rpm`:** `/usr/lib/grid/libmpv.so.2` (and the FFmpeg,
+  libplacebo and dav1d libraries beside it). The binary's RUNPATH is
+  `$ORIGIN/../lib/grid`, then `$ORIGIN/../lib`.
+- **Linux AppImage:** `usr/lib/libmpv.so.2` inside the image; extract it with
+  `--appimage-extract`, replace the file and run `squashfs-root/AppRun`.
+- **Windows:** `libmpv-2.dll` beside `grid.exe` in the install directory.
+
+A replacement must provide the same libmpv client API under the same file name
+(`libmpv.so.2` / `libmpv-2.dll`).
+
+## Licence texts shipped with each package
+
+- **Linux (`.deb`, `.rpm`, AppImage):** `usr/lib/grid/LICENSES/`, copied from
+  the Linux artifact: `mpv-LGPL-2.1.txt`, `ffmpeg-LGPL-2.1.txt`,
+  `libplacebo-LGPL-2.1.txt` and `dav1d-BSD-2.txt`.
+- **Windows (MSI and NSIS):** `LICENSES\` in the install directory, beside
+  `grid.exe` and `libmpv-2.dll`. The Windows archive ships no licence text, so
+  these are the same four files, copied from the Linux artifact's `LICENSES/`
+  into [`libmpv/`](libmpv/) and bundled by `src-tauri/tauri.windows.conf.json`.
 
 Nothing here is legal advice; the distribution obligations above need review by
 someone qualified before the first release that bundles libmpv.
