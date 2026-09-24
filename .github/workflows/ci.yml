@@ -254,10 +254,12 @@ jobs:
         # The job has no libmpv-dev: build.rs links src-tauri/lib/linux, and the
         # test binary (no RUNPATH, unlike the app) loads the pruned runtime set
         # through LD_LIBRARY_PATH, so a wrong link or a missing library fails.
+        # --color never: rust-toolchain sets CARGO_TERM_COLOR=always, and the
+        # output below is parsed.
         run: |
           set -euo pipefail
           export LD_LIBRARY_PATH="$PWD/src-tauri/lib/linux-runtime"
-          cargo test --manifest-path src-tauri/Cargo.toml --lib --no-run 2>&1 | tee /tmp/player-build.txt
+          cargo test --color never --manifest-path src-tauri/Cargo.toml --lib --no-run 2>&1 | tee /tmp/player-build.txt
           bin="$(sed -n 's/.*Executable unittests src\/lib\.rs (\(.*\))$/\1/p' /tmp/player-build.txt)"
           [ -n "$bin" ] || { echo "::error::unit test binary not found"; exit 1; }
           case "$bin" in /*) ;; *) bin="$PWD/$bin" ;; esac
@@ -267,7 +269,7 @@ jobs:
             *"=> $LD_LIBRARY_PATH/libmpv.so.2 "*) ;;
             *) echo "::error::the test binary does not load the bundled libmpv"; exit 1 ;;
           esac
-          cargo test --manifest-path src-tauri/Cargo.toml --lib player:: 2>&1 | tee /tmp/player-tests.txt
+          cargo test --color never --manifest-path src-tauri/Cargo.toml --lib player:: -- --color never 2>&1 | tee /tmp/player-tests.txt
           passed="$(sed -n 's/^test result: ok\. \([0-9]*\) passed.*/\1/p' /tmp/player-tests.txt | head -1)"
           echo "player tests passed: ${passed:-0}"
           [ "${passed:-0}" -gt 0 ] || { echo "::error::no player tests ran"; exit 1; }
