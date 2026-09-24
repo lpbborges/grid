@@ -1,0 +1,105 @@
+# Builds the LGPL libmpv that Grid bundles on Windows.
+# See src-tauri/licenses/README.md. Manual: run it, check BUILD-INFO.txt, then
+# pin the new release's URL and SHA256 in scripts/libmpv.lock.json.
+name: Build libmpv (Windows, LGPL)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mpv_ref: { description: mpv tag, required: true, default: v0.41.0 }
+      ffmpeg_ref: { description: FFmpeg tag, required: true, default: n7.1 }
+      libplacebo_ref: { description: libplacebo tag, required: true, default: v7.351.0 }
+
+permissions:
+  contents: write
+
+env:
+  MPV_REF: ${{ inputs.mpv_ref || 'v0.41.0' }}
+  FFMPEG_REF: ${{ inputs.ffmpeg_ref || 'n7.1' }}
+  LIBPLACEBO_REF: ${{ inputs.libplacebo_ref || 'v7.351.0' }}
+
+defaults:
+  run:
+    shell: msys2 {0}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 150
+    steps:
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git tar xz zstd curl make diffutils
+          # toolchain:p brings binutils (objdump, for Task 2's closure walk) and
+          # crt/headers/winpthreads (static parts, D3). spirv-headers:p is not
+          # linked by anything here: it is installed so Task 2 can ship the
+          # notice of the SPIR-V tables compiled into libshaderc_shared.dll.
+          pacboy: >-
+            toolchain:p meson:p ninja:p pkgconf:p nasm:p
+            dav1d:p libass:p freetype:p harfbuzz:p fribidi:p zlib:p
+            shaderc:p spirv-cross:p spirv-headers:p
+      - name: Check out this workflow
+        uses: actions/checkout@v7
+        with:
+          path: grid
+          sparse-checkout: .github/workflows/build-libmpv-windows.yml
+          sparse-checkout-cone-mode: false
+      - name: Fetch sources
+        run: |
+          git clone --depth 1 --branch "$FFMPEG_REF" https://git.ffmpeg.org/ffmpeg.git
+          git clone --depth 1 --branch "$LIBPLACEBO_REF" --recurse-submodules https://code.videolan.org/videolan/libplacebo.git
+          git clone --depth 1 --branch "$MPV_REF" https://github.com/mpv-player/mpv.git
+      - name: FFmpeg (LGPL-2.1 - no gpl, no version3, no nonfree)
+        run: |
+          export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig:$PKG_CONFIG_PATH"
+          cd ffmpeg
+          opts=(--prefix="$PWD/../out" --enable-shared --disable-static
+            --disable-programs --disable-doc --disable-debug --disable-encoders --disable-muxers
+            --disable-avdevice --enable-libdav1d --enable-d3d11va --enable-dxva2 --disable-bzlib --disable-lzma
+            --disable-iconv --disable-sdl2 --disable-schannel)
+          echo "${opts[*]}" > "$RUNNER_TEMP/ffmpeg-options"
+          ./configure "${opts[@]}"
+          grep -q 'CONFIG_GPL 0' config.h
+          grep -q 'CONFIG_VERSION3 0' config.h
+          grep -q 'CONFIG_NONFREE 0' config.h
+          grep -q 'CONFIG_D3D11VA 1' config.h
+          make -j"$(nproc)" && make install
+      - name: libplacebo
+        run: |
+          export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig:$PKG_CONFIG_PATH"
+          opts=(--prefix="$PWD/out" --buildtype=release -Dd3d11=enabled -Dvulkan=disabled -Dopengl=disabled
+            -Dshaderc=enabled -Dglslang=disabled -Dlcms=disabled -Ddovi=disabled
+            -Dlibdovi=disabled -Ddemos=false -Dtests=false)
+          echo "${opts[*]}" > "$RUNNER_TEMP/libplacebo-options"
+          meson setup libplacebo/build libplacebo "${opts[@]}"
+          meson install -C libplacebo/build
+      - name: libmpv (-Dgpl=false)
+        run: |
+          export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig:$PKG_CONFIG_PATH"
+          opts=(--prefix="$PWD/out" --buildtype=release -Dgpl=false -Dlibmpv=true -Dcplayer=false
+            -Dlua=disabled -Djavascript=disabled -Dlibarchive=disabled -Dlibbluray=disabled
+            -Duchardet=disabled -Drubberband=disabled -Dlcms2=disabled -Djpeg=disabled
+            -Dvapoursynth=disabled -Dsdl2-gamepad=disabled -Dwin32-smtc=disabled
+            -Dvulkan=disabled -Dgl=disabled -Degl-angle=disabled -Dlibavdevice=disabled
+            -Dd3d11=enabled -Dd3d-hwaccel=enabled -Dspirv-cross=enabled -Dshaderc=enabled)
+          echo "${opts[*]}" > "$RUNNER_TEMP/mpv-options"
+          meson setup mpv/build mpv "${opts[@]}"
+          # Read back from the configured build, not the echoed options (as on Linux).
+          meson configure mpv/build | grep -E '^\s*gpl\s+false'
+          meson install -C mpv/build
+      - name: libmpv has what Grid's Windows player uses
+        run: |
+          features=$(sed -n 's/^#define FULLCONFIG "\(.*\)"$/\1/p' mpv/build/config.h)
+          echo "mpv features: $features"
+          [ -n "$features" ] || { echo "::error::FULLCONFIG not found"; exit 1; }
+          for f in d3d11 d3d-hwaccel libass libplacebo shaderc spirv-cross; do
+            [[ " $features " == *" $f "* ]] || { echo "::error::mpv was built without $f"; exit 1; }
+          done
+          for f in gpl lua javascript libavdevice; do
+            [[ " $features " != *" $f "* ]] || { echo "::error::mpv was built with $f"; exit 1; }
+          done
+          echo "$features" > "$RUNNER_TEMP/mpv-features"
+          ls out/bin
