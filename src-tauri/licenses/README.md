@@ -144,10 +144,6 @@ release and refuses to publish if it is missing. The superseded build
 from the commits its `BUILD-INFO.txt` records, including the hwdata source
 package its PNP ID table came from.
 
-If any of those links stops working, open an issue on the Grid repository and
-the complete corresponding source for the build shipped in any Grid release
-will be provided, for at least three years after that release.
-
 ## Replacing the library
 
 libmpv is never linked statically. Each package installs it as a separate
