@@ -1,0 +1,103 @@
+# Builds the LGPL libmpv that Grid bundles in its Linux packages.
+# See src-tauri/licenses/README.md. Manual: run it, check BUILD-INFO.txt, then
+# pin the release asset's SHA256 in scripts/libmpv.lock.json.
+#
+# workflow_dispatch only works once this file is on the default branch, so a
+# push to `build/libmpv-linux` also runs it (with the default refs below).
+name: Build libmpv (Linux, LGPL)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mpv_ref: { description: mpv tag, required: true, default: v0.41.0 }
+      ffmpeg_ref: { description: FFmpeg tag, required: true, default: n7.1 }
+      libplacebo_ref: { description: libplacebo tag, required: true, default: v7.351.0 }
+  push:
+    branches: ['build/libmpv-linux']
+
+permissions:
+  contents: write
+
+env:
+  MPV_REF: ${{ inputs.mpv_ref || 'v0.41.0' }}
+  FFMPEG_REF: ${{ inputs.ffmpeg_ref || 'n7.1' }}
+  LIBPLACEBO_REF: ${{ inputs.libplacebo_ref || 'v7.351.0' }}
+
+jobs:
+  build:
+    # The oldest Ubuntu the release job targets: the glibc floor for users.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential nasm pkg-config \
+            python3-venv ninja-build git patchelf libass-dev libfreetype-dev libfribidi-dev \
+            libharfbuzz-dev libdav1d-dev libva-dev libdrm-dev libegl-dev libgl-dev \
+            libvulkan-dev glslang-dev spirv-tools libx11-dev libwayland-dev wayland-protocols \
+            libxkbcommon-dev libpulse-dev libasound2-dev
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install 'meson>=1.3' jinja2 glad2
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      - name: Fetch sources
+        run: |
+          git clone --depth 1 --branch "$FFMPEG_REF" https://git.ffmpeg.org/ffmpeg.git
+          git clone --depth 1 --branch "$LIBPLACEBO_REF" --recurse-submodules https://code.videolan.org/videolan/libplacebo.git
+          git clone --depth 1 --branch "$MPV_REF" https://github.com/mpv-player/mpv.git
+      - name: FFmpeg (LGPL - no --enable-gpl, no --enable-nonfree)
+        run: |
+          cd ffmpeg
+          ./configure --prefix="$PWD/../out" --enable-shared --disable-static \
+            --disable-programs --disable-doc --disable-debug \
+            --enable-libdav1d --enable-vaapi
+          grep -q 'CONFIG_GPL 0' config.h
+          make -j"$(nproc)" && make install
+      - name: libplacebo
+        run: |
+          export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig"
+          meson setup libplacebo/build libplacebo --prefix="$PWD/out" --libdir=lib \
+            -Dvulkan=enabled -Dopengl=enabled -Dshaderc=disabled -Dglslang=enabled -Ddemos=false -Dtests=false
+          meson install -C libplacebo/build
+          # libplacebo's libav.h pulls in FFmpeg's hwcontext_vulkan.h, which needs
+          # newer Vulkan headers than Ubuntu 22.04 ships. Build-time only: the
+          # package copies include/mpv alone.
+          cp -r libplacebo/3rdparty/Vulkan-Headers/include/. out/include/
+      - name: libmpv (-Dgpl=false)
+        run: |
+          export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig"
+          meson setup mpv/build mpv --prefix="$PWD/out" --libdir=lib \
+            -Dgpl=false -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled
+          meson configure mpv/build | grep -E '^\s*gpl\s+false'
+          meson install -C mpv/build
+      - name: Package
+        run: |
+          mkdir -p dist/lib dist/include dist/LICENSES
+          cp -a out/lib/libmpv.so* out/lib/libav*.so* out/lib/libsw*.so* out/lib/libplacebo.so* dist/lib/
+          for f in dist/lib/*.so.*; do [ -L "$f" ] || patchelf --set-rpath '$ORIGIN' "$f"; done
+          cp -a out/include/mpv dist/include/
+          cp mpv/LICENSE.LGPL dist/LICENSES/mpv-LGPL-2.1.txt
+          cp ffmpeg/COPYING.LGPLv2.1 dist/LICENSES/ffmpeg-LGPL-2.1.txt
+          cp libplacebo/LICENSE dist/LICENSES/libplacebo-LGPL-2.1.txt
+          {
+            echo "mpv $MPV_REF $(git -C mpv rev-parse HEAD) gpl=false"
+            echo "ffmpeg $FFMPEG_REF $(git -C ffmpeg rev-parse HEAD)"
+            grep FFMPEG_CONFIGURATION ffmpeg/config.h
+            echo "libplacebo $LIBPLACEBO_REF $(git -C libplacebo rev-parse HEAD)"
+          } > dist/BUILD-INFO.txt
+          tar -C dist -czf libmpv-linux-x86_64.tar.gz .
+          sha256sum libmpv-linux-x86_64.tar.gz | tee libmpv-linux-x86_64.tar.gz.sha256
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="libmpv-linux-$MPV_REF"
+          # Idempotent: a rerun replaces the assets of an existing prerelease.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" libmpv-linux-x86_64.tar.gz libmpv-linux-x86_64.tar.gz.sha256 --clobber
+            gh release edit "$tag" --notes-file dist/BUILD-INFO.txt --prerelease
+          else
+            gh release create "$tag" libmpv-linux-x86_64.tar.gz libmpv-linux-x86_64.tar.gz.sha256 \
+              --title "libmpv $MPV_REF (Linux, LGPL)" --notes-file dist/BUILD-INFO.txt --prerelease
+          fi
