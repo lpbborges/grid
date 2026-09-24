@@ -29,7 +29,7 @@
     "test:backend": "cd src-tauri && cargo test",
     "test:backend:cov": "cd src-tauri && cargo llvm-cov",
     "setup:libmpv": "node scripts/setup-libmpv.mjs",
-    "bundle:linux": "LD_LIBRARY_PATH=src-tauri/lib/linux-runtime tauri build --bundles deb,rpm,appimage"
+    "bundle:linux": "LD_LIBRARY_PATH=\"$PWD/src-tauri/lib/linux-runtime\" tauri build --bundles deb,rpm,appimage --verbose"
   },
   "lint-staged": {
     "*.{js,ts,svelte}": [
