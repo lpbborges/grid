@@ -1066,7 +1066,17 @@ mod tests {
         )
         .await;
 
-        let text: String = player.mpv().get_property("sub-text").unwrap_or_default();
+        // mpv renders the cue asynchronously, so the first Time event past the
+        // cue's start can arrive before sub-text is populated under load.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut text = String::new();
+        while std::time::Instant::now() < deadline {
+            text = player.mpv().get_property("sub-text").unwrap_or_default();
+            if text == "Grid VTT fixture" {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
         assert_eq!(text, "Grid VTT fixture");
         let _ = std::fs::remove_dir_all(dir);
     }
