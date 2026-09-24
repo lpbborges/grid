@@ -41,7 +41,7 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
 
 - For the end-to-end playback tests (Linux and Windows only): [`tauri-driver`](https://v2.tauri.app/develop/tests/webdriver/) (`cargo install tauri-driver --locked`), plus `WebKitWebDriver` and the GStreamer libav plugins on Linux (Debian/Ubuntu: `sudo apt-get install -y webkit2gtk-driver gstreamer1.0-libav`), or an `msedgedriver` matching your WebView2 version on Windows (point `NATIVE_DRIVER` at it). `ffmpeg` is needed only to regenerate the test media.
 
-- **Linux release builds** bundle their own LGPL libmpv (`npm run setup:libmpv -- --bundle`, see [libmpv](#libmpv-linux-and-windows)) and require **glibc 2.35 or newer** — Ubuntu 22.04+, Debian 12+, or Fedora 36+. Older distributions are not supported.
+- **Linux release builds** bundle their own LGPL libmpv (`npm run setup:libmpv -- --bundle`, see [libmpv](#libmpv-linux-and-windows)) and require **glibc 2.39 or newer** (Ubuntu 24.04+, Debian 13+, Fedora 40+): the Grid binary itself needs it. Older distributions are not supported.
 
 ## Getting Started
 
@@ -203,7 +203,7 @@ repository; `npm run setup:libmpv` downloads and verifies it.
   already resolves and copies every library the binary needs (including the
   bundled libmpv) into its own `usr/lib` and rewrites RUNPATH to point there, so
   a second copy under `usr/lib/grid` would just be dead weight. Requires glibc
-  2.35+ (see [Prerequisites](#prerequisites)).
+  2.39 (Ubuntu 24.04+, Debian 13+, Fedora 40+; see [Prerequisites](#prerequisites)).
 - **Windows** always links the pinned `mpv-dev-lgpl` `libmpv-2.dll`:
   `npm run setup:libmpv` puts it and a generated import library in
   `src-tauri/lib/windows/`. `src-tauri/tauri.windows.conf.json` bundles the DLL

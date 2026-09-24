@@ -5,7 +5,7 @@
       "deb": {
         "files": { "/usr/lib/grid": "lib/linux-runtime" },
         "depends": [
-          "libc6 (>= 2.35)",
+          "libc6 (>= 2.39)",
           "libass9",
           "libva2",
           "libva-drm2",
@@ -24,7 +24,7 @@
       "rpm": {
         "files": { "/usr/lib/grid": "lib/linux-runtime" },
         "depends": [
-          "glibc >= 2.35",
+          "glibc >= 2.39",
           "libass",
           "libva",
           "vulkan-loader",
