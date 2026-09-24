@@ -82,6 +82,93 @@ jobs:
       - run: cargo audit
         working-directory: src-tauri
 
+  package-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install Tauri bundling dependencies
+        # No libmpv-dev here: linking must resolve libmpv.so.2 only through the
+        # bundled copy in src-tauri/lib/linux, never a system package, so a
+        # wrong link cannot hide behind one installed for development.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential curl wget file libxdo-dev libssl-dev \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            libfuse2 rpm \
+            libass-dev libva-dev libvulkan-dev libpulse-dev libasound2-dev \
+            libdrm-dev libegl-dev libx11-dev
+      - run: npm ci
+      - name: Fetch the bundled libmpv (Linux)
+        run: npm run setup:libmpv -- --bundle
+      - name: Build the deb, rpm and AppImage bundles
+        # linuxdeploy (which the AppImage bundler shells out to) resolves the
+        # binary's dependencies with its own ldd before the bundle's directory
+        # layout exists, so target/release/grid's $ORIGIN/../lib/grid RUNPATH
+        # resolves nowhere yet. Point LD_LIBRARY_PATH at the bundled copy for
+        # this step only, so it finds and packages that copy instead of
+        # silently skipping libmpv or grabbing a system one.
+        run: |
+          export LD_LIBRARY_PATH="$PWD/src-tauri/lib/linux"
+          npx tauri build --bundles deb,rpm,appimage
+      - name: Check (a) the .deb ships the bundled libmpv
+        run: |
+          set -euo pipefail
+          deb="$(ls src-tauri/target/release/bundle/deb/*.deb)"
+          echo "Checking $deb"
+          dpkg -c "$deb" | tee /tmp/deb-contents.txt
+          grep -q '\./usr/lib/grid/libmpv\.so\.2$' /tmp/deb-contents.txt
+      - name: Check (b) the .rpm ships the bundled libmpv
+        run: |
+          set -euo pipefail
+          rpm_file="$(ls src-tauri/target/release/bundle/rpm/*.rpm)"
+          echo "Checking $rpm_file"
+          rpm -qlp "$rpm_file" | tee /tmp/rpm-contents.txt
+          grep -qx '/usr/lib/grid/libmpv.so.2' /tmp/rpm-contents.txt
+      - name: Check (c) the AppImage's binary resolves libmpv to its own bundled copy
+        run: |
+          set -euo pipefail
+          appimage="$(ls src-tauri/target/release/bundle/appimage/*.AppImage)"
+          echo "Checking $appimage"
+          "$appimage" --appimage-extract >/dev/null
+          resolved="$(env -u LD_LIBRARY_PATH ldd squashfs-root/usr/bin/grid | grep libmpv.so.2 || true)"
+          echo "ldd result: $resolved"
+          if [ -z "$resolved" ]; then
+            echo "::error::libmpv.so.2 not found by ldd"
+            exit 1
+          fi
+          path="$(echo "$resolved" | sed -n 's/.*=> \(\S*\) .*/\1/p')"
+          case "$path" in
+            "$PWD"/squashfs-root/*) ;;
+            *)
+              echo "::error::libmpv.so.2 resolved to '$path', not inside squashfs-root"
+              exit 1
+              ;;
+          esac
+      - name: Check (d) the binary's RUNPATH points at the bundled libmpv
+        run: |
+          set -euo pipefail
+          out="$(readelf -d src-tauri/target/release/grid | grep RUNPATH || true)"
+          echo "$out"
+          echo "$out" | grep -q '\$ORIGIN/\.\./lib/grid' || { echo "::error::RUNPATH is missing \$ORIGIN/../lib/grid"; exit 1; }
+          echo "$out" | grep -Eq '\$ORIGIN/\.\./lib(:|\])' || { echo "::error::RUNPATH is missing \$ORIGIN/../lib"; exit 1; }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
+
   e2e:
     needs: [frontend, rust]
     strategy:
