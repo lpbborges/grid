@@ -6,7 +6,7 @@
   },
   "linux-x86_64": {
     "url": "https://github.com/lpbborges/grid/releases/download/libmpv-linux-v0.41.0/libmpv-linux-x86_64.tar.gz",
-    "sha256": "478b79638df7f8cb2599aee4df9d85ec6c7969d6f8dd77391cefa4a9d1b0a38a",
+    "sha256": "4b12251ead2a8931f5cb90c1a69571c5c793c70fd590a0150b65df70e393da5c",
     "licence": "LGPL-2.1-or-later"
   }
 }
