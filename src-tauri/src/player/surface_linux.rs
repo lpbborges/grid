@@ -119,6 +119,38 @@ fn current_framebuffer() -> i32 {
     framebuffer
 }
 
+/// Mesa's CPU rasterisers, by the name `GL_RENDERER` reports.
+///
+/// Only Mesa's software renderers: "LLVM" alone also appears in real GPU
+/// drivers (radeonsi, VMware's SVGA3D), so it is not a signal.
+fn is_software_renderer(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    ["llvmpipe", "softpipe", "software rasterizer", "swrast"]
+        .iter()
+        .any(|software| name.contains(software))
+}
+
+/// `GL_RENDERER` of the context current on this thread.
+fn gl_renderer() -> Option<String> {
+    const GL_RENDERER: u32 = 0x1F01;
+    type GetString = unsafe extern "C" fn(u32) -> *const c_char;
+    let found = get_proc_address(&(), "glGetString");
+    if found.is_null() {
+        return None;
+    }
+    // SAFETY: `found` is glGetString, whose C signature is
+    // `const GLubyte *(GLenum)`; it is called with the area's context current,
+    // and a non-null result is a NUL-terminated string owned by the driver.
+    unsafe {
+        let name = std::mem::transmute::<*mut c_void, GetString>(found)(GL_RENDERER);
+        (!name.is_null()).then(|| {
+            std::ffi::CStr::from_ptr(name)
+                .to_string_lossy()
+                .into_owned()
+        })
+    }
+}
+
 /// Checks Tauri's layout before touching it, so a Tauri upgrade that moves the
 /// webview fails here with a readable error instead of aborting on a click.
 fn take_over_layout(webview: &webkit2gtk::WebView) -> Result<(gtk::Window, gtk::Box), String> {
@@ -190,6 +222,21 @@ fn build(
             if let Some(error) = area.error() {
                 finish(Err(format!("OpenGL is not available: {error}")));
                 return;
+            }
+            // Under a software OpenGL renderer (llvmpipe: no GPU, a VM, a broken
+            // driver) mpv's full render pipeline drew black frames in about half
+            // of all starts, with no GL error; its simple path drew the video
+            // every time. Real GPUs keep the full pipeline and its image quality.
+            if let Some(renderer) = gl_renderer().filter(|name| is_software_renderer(name)) {
+                eprintln!(
+                    "Native player surface: software OpenGL ({renderer}); using mpv's simple render path"
+                );
+                if let Err(e) = controller.mpv().set_property("gpu-dumb-mode", "yes") {
+                    eprintln!(
+                        "Native player surface: could not simplify mpv's rendering: {}",
+                        super::controller::describe_error(&e)
+                    );
+                }
             }
             let created = controller.mpv().create_render_context([
                 RenderParam::ApiType(RenderParamApiType::OpenGl),
@@ -279,4 +326,33 @@ fn build(
     window.add(&overlay);
     overlay.show_all();
     webview.grab_focus();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_software_renderer;
+
+    #[test]
+    fn recognises_mesa_software_renderers() {
+        for name in [
+            "llvmpipe (LLVM 17.0.6, 256 bits)",
+            "softpipe",
+            "Software Rasterizer",
+            "Mesa swrast",
+        ] {
+            assert!(is_software_renderer(name), "{name} is software");
+        }
+    }
+
+    #[test]
+    fn leaves_real_gpus_alone() {
+        for name in [
+            "Mesa Intel(R) Xe Graphics (TGL GT2)",
+            "AMD Radeon RX 7800 XT (radeonsi, navi32, LLVM 17.0.6, DRM 3.57)",
+            "NVIDIA GeForce RTX 4070/PCIe/SSE2",
+            "SVGA3D; build: RELEASE; LLVM;",
+        ] {
+            assert!(!is_software_renderer(name), "{name} is a GPU");
+        }
+    }
 }
