@@ -1,11 +1,12 @@
 /**
  * Maps a DOM `MediaError.code` to pt-BR copy the user can act on.
  *
- * Linux plays through GStreamer, which decodes 4K HEVC and E-AC3 only when the
- * libav plugins are installed. They are not a default on a clean Ubuntu or
- * Fedora, and the symptom is a bare `MediaError 4` that reads as a broken file.
- * The packages are declared in `tauri.conf.json` for the .deb, but a user on
- * another distribution still needs to be told what is missing.
+ * Linux plays through libmpv by default; when the `<video>` element is forced
+ * (`VITE_GRID_NATIVE_PLAYER=off`) it decodes through GStreamer, which handles 4K
+ * HEVC and E-AC3 only when the libav plugins are installed. They are not a
+ * default on a clean Ubuntu or Fedora and no package declares them, and the
+ * symptom is a bare `MediaError 4` that reads as a broken file, so the user
+ * needs to be told what is missing.
  */
 export function describeMediaError(code: number): string {
   switch (code) {

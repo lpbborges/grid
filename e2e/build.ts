@@ -10,7 +10,11 @@ const result = spawnSync(
     stdio: 'inherit',
     shell: process.platform === 'win32',
     env: process.argv.includes('--live')
-      ? { ...process.env }
+      ? {
+          ...process.env,
+          // The live smoke waits on the <video> element too.
+          VITE_GRID_NATIVE_PLAYER: process.env.VITE_GRID_NATIVE_PLAYER ?? 'off'
+        }
       : {
           ...process.env,
           VITE_E2E_API_BASE: MOCK_BASE,

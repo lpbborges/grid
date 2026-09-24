@@ -82,6 +82,284 @@ jobs:
       - run: cargo audit
         working-directory: src-tauri
 
+  package-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install Tauri bundling dependencies
+        # No libmpv-dev here: linking must resolve libmpv.so.2 only through the
+        # bundled copy in src-tauri/lib/linux, never a system package, so a
+        # wrong link cannot hide behind one installed for development.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential curl wget file libxdo-dev libssl-dev \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            libfuse2 rpm \
+            libass-dev libva-dev libvulkan-dev libpulse-dev libasound2-dev \
+            libdrm-dev libegl-dev libx11-dev
+      - run: npm ci
+      - name: Fetch the bundled libmpv (Linux)
+        run: npm run setup:libmpv -- --bundle
+      - name: Build the deb, rpm and AppImage bundles
+        # npm run bundle:linux (package.json) is the single Linux bundling entry
+        # point, also used by release.yml, so both build the same way. linuxdeploy
+        # (which the AppImage bundler shells out to) resolves the binary's
+        # dependencies with its own ldd before the bundle's directory layout
+        # exists, so target/release/grid's $ORIGIN/../lib/grid RUNPATH resolves
+        # nowhere yet; the script's LD_LIBRARY_PATH points at the bundled copy so
+        # it finds and packages that copy instead of silently skipping libmpv or
+        # grabbing a system one.
+        run: npm run bundle:linux
+      - name: Check (a) the .deb ships the bundled libmpv
+        run: |
+          set -euo pipefail
+          deb="$(ls src-tauri/target/release/bundle/deb/*.deb)"
+          echo "Checking $deb"
+          dpkg -c "$deb" | tee /tmp/deb-raw.txt
+          # dpkg -c paths are not consistently prefixed with "./".
+          awk '{print $NF}' /tmp/deb-raw.txt | tee /tmp/deb-contents.txt
+          grep -Eq '^(\./)?usr/lib/grid/libmpv\.so\.2$' /tmp/deb-contents.txt
+      - name: Check (b) the .rpm ships the bundled libmpv
+        run: |
+          set -euo pipefail
+          rpm_file="$(ls src-tauri/target/release/bundle/rpm/*.rpm)"
+          echo "Checking $rpm_file"
+          rpm -qlp "$rpm_file" | tee /tmp/rpm-contents.txt
+          grep -Eq '^/?(\./)?usr/lib/grid/libmpv\.so\.2$' /tmp/rpm-contents.txt
+      - name: Check (c) the AppImage's binary resolves libmpv to its own bundled copy
+        run: |
+          set -euo pipefail
+          appimage="$(ls src-tauri/target/release/bundle/appimage/*.AppImage)"
+          echo "Checking $appimage"
+          "$appimage" --appimage-extract >/dev/null
+          resolved="$(env -u LD_LIBRARY_PATH ldd squashfs-root/usr/bin/grid | grep libmpv.so.2 || true)"
+          echo "ldd result: $resolved"
+          if [ -z "$resolved" ]; then
+            echo "::error::libmpv.so.2 not found by ldd"
+            exit 1
+          fi
+          path="$(echo "$resolved" | sed -n 's/.*=> \(\S*\) .*/\1/p')"
+          case "$path" in
+            "$PWD"/squashfs-root/*) ;;
+            *)
+              echo "::error::libmpv.so.2 resolved to '$path', not inside squashfs-root"
+              exit 1
+              ;;
+          esac
+      - name: Check (d) the binary's RUNPATH points at the bundled libmpv
+        run: |
+          set -euo pipefail
+          out="$(readelf -d src-tauri/target/release/grid | grep RUNPATH || true)"
+          echo "$out"
+          echo "$out" | grep -q '\$ORIGIN/\.\./lib/grid' || { echo "::error::RUNPATH is missing \$ORIGIN/../lib/grid"; exit 1; }
+          echo "$out" | grep -Eq '\$ORIGIN/\.\./lib(:|\])' || { echo "::error::RUNPATH is missing \$ORIGIN/../lib"; exit 1; }
+      - name: Check (e) only SONAME-named library files and the licence texts ship under usr/lib/grid
+        run: |
+          set -euo pipefail
+          # Allowed: one real file per SONAME (e.g. libmpv.so.2) and anything
+          # under LICENSES/. Rejected: unversioned dev symlinks (libmpv.so),
+          # full-version files (libmpv.so.2.5.0), the setup stamp file, and
+          # (after R30, there should be none) symlink entries.
+          #
+          # /tmp/deb-raw.txt (written by check a) is dpkg -c's untouched output;
+          # a symlink line starts with 'l' (its permission column, e.g.
+          # "lrwxrwxrwx ..."). Checking the raw line, not the awk '{print $NF}'
+          # path list in /tmp/deb-contents.txt, is required — the path list has
+          # already thrown away everything but the last column, so it can never
+          # contain a "-> target" symlink marker to grep for.
+          if awk 'substr($0, 1, 1) == "l"' /tmp/deb-raw.txt | grep -q .; then
+            echo "::error::.deb listing contains a symlink; every shipped library must be a real SONAME file"
+            awk 'substr($0, 1, 1) == "l"' /tmp/deb-raw.txt
+            exit 1
+          fi
+          # /tmp/deb-contents.txt holds dpkg -c's last column, one path per
+          # line, with an optional "./" prefix that varies by tauri-bundler
+          # version. Strip it unconditionally with a plain `sed 's#^\./##'` —
+          # `sed -n '...p'` would silently drop every line when none happen to
+          # have the prefix, emptying the whole list without ever erroring.
+          deb_entries="$(sed 's#^\./##' /tmp/deb-contents.txt | { grep '^usr/lib/grid/' || true; } | { grep -v '/$' || true; } | sed 's#^usr/lib/grid/##')"
+          echo "deb entries under usr/lib/grid:"; echo "$deb_entries"
+          if [ -z "$deb_entries" ]; then echo "::error::No .deb entries found under usr/lib/grid; the check would pass vacuously"; exit 1; fi
+          bad_deb="$(echo "$deb_entries" | { grep -vE '^(LICENSES(/.+)?|lib[A-Za-z0-9+_.-]+\.so\.[0-9]+)$' || true; })"
+          if [ -n "$bad_deb" ]; then echo "::error::Unexpected .deb entries under usr/lib/grid:"; echo "$bad_deb"; exit 1; fi
+
+          # /tmp/rpm-contents.txt (written by check b) holds rpm -qlp's plain
+          # absolute paths, one per line, no symlink notation.
+          rpm_entries="$(sed -n 's#^/usr/lib/grid/##p' /tmp/rpm-contents.txt | { grep -v '^$' || true; })"
+          echo "rpm entries under usr/lib/grid:"; echo "$rpm_entries"
+          if [ -z "$rpm_entries" ]; then echo "::error::No .rpm entries found under usr/lib/grid; the check would pass vacuously"; exit 1; fi
+          bad_rpm="$(echo "$rpm_entries" | { grep -vE '^(LICENSES(/.+)?|lib[A-Za-z0-9+_.-]+\.so\.[0-9]+)$' || true; })"
+          if [ -n "$bad_rpm" ]; then echo "::error::Unexpected .rpm entries under usr/lib/grid:"; echo "$bad_rpm"; exit 1; fi
+
+          # The AppImage does NOT ship a second usr/lib/grid copy of the
+          # libraries (see tauri.linux.conf.json): linuxdeploy already copied
+          # each one linuxdeploy's own ldd detected into usr/lib and rewrote
+          # RUNPATH to point there (check (c) proved libmpv.so.2 resolves from
+          # squashfs-root/usr/bin/../lib/). Every bundled SONAME must appear
+          # exactly once anywhere under squashfs-root, and usr/lib/grid must
+          # carry no .so files at all.
+          sonames="$(ls src-tauri/lib/linux-runtime | grep -v '^LICENSES$')"
+          echo "SONAMEs to check inside the AppImage:"; echo "$sonames"
+          appimage_bad=0
+          while IFS= read -r soname; do
+            count="$(find squashfs-root -type f -name "$soname" | wc -l)"
+            echo "$soname: $count occurrence(s)"
+            if [ "$count" -ne 1 ]; then
+              echo "::error::$soname appears $count times under squashfs-root (expected exactly 1)"
+              find squashfs-root -type f -name "$soname"
+              appimage_bad=1
+            fi
+          done <<< "$sonames"
+          grid_so="$(find squashfs-root -path '*/usr/lib/grid/*.so*' || true)"
+          if [ -n "$grid_so" ]; then
+            echo "::error::usr/lib/grid inside the AppImage still ships .so files (should be LICENSES only):"
+            echo "$grid_so"
+            appimage_bad=1
+          fi
+          if [ "$appimage_bad" -ne 0 ]; then exit 1; fi
+
+          # The LGPL licence texts must ship in every package (see
+          # src-tauri/licenses/README.md).
+          licences_bad=0
+          for f in mpv-LGPL-2.1.txt ffmpeg-LGPL-2.1.txt libplacebo-LGPL-2.1.txt dav1d-BSD-2.txt \
+            libdisplay-info-MIT.txt hwdata-copyright.txt; do
+            if test -f "squashfs-root/usr/lib/grid/LICENSES/$f"; then
+              echo "AppImage: usr/lib/grid/LICENSES/$f present"
+            else
+              echo "::error::AppImage is missing usr/lib/grid/LICENSES/$f"; licences_bad=1
+            fi
+            if echo "$deb_entries" | grep -qxF "LICENSES/$f"; then
+              echo ".deb: usr/lib/grid/LICENSES/$f present"
+            else
+              echo "::error::.deb is missing usr/lib/grid/LICENSES/$f"; licences_bad=1
+            fi
+            if echo "$rpm_entries" | grep -qxF "LICENSES/$f"; then
+              echo ".rpm: usr/lib/grid/LICENSES/$f present"
+            else
+              echo "::error::.rpm is missing usr/lib/grid/LICENSES/$f"; licences_bad=1
+            fi
+          done
+          if [ "$licences_bad" -ne 0 ]; then exit 1; fi
+      - name: Play through the bundled libmpv (real-libmpv player tests)
+        # The job has no libmpv-dev: build.rs links src-tauri/lib/linux, and the
+        # test binary (no RUNPATH, unlike the app) loads the pruned runtime set
+        # through LD_LIBRARY_PATH, so a wrong link or a missing library fails.
+        # --color never: rust-toolchain sets CARGO_TERM_COLOR=always, and the
+        # output below is parsed.
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="$PWD/src-tauri/lib/linux-runtime"
+          cargo test --color never --manifest-path src-tauri/Cargo.toml --lib --no-run 2>&1 | tee /tmp/player-build.txt
+          bin="$(sed -n 's/.*Executable unittests src\/lib\.rs (\(.*\))$/\1/p' /tmp/player-build.txt)"
+          [ -n "$bin" ] || { echo "::error::unit test binary not found"; exit 1; }
+          case "$bin" in /*) ;; *) bin="$PWD/$bin" ;; esac
+          resolved="$(ldd "$bin" | grep 'libmpv\.so\.2' || true)"
+          echo "ldd: $resolved"
+          case "$resolved" in
+            *"=> $LD_LIBRARY_PATH/libmpv.so.2 "*) ;;
+            *) echo "::error::the test binary does not load the bundled libmpv"; exit 1 ;;
+          esac
+          cargo test --color never --manifest-path src-tauri/Cargo.toml --lib player:: -- --color never 2>&1 | tee /tmp/player-tests.txt
+          passed="$(sed -n 's/^test result: ok\. \([0-9]*\) passed.*/\1/p' /tmp/player-tests.txt | head -1)"
+          echo "player tests passed: ${passed:-0}"
+          [ "${passed:-0}" -gt 0 ] || { echo "::error::no player tests ran"; exit 1; }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
+
+  package-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Set up libmpv (Windows)
+        run: npm run setup:libmpv
+      - name: Build the MSI and NSIS installers
+        run: npx tauri build --bundles msi,nsis
+      - name: Check the MSI installs libmpv-2.dll and its licence texts beside grid.exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = @(Get-ChildItem src-tauri/target/release/bundle/msi/*.msi)
+          if ($msi.Count -ne 1) { throw "expected exactly one MSI, found $($msi.Count)" }
+          $dest = Join-Path $env:RUNNER_TEMP 'msi-extract'
+          Write-Host "Administrative install of $($msi[0].FullName) into $dest"
+          $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(
+            '/a', "`"$($msi[0].FullName)`"", '/qn', "TARGETDIR=`"$dest`""
+          )
+          if ($p.ExitCode -ne 0) { throw "msiexec /a exited with $($p.ExitCode)" }
+          Write-Host 'Extracted tree:'
+          Get-ChildItem -Recurse -Force $dest | ForEach-Object { $_.FullName.Substring($dest.Length) }
+          # Windows file names are case-insensitive: this matches Grid.exe too.
+          $exe = @(Get-ChildItem -Recurse -File $dest -Filter grid.exe)
+          if ($exe.Count -ne 1) { throw "expected exactly one grid.exe, found $($exe.Count)" }
+          $dir = $exe[0].DirectoryName
+          Write-Host "grid.exe is in $dir"
+          $required = @(
+            'libmpv-2.dll',
+            'LICENSES\mpv-LGPL-2.1.txt',
+            'LICENSES\ffmpeg-LGPL-2.1.txt',
+            'LICENSES\libplacebo-LGPL-2.1.txt',
+            'LICENSES\dav1d-BSD-2.txt'
+          )
+          $missing = @($required | Where-Object { -not (Test-Path -PathType Leaf (Join-Path $dir $_)) })
+          if ($missing.Count -gt 0) {
+            $missing | ForEach-Object { Write-Host "::error::MSI does not install $_ beside grid.exe" }
+            exit 1
+          }
+          $required | ForEach-Object { Write-Host "present beside grid.exe: $_" }
+      - name: Check the NSIS installer carries libmpv-2.dll and its licence texts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $nsis = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
+          if ($nsis.Count -ne 1) { throw "expected exactly one NSIS installer, found $($nsis.Count)" }
+          Write-Host "Listing $($nsis[0].FullName)"
+          $listing = 7z l -slt $nsis[0].FullName
+          if ($LASTEXITCODE -ne 0) { throw "7z could not list the NSIS installer" }
+          $paths = @($listing | Where-Object { $_ -like 'Path = *' } | ForEach-Object { $_.Substring(7) })
+          $paths
+          $missing = @(
+            'libmpv-2.dll',
+            'LICENSES\mpv-LGPL-2.1.txt',
+            'LICENSES\ffmpeg-LGPL-2.1.txt',
+            'LICENSES\libplacebo-LGPL-2.1.txt',
+            'LICENSES\dav1d-BSD-2.txt'
+          ) | Where-Object { $paths -notcontains $_ }
+          if ($missing) {
+            $missing | ForEach-Object { Write-Host "::error::NSIS installer does not carry $_" }
+            exit 1
+          }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-installers
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+
   e2e:
     needs: [frontend, rust]
     strategy:

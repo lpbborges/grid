@@ -21,19 +21,6 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
-      # Grid links libmpv in-process on Linux and Windows, and nothing here
-      # packages it yet. Adding the missing piece alone does not fix that:
-      # installing libmpv-dev makes the Linux build link Ubuntu's libmpv, a GPL
-      # build the package would then depend on, and running setup:libmpv
-      # builds Windows against a DLL the installer does not ship, so the app
-      # fails to start. Packaging an LGPL-2.1+ libmpv, with its licence text
-      # and source offer, is PR 2 of the libmpv plan; remove this step there.
-      - name: Block releases until libmpv is packaged
-        shell: bash
-        run: |
-          echo "::error::Releases are blocked until libmpv is packaged (PR 2 of the libmpv plan)"
-          exit 1
-
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -59,15 +46,38 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            libass-dev \
+            libva-dev \
+            libvulkan-dev \
+            libpulse-dev \
+            libasound2-dev \
+            libdrm-dev \
+            libegl-dev \
+            libx11-dev
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Fetch the bundled libmpv (Linux)
+        if: matrix.platform == 'ubuntu-latest'
+        run: npm run setup:libmpv -- --bundle
+
+      # tauri.windows.conf.json bundles the DLL beside grid.exe.
+      - name: Set up libmpv (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: npm run setup:libmpv
 
       - name: Build and Publish Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Same reason as package.json's bundle:linux script (used by
+          # .github/workflows/ci.yml): linuxdeploy resolves the AppImage's
+          # dependencies with its own ldd before the bundle's directory layout
+          # exists, so the binary's $ORIGIN/../lib/grid RUNPATH resolves
+          # nowhere yet. An empty LD_LIBRARY_PATH on Windows is inert.
+          LD_LIBRARY_PATH: ${{ matrix.platform == 'ubuntu-latest' && format('{0}/src-tauri/lib/linux-runtime', github.workspace) || '' }}
         with:
           tagName: v__VERSION__
           releaseName: 'Grid v__VERSION__'

@@ -4,20 +4,23 @@ This document serves as a living repository of the core architectural decisions,
 
 ## Command Cheat-Sheet
 
-| Task                                             | Command                                                                     |
-| ------------------------------------------------ | --------------------------------------------------------------------------- |
-| Frontend only (no playback)                      | `npm run dev`                                                               |
-| Full app                                         | `npm run tauri dev`                                                         |
-| Release bundles                                  | `npm run tauri build`                                                       |
-| Type check                                       | `npm run check`                                                             |
-| Lint / format                                    | `npm run lint` / `npm run format`                                           |
-| Frontend tests (+ coverage)                      | `npm run test:frontend` (`test:frontend:cov`)                               |
-| Rust tests (+ coverage)                          | `npm run test:backend` (`test:backend:cov`)                                 |
-| E2E playback tests (Linux/Windows)               | `npm run test:e2e` (`test:e2e:run` skips the build)                         |
-| Live smoke test (manual, internet)               | `npm run test:e2e:live`                                                     |
-| Refresh rqbit response snapshots                 | `cd src-tauri && UPDATE_RQBIT_SNAPSHOTS=1 cargo test playback_engine_tests` |
-| Rust format / lint                               | `cd src-tauri && cargo fmt && cargo clippy --all-targets -- -D warnings`    |
-| Fetch the pinned libmpv (Windows; Linux release) | `npm run setup:libmpv`                                                      |
+| Task                                    | Command                                                                     |
+| --------------------------------------- | --------------------------------------------------------------------------- |
+| Frontend only (no playback)             | `npm run dev`                                                               |
+| Full app                                | `npm run tauri dev`                                                         |
+| Release bundles (Windows, macOS)        | `npm run setup:libmpv && npm run tauri build`                               |
+| Release bundles (Linux)                 | `npm run setup:libmpv -- --bundle && npm run bundle:linux`                  |
+| Type check                              | `npm run check`                                                             |
+| Lint / format                           | `npm run lint` / `npm run format`                                           |
+| Frontend tests (+ coverage)             | `npm run test:frontend` (`test:frontend:cov`)                               |
+| Rust tests (+ coverage)                 | `npm run test:backend` (`test:backend:cov`)                                 |
+| E2E playback tests (Linux/Windows)      | `npm run test:e2e` (`test:e2e:run` skips the build)                         |
+| Live smoke test (manual, internet)      | `npm run test:e2e:live`                                                     |
+| Refresh rqbit response snapshots        | `cd src-tauri && UPDATE_RQBIT_SNAPSHOTS=1 cargo test playback_engine_tests` |
+| Rust format / lint                      | `cd src-tauri && cargo fmt && cargo clippy --all-targets -- -D warnings`    |
+| Fetch the pinned libmpv (Windows)       | `npm run setup:libmpv`                                                      |
+| Fetch the pinned libmpv (Linux release) | `npm run setup:libmpv -- --bundle`                                          |
+| Build the Linux release packages        | `npm run bundle:linux` (after the `--bundle` setup)                         |
 
 ## 1. Architecture & Modularity
 
@@ -93,13 +96,14 @@ This document serves as a living repository of the core architectural decisions,
 
 - **Raw streams:** The header patch above hides every embedded subtitle track, so anything that demuxes Matroska correctly must ask for `?raw=1` (`getStreamUrl(hash, idx, { raw: true })`). The `<video>` element must not: it needs the patch. Keep the Rust `wants_raw` check and the TS option in sync.
 - **Native player (Linux, Windows):** libmpv runs **in-process** (`src-tauri/src/player/`), one instance per app run, created on the first playback and never destroyed (`stop` ends a file). Only ever link an **LGPL** libmpv build and ship its licence and source offer (`src-tauri/licenses/`); Linux development may link the system libmpv, releases never do. Linux draws through the render API into a `GtkGLArea` under the webview: the `GtkOverlay` must be the window's **direct** child (tauri-runtime-wry's resize handler unwraps `webview.parent().parent()` as the window), `LC_NUMERIC` must be `C` after GTK init (see `setup`), and nothing in a GTK signal handler or libmpv callback may panic. Windows passes Grid's HWND as `wid` and `window_embed.rs` pushes mpv's child to the bottom of the z-order. Keep the command surface narrow: mpv's own commands include `run` and `load-script`, so never add a generic passthrough, and `start_native_player` must reject any URL that is not the local stream proxy.
+- **libmpv pins:** `scripts/libmpv.lock.json` pins each platform's LGPL build by URL and SHA256, and every pinned URL must be a never-overwritten prerelease in Grid's own repository (`build-libmpv-linux.yml` publishes Linux builds; Windows archives are mirrored unchanged with `gh release create --prerelease`, never overwriting a tag). Update `src-tauri/licenses/README.md` (source offer, evidence) in the same change. `tauri.windows.conf.json` must keep `libmpv-2.dll` beside `grid.exe` and repeat `bin/rqbit` in `externalBin` (platform configs replace arrays); CI's `package-windows` job checks the installed layout.
 
 ## 6. Code Quality & Git
 
 - **Formatting & Linting:** `eslint` and `prettier` are mandated for all TS/JS/Svelte code. `cargo fmt` and `cargo clippy --all-targets -- -D warnings` are mandated for Rust code.
 - **Versioning:** `package.json` is the single source of truth for the application version; `src-tauri/tauri.conf.json` references it dynamically via `"../package.json"`. Do not bump versions on individual functional commits or PRs; version bumps follow SemVer and are performed intentionally when preparing a release or release tag. Keep `src-tauri/Cargo.toml` in sync when bumping versions for a release.
 - **Pre-commit Hook:** `.husky/pre-commit` runs `lint-staged` (ESLint + Prettier on staged files), the full frontend test suite, the full Rust test suite, `cargo fmt --check`, and `cargo clippy`. A commit therefore takes a minute or more. Never bypass this hook unless absolutely necessary. It runs against the working tree, so don't leave intentionally failing tests unstaged while committing something else.
-- **CI:** `.github/workflows/ci.yml` runs lint, Prettier, `svelte-check`, the frontend tests, `cargo fmt`, `clippy`, `cargo test`, `npm audit`, `cargo audit`, and, after those pass, the `e2e` job on Linux and Windows.
+- **CI:** `.github/workflows/ci.yml` runs lint, Prettier, `svelte-check`, the frontend tests, `cargo fmt`, `clippy`, `cargo test`, `npm audit`, `cargo audit`, and, after those pass, the `e2e` job on Linux and Windows. The `package-linux` job builds the `.deb`, `.rpm` and AppImage against the pinned LGPL libmpv (`setup:libmpv -- --bundle`, no system `libmpv-dev`) and checks that the `.deb` and `.rpm` ship it under `/usr/lib/grid`, that the binary's RUNPATH and the AppImage resolve libmpv to the bundled copy, and that nothing but SONAME-named libraries and the licence texts ships there; `package-windows` builds the MSI and NSIS installers and checks that each installs `libmpv-2.dll` and its `LICENSES\` beside `grid.exe`.
 - **Commits:** Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `chore:`, `ci:`) with small, atomic commits.
 - **Plans & specs:** Never commit planning or spec documents. `.claude/plans/`, `docs/superpowers/` and `.backlog/` are gitignored.
 

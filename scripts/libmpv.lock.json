@@ -1,7 +1,12 @@
 {
   "windows-x86_64": {
-    "url": "https://github.com/zhongfly/mpv-winbuild/releases/download/2026-09-23-bdefd6cb42/mpv-dev-lgpl-x86_64-20260923-git-bdefd6cb42.7z",
+    "url": "https://github.com/lpbborges/grid/releases/download/libmpv-windows-2026-09-23-bdefd6cb42/mpv-dev-lgpl-x86_64-20260923-git-bdefd6cb42.7z",
     "sha256": "f44eb9a2e3a187af66e16bd7d8be37bfa46ac0c894297145937bab9116f2aec1",
+    "licence": "LGPL-2.1-or-later"
+  },
+  "linux-x86_64": {
+    "url": "https://github.com/lpbborges/grid/releases/download/libmpv-linux-v0.41.0-b5/libmpv-linux-x86_64.tar.gz",
+    "sha256": "b06668787b56b6e4c385cea8ed17c77c48fef6383fdaa215c16d678b32a5a8c2",
     "licence": "LGPL-2.1-or-later"
   }
 }
