@@ -163,7 +163,7 @@ jobs:
           echo "$out"
           echo "$out" | grep -q '\$ORIGIN/\.\./lib/grid' || { echo "::error::RUNPATH is missing \$ORIGIN/../lib/grid"; exit 1; }
           echo "$out" | grep -Eq '\$ORIGIN/\.\./lib(:|\])' || { echo "::error::RUNPATH is missing \$ORIGIN/../lib"; exit 1; }
-      - name: Check (e) only SONAME-named library files and LICENSES ship under usr/lib/grid
+      - name: Check (e) only SONAME-named library files and the licence texts ship under usr/lib/grid
         run: |
           set -euo pipefail
           # Allowed: one real file per SONAME (e.g. libmpv.so.2) and anything
@@ -227,6 +227,28 @@ jobs:
             appimage_bad=1
           fi
           if [ "$appimage_bad" -ne 0 ]; then exit 1; fi
+
+          # The LGPL licence texts must ship in every package (see
+          # src-tauri/licenses/README.md).
+          licences_bad=0
+          for f in mpv-LGPL-2.1.txt ffmpeg-LGPL-2.1.txt libplacebo-LGPL-2.1.txt dav1d-BSD-2.txt; do
+            if test -f "squashfs-root/usr/lib/grid/LICENSES/$f"; then
+              echo "AppImage: usr/lib/grid/LICENSES/$f present"
+            else
+              echo "::error::AppImage is missing usr/lib/grid/LICENSES/$f"; licences_bad=1
+            fi
+            if echo "$deb_entries" | grep -qxF "LICENSES/$f"; then
+              echo ".deb: usr/lib/grid/LICENSES/$f present"
+            else
+              echo "::error::.deb is missing usr/lib/grid/LICENSES/$f"; licences_bad=1
+            fi
+            if echo "$rpm_entries" | grep -qxF "LICENSES/$f"; then
+              echo ".rpm: usr/lib/grid/LICENSES/$f present"
+            else
+              echo "::error::.rpm is missing usr/lib/grid/LICENSES/$f"; licences_bad=1
+            fi
+          done
+          if [ "$licences_bad" -ne 0 ]; then exit 1; fi
       - uses: actions/upload-artifact@v7
         with:
           name: linux-packages
@@ -234,6 +256,85 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/rpm/*.rpm
             src-tauri/target/release/bundle/appimage/*.AppImage
+
+  package-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Set up libmpv (Windows)
+        run: npm run setup:libmpv
+      - name: Build the MSI and NSIS installers
+        run: npx tauri build --bundles msi,nsis
+      - name: Check the MSI installs libmpv-2.dll and its licence texts beside grid.exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = @(Get-ChildItem src-tauri/target/release/bundle/msi/*.msi)
+          if ($msi.Count -ne 1) { throw "expected exactly one MSI, found $($msi.Count)" }
+          $dest = Join-Path $env:RUNNER_TEMP 'msi-extract'
+          Write-Host "Administrative install of $($msi[0].FullName) into $dest"
+          $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(
+            '/a', "`"$($msi[0].FullName)`"", '/qn', "TARGETDIR=`"$dest`""
+          )
+          if ($p.ExitCode -ne 0) { throw "msiexec /a exited with $($p.ExitCode)" }
+          Write-Host 'Extracted tree:'
+          Get-ChildItem -Recurse -Force $dest | ForEach-Object { $_.FullName.Substring($dest.Length) }
+          # Windows file names are case-insensitive: this matches Grid.exe too.
+          $exe = @(Get-ChildItem -Recurse -File $dest -Filter grid.exe)
+          if ($exe.Count -ne 1) { throw "expected exactly one grid.exe, found $($exe.Count)" }
+          $dir = $exe[0].DirectoryName
+          Write-Host "grid.exe is in $dir"
+          $required = @(
+            'libmpv-2.dll',
+            'LICENSES\mpv-LGPL-2.1.txt',
+            'LICENSES\ffmpeg-LGPL-2.1.txt',
+            'LICENSES\libplacebo-LGPL-2.1.txt',
+            'LICENSES\dav1d-BSD-2.txt'
+          )
+          $missing = @($required | Where-Object { -not (Test-Path -PathType Leaf (Join-Path $dir $_)) })
+          if ($missing.Count -gt 0) {
+            $missing | ForEach-Object { Write-Host "::error::MSI does not install $_ beside grid.exe" }
+            exit 1
+          }
+          $required | ForEach-Object { Write-Host "present beside grid.exe: $_" }
+      - name: Check the NSIS installer carries libmpv-2.dll and its licence texts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $nsis = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
+          if ($nsis.Count -ne 1) { throw "expected exactly one NSIS installer, found $($nsis.Count)" }
+          Write-Host "Listing $($nsis[0].FullName)"
+          $listing = 7z l -slt $nsis[0].FullName
+          if ($LASTEXITCODE -ne 0) { throw "7z could not list the NSIS installer" }
+          $paths = @($listing | Where-Object { $_ -like 'Path = *' } | ForEach-Object { $_.Substring(7) })
+          $paths
+          $missing = @(
+            'libmpv-2.dll',
+            'LICENSES\mpv-LGPL-2.1.txt',
+            'LICENSES\ffmpeg-LGPL-2.1.txt',
+            'LICENSES\libplacebo-LGPL-2.1.txt',
+            'LICENSES\dav1d-BSD-2.txt'
+          ) | Where-Object { $paths -notcontains $_ }
+          if ($missing) {
+            $missing | ForEach-Object { Write-Host "::error::NSIS installer does not carry $_" }
+            exit 1
+          }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-installers
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*-setup.exe
 
   e2e:
     needs: [frontend, rust]
