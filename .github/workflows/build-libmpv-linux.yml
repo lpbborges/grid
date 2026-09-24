@@ -12,6 +12,7 @@ on:
       mpv_ref: { description: mpv tag, required: true, default: v0.41.0 }
       ffmpeg_ref: { description: FFmpeg tag, required: true, default: n7.1 }
       libplacebo_ref: { description: libplacebo tag, required: true, default: v7.351.0 }
+      dav1d_ref: { description: dav1d tag, required: true, default: 1.5.1 }
   push:
     branches: ['build/libmpv-linux']
 
@@ -22,6 +23,8 @@ env:
   MPV_REF: ${{ inputs.mpv_ref || 'v0.41.0' }}
   FFMPEG_REF: ${{ inputs.ffmpeg_ref || 'n7.1' }}
   LIBPLACEBO_REF: ${{ inputs.libplacebo_ref || 'v7.351.0' }}
+  # dav1d is bundled because its soname differs across distributions.
+  DAV1D_REF: ${{ inputs.dav1d_ref || '1.5.1' }}
 
 jobs:
   build:
@@ -34,7 +37,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential nasm pkg-config \
             python3-venv ninja-build git patchelf libass-dev libfreetype-dev libfribidi-dev \
-            libharfbuzz-dev libdav1d-dev libva-dev libdrm-dev libegl-dev libgl-dev \
+            libharfbuzz-dev libva-dev libdrm-dev libegl-dev libgl-dev \
             libvulkan-dev glslang-dev spirv-tools libx11-dev libwayland-dev wayland-protocols \
             libxkbcommon-dev libpulse-dev libasound2-dev
           python3 -m venv "$RUNNER_TEMP/venv"
@@ -42,22 +45,33 @@ jobs:
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
       - name: Fetch sources
         run: |
+          git clone --depth 1 --branch "$DAV1D_REF" https://code.videolan.org/videolan/dav1d.git
           git clone --depth 1 --branch "$FFMPEG_REF" https://git.ffmpeg.org/ffmpeg.git
           git clone --depth 1 --branch "$LIBPLACEBO_REF" --recurse-submodules https://code.videolan.org/videolan/libplacebo.git
           git clone --depth 1 --branch "$MPV_REF" https://github.com/mpv-player/mpv.git
+      - name: dav1d
+        run: |
+          meson setup dav1d/build dav1d --prefix="$PWD/out" --libdir=lib --buildtype=release \
+            -Denable_tools=false -Denable_tests=false -Denable_examples=false
+          meson install -C dav1d/build
       - name: FFmpeg (LGPL - no --enable-gpl, no --enable-nonfree)
         run: |
+          export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig"
           cd ffmpeg
+          # bzlib and lzma are off: their sonames differ across distributions
+          # (libbz2.so.1.0 vs libbz2.so.1) and playback does not need them.
           ./configure --prefix="$PWD/../out" --enable-shared --disable-static \
             --disable-programs --disable-doc --disable-debug \
-            --enable-libdav1d --enable-vaapi
+            --enable-libdav1d --enable-vaapi --disable-bzlib --disable-lzma
           grep -q 'CONFIG_GPL 0' config.h
+          # FFmpeg must link the bundled dav1d, not a system one.
+          grep -q -- "-L$(cd .. && pwd)/out/lib -ldav1d" ffbuild/config.mak
           make -j"$(nproc)" && make install
       - name: libplacebo
         run: |
           export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig"
           meson setup libplacebo/build libplacebo --prefix="$PWD/out" --libdir=lib \
-            -Dvulkan=enabled -Dopengl=enabled -Dshaderc=disabled -Dglslang=enabled -Ddemos=false -Dtests=false
+            -Dvulkan=enabled -Dopengl=enabled -Dshaderc=disabled -Dglslang=enabled -Dlcms=disabled -Ddemos=false -Dtests=false
           meson install -C libplacebo/build
           # libplacebo's libav.h pulls in FFmpeg's hwcontext_vulkan.h, which needs
           # newer Vulkan headers than Ubuntu 22.04 ships. Build-time only: the
@@ -67,26 +81,53 @@ jobs:
         run: |
           export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig"
           meson setup mpv/build mpv --prefix="$PWD/out" --libdir=lib \
-            -Dgpl=false -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled
+            -Dgpl=false -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled \
+            -Djpeg=disabled -Dlcms2=disabled
           meson configure mpv/build | grep -E '^\s*gpl\s+false'
           meson install -C mpv/build
       - name: Package
         run: |
           mkdir -p dist/lib dist/include dist/LICENSES
-          cp -a out/lib/libmpv.so* out/lib/libav*.so* out/lib/libsw*.so* out/lib/libplacebo.so* dist/lib/
-          for f in dist/lib/*.so.*; do [ -L "$f" ] || patchelf --set-rpath '$ORIGIN' "$f"; done
+          cp -a out/lib/libmpv.so* out/lib/libav*.so* out/lib/libsw*.so* out/lib/libplacebo.so* \
+            out/lib/libdav1d.so* dist/lib/
+          for f in dist/lib/*.so.*; do
+            [ -L "$f" ] && continue
+            strip --strip-debug "$f"
+            patchelf --set-rpath '$ORIGIN' "$f"
+          done
           cp -a out/include/mpv dist/include/
           cp mpv/LICENSE.LGPL dist/LICENSES/mpv-LGPL-2.1.txt
           cp ffmpeg/COPYING.LGPLv2.1 dist/LICENSES/ffmpeg-LGPL-2.1.txt
           cp libplacebo/LICENSE dist/LICENSES/libplacebo-LGPL-2.1.txt
+          cp dav1d/COPYING dist/LICENSES/dav1d-BSD-2.txt
           {
             echo "mpv $MPV_REF $(git -C mpv rev-parse HEAD) gpl=false"
             echo "ffmpeg $FFMPEG_REF $(git -C ffmpeg rev-parse HEAD)"
             grep FFMPEG_CONFIGURATION ffmpeg/config.h
             echo "libplacebo $LIBPLACEBO_REF $(git -C libplacebo rev-parse HEAD)"
+            echo "dav1d $DAV1D_REF $(git -C dav1d rev-parse HEAD)"
           } > dist/BUILD-INFO.txt
           tar -C dist -czf libmpv-linux-x86_64.tar.gz .
           sha256sum libmpv-linux-x86_64.tar.gz | tee libmpv-linux-x86_64.tar.gz.sha256
+      - name: Only portable system libraries are needed
+        run: |
+          # Every NEEDED entry must be bundled or have the same soname on every
+          # supported distribution. libz.so.1 is universal and FFmpeg/mpv need it
+          # for zlib-compressed Matroska tracks.
+          allowed='^(ld-linux-x86-64\.so\.2|lib(c|m|dl|pthread|rt|resolv)\.so\.[0-9]+|libstdc\+\+\.so\.6|libgcc_s\.so\.1|libatomic\.so\.1'
+          allowed+='|libX[A-Za-z0-9]*\.so\.[0-9]+|libxcb(-[a-z0-9-]+)?\.so\.[0-9]+|libwayland-(client|cursor|egl)\.so\.[0-9]+'
+          allowed+='|libxkbcommon\.so\.0|libEGL\.so\.1|libGL\.so\.1|libvulkan\.so\.1|libva(-drm|-x11|-wayland)?\.so\.2'
+          allowed+='|libdrm\.so\.2|libass\.so\.9|libfreetype\.so\.6|libfribidi\.so\.0|libharfbuzz\.so\.0'
+          allowed+='|libpulse\.so\.0|libasound\.so\.2|libpipewire-0\.3\.so\.0|libz\.so\.1)$'
+          bundled=$(ls dist/lib)
+          needed=$(for f in dist/lib/*.so.*; do [ -L "$f" ] || readelf -d "$f"; done \
+            | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | sort -u)
+          echo "NEEDED across all shipped libraries:"; echo "$needed"
+          bad=$(echo "$needed" | grep -vxF -f <(echo "$bundled") | grep -vE "$allowed" || true)
+          if [ -n "$bad" ]; then echo "::error::Non-portable NEEDED entries:"; echo "$bad"; exit 1; fi
+          for f in dist/lib/*.so.*; do
+            [ -L "$f" ] || readelf -d "$f" | grep -q 'RUNPATH.*\[\$ORIGIN\]' || { echo "::error::$f lacks RUNPATH \$ORIGIN"; exit 1; }
+          done
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
