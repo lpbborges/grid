@@ -59,10 +59,22 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            libass-dev \
+            libva-dev \
+            libvulkan-dev \
+            libpulse-dev \
+            libasound2-dev \
+            libdrm-dev \
+            libegl-dev \
+            libx11-dev
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Fetch the bundled libmpv (Linux)
+        if: matrix.platform == 'ubuntu-latest'
+        run: npm run setup:libmpv -- --bundle
 
       - name: Build and Publish Tauri app
         uses: tauri-apps/tauri-action@v0

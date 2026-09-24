@@ -32,7 +32,7 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
 
 - The libmpv development files, for native playback. Linux: `sudo apt install libmpv-dev` (Debian/Ubuntu) or the `mpv` package (Arch, which ships the headers alongside the player); Linux development needs libmpv from mpv 0.33 or newer. Windows: 7-Zip and the MSVC build tools, then run `npm run setup:libmpv` once to fetch the pinned DLL and generate its import library. macOS needs nothing here: it plays through the `<video>` element and never links libmpv.
 
-- On Linux, the GStreamer decoders the webview plays through. They are not installed by default on a clean Ubuntu or Fedora, and without them 4K HEVC and E-AC3 releases fail with "este vídeo precisa de componentes de vídeo que não estão instalados no sistema". The `.deb` declares them; for `tauri dev` or another package format, install them yourself (Debian/Ubuntu):
+- On Linux, `tauri dev` and the `VITE_GRID_NATIVE_PLAYER` flag off still play through the webview's `<video>` element, which needs the GStreamer decoders below. They are not installed by default on a clean Ubuntu or Fedora, and without them 4K HEVC and E-AC3 releases fail with "este vídeo precisa de componentes de vídeo que não estão instalados no sistema". Release packages no longer declare them as dependencies — Linux release builds play through the bundled libmpv instead (see [Sidecars](#sidecars)) — so install them yourself for `tauri dev` (Debian/Ubuntu):
 
   ```sh
   sudo apt-get install -y gstreamer1.0-libav gstreamer1.0-plugins-good \
@@ -40,6 +40,8 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
   ```
 
 - For the end-to-end playback tests (Linux and Windows only): [`tauri-driver`](https://v2.tauri.app/develop/tests/webdriver/) (`cargo install tauri-driver --locked`), plus `WebKitWebDriver` and the GStreamer libav plugins on Linux (Debian/Ubuntu: `sudo apt-get install -y webkit2gtk-driver gstreamer1.0-libav`), or an `msedgedriver` matching your WebView2 version on Windows (point `NATIVE_DRIVER` at it). `ffmpeg` is needed only to regenerate the test media.
+
+- **Linux release builds** bundle their own LGPL libmpv (`npm run setup:libmpv -- --bundle`, see [Sidecars](#sidecars)) and require **glibc 2.35 or newer** — Ubuntu 22.04+, Debian 12+, or Fedora 36+. Older distributions are not supported.
 
 ## Getting Started
 
@@ -54,7 +56,7 @@ The first `tauri dev` compiles the Rust backend, which takes a few minutes. To p
 npm run tauri build
 ```
 
-Bundles are written to `src-tauri/target/release/bundle/`.
+Bundles are written to `src-tauri/target/release/bundle/`. On Linux, fetch the bundled LGPL libmpv first (`npm run setup:libmpv -- --bundle`) so the `.deb`, `.rpm` and AppImage ship it; see [Sidecars](#sidecars).
 
 ## Recommended IDE Setup
 
@@ -179,8 +181,15 @@ top. The commands are the only way in; there is no generic mpv passthrough.
   child window, which `window_embed.rs` pushes beneath WebView2. Run
   `npm run setup:libmpv` once to fetch the pinned LGPL `libmpv-2.dll`.
 
-Release packages must ship an LGPL libmpv build with its licence and source
-offer; see [`src-tauri/licenses/README.md`](src-tauri/licenses/README.md).
+Release packages ship an LGPL libmpv build alongside its licence texts:
+`npm run setup:libmpv -- --bundle` downloads the pinned Linux build into
+`src-tauri/lib/linux/` (`.so` files plus `LICENSES/`), and `tauri build`
+installs it to `/usr/lib/grid` (`.deb`/`.rpm`) or `usr/lib/grid` inside the
+AppImage per `src-tauri/tauri.linux.conf.json`; the binary's RUNPATH
+(`$ORIGIN/../lib/grid`, `$ORIGIN/../lib`) finds it there ahead of any system
+libmpv. Requires glibc 2.35+ (see [Prerequisites](#prerequisites)). See
+[`src-tauri/licenses/README.md`](src-tauri/licenses/README.md) for the full
+licensing route and its source offer.
 
 ## Data Sources & Privacy
 

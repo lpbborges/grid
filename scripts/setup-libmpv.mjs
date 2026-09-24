@@ -119,11 +119,42 @@ async function setupWindows() {
   console.log('libmpv set up in', out);
 }
 
+async function setupLinuxBundle() {
+  const entry = lock['linux-x86_64'];
+  const out = path.join(root, 'src-tauri', 'lib', 'linux');
+  const stamp = path.join(out, STAMP);
+  const current = existsSync(stamp) ? readFileSync(stamp, 'utf8').trim() : '';
+  if (current === entry.sha256 && existsSync(path.join(out, 'libmpv.so.2'))) {
+    console.log('bundled libmpv already set up in', out);
+    return;
+  }
+  if (current && current !== entry.sha256) {
+    console.log('libmpv.lock.json changed; replacing the bundled libmpv in', out);
+  }
+  mkdirSync(out, { recursive: true });
+  const work = path.join(tmpdir(), `grid-libmpv-${Date.now()}`);
+  mkdirSync(work, { recursive: true });
+  try {
+    const archive = path.join(work, 'libmpv.tar.gz');
+    await fetchVerified(entry, archive);
+    execFileSync('tar', ['-xzf', archive, '-C', work], { stdio: 'inherit' });
+    execFileSync('cp', ['-a', `${path.join(work, 'lib')}/.`, out], { stdio: 'inherit' });
+    execFileSync('cp', ['-a', path.join(work, 'LICENSES'), path.join(out, 'LICENSES')], {
+      stdio: 'inherit'
+    });
+    // Written last: a run that fails halfway leaves no stamp, so the next
+    // run starts over instead of trusting a partial set of files.
+    writeFileSync(stamp, `${entry.sha256}\n`);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+  console.log('bundled libmpv set up in', out);
+}
+
 if (process.platform === 'win32') {
   await setupWindows();
 } else if (process.platform === 'linux' && bundle) {
-  // Filled in by Task 9.
-  throw new Error('--bundle on Linux is not implemented yet (Task 9)');
+  await setupLinuxBundle();
 } else {
   console.log('Nothing to do: this platform links the system libmpv or does not use it.');
 }

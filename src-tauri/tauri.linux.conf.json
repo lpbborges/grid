@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "linux": {
+      "deb": {
+        "files": { "/usr/lib/grid": "lib/linux" },
+        "depends": [
+          "libass9",
+          "libva2",
+          "libva-drm2",
+          "libva-x11-2",
+          "libvulkan1",
+          "libpulse0",
+          "libasound2 | libasound2t64",
+          "libdrm2",
+          "libegl1",
+          "libx11-6",
+          "libxcb1",
+          "libxcb-shm0",
+          "zlib1g"
+        ]
+      },
+      "rpm": {
+        "files": { "/usr/lib/grid": "lib/linux" },
+        "depends": [
+          "libass",
+          "libva",
+          "vulkan-loader",
+          "pulseaudio-libs",
+          "alsa-lib",
+          "libdrm",
+          "libglvnd-egl",
+          "libX11",
+          "libxcb",
+          "zlib"
+        ]
+      },
+      "appimage": {
+        "files": { "usr/lib/grid": "lib/linux" }
+      }
+    }
+  }
+}
