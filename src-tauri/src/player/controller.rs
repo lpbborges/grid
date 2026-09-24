@@ -99,6 +99,18 @@ pub fn options_for(output: VideoOutput) -> Vec<(&'static str, String)> {
 }
 
 /// mpv's own wording for an error, e.g. "loading failed".
+/// mpv only has `osc` and `ytdl` when it is built with Lua, which the Linux
+/// LGPL build Grid ships is not (see src-tauri/licenses/README.md). Without Lua
+/// neither script can load, so turning them off is already the case there.
+const LUA_ONLY_OPTIONS: [&str; 2] = ["osc", "ytdl"];
+
+/// Whether a failure to set `key` just means this libmpv lacks the option
+/// because the feature it switches off is not compiled in.
+fn may_be_missing(key: &str, error: &libmpv2::Error) -> bool {
+    LUA_ONLY_OPTIONS.contains(&key)
+        && matches!(error, libmpv2::Error::Raw(code) if *code == libmpv2::mpv_error::OptionNotFound)
+}
+
 pub fn describe_error(error: &libmpv2::Error) -> String {
     match error {
         libmpv2::Error::Raw(code) => {
@@ -513,7 +525,10 @@ impl Controller {
         let options = options_for(output);
         let mpv = Mpv::with_initializer(|init| {
             for (key, value) in &options {
-                init.set_option(key, value.as_str())?;
+                match init.set_option(key, value.as_str()) {
+                    Err(error) if may_be_missing(key, &error) => {}
+                    result => result?,
+                }
             }
             Ok(())
         })
@@ -798,6 +813,17 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn only_lua_script_switches_may_be_missing() {
+        let not_found = libmpv2::Error::Raw(libmpv2::mpv_error::OptionNotFound);
+        assert!(may_be_missing("osc", &not_found));
+        assert!(may_be_missing("ytdl", &not_found));
+        assert!(!may_be_missing("config", &not_found));
+        assert!(!may_be_missing("load-scripts", &not_found));
+        let invalid = libmpv2::Error::Raw(libmpv2::mpv_error::OptionFormat);
+        assert!(!may_be_missing("osc", &invalid));
     }
 
     #[test]
