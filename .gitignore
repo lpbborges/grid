@@ -19,5 +19,9 @@ docs/superpowers/
 
 e2e/artifacts/
 
+# Local output of the logo-creator skill (drafts, previews)
+.skill-archive/
+
 # Pinned libmpv, downloaded by `npm run setup:libmpv` (scripts/libmpv.lock.json).
 src-tauri/lib/
+

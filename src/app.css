@@ -60,6 +60,49 @@
   --color-warning: var(--warning);
   --color-success: var(--success);
   --color-backdrop: var(--video-backdrop);
+
+  /* Header logo hover (GridLogo.svelte) */
+  --animate-logo-scan: logo-scan 0.5s linear infinite;
+  --animate-logo-chroma: logo-chroma 1.1s steps(1, end) infinite;
+  --animate-logo-glitch: logo-glitch 1.1s steps(1, end) infinite;
+
+  /* 17px is GridLogo's SCANLINE_PITCH: one full line per loop */
+  @keyframes logo-scan {
+    to {
+      transform: translateY(17px);
+    }
+  }
+
+  @keyframes logo-chroma {
+    0%,
+    20%,
+    66%,
+    100% {
+      transform: translateX(-7px);
+    }
+    12% {
+      transform: translateX(-18px);
+    }
+    16% {
+      transform: translateX(-2px);
+    }
+    58% {
+      transform: translateX(-22px);
+    }
+    62% {
+      transform: translateX(3px);
+    }
+  }
+
+  @keyframes logo-glitch {
+    0% {
+      opacity: 1;
+    }
+    10%,
+    100% {
+      opacity: 0;
+    }
+  }
 }
 
 :root {
