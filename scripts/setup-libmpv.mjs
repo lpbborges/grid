@@ -133,8 +133,7 @@ async function setupWindows() {
     console.log('libmpv.lock.json changed; replacing the libmpv in', out);
   }
   mkdirSync(out, { recursive: true });
-  const work = path.join(tmpdir(), `grid-libmpv-${Date.now()}`);
-  mkdirSync(work, { recursive: true });
+  const work = mkdtempSync(path.join(tmpdir(), 'grid-libmpv-'));
   try {
     const archive = path.join(work, 'libmpv.7z');
     await fetchVerified(entry, archive);
