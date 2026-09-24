@@ -157,5 +157,5 @@ jobs:
           # asset must never be replaced. `gh release create` fails if the tag exists.
           tag="libmpv-linux-$MPV_REF-b$GITHUB_RUN_NUMBER"
           gh release create "$tag" libmpv-linux-x86_64.tar.gz libmpv-linux-x86_64.tar.gz.sha256 \
-            --title "libmpv $MPV_REF build $GITHUB_RUN_NUMBER (Linux, LGPL)" \
+            --target "$GITHUB_SHA" --title "libmpv $MPV_REF build $GITHUB_RUN_NUMBER (Linux, LGPL)" \
             --notes-file dist/BUILD-INFO.txt --prerelease
