@@ -13,6 +13,7 @@ on:
       ffmpeg_ref: { description: FFmpeg tag, required: true, default: n7.1 }
       libplacebo_ref: { description: libplacebo tag, required: true, default: v7.351.0 }
       dav1d_ref: { description: dav1d tag, required: true, default: 1.5.1 }
+      libdisplay_info_ref: { description: libdisplay-info tag, required: true, default: 0.2.0 }
   push:
     branches: ['build/libmpv-linux']
 
@@ -25,6 +26,9 @@ env:
   LIBPLACEBO_REF: ${{ inputs.libplacebo_ref || 'v7.351.0' }}
   # dav1d is bundled because its soname differs across distributions.
   DAV1D_REF: ${{ inputs.dav1d_ref || '1.5.1' }}
+  # libdisplay-info is bundled for the same reason (libdisplay-info.so.1/.2/.3);
+  # mpv's drm feature, which VA-API needs here, requires it.
+  LIBDISPLAY_INFO_REF: ${{ inputs.libdisplay_info_ref || '0.2.0' }}
 
 defaults:
   run:
@@ -32,15 +36,16 @@ defaults:
 
 jobs:
   build:
-    # The oldest Ubuntu the release job targets: the glibc floor for users.
-    runs-on: ubuntu-22.04
+    # Ubuntu 24.04: its glibc (2.39) is the floor the Grid binary itself already
+    # needs, and its libva/libdrm are new enough for mpv's VA-API support.
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential nasm pkg-config \
-            python3-venv ninja-build git patchelf libass-dev libfreetype-dev libfribidi-dev \
+            python3-venv ninja-build git patchelf hwdata libass-dev libfreetype-dev libfribidi-dev \
             libharfbuzz-dev libva-dev libdrm-dev libegl-dev libgl-dev \
             libvulkan-dev glslang-dev spirv-tools libx11-dev libwayland-dev wayland-protocols \
             libxkbcommon-dev libpulse-dev libasound2-dev
@@ -50,6 +55,7 @@ jobs:
       - name: Fetch sources
         run: |
           git clone --depth 1 --branch "$DAV1D_REF" https://code.videolan.org/videolan/dav1d.git
+          git clone --depth 1 --branch "$LIBDISPLAY_INFO_REF" https://gitlab.freedesktop.org/emersion/libdisplay-info.git
           git clone --depth 1 --branch "$FFMPEG_REF" https://git.ffmpeg.org/ffmpeg.git
           git clone --depth 1 --branch "$LIBPLACEBO_REF" --recurse-submodules https://code.videolan.org/videolan/libplacebo.git
           git clone --depth 1 --branch "$MPV_REF" https://github.com/mpv-player/mpv.git
@@ -60,6 +66,13 @@ jobs:
           echo "${opts[*]}" > "$RUNNER_TEMP/dav1d-options"
           meson setup dav1d/build dav1d "${opts[@]}"
           meson install -C dav1d/build
+      - name: libdisplay-info
+        run: |
+          # Its PNP ID table is generated from hwdata's pnp.ids at build time.
+          opts=(--prefix="$PWD/out" --libdir=lib --buildtype=release)
+          echo "${opts[*]}" > "$RUNNER_TEMP/libdisplay-info-options"
+          meson setup libdisplay-info/build libdisplay-info "${opts[@]}"
+          meson install -C libdisplay-info/build
       - name: FFmpeg (LGPL - no --enable-gpl, no --enable-nonfree)
         run: |
           export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig"
@@ -71,6 +84,8 @@ jobs:
             --enable-libdav1d --enable-vaapi --disable-bzlib --disable-lzma
           grep -q 'CONFIG_GPL 0' config.h
           grep -q 'CONFIG_NONFREE 0' config.h
+          # mpv's VA-API hardware decoding goes through FFmpeg's.
+          grep -q 'CONFIG_VAAPI 1' config.h
           # FFmpeg must link the bundled dav1d, not a system one.
           grep -q -- "-L$(cd .. && pwd)/out/lib -ldav1d" ffbuild/config.mak
           make -j"$(nproc)" && make install
@@ -83,23 +98,49 @@ jobs:
           meson setup libplacebo/build libplacebo "${opts[@]}"
           meson install -C libplacebo/build
           # libplacebo's libav.h pulls in FFmpeg's hwcontext_vulkan.h, which needs
-          # newer Vulkan headers than Ubuntu 22.04 ships. Build-time only: the
-          # package copies include/mpv alone.
+          # Vulkan headers at least as new as libplacebo's own; the runner's may
+          # lag behind. Build-time only: the package copies include/mpv alone.
           cp -r libplacebo/3rdparty/Vulkan-Headers/include/. out/include/
       - name: libmpv (-Dgpl=false)
         run: |
           export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig"
+          # Hardware decoding through the render API: VA-API opens a DRM render
+          # node (vaapi-drm, which needs drm) and hands frames to Grid's OpenGL
+          # context as dma-bufs (dmabuf-interop-gl, which needs egl). x11 and
+          # everything built on it are GPL-only in mpv and stay off. Wayland is
+          # off: Grid does not pass mpv a Wayland display, so mpv would not use
+          # it, and gbm/egl-drm only serve mpv's own DRM video output.
           opts=(--prefix="$PWD/out" --libdir=lib -Dgpl=false -Dlibmpv=true -Dcplayer=false
-            -Dlua=disabled -Djavascript=disabled -Djpeg=disabled -Dlcms2=disabled)
+            -Dlua=disabled -Djavascript=disabled -Djpeg=disabled -Dlcms2=disabled
+            -Dvaapi=enabled -Dvaapi-drm=enabled -Ddrm=enabled -Degl=enabled
+            -Dx11=disabled -Dwayland=disabled -Dgbm=disabled -Degl-drm=disabled)
           echo "${opts[*]}" > "$RUNNER_TEMP/mpv-options"
           meson setup mpv/build mpv "${opts[@]}"
           meson configure mpv/build | grep -E '^\s*gpl\s+false'
           meson install -C mpv/build
+      - name: libmpv has hardware decoding
+        run: |
+          # FULLCONFIG in mpv's generated config.h lists every feature the build
+          # actually enabled (what `mpv --version` prints), not the requested options.
+          features=$(sed -n 's/^#define FULLCONFIG "\(.*\)"$/\1/p' mpv/build/config.h)
+          echo "mpv features: $features"
+          if [ -z "$features" ]; then echo "::error::FULLCONFIG not found in mpv/build/config.h"; exit 1; fi
+          for f in gl egl drm vaapi vaapi-drm dmabuf-interop-gl; do
+            [[ " $features " == *" $f "* ]] || { echo "::error::mpv was built without $f"; exit 1; }
+          done
+          for f in gpl x11; do
+            [[ " $features " != *" $f "* ]] || { echo "::error::mpv was built with $f"; exit 1; }
+          done
+          hwdec=$(tr ' ' '\n' <<< "$features" \
+            | grep -xE 'gl|egl|drm|vaapi(-[a-z0-9]+)?|dmabuf-[a-z-]+|vulkan|wayland|x11|vdpau|cuda-[a-z-]+' \
+            | tr '\n' ' ')
+          echo "$features" > "$RUNNER_TEMP/mpv-features"
+          echo "${hwdec% }" > "$RUNNER_TEMP/mpv-hwdec-features"
       - name: Package
         run: |
           mkdir -p dist/lib dist/include dist/LICENSES
           cp -a out/lib/libmpv.so* out/lib/libav*.so* out/lib/libsw*.so* out/lib/libplacebo.so* \
-            out/lib/libdav1d.so* dist/lib/
+            out/lib/libdav1d.so* out/lib/libdisplay-info.so* dist/lib/
           for f in dist/lib/*.so.*; do
             [ -L "$f" ] && continue
             strip --strip-debug "$f"
@@ -110,6 +151,9 @@ jobs:
           cp ffmpeg/COPYING.LGPLv2.1 dist/LICENSES/ffmpeg-LGPL-2.1.txt
           cp libplacebo/LICENSE dist/LICENSES/libplacebo-LGPL-2.1.txt
           cp dav1d/COPYING dist/LICENSES/dav1d-BSD-2.txt
+          cp libdisplay-info/LICENSE dist/LICENSES/libdisplay-info-MIT.txt
+          # libdisplay-info compiles in a table generated from hwdata's pnp.ids.
+          cp /usr/share/doc/hwdata/copyright dist/LICENSES/hwdata-copyright.txt
           # mpv's gpl value is read back from the configured build, not echoed.
           gpl=$(meson introspect --buildoptions mpv/build \
             | python3 -c 'import json,sys; print(json.dumps([o["value"] for o in json.load(sys.stdin) if o["name"] == "gpl"][0]))')
@@ -117,12 +161,18 @@ jobs:
           {
             echo "mpv $MPV_REF $(git -C mpv rev-parse HEAD) gpl=$gpl"
             echo "  meson setup: $(cat "$RUNNER_TEMP/mpv-options")"
+            echo "  hardware decoding features: $(cat "$RUNNER_TEMP/mpv-hwdec-features")"
+            echo "  all features: $(cat "$RUNNER_TEMP/mpv-features")"
             echo "ffmpeg $FFMPEG_REF $(git -C ffmpeg rev-parse HEAD)"
             echo "  configure: $(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' ffmpeg/config.h)"
             echo "libplacebo $LIBPLACEBO_REF $(git -C libplacebo rev-parse HEAD)"
             echo "  meson setup: $(cat "$RUNNER_TEMP/libplacebo-options")"
             echo "dav1d $DAV1D_REF $(git -C dav1d rev-parse HEAD)"
             echo "  meson setup: $(cat "$RUNNER_TEMP/dav1d-options")"
+            echo "libdisplay-info $LIBDISPLAY_INFO_REF $(git -C libdisplay-info rev-parse HEAD)"
+            echo "  meson setup: $(cat "$RUNNER_TEMP/libdisplay-info-options")"
+            echo "hwdata (pnp.ids) $(dpkg-query -W -f='${Version}' hwdata)"
+            echo "built on $(. /etc/os-release && echo "$PRETTY_NAME"), glibc $(ldd --version | head -1 | awk '{print $NF}')"
           } > dist/BUILD-INFO.txt
           cat dist/BUILD-INFO.txt
           tar -C dist -czf libmpv-linux-x86_64.tar.gz .
