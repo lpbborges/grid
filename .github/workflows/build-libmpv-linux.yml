@@ -1,6 +1,6 @@
 # Builds the LGPL libmpv that Grid bundles in its Linux packages.
 # See src-tauri/licenses/README.md. Manual: run it, check BUILD-INFO.txt, then
-# pin the release asset's SHA256 in scripts/libmpv.lock.json.
+# pin the new release's URL and SHA256 in scripts/libmpv.lock.json.
 #
 # workflow_dispatch only works once this file is on the default branch, so a
 # push to `build/libmpv-linux` also runs it (with the default refs below).
@@ -25,6 +25,10 @@ env:
   LIBPLACEBO_REF: ${{ inputs.libplacebo_ref || 'v7.351.0' }}
   # dav1d is bundled because its soname differs across distributions.
   DAV1D_REF: ${{ inputs.dav1d_ref || '1.5.1' }}
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   build:
@@ -51,8 +55,10 @@ jobs:
           git clone --depth 1 --branch "$MPV_REF" https://github.com/mpv-player/mpv.git
       - name: dav1d
         run: |
-          meson setup dav1d/build dav1d --prefix="$PWD/out" --libdir=lib --buildtype=release \
-            -Denable_tools=false -Denable_tests=false -Denable_examples=false
+          opts=(--prefix="$PWD/out" --libdir=lib --buildtype=release
+            -Denable_tools=false -Denable_tests=false -Denable_examples=false)
+          echo "${opts[*]}" > "$RUNNER_TEMP/dav1d-options"
+          meson setup dav1d/build dav1d "${opts[@]}"
           meson install -C dav1d/build
       - name: FFmpeg (LGPL - no --enable-gpl, no --enable-nonfree)
         run: |
@@ -64,14 +70,17 @@ jobs:
             --disable-programs --disable-doc --disable-debug \
             --enable-libdav1d --enable-vaapi --disable-bzlib --disable-lzma
           grep -q 'CONFIG_GPL 0' config.h
+          grep -q 'CONFIG_NONFREE 0' config.h
           # FFmpeg must link the bundled dav1d, not a system one.
           grep -q -- "-L$(cd .. && pwd)/out/lib -ldav1d" ffbuild/config.mak
           make -j"$(nproc)" && make install
       - name: libplacebo
         run: |
           export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig"
-          meson setup libplacebo/build libplacebo --prefix="$PWD/out" --libdir=lib \
-            -Dvulkan=enabled -Dopengl=enabled -Dshaderc=disabled -Dglslang=enabled -Dlcms=disabled -Ddemos=false -Dtests=false
+          opts=(--prefix="$PWD/out" --libdir=lib -Dvulkan=enabled -Dopengl=enabled
+            -Dshaderc=disabled -Dglslang=enabled -Dlcms=disabled -Ddemos=false -Dtests=false)
+          echo "${opts[*]}" > "$RUNNER_TEMP/libplacebo-options"
+          meson setup libplacebo/build libplacebo "${opts[@]}"
           meson install -C libplacebo/build
           # libplacebo's libav.h pulls in FFmpeg's hwcontext_vulkan.h, which needs
           # newer Vulkan headers than Ubuntu 22.04 ships. Build-time only: the
@@ -80,9 +89,10 @@ jobs:
       - name: libmpv (-Dgpl=false)
         run: |
           export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig"
-          meson setup mpv/build mpv --prefix="$PWD/out" --libdir=lib \
-            -Dgpl=false -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled \
-            -Djpeg=disabled -Dlcms2=disabled
+          opts=(--prefix="$PWD/out" --libdir=lib -Dgpl=false -Dlibmpv=true -Dcplayer=false
+            -Dlua=disabled -Djavascript=disabled -Djpeg=disabled -Dlcms2=disabled)
+          echo "${opts[*]}" > "$RUNNER_TEMP/mpv-options"
+          meson setup mpv/build mpv "${opts[@]}"
           meson configure mpv/build | grep -E '^\s*gpl\s+false'
           meson install -C mpv/build
       - name: Package
@@ -100,13 +110,21 @@ jobs:
           cp ffmpeg/COPYING.LGPLv2.1 dist/LICENSES/ffmpeg-LGPL-2.1.txt
           cp libplacebo/LICENSE dist/LICENSES/libplacebo-LGPL-2.1.txt
           cp dav1d/COPYING dist/LICENSES/dav1d-BSD-2.txt
+          # mpv's gpl value is read back from the configured build, not echoed.
+          gpl=$(meson introspect --buildoptions mpv/build \
+            | python3 -c 'import json,sys; print(json.dumps([o["value"] for o in json.load(sys.stdin) if o["name"] == "gpl"][0]))')
+          [ "$gpl" = false ]
           {
-            echo "mpv $MPV_REF $(git -C mpv rev-parse HEAD) gpl=false"
+            echo "mpv $MPV_REF $(git -C mpv rev-parse HEAD) gpl=$gpl"
+            echo "  meson setup: $(cat "$RUNNER_TEMP/mpv-options")"
             echo "ffmpeg $FFMPEG_REF $(git -C ffmpeg rev-parse HEAD)"
-            grep FFMPEG_CONFIGURATION ffmpeg/config.h
+            echo "  configure: $(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' ffmpeg/config.h)"
             echo "libplacebo $LIBPLACEBO_REF $(git -C libplacebo rev-parse HEAD)"
+            echo "  meson setup: $(cat "$RUNNER_TEMP/libplacebo-options")"
             echo "dav1d $DAV1D_REF $(git -C dav1d rev-parse HEAD)"
+            echo "  meson setup: $(cat "$RUNNER_TEMP/dav1d-options")"
           } > dist/BUILD-INFO.txt
+          cat dist/BUILD-INFO.txt
           tar -C dist -czf libmpv-linux-x86_64.tar.gz .
           sha256sum libmpv-linux-x86_64.tar.gz | tee libmpv-linux-x86_64.tar.gz.sha256
       - name: Only portable system libraries are needed
@@ -114,7 +132,7 @@ jobs:
           # Every NEEDED entry must be bundled or have the same soname on every
           # supported distribution. libz.so.1 is universal and FFmpeg/mpv need it
           # for zlib-compressed Matroska tracks.
-          allowed='^(ld-linux-x86-64\.so\.2|lib(c|m|dl|pthread|rt|resolv)\.so\.[0-9]+|libstdc\+\+\.so\.6|libgcc_s\.so\.1|libatomic\.so\.1'
+          allowed='^(ld-linux-x86-64\.so\.2|libc\.so\.6|libm\.so\.6|libdl\.so\.2|libpthread\.so\.0|librt\.so\.1|libresolv\.so\.2|libstdc\+\+\.so\.6|libgcc_s\.so\.1|libatomic\.so\.1'
           allowed+='|libX[A-Za-z0-9]*\.so\.[0-9]+|libxcb(-[a-z0-9-]+)?\.so\.[0-9]+|libwayland-(client|cursor|egl)\.so\.[0-9]+'
           allowed+='|libxkbcommon\.so\.0|libEGL\.so\.1|libGL\.so\.1|libvulkan\.so\.1|libva(-drm|-x11|-wayland)?\.so\.2'
           allowed+='|libdrm\.so\.2|libass\.so\.9|libfreetype\.so\.6|libfribidi\.so\.0|libharfbuzz\.so\.0'
@@ -123,6 +141,7 @@ jobs:
           needed=$(for f in dist/lib/*.so.*; do [ -L "$f" ] || readelf -d "$f"; done \
             | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | sort -u)
           echo "NEEDED across all shipped libraries:"; echo "$needed"
+          if [ -z "$needed" ]; then echo "::error::No NEEDED entries found; the check would pass vacuously"; exit 1; fi
           bad=$(echo "$needed" | grep -vxF -f <(echo "$bundled") | grep -vE "$allowed" || true)
           if [ -n "$bad" ]; then echo "::error::Non-portable NEEDED entries:"; echo "$bad"; exit 1; fi
           for f in dist/lib/*.so.*; do
@@ -133,12 +152,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          tag="libmpv-linux-$MPV_REF"
-          # Idempotent: a rerun replaces the assets of an existing prerelease.
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" libmpv-linux-x86_64.tar.gz libmpv-linux-x86_64.tar.gz.sha256 --clobber
-            gh release edit "$tag" --notes-file dist/BUILD-INFO.txt --prerelease
-          else
-            gh release create "$tag" libmpv-linux-x86_64.tar.gz libmpv-linux-x86_64.tar.gz.sha256 \
-              --title "libmpv $MPV_REF (Linux, LGPL)" --notes-file dist/BUILD-INFO.txt --prerelease
-          fi
+          # Every build is its own immutable release: scripts/libmpv.lock.json pins
+          # a URL and SHA256, and the build is not bit-reproducible, so a published
+          # asset must never be replaced. `gh release create` fails if the tag exists.
+          tag="libmpv-linux-$MPV_REF-b$GITHUB_RUN_NUMBER"
+          gh release create "$tag" libmpv-linux-x86_64.tar.gz libmpv-linux-x86_64.tar.gz.sha256 \
+            --title "libmpv $MPV_REF build $GITHUB_RUN_NUMBER (Linux, LGPL)" \
+            --notes-file dist/BUILD-INFO.txt --prerelease
