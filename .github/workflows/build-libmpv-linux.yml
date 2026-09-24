@@ -1,9 +1,7 @@
 # Builds the LGPL libmpv that Grid bundles in its Linux packages.
 # See src-tauri/licenses/README.md. Manual: run it, check BUILD-INFO.txt, then
 # pin the new release's URL and SHA256 in scripts/libmpv.lock.json.
-#
-# workflow_dispatch only works once this file is on the default branch, so a
-# push to `build/libmpv-linux` also runs it (with the default refs below).
+# Run it with workflow_dispatch from the default branch.
 name: Build libmpv (Linux, LGPL)
 
 on:
@@ -14,8 +12,6 @@ on:
       libplacebo_ref: { description: libplacebo tag, required: true, default: v7.351.0 }
       dav1d_ref: { description: dav1d tag, required: true, default: 1.5.1 }
       libdisplay_info_ref: { description: libdisplay-info tag, required: true, default: 0.2.0 }
-  push:
-    branches: ['build/libmpv-linux']
 
 permissions:
   contents: write
