@@ -84,7 +84,7 @@ jobs:
 
   package-linux:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -249,6 +249,27 @@ jobs:
             fi
           done
           if [ "$licences_bad" -ne 0 ]; then exit 1; fi
+      - name: Play through the bundled libmpv (real-libmpv player tests)
+        # The job has no libmpv-dev: build.rs links src-tauri/lib/linux, and the
+        # test binary (no RUNPATH, unlike the app) loads the pruned runtime set
+        # through LD_LIBRARY_PATH, so a wrong link or a missing library fails.
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="$PWD/src-tauri/lib/linux-runtime"
+          cargo test --manifest-path src-tauri/Cargo.toml --lib --no-run 2>&1 | tee /tmp/player-build.txt
+          bin="$(sed -n 's/.*Executable unittests src\/lib\.rs (\(.*\))$/\1/p' /tmp/player-build.txt)"
+          [ -n "$bin" ] || { echo "::error::unit test binary not found"; exit 1; }
+          case "$bin" in /*) ;; *) bin="$PWD/$bin" ;; esac
+          resolved="$(ldd "$bin" | grep 'libmpv\.so\.2' || true)"
+          echo "ldd: $resolved"
+          case "$resolved" in
+            *"=> $LD_LIBRARY_PATH/libmpv.so.2 "*) ;;
+            *) echo "::error::the test binary does not load the bundled libmpv"; exit 1 ;;
+          esac
+          cargo test --manifest-path src-tauri/Cargo.toml --lib player:: 2>&1 | tee /tmp/player-tests.txt
+          passed="$(sed -n 's/^test result: ok\. \([0-9]*\) passed.*/\1/p' /tmp/player-tests.txt | head -1)"
+          echo "player tests passed: ${passed:-0}"
+          [ "${passed:-0}" -gt 0 ] || { echo "::error::no player tests ran"; exit 1; }
       - uses: actions/upload-artifact@v7
         with:
           name: linux-packages
