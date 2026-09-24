@@ -187,6 +187,15 @@ jobs:
           cp /usr/share/doc/glslang-dev/copyright dist/LICENSES/glslang-copyright.txt
           cp /usr/share/doc/spirv-tools/copyright dist/LICENSES/spirv-tools-copyright.txt
           cp /usr/share/doc/spirv-headers/copyright dist/LICENSES/spirv-headers-copyright.txt
+          # Debian's copyright files point at /usr/share/common-licenses for the
+          # full Apache-2.0 text, and describe glslang's Bison-generated parser as
+          # plain GPL-3: ship the Apache text and glslang's own LICENSE.txt, which
+          # carries the Bison exception that parser is actually under.
+          cp /usr/share/common-licenses/Apache-2.0 dist/LICENSES/Apache-2.0.txt
+          glslang_ver=$(dpkg-query -W -f='${Version}' glslang-dev | sed 's/-.*//')
+          curl -fsSL "https://raw.githubusercontent.com/KhronosGroup/glslang/$glslang_ver/LICENSE.txt" \
+            -o dist/LICENSES/glslang-LICENSE.txt
+          grep -q 'Bison Exception' dist/LICENSES/glslang-LICENSE.txt
           cp libplacebo/3rdparty/fast_float/LICENSE-MIT dist/LICENSES/fast_float-MIT.txt
           cp libplacebo/3rdparty/glad/LICENSE dist/LICENSES/glad-MIT-and-Khronos.txt
           cp libplacebo/3rdparty/Vulkan-Headers/LICENSE.md dist/LICENSES/Vulkan-Headers-LICENSE.md
