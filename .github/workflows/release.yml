@@ -80,6 +80,12 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Same reason as package.json's bundle:linux script (used by
+          # .github/workflows/ci.yml): linuxdeploy resolves the AppImage's
+          # dependencies with its own ldd before the bundle's directory layout
+          # exists, so the binary's $ORIGIN/../lib/grid RUNPATH resolves
+          # nowhere yet. An empty LD_LIBRARY_PATH on Windows is inert.
+          LD_LIBRARY_PATH: ${{ matrix.platform == 'ubuntu-latest' && format('{0}/src-tauri/lib/linux-runtime', github.workspace) || '' }}
         with:
           tagName: v__VERSION__
           releaseName: 'Grid v__VERSION__'

@@ -56,7 +56,7 @@ The first `tauri dev` compiles the Rust backend, which takes a few minutes. To p
 npm run tauri build
 ```
 
-Bundles are written to `src-tauri/target/release/bundle/`. On Linux, fetch the bundled LGPL libmpv first (`npm run setup:libmpv -- --bundle`) so the `.deb`, `.rpm` and AppImage ship it; see [Sidecars](#sidecars).
+Bundles are written to `src-tauri/target/release/bundle/`. On Linux, use `npm run setup:libmpv -- --bundle && npm run bundle:linux` instead — it fetches the bundled LGPL libmpv, then builds the `.deb`, `.rpm` and AppImage with the environment linuxdeploy needs to find and package it (see [Sidecars](#sidecars)); `npm run tauri build` alone does not set that up.
 
 ## Recommended IDE Setup
 
@@ -67,6 +67,7 @@ Bundles are written to `src-tauri/target/release/bundle/`. On Linux, fetch the b
 - `npm run dev` - Start the frontend dev server only. Browsing and search work in a plain browser, but playback, subtitles, and the video cache need the Tauri backend, so use `npm run tauri dev` for those.
 - `npm run tauri dev` - Start the Tauri window and dev server.
 - `npm run tauri build` - Build release bundles.
+- `npm run bundle:linux` - Linux only: build the `.deb`, `.rpm` and AppImage with the bundled libmpv (run `npm run setup:libmpv -- --bundle` first).
 - `npm run test:frontend` - Run the frontend test suite.
 - `npm run test:frontend:cov` - Run the frontend tests with a coverage report.
 - `npm run test:backend` - Run the Rust unit tests.
@@ -182,12 +183,19 @@ top. The commands are the only way in; there is no generic mpv passthrough.
   `npm run setup:libmpv` once to fetch the pinned LGPL `libmpv-2.dll`.
 
 Release packages ship an LGPL libmpv build alongside its licence texts:
-`npm run setup:libmpv -- --bundle` downloads the pinned Linux build into
-`src-tauri/lib/linux/` (`.so` files plus `LICENSES/`), and `tauri build`
-installs it to `/usr/lib/grid` (`.deb`/`.rpm`) or `usr/lib/grid` inside the
-AppImage per `src-tauri/tauri.linux.conf.json`; the binary's RUNPATH
+`npm run setup:libmpv -- --bundle` downloads the pinned Linux build into two
+directories — `src-tauri/lib/linux/` (the full archive, symlinks included,
+used only to link the Rust binary at build time) and
+`src-tauri/lib/linux-runtime/` (one real file per SONAME plus `LICENSES/`,
+pruned so the package doesn't ship the same bytes three times over). `npm run
+bundle:linux` installs `lib/linux-runtime` to `/usr/lib/grid` in the `.deb`
+and `.rpm` per `src-tauri/tauri.linux.conf.json`; the binary's RUNPATH
 (`$ORIGIN/../lib/grid`, `$ORIGIN/../lib`) finds it there ahead of any system
-libmpv. Requires glibc 2.35+ (see [Prerequisites](#prerequisites)). See
+libmpv. The AppImage ships only `LICENSES/` under `usr/lib/grid`: linuxdeploy
+already resolves and copies every library the binary needs (including the
+bundled libmpv) into its own `usr/lib` and rewrites RUNPATH to point there, so
+a second copy under `usr/lib/grid` would just be dead weight. Requires glibc
+2.35+ (see [Prerequisites](#prerequisites)). See
 [`src-tauri/licenses/README.md`](src-tauri/licenses/README.md) for the full
 licensing route and its source offer.
 

@@ -5,6 +5,7 @@
       "deb": {
         "files": { "/usr/lib/grid": "lib/linux-runtime" },
         "depends": [
+          "libc6 (>= 2.35)",
           "libass9",
           "libva2",
           "libva-drm2",
@@ -23,6 +24,7 @@
       "rpm": {
         "files": { "/usr/lib/grid": "lib/linux-runtime" },
         "depends": [
+          "glibc >= 2.35",
           "libass",
           "libva",
           "vulkan-loader",
@@ -36,7 +38,7 @@
         ]
       },
       "appimage": {
-        "files": { "usr/lib/grid": "lib/linux-runtime" }
+        "files": { "usr/lib/grid/LICENSES": "lib/linux-runtime/LICENSES" }
       }
     }
   }

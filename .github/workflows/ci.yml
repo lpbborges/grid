@@ -111,22 +111,23 @@ jobs:
       - name: Fetch the bundled libmpv (Linux)
         run: npm run setup:libmpv -- --bundle
       - name: Build the deb, rpm and AppImage bundles
-        # linuxdeploy (which the AppImage bundler shells out to) resolves the
-        # binary's dependencies with its own ldd before the bundle's directory
-        # layout exists, so target/release/grid's $ORIGIN/../lib/grid RUNPATH
-        # resolves nowhere yet. Point LD_LIBRARY_PATH at the bundled copy for
-        # this step only, so it finds and packages that copy instead of
-        # silently skipping libmpv or grabbing a system one.
-        run: |
-          export LD_LIBRARY_PATH="$PWD/src-tauri/lib/linux-runtime"
-          npx tauri build --bundles deb,rpm,appimage
+        # npm run bundle:linux (package.json) is the single Linux bundling entry
+        # point, also used by release.yml, so both build the same way. linuxdeploy
+        # (which the AppImage bundler shells out to) resolves the binary's
+        # dependencies with its own ldd before the bundle's directory layout
+        # exists, so target/release/grid's $ORIGIN/../lib/grid RUNPATH resolves
+        # nowhere yet; the script's LD_LIBRARY_PATH points at the bundled copy so
+        # it finds and packages that copy instead of silently skipping libmpv or
+        # grabbing a system one.
+        run: npm run bundle:linux
       - name: Check (a) the .deb ships the bundled libmpv
         run: |
           set -euo pipefail
           deb="$(ls src-tauri/target/release/bundle/deb/*.deb)"
           echo "Checking $deb"
+          dpkg -c "$deb" | tee /tmp/deb-raw.txt
           # dpkg -c paths are not consistently prefixed with "./".
-          dpkg -c "$deb" | awk '{print $NF}' | tee /tmp/deb-contents.txt
+          awk '{print $NF}' /tmp/deb-raw.txt | tee /tmp/deb-contents.txt
           grep -Eq '^(\./)?usr/lib/grid/libmpv\.so\.2$' /tmp/deb-contents.txt
       - name: Check (b) the .rpm ships the bundled libmpv
         run: |
@@ -170,17 +171,22 @@ jobs:
           # full-version files (libmpv.so.2.5.0), the setup stamp file, and
           # (after R30, there should be none) symlink entries.
           #
-          # /tmp/deb-contents.txt (written by check a) already holds dpkg -c's
-          # last column, one path per line, with an optional "./" prefix that
-          # varies by tauri-bundler version. Strip it unconditionally with a
-          # plain `sed 's#^\./##'` — `sed -n '...p'` would silently drop every
-          # line when none happen to have the prefix, emptying the whole list
-          # without ever erroring.
-          if grep -q -- '->' /tmp/deb-contents.txt; then
+          # /tmp/deb-raw.txt (written by check a) is dpkg -c's untouched output;
+          # a symlink line starts with 'l' (its permission column, e.g.
+          # "lrwxrwxrwx ..."). Checking the raw line, not the awk '{print $NF}'
+          # path list in /tmp/deb-contents.txt, is required — the path list has
+          # already thrown away everything but the last column, so it can never
+          # contain a "-> target" symlink marker to grep for.
+          if awk 'substr($0, 1, 1) == "l"' /tmp/deb-raw.txt | grep -q .; then
             echo "::error::.deb listing contains a symlink; every shipped library must be a real SONAME file"
-            grep -- '->' /tmp/deb-contents.txt
+            awk 'substr($0, 1, 1) == "l"' /tmp/deb-raw.txt
             exit 1
           fi
+          # /tmp/deb-contents.txt holds dpkg -c's last column, one path per
+          # line, with an optional "./" prefix that varies by tauri-bundler
+          # version. Strip it unconditionally with a plain `sed 's#^\./##'` —
+          # `sed -n '...p'` would silently drop every line when none happen to
+          # have the prefix, emptying the whole list without ever erroring.
           deb_entries="$(sed 's#^\./##' /tmp/deb-contents.txt | { grep '^usr/lib/grid/' || true; } | { grep -v '/$' || true; } | sed 's#^usr/lib/grid/##')"
           echo "deb entries under usr/lib/grid:"; echo "$deb_entries"
           if [ -z "$deb_entries" ]; then echo "::error::No .deb entries found under usr/lib/grid; the check would pass vacuously"; exit 1; fi
@@ -194,6 +200,33 @@ jobs:
           if [ -z "$rpm_entries" ]; then echo "::error::No .rpm entries found under usr/lib/grid; the check would pass vacuously"; exit 1; fi
           bad_rpm="$(echo "$rpm_entries" | { grep -vE '^(LICENSES(/.+)?|lib[A-Za-z0-9+_.-]+\.so\.[0-9]+)$' || true; })"
           if [ -n "$bad_rpm" ]; then echo "::error::Unexpected .rpm entries under usr/lib/grid:"; echo "$bad_rpm"; exit 1; fi
+
+          # The AppImage does NOT ship a second usr/lib/grid copy of the
+          # libraries (see tauri.linux.conf.json): linuxdeploy already copied
+          # each one linuxdeploy's own ldd detected into usr/lib and rewrote
+          # RUNPATH to point there (check (c) proved libmpv.so.2 resolves from
+          # squashfs-root/usr/bin/../lib/). Every bundled SONAME must appear
+          # exactly once anywhere under squashfs-root, and usr/lib/grid must
+          # carry no .so files at all.
+          sonames="$(ls src-tauri/lib/linux-runtime | grep -v '^LICENSES$')"
+          echo "SONAMEs to check inside the AppImage:"; echo "$sonames"
+          appimage_bad=0
+          while IFS= read -r soname; do
+            count="$(find squashfs-root -type f -name "$soname" | wc -l)"
+            echo "$soname: $count occurrence(s)"
+            if [ "$count" -ne 1 ]; then
+              echo "::error::$soname appears $count times under squashfs-root (expected exactly 1)"
+              find squashfs-root -type f -name "$soname"
+              appimage_bad=1
+            fi
+          done <<< "$sonames"
+          grid_so="$(find squashfs-root -path '*/usr/lib/grid/*.so*' || true)"
+          if [ -n "$grid_so" ]; then
+            echo "::error::usr/lib/grid inside the AppImage still ships .so files (should be LICENSES only):"
+            echo "$grid_so"
+            appimage_bad=1
+          fi
+          if [ "$appimage_bad" -ne 0 ]; then exit 1; fi
       - uses: actions/upload-artifact@v7
         with:
           name: linux-packages
