@@ -17,7 +17,6 @@
           "libegl1",
           "libx11-6",
           "libxcb1",
-          "libxcb-shm0",
           "zlib1g"
         ]
       },

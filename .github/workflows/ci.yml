@@ -231,7 +231,8 @@ jobs:
           # The LGPL licence texts must ship in every package (see
           # src-tauri/licenses/README.md).
           licences_bad=0
-          for f in mpv-LGPL-2.1.txt ffmpeg-LGPL-2.1.txt libplacebo-LGPL-2.1.txt dav1d-BSD-2.txt; do
+          for f in mpv-LGPL-2.1.txt ffmpeg-LGPL-2.1.txt libplacebo-LGPL-2.1.txt dav1d-BSD-2.txt \
+            libdisplay-info-MIT.txt hwdata-copyright.txt; do
             if test -f "squashfs-root/usr/lib/grid/LICENSES/$f"; then
               echo "AppImage: usr/lib/grid/LICENSES/$f present"
             else

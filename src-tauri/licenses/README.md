@@ -49,33 +49,47 @@ What GPL buys in an mpv build is nothing Grid uses:
   draws through libmpv's render API on Linux and `gpu-api=d3d11` on Windows.
 
 Nothing in the decode path is GPL. H.264, HEVC, VP9, AV1, AC3, E-AC3, DTS and
-AAC decoding is FFmpeg's own LGPL code, `d3d11va` hardware decoding is core, and
-libass (subtitle rendering) is ISC.
+AAC decoding is FFmpeg's own LGPL code, `d3d11va` (Windows) and VA-API (Linux)
+hardware decoding are core, and libass (subtitle rendering) is ISC.
 
 ### Linux: built by Grid
 
 `.github/workflows/build-libmpv-linux.yml` builds mpv (`-Dgpl=false`), FFmpeg
-(no `--enable-gpl`, no `--enable-nonfree`), libplacebo and dav1d from their
-upstream tags as shared libraries, asserts the LGPL configuration from the
-configured builds themselves, and publishes the result as a never-overwritten
-prerelease:
+(no `--enable-gpl`, no `--enable-nonfree`), libplacebo, dav1d and
+libdisplay-info from their upstream tags as shared libraries on Ubuntu 24.04
+(glibc 2.39, the floor the Grid binary itself needs), asserts the LGPL
+configuration from the configured builds themselves, and publishes the result
+as a never-overwritten prerelease:
 
-- **Release:** [`libmpv-linux-v0.41.0-b4`](https://github.com/lpbborges/grid/releases/tag/libmpv-linux-v0.41.0-b4),
+- **Release:** [`libmpv-linux-v0.41.0-b5`](https://github.com/lpbborges/grid/releases/tag/libmpv-linux-v0.41.0-b5),
   asset `libmpv-linux-x86_64.tar.gz`
-- **Built by:** [workflow run 4](https://github.com/lpbborges/grid/actions/runs/35948741224),
-  from commit `b3198752697a351a61cfabb166fe37ec23b7b683`
-- **SHA256:** `2972a7c1ee0ee30d5c932a67f0e3656e303eff16ebbb1d662d3e01a4d29e1417`
-- **Licence:** LGPL-2.1-or-later (dav1d: BSD-2-Clause)
+- **Built by:** [workflow run 5](https://github.com/lpbborges/grid/actions/runs/36009061457),
+  from commit `70b23a5e6fe1b15b8489f52b582b7f2e6f6fef22`
+- **SHA256:** `b06668787b56b6e4c385cea8ed17c77c48fef6383fdaa215c16d678b32a5a8c2`
+- **Licence:** LGPL-2.1-or-later (dav1d: BSD-2-Clause; libdisplay-info: MIT,
+  with a PNP ID table generated from hwdata's `pnp.ids`, used under its
+  XFree86 licence option)
+
+**Hardware decoding:** VA-API (Intel and AMD GPUs, or any GPU with a VA-API
+driver). mpv opens a DRM render node (`vaapi-drm`) and hands decoded frames to Grid's
+OpenGL context as dma-bufs (`dmabuf-interop-gl`, through EGL). The build fails
+unless mpv's enabled features include `gl`, `egl`, `drm`, `vaapi`, `vaapi-drm`
+and `dmabuf-interop-gl`, and never includes `gpl` or `x11`; `BUILD-INFO.txt`
+records them. mpv's X11 support (and with it `vaapi-x11` and VDPAU) is GPL-only
+and stays off; Wayland is off because Grid does not pass mpv a Wayland display.
+When hardware decoding is unavailable, `hwdec=auto-safe` falls back to software
+decoding.
 
 The archive's `BUILD-INFO.txt` (also the release notes) records the exact
 upstream revisions and the flags each one was built with:
 
-| Component  | Tag        | Commit                                     | Built with                                                                                                                                                    |
-| ---------- | ---------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| mpv        | `v0.41.0`  | `41f6a645068483470267271e1d09966ca3b9f413` | `meson setup -Dgpl=false -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled -Djpeg=disabled -Dlcms2=disabled`                                 |
-| FFmpeg     | `n7.1`     | `b08d7969c550a804a59511c7b83f2dd8cc0499b8` | `configure --enable-shared --disable-static --disable-programs --disable-doc --disable-debug --enable-libdav1d --enable-vaapi --disable-bzlib --disable-lzma` |
-| libplacebo | `v7.351.0` | `3188549fba13bbdf3a5a98de2a38c2e71f04e21e` | `meson setup -Dvulkan=enabled -Dopengl=enabled -Dshaderc=disabled -Dglslang=enabled -Dlcms=disabled -Ddemos=false -Dtests=false`                              |
-| dav1d      | `1.5.1`    | `42b2b24fb8819f1ed3643aa9cf2a62f03868e3aa` | `meson setup --buildtype=release -Denable_tools=false -Denable_tests=false -Denable_examples=false`                                                           |
+| Component       | Tag        | Commit                                     | Built with                                                                                                                                                                                                                                                        |
+| --------------- | ---------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| mpv             | `v0.41.0`  | `41f6a645068483470267271e1d09966ca3b9f413` | `meson setup -Dgpl=false -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled -Djpeg=disabled -Dlcms2=disabled -Dvaapi=enabled -Dvaapi-drm=enabled -Ddrm=enabled -Degl=enabled -Dx11=disabled -Dwayland=disabled -Dgbm=disabled -Degl-drm=disabled` |
+| FFmpeg          | `n7.1`     | `b08d7969c550a804a59511c7b83f2dd8cc0499b8` | `configure --enable-shared --disable-static --disable-programs --disable-doc --disable-debug --enable-libdav1d --enable-vaapi --disable-bzlib --disable-lzma`                                                                                                     |
+| libplacebo      | `v7.351.0` | `3188549fba13bbdf3a5a98de2a38c2e71f04e21e` | `meson setup -Dvulkan=enabled -Dopengl=enabled -Dshaderc=disabled -Dglslang=enabled -Dlcms=disabled -Ddemos=false -Dtests=false`                                                                                                                                  |
+| dav1d           | `1.5.1`    | `42b2b24fb8819f1ed3643aa9cf2a62f03868e3aa` | `meson setup --buildtype=release -Denable_tools=false -Denable_tests=false -Denable_examples=false`                                                                                                                                                               |
+| libdisplay-info | `0.2.0`    | `66b802d05b374cd8f388dc6ad1e7ae4f08cb3300` | `meson setup --buildtype=release` (PNP IDs from Ubuntu's `hwdata` 0.379-1)                                                                                                                                                                                        |
 
 ### Windows: the mirrored `mpv-dev-lgpl` DLL
 
@@ -118,11 +132,10 @@ For each package it is:
 
 - **Linux:** the upstream sources at the commits in the table above, built by
   `.github/workflows/build-libmpv-linux.yml` at commit
-  `b3198752697a351a61cfabb166fe37ec23b7b683` with the listed flags. The
-  release [`libmpv-linux-v0.41.0-b4`](https://github.com/lpbborges/grid/releases/tag/libmpv-linux-v0.41.0-b4)
+  `70b23a5e6fe1b15b8489f52b582b7f2e6f6fef22` with the listed flags. The
+  release [`libmpv-linux-v0.41.0-b5`](https://github.com/lpbborges/grid/releases/tag/libmpv-linux-v0.41.0-b5)
   holds the exact binaries and their `BUILD-INFO.txt`. The `.deb` and `.rpm`
-  ship those binaries unchanged; the AppImage's copy is identical except that
-  linuxdeploy rewrites its rpath (to `$ORIGIN`).
+  ship those binaries unchanged, and the AppImage's copies are identical too.
 - **Windows:** the upstream build recipe at tag `2026-09-23-bdefd6cb42` of
   [`zhongfly/mpv-winbuild`](https://github.com/zhongfly/mpv-winbuild) (on top of
   `shinchiro/mpv-winbuild-cmake`), mpv commit
@@ -144,7 +157,7 @@ own build (for example, one compiled from the sources above) — that is the
 LGPL's relinking requirement:
 
 - **Linux `.deb` / `.rpm`:** `/usr/lib/grid/libmpv.so.2` (and the FFmpeg,
-  libplacebo and dav1d libraries beside it). The binary's RUNPATH is
+  libplacebo, dav1d and libdisplay-info libraries beside it). The binary's RUNPATH is
   `$ORIGIN/../lib/grid`, then `$ORIGIN/../lib`.
 - **Linux AppImage:** `usr/lib/libmpv.so.2` inside the image; extract it with
   `--appimage-extract`, replace the file and run `squashfs-root/AppRun`.
@@ -157,10 +170,11 @@ A replacement must provide the same libmpv client API under the same file name
 
 - **Linux (`.deb`, `.rpm`, AppImage):** `usr/lib/grid/LICENSES/`, copied from
   the Linux artifact: `mpv-LGPL-2.1.txt`, `ffmpeg-LGPL-2.1.txt`,
-  `libplacebo-LGPL-2.1.txt` and `dav1d-BSD-2.txt`.
+  `libplacebo-LGPL-2.1.txt`, `dav1d-BSD-2.txt`, `libdisplay-info-MIT.txt` and
+  `hwdata-copyright.txt`.
 - **Windows (MSI and NSIS):** `LICENSES\` in the install directory, beside
   `grid.exe` and `libmpv-2.dll`. The Windows archive ships no licence text, so
-  these are the same four files, copied from the Linux artifact's `LICENSES/`
+  these are the same first four files (the Windows DLL has no libdisplay-info), copied from the Linux artifact's `LICENSES/`
   into [`libmpv/`](libmpv/) and bundled by `src-tauri/tauri.windows.conf.json`.
 
 Nothing here is legal advice; the distribution obligations above need review by
