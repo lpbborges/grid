@@ -5,8 +5,8 @@
     "licence": "LGPL-2.1-or-later"
   },
   "linux-x86_64": {
-    "url": "https://github.com/lpbborges/grid/releases/download/libmpv-linux-v0.41.0/libmpv-linux-x86_64.tar.gz",
-    "sha256": "4b12251ead2a8931f5cb90c1a69571c5c793c70fd590a0150b65df70e393da5c",
+    "url": "https://github.com/lpbborges/grid/releases/download/libmpv-linux-v0.41.0-b4/libmpv-linux-x86_64.tar.gz",
+    "sha256": "2972a7c1ee0ee30d5c932a67f0e3656e303eff16ebbb1d662d3e01a4d29e1417",
     "licence": "LGPL-2.1-or-later"
   }
 }
