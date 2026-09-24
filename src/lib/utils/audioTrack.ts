@@ -56,9 +56,14 @@ export function resolvePreferredAudioTrack(
   }
 
   if (preference === 'pt') {
-    return tracks.findIndex(
-      (t) => t.label.toLowerCase().includes('portug') || t.label.toLowerCase().includes('pt')
-    );
+    // Brazilian and European Portuguese are two languages: Brazilian first,
+    // European only when there is no Brazilian dub - the same order
+    // findPreferredSubtitleIndex uses for the 'pt' subtitle preference.
+    const isPortuguese = (t: ParsedAudioTrack) =>
+      t.label.toLowerCase().includes('portug') || t.label.toLowerCase().includes('pt');
+    const isBrazilian = (t: ParsedAudioTrack) => /\bbr\b|bras|brazil|pt-?br/i.test(t.label);
+    const brazilian = tracks.findIndex((t) => isPortuguese(t) && isBrazilian(t));
+    return brazilian !== -1 ? brazilian : tracks.findIndex(isPortuguese);
   }
   if (preference === 'en') {
     return tracks.findIndex(

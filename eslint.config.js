@@ -55,7 +55,7 @@ export default [
     }
   },
   {
-    files: ['e2e/**/*.ts', 'scripts/**/*.{js,ts}'],
+    files: ['e2e/**/*.ts', 'scripts/**/*.{js,mjs,ts}'],
     languageOptions: {
       globals: {
         ...globals.node

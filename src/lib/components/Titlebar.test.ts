@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { tick } from 'svelte';
 import Titlebar from './Titlebar.svelte';
 import { playerState } from '$lib/stores.svelte';
 
@@ -41,6 +42,25 @@ describe('Titlebar Component', () => {
     const titlebarEl = container.firstElementChild;
     expect(titlebarEl?.className).toContain('opacity-0');
     expect(titlebarEl?.className).toContain('pointer-events-none');
+  });
+
+  it('stays visible and clickable while the pointer is over it during playback', async () => {
+    // The player hides its controls 3 s after the last move; the titlebar
+    // follows them, and hiding it under the pointer made its buttons vanish
+    // the moment the user reached for them.
+    playerState.isPlaying = true;
+    playerState.showControls = true;
+    const { container } = render(Titlebar);
+    const titlebarEl = container.firstElementChild as HTMLElement;
+
+    await fireEvent.mouseEnter(titlebarEl);
+    playerState.showControls = false;
+    await tick();
+    expect(titlebarEl.className).toContain('opacity-100');
+    expect(titlebarEl.className).not.toContain('pointer-events-none');
+
+    await fireEvent.mouseLeave(titlebarEl);
+    expect(titlebarEl.className).toContain('opacity-0');
   });
 
   it('calls minimize when minimize button is clicked', async () => {

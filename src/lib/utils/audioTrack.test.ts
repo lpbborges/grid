@@ -51,6 +51,23 @@ describe('resolvePreferredAudioTrack', () => {
     expect(resolvePreferredAudioTrack(tracks, 'pt')).toBe(1);
   });
 
+  it("preference === 'pt' prefers Brazilian Portuguese over European Portuguese", () => {
+    // Two distinct languages: the subtitle preference already ranks Brazilian
+    // first, and the dub should follow the same rule.
+    expect(resolvePreferredAudioTrack([track('Português'), track('Português BR')], 'pt')).toBe(1);
+    expect(
+      resolvePreferredAudioTrack(
+        [track('Portuguese (Portugal)'), track('Portuguese (Brazil)')],
+        'pt'
+      )
+    ).toBe(1);
+    expect(resolvePreferredAudioTrack([track('Inglês'), track('pt-BR')], 'pt')).toBe(1);
+  });
+
+  it("preference === 'pt' falls back to European Portuguese when there is no Brazilian track", () => {
+    expect(resolvePreferredAudioTrack([track('Inglês'), track('Português')], 'pt')).toBe(1);
+  });
+
   it("preference === 'en' matches an English track by label substring", () => {
     const tracks = [track('Português'), track('Inglês')];
     expect(resolvePreferredAudioTrack(tracks, 'en')).toBe(1);

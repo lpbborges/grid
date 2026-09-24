@@ -10,7 +10,7 @@
    *
    * Presentational on purpose: it holds no `<video>` element and sends no IPC.
    * It reports what the user pressed and each host maps that to its own
-   * backend - the DOM element on Linux, mpv over IPC on Windows.
+   * backend - the DOM element on macOS, in-process libmpv on Linux and Windows.
    *
    * The track callbacks are index-based because the existing selection
    * composables are: `useAudioTrackSelection.selectAudioTrack(el, index)` and
