@@ -3,7 +3,7 @@
   "bundle": {
     "linux": {
       "deb": {
-        "files": { "/usr/lib/grid": "lib/linux" },
+        "files": { "/usr/lib/grid": "lib/linux-runtime" },
         "depends": [
           "libass9",
           "libva2",
@@ -21,7 +21,7 @@
         ]
       },
       "rpm": {
-        "files": { "/usr/lib/grid": "lib/linux" },
+        "files": { "/usr/lib/grid": "lib/linux-runtime" },
         "depends": [
           "libass",
           "libva",
@@ -36,7 +36,7 @@
         ]
       },
       "appimage": {
-        "files": { "usr/lib/grid": "lib/linux" }
+        "files": { "usr/lib/grid": "lib/linux-runtime" }
       }
     }
   }

@@ -10,6 +10,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   writeFileSync,
   copyFileSync
@@ -75,6 +76,39 @@ function defFromExports(dll, defPath) {
 /** Records which lock entry the extracted files came from. */
 const STAMP = '.libmpv-sha256';
 
+/** The ELF DT_SONAME of a shared library, e.g. "libmpv.so.2". */
+function sonameOf(file) {
+  const out = execFileSync('readelf', ['-d', file], { encoding: 'utf8' });
+  const match = /Library soname: \[(.+?)\]/.exec(out);
+  if (!match) throw new Error(`${file} has no DT_SONAME`);
+  return match[1];
+}
+
+/**
+ * Package Linux release builds must ship exactly one file per shared library
+ * SONAME, never the dev-symlink (`libmpv.so`) or the full-version file
+ * (`libmpv.so.2.5.0`) alongside it — those triple the installed size for no
+ * runtime benefit. `linkDir` (used to link the Rust binary, see build.rs)
+ * keeps the full set; this rebuilds `runtimeDir` from scratch as the pruned
+ * set the packages actually install.
+ */
+function buildRuntimeDir(linkDir, runtimeDir) {
+  rmSync(runtimeDir, { recursive: true, force: true });
+  mkdirSync(runtimeDir, { recursive: true });
+  const seen = new Set();
+  for (const entry of readdirSync(linkDir, { withFileTypes: true })) {
+    if (entry.name === STAMP || entry.name === 'LICENSES') continue;
+    const real = realpathSync(path.join(linkDir, entry.name));
+    const soname = sonameOf(real);
+    if (seen.has(soname)) continue;
+    seen.add(soname);
+    copyFileSync(real, path.join(runtimeDir, soname));
+  }
+  execFileSync('cp', ['-a', path.join(linkDir, 'LICENSES'), path.join(runtimeDir, 'LICENSES')], {
+    stdio: 'inherit'
+  });
+}
+
 async function setupWindows() {
   const entry = lock['windows-x86_64'];
   const out = path.join(root, 'src-tauri', 'lib', 'windows');
@@ -121,11 +155,20 @@ async function setupWindows() {
 
 async function setupLinuxBundle() {
   const entry = lock['linux-x86_64'];
+  // lib/linux: the full archive contents (symlinks + full-version files),
+  // used only to link the Rust binary at build time (build.rs).
+  // lib/linux-runtime: one real file per SONAME, which is what actually gets
+  // installed by the .deb/.rpm/AppImage — see buildRuntimeDir.
   const out = path.join(root, 'src-tauri', 'lib', 'linux');
+  const runtimeOut = path.join(root, 'src-tauri', 'lib', 'linux-runtime');
   const stamp = path.join(out, STAMP);
   const current = existsSync(stamp) ? readFileSync(stamp, 'utf8').trim() : '';
-  if (current === entry.sha256 && existsSync(path.join(out, 'libmpv.so.2'))) {
-    console.log('bundled libmpv already set up in', out);
+  if (
+    current === entry.sha256 &&
+    existsSync(path.join(out, 'libmpv.so.2')) &&
+    existsSync(path.join(runtimeOut, 'libmpv.so.2'))
+  ) {
+    console.log('bundled libmpv already set up in', out, 'and', runtimeOut);
     return;
   }
   if (current && current !== entry.sha256) {
@@ -142,13 +185,14 @@ async function setupLinuxBundle() {
     execFileSync('cp', ['-a', path.join(work, 'LICENSES'), path.join(out, 'LICENSES')], {
       stdio: 'inherit'
     });
+    buildRuntimeDir(out, runtimeOut);
     // Written last: a run that fails halfway leaves no stamp, so the next
     // run starts over instead of trusting a partial set of files.
     writeFileSync(stamp, `${entry.sha256}\n`);
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
-  console.log('bundled libmpv set up in', out);
+  console.log('bundled libmpv set up in', out, 'and', runtimeOut);
 }
 
 if (process.platform === 'win32') {

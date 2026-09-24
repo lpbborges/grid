@@ -118,22 +118,23 @@ jobs:
         # this step only, so it finds and packages that copy instead of
         # silently skipping libmpv or grabbing a system one.
         run: |
-          export LD_LIBRARY_PATH="$PWD/src-tauri/lib/linux"
+          export LD_LIBRARY_PATH="$PWD/src-tauri/lib/linux-runtime"
           npx tauri build --bundles deb,rpm,appimage
       - name: Check (a) the .deb ships the bundled libmpv
         run: |
           set -euo pipefail
           deb="$(ls src-tauri/target/release/bundle/deb/*.deb)"
           echo "Checking $deb"
-          dpkg -c "$deb" | tee /tmp/deb-contents.txt
-          grep -q '\./usr/lib/grid/libmpv\.so\.2$' /tmp/deb-contents.txt
+          # dpkg -c paths are not consistently prefixed with "./".
+          dpkg -c "$deb" | awk '{print $NF}' | tee /tmp/deb-contents.txt
+          grep -Eq '^(\./)?usr/lib/grid/libmpv\.so\.2$' /tmp/deb-contents.txt
       - name: Check (b) the .rpm ships the bundled libmpv
         run: |
           set -euo pipefail
           rpm_file="$(ls src-tauri/target/release/bundle/rpm/*.rpm)"
           echo "Checking $rpm_file"
           rpm -qlp "$rpm_file" | tee /tmp/rpm-contents.txt
-          grep -qx '/usr/lib/grid/libmpv.so.2' /tmp/rpm-contents.txt
+          grep -Eq '^/?(\./)?usr/lib/grid/libmpv\.so\.2$' /tmp/rpm-contents.txt
       - name: Check (c) the AppImage's binary resolves libmpv to its own bundled copy
         run: |
           set -euo pipefail
@@ -161,6 +162,21 @@ jobs:
           echo "$out"
           echo "$out" | grep -q '\$ORIGIN/\.\./lib/grid' || { echo "::error::RUNPATH is missing \$ORIGIN/../lib/grid"; exit 1; }
           echo "$out" | grep -Eq '\$ORIGIN/\.\./lib(:|\])' || { echo "::error::RUNPATH is missing \$ORIGIN/../lib"; exit 1; }
+      - name: Check (e) only SONAME-named library files and LICENSES ship under usr/lib/grid
+        run: |
+          set -euo pipefail
+          # Allowed: one real file per SONAME (e.g. libmpv.so.2) and anything
+          # under LICENSES/. Rejected: unversioned dev symlinks (libmpv.so),
+          # full-version files (libmpv.so.2.5.0) and the setup stamp file.
+          deb_entries="$(sed -n 's#^\./##p' /tmp/deb-contents.txt | grep '^usr/lib/grid/' | grep -v '/$' | sed 's#^usr/lib/grid/##')"
+          echo "deb entries under usr/lib/grid:"; echo "$deb_entries"
+          bad_deb="$(echo "$deb_entries" | grep -vE '^(LICENSES/.+|lib[A-Za-z0-9+_.-]+\.so\.[0-9]+)$' || true)"
+          if [ -n "$bad_deb" ]; then echo "::error::Unexpected .deb entries under usr/lib/grid:"; echo "$bad_deb"; exit 1; fi
+
+          rpm_entries="$(sed -n 's#^/usr/lib/grid/##p' /tmp/rpm-contents.txt | grep -v '^$')"
+          echo "rpm entries under usr/lib/grid:"; echo "$rpm_entries"
+          bad_rpm="$(echo "$rpm_entries" | grep -vE '^(LICENSES/.+|lib[A-Za-z0-9+_.-]+\.so\.[0-9]+)$' || true)"
+          if [ -n "$bad_rpm" ]; then echo "::error::Unexpected .rpm entries under usr/lib/grid:"; echo "$bad_rpm"; exit 1; fi
       - uses: actions/upload-artifact@v7
         with:
           name: linux-packages
