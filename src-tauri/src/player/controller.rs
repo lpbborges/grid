@@ -66,6 +66,14 @@ pub fn options_for(output: VideoOutput) -> Vec<(&'static str, String)> {
         ("input-vo-keyboard", "no"),
         ("input-cursor", "no"),
         ("osc", "no"),
+        ("load-stats-overlay", "no"),
+        ("load-console", "no"),
+        ("load-osd-console", "no"),
+        ("load-auto-profiles", "no"),
+        ("load-select", "no"),
+        ("load-commands", "no"),
+        ("load-positioning", "no"),
+        ("load-context-menu", "no"),
         ("terminal", "no"),
         ("sub-auto", "no"),
         ("keep-open", "no"),
@@ -98,19 +106,33 @@ pub fn options_for(output: VideoOutput) -> Vec<(&'static str, String)> {
     options
 }
 
-/// mpv's own wording for an error, e.g. "loading failed".
-/// mpv only has `osc` and `ytdl` when it is built with Lua, which the Linux
-/// LGPL build Grid ships is not (see src-tauri/licenses/README.md). Without Lua
-/// neither script can load, so turning them off is already the case there.
-const LUA_ONLY_OPTIONS: [&str; 2] = ["osc", "ytdl"];
+/// Switches for mpv's built-in Lua scripts. mpv only has them when it is built
+/// with Lua, which the Linux LGPL build Grid ships is not (see
+/// src-tauri/licenses/README.md), and newer releases keep adding scripts
+/// (`load-console` replaced `load-osd-console`). A libmpv without the switch
+/// has no such script to turn off. `load-scripts=no` covers only scripts from
+/// the user's mpv directory, not these.
+const BUILTIN_SCRIPT_OPTIONS: [&str; 10] = [
+    "osc",
+    "ytdl",
+    "load-stats-overlay",
+    "load-console",
+    "load-osd-console",
+    "load-auto-profiles",
+    "load-select",
+    "load-commands",
+    "load-positioning",
+    "load-context-menu",
+];
 
 /// Whether a failure to set `key` just means this libmpv lacks the option
-/// because the feature it switches off is not compiled in.
+/// because the script it switches off is not there.
 fn may_be_missing(key: &str, error: &libmpv2::Error) -> bool {
-    LUA_ONLY_OPTIONS.contains(&key)
+    BUILTIN_SCRIPT_OPTIONS.contains(&key)
         && matches!(error, libmpv2::Error::Raw(code) if *code == libmpv2::mpv_error::OptionNotFound)
 }
 
+/// mpv's own wording for an error, e.g. "loading failed".
 pub fn describe_error(error: &libmpv2::Error) -> String {
     match error {
         libmpv2::Error::Raw(code) => {
@@ -777,7 +799,7 @@ mod tests {
     use crate::player::model::PlayerEvent;
     use std::time::{Duration, Instant};
 
-    const GLOBAL_OPTIONS: [(&str, &str); 14] = [
+    const GLOBAL_OPTIONS: [(&str, &str); 22] = [
         ("config", "no"),
         ("load-scripts", "no"),
         ("ytdl", "no"),
@@ -785,6 +807,14 @@ mod tests {
         ("input-vo-keyboard", "no"),
         ("input-cursor", "no"),
         ("osc", "no"),
+        ("load-stats-overlay", "no"),
+        ("load-console", "no"),
+        ("load-osd-console", "no"),
+        ("load-auto-profiles", "no"),
+        ("load-select", "no"),
+        ("load-commands", "no"),
+        ("load-positioning", "no"),
+        ("load-context-menu", "no"),
         ("terminal", "no"),
         ("sub-auto", "no"),
         ("keep-open", "no"),
@@ -816,10 +846,11 @@ mod tests {
     }
 
     #[test]
-    fn only_lua_script_switches_may_be_missing() {
+    fn only_builtin_script_switches_may_be_missing() {
         let not_found = libmpv2::Error::Raw(libmpv2::mpv_error::OptionNotFound);
         assert!(may_be_missing("osc", &not_found));
         assert!(may_be_missing("ytdl", &not_found));
+        assert!(may_be_missing("load-context-menu", &not_found));
         assert!(!may_be_missing("config", &not_found));
         assert!(!may_be_missing("load-scripts", &not_found));
         let invalid = libmpv2::Error::Raw(libmpv2::mpv_error::OptionFormat);
@@ -1044,6 +1075,30 @@ mod tests {
         })
         .await
         .expect("expected event within 10 s")
+    }
+
+    #[test]
+    fn runs_none_of_mpvs_builtin_scripts() {
+        let player = Controller::new(VideoOutput::Null).unwrap();
+        for script in [
+            "osc",
+            "ytdl_hook",
+            "stats",
+            "console",
+            "auto_profiles",
+            "select",
+            "commands",
+            "positioning",
+            "context_menu",
+        ] {
+            assert!(
+                player
+                    .mpv
+                    .command("script-message-to", &[script, "grid-probe"])
+                    .is_err(),
+                "mpv's built-in {script} script is running"
+            );
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
