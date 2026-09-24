@@ -167,15 +167,32 @@ jobs:
           set -euo pipefail
           # Allowed: one real file per SONAME (e.g. libmpv.so.2) and anything
           # under LICENSES/. Rejected: unversioned dev symlinks (libmpv.so),
-          # full-version files (libmpv.so.2.5.0) and the setup stamp file.
-          deb_entries="$(sed -n 's#^\./##p' /tmp/deb-contents.txt | grep '^usr/lib/grid/' | grep -v '/$' | sed 's#^usr/lib/grid/##')"
+          # full-version files (libmpv.so.2.5.0), the setup stamp file, and
+          # (after R30, there should be none) symlink entries.
+          #
+          # /tmp/deb-contents.txt (written by check a) already holds dpkg -c's
+          # last column, one path per line, with an optional "./" prefix that
+          # varies by tauri-bundler version. Strip it unconditionally with a
+          # plain `sed 's#^\./##'` — `sed -n '...p'` would silently drop every
+          # line when none happen to have the prefix, emptying the whole list
+          # without ever erroring.
+          if grep -q -- '->' /tmp/deb-contents.txt; then
+            echo "::error::.deb listing contains a symlink; every shipped library must be a real SONAME file"
+            grep -- '->' /tmp/deb-contents.txt
+            exit 1
+          fi
+          deb_entries="$(sed 's#^\./##' /tmp/deb-contents.txt | { grep '^usr/lib/grid/' || true; } | { grep -v '/$' || true; } | sed 's#^usr/lib/grid/##')"
           echo "deb entries under usr/lib/grid:"; echo "$deb_entries"
-          bad_deb="$(echo "$deb_entries" | grep -vE '^(LICENSES/.+|lib[A-Za-z0-9+_.-]+\.so\.[0-9]+)$' || true)"
+          if [ -z "$deb_entries" ]; then echo "::error::No .deb entries found under usr/lib/grid; the check would pass vacuously"; exit 1; fi
+          bad_deb="$(echo "$deb_entries" | { grep -vE '^(LICENSES(/.+)?|lib[A-Za-z0-9+_.-]+\.so\.[0-9]+)$' || true; })"
           if [ -n "$bad_deb" ]; then echo "::error::Unexpected .deb entries under usr/lib/grid:"; echo "$bad_deb"; exit 1; fi
 
-          rpm_entries="$(sed -n 's#^/usr/lib/grid/##p' /tmp/rpm-contents.txt | grep -v '^$')"
+          # /tmp/rpm-contents.txt (written by check b) holds rpm -qlp's plain
+          # absolute paths, one per line, no symlink notation.
+          rpm_entries="$(sed -n 's#^/usr/lib/grid/##p' /tmp/rpm-contents.txt | { grep -v '^$' || true; })"
           echo "rpm entries under usr/lib/grid:"; echo "$rpm_entries"
-          bad_rpm="$(echo "$rpm_entries" | grep -vE '^(LICENSES/.+|lib[A-Za-z0-9+_.-]+\.so\.[0-9]+)$' || true)"
+          if [ -z "$rpm_entries" ]; then echo "::error::No .rpm entries found under usr/lib/grid; the check would pass vacuously"; exit 1; fi
+          bad_rpm="$(echo "$rpm_entries" | { grep -vE '^(LICENSES(/.+)?|lib[A-Za-z0-9+_.-]+\.so\.[0-9]+)$' || true; })"
           if [ -n "$bad_rpm" ]; then echo "::error::Unexpected .rpm entries under usr/lib/grid:"; echo "$bad_rpm"; exit 1; fi
       - uses: actions/upload-artifact@v7
         with:
