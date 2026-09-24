@@ -228,11 +228,14 @@ jobs:
           fi
           if [ "$appimage_bad" -ne 0 ]; then exit 1; fi
 
-          # The LGPL licence texts must ship in every package (see
+          # The licence texts and notices of everything compiled into the
+          # bundled libraries must ship in every package (see
           # src-tauri/licenses/README.md).
           licences_bad=0
           for f in mpv-LGPL-2.1.txt ffmpeg-LGPL-2.1.txt libplacebo-LGPL-2.1.txt dav1d-BSD-2.txt \
-            libdisplay-info-MIT.txt hwdata-copyright.txt; do
+            libdisplay-info-MIT.txt glslang-copyright.txt glslang-LICENSE.txt Apache-2.0.txt spirv-tools-copyright.txt \
+            spirv-headers-copyright.txt fast_float-MIT.txt glad-MIT-and-Khronos.txt \
+            Vulkan-Headers-LICENSE.md Vulkan-Headers-Apache-2.0.txt Vulkan-Headers-MIT.txt; do
             if test -f "squashfs-root/usr/lib/grid/LICENSES/$f"; then
               echo "AppImage: usr/lib/grid/LICENSES/$f present"
             else
@@ -353,12 +356,6 @@ jobs:
             $missing | ForEach-Object { Write-Host "::error::NSIS installer does not carry $_" }
             exit 1
           }
-      - uses: actions/upload-artifact@v7
-        with:
-          name: windows-installers
-          path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*-setup.exe
 
   e2e:
     needs: [frontend, rust]

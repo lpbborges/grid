@@ -186,11 +186,12 @@ top. The commands are the only way in; there is no generic mpv passthrough.
 
 libmpv is a library **linked into Grid's own process**, not a sidecar. Both
 platforms use a pinned **LGPL** build, recorded by URL and SHA256 in
-`scripts/libmpv.lock.json` and mirrored as a never-overwritten prerelease in Grid's own
-repository; `npm run setup:libmpv` downloads and verifies it.
+`scripts/libmpv.lock.json`; `npm run setup:libmpv` downloads and verifies it.
 
 - **Linux** development links the system libmpv. Release packages use Grid's
-  own build (`.github/workflows/build-libmpv-linux.yml`):
+  own build (`.github/workflows/build-libmpv-linux.yml`), published as a
+  never-overwritten prerelease in Grid's repository together with its complete
+  source (`libmpv-linux-source.tar.xz`):
   `npm run setup:libmpv -- --bundle` downloads it into two directories —
   `src-tauri/lib/linux/` (the full archive, symlinks included, used only to link
   the Rust binary at build time) and `src-tauri/lib/linux-runtime/` (one real
@@ -204,11 +205,12 @@ repository; `npm run setup:libmpv` downloads and verifies it.
   bundled libmpv) into its own `usr/lib` and rewrites RUNPATH to point there, so
   a second copy under `usr/lib/grid` would just be dead weight. Requires glibc
   2.39 (Ubuntu 24.04+, Debian 13+, Fedora 40+; see [Prerequisites](#prerequisites)).
-- **Windows** always links the pinned `mpv-dev-lgpl` `libmpv-2.dll`:
-  `npm run setup:libmpv` puts it and a generated import library in
-  `src-tauri/lib/windows/`. `src-tauri/tauri.windows.conf.json` bundles the DLL
-  beside `grid.exe` and the licence texts under `LICENSES\` in the MSI and NSIS
-  installers.
+- **Windows** links a community `mpv-dev-lgpl` `libmpv-2.dll` for development
+  and CI: `npm run setup:libmpv` puts it and a generated import library in
+  `src-tauri/lib/windows/`, and `src-tauri/tauri.windows.conf.json` bundles the
+  DLL beside `grid.exe`. **Windows releases are paused**: that DLL's complete
+  source cannot be reconstructed, so it is not shipped until Grid builds its
+  own.
 
 See [`src-tauri/licenses/README.md`](src-tauri/licenses/README.md) for the
 licensing route, the source offer and how to replace the library.
@@ -244,4 +246,4 @@ Grid does not host, index, or distribute any content. It only plays streams that
 
 [MIT](LICENSE) © 2026 LP
 
-The Linux and Windows builds link libmpv (and the FFmpeg it uses) in-process, and their release packages bundle an LGPL-2.1-or-later build of it together with its licence texts — see [`src-tauri/licenses/`](src-tauri/licenses/) for the licensing route, the source offer and how to replace the library.
+The Linux and Windows builds link libmpv (and the FFmpeg it uses) in-process. The Linux release packages bundle an LGPL-2.1-or-later build of it together with its licence texts and a link to its complete source — see [`src-tauri/licenses/`](src-tauri/licenses/) for the licensing route, the source offer and how to replace the library.

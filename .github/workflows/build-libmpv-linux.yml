@@ -41,9 +41,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential nasm pkg-config \
-            python3-venv ninja-build git patchelf hwdata libass-dev libfreetype-dev libfribidi-dev \
+            python3-venv ninja-build git patchelf libass-dev libfreetype-dev libfribidi-dev \
             libharfbuzz-dev libva-dev libdrm-dev libegl-dev libgl-dev \
-            libvulkan-dev glslang-dev spirv-tools libx11-dev libwayland-dev wayland-protocols \
+            libvulkan-dev glslang-dev spirv-tools spirv-headers libx11-dev libwayland-dev wayland-protocols \
             libxkbcommon-dev libpulse-dev libasound2-dev
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install 'meson>=1.3' jinja2 glad2
@@ -55,6 +55,26 @@ jobs:
           git clone --depth 1 --branch "$FFMPEG_REF" https://git.ffmpeg.org/ffmpeg.git
           git clone --depth 1 --branch "$LIBPLACEBO_REF" --recurse-submodules https://code.videolan.org/videolan/libplacebo.git
           git clone --depth 1 --branch "$MPV_REF" https://github.com/mpv-player/mpv.git
+      - name: Check out this workflow
+        uses: actions/checkout@v7
+        with:
+          path: grid
+          sparse-checkout: .github/workflows/build-libmpv-linux.yml
+          sparse-checkout-cone-mode: false
+      - name: Archive the corresponding source
+        run: |
+          # The LGPL requires the complete source of what Grid ships, offered from
+          # the same place as the binaries: this archive is published beside them.
+          # It is taken before anything is built (FFmpeg builds in its source tree)
+          # and holds every source tree (libplacebo's submodules included) plus the
+          # workflow that builds them. glslang, SPIRV-Tools and SPIRV-Headers come
+          # from Ubuntu's packages under permissive licences (see LICENSES/).
+          mkdir -p src-archive
+          cp grid/.github/workflows/build-libmpv-linux.yml src-archive/
+          tar -cJf libmpv-linux-source.tar.xz --exclude-vcs \
+            --transform 's|^|libmpv-linux-source/|' \
+            dav1d libdisplay-info ffmpeg libplacebo mpv -C src-archive build-libmpv-linux.yml
+          sha256sum libmpv-linux-source.tar.xz | tee libmpv-linux-source.tar.xz.sha256
       - name: dav1d
         run: |
           opts=(--prefix="$PWD/out" --libdir=lib --buildtype=release
@@ -64,11 +84,21 @@ jobs:
           meson install -C dav1d/build
       - name: libdisplay-info
         run: |
-          # Its PNP ID table is generated from hwdata's pnp.ids at build time.
+          # Its monitor vendor-name table is generated from hwdata's pnp.ids,
+          # whose licence is ambiguous (hwdata's LICENSE offers GPL-2.0+ or
+          # XFree86, its spec says GPL-2.0+ only). Build it from an empty table
+          # instead: vendors print as their PNP code, e.g. "PNP(ACR)".
+          mkdir -p "$RUNNER_TEMP/no-hwdata"
+          : > "$RUNNER_TEMP/no-hwdata/pnp.ids"
+          printf 'pkgdatadir=%s\n\nName: hwdata\nDescription: empty PNP ID table\nVersion: 0\n' \
+            "$RUNNER_TEMP/no-hwdata" > "$RUNNER_TEMP/no-hwdata/hwdata.pc"
           opts=(--prefix="$PWD/out" --libdir=lib --buildtype=release)
-          echo "${opts[*]}" > "$RUNNER_TEMP/libdisplay-info-options"
-          meson setup libdisplay-info/build libdisplay-info "${opts[@]}"
+          echo "${opts[*]} (empty PNP ID table)" > "$RUNNER_TEMP/libdisplay-info-options"
+          PKG_CONFIG_PATH="$RUNNER_TEMP/no-hwdata" meson setup libdisplay-info/build libdisplay-info "${opts[@]}"
           meson install -C libdisplay-info/build
+          if grep -q '"ACR"' libdisplay-info/build/pnp-id-table.c; then
+            echo "::error::libdisplay-info was built with hwdata's PNP ID table"; exit 1
+          fi
       - name: FFmpeg (LGPL - no --enable-gpl, no --enable-nonfree)
         run: |
           export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig"
@@ -148,8 +178,29 @@ jobs:
           cp libplacebo/LICENSE dist/LICENSES/libplacebo-LGPL-2.1.txt
           cp dav1d/COPYING dist/LICENSES/dav1d-BSD-2.txt
           cp libdisplay-info/LICENSE dist/LICENSES/libdisplay-info-MIT.txt
-          # libdisplay-info compiles in a table generated from hwdata's pnp.ids.
-          cp /usr/share/doc/hwdata/copyright dist/LICENSES/hwdata-copyright.txt
+          # Compiled into libplacebo.so: glslang and SPIRV-Tools (Ubuntu's static
+          # libraries, with the SPIR-V headers' tables), and libplacebo's own
+          # 3rdparty code (fast_float, the glad-generated GL loader, Vulkan-Headers).
+          if readelf -d out/lib/libplacebo.so.* | grep -qiE 'NEEDED.*(glslang|SPIRV)'; then
+            echo "::error::libplacebo links glslang dynamically; revisit the notices below"; exit 1
+          fi
+          cp /usr/share/doc/glslang-dev/copyright dist/LICENSES/glslang-copyright.txt
+          cp /usr/share/doc/spirv-tools/copyright dist/LICENSES/spirv-tools-copyright.txt
+          cp /usr/share/doc/spirv-headers/copyright dist/LICENSES/spirv-headers-copyright.txt
+          # Debian's copyright files point at /usr/share/common-licenses for the
+          # full Apache-2.0 text, and describe glslang's Bison-generated parser as
+          # plain GPL-3: ship the Apache text and glslang's own LICENSE.txt, which
+          # carries the Bison exception that parser is actually under.
+          cp /usr/share/common-licenses/Apache-2.0 dist/LICENSES/Apache-2.0.txt
+          glslang_ver=$(dpkg-query -W -f='${Version}' glslang-dev | sed 's/-.*//')
+          curl -fsSL "https://raw.githubusercontent.com/KhronosGroup/glslang/$glslang_ver/LICENSE.txt" \
+            -o dist/LICENSES/glslang-LICENSE.txt
+          grep -q 'Bison Exception' dist/LICENSES/glslang-LICENSE.txt
+          cp libplacebo/3rdparty/fast_float/LICENSE-MIT dist/LICENSES/fast_float-MIT.txt
+          cp libplacebo/3rdparty/glad/LICENSE dist/LICENSES/glad-MIT-and-Khronos.txt
+          cp libplacebo/3rdparty/Vulkan-Headers/LICENSE.md dist/LICENSES/Vulkan-Headers-LICENSE.md
+          cp libplacebo/3rdparty/Vulkan-Headers/LICENSES/Apache-2.0.txt dist/LICENSES/Vulkan-Headers-Apache-2.0.txt
+          cp libplacebo/3rdparty/Vulkan-Headers/LICENSES/MIT.txt dist/LICENSES/Vulkan-Headers-MIT.txt
           # mpv's gpl value is read back from the configured build, not echoed.
           gpl=$(meson introspect --buildoptions mpv/build \
             | python3 -c 'import json,sys; print(json.dumps([o["value"] for o in json.load(sys.stdin) if o["name"] == "gpl"][0]))')
@@ -167,7 +218,10 @@ jobs:
             echo "  meson setup: $(cat "$RUNNER_TEMP/dav1d-options")"
             echo "libdisplay-info $LIBDISPLAY_INFO_REF $(git -C libdisplay-info rev-parse HEAD)"
             echo "  meson setup: $(cat "$RUNNER_TEMP/libdisplay-info-options")"
-            echo "hwdata (pnp.ids) $(dpkg-query -W -f='${Version}' hwdata)"
+            for pkg in glslang-dev spirv-tools spirv-headers; do
+              echo "$pkg (Ubuntu, statically linked into libplacebo) $(dpkg-query -W -f='${Version}' "$pkg")"
+            done
+            echo "source: libmpv-linux-source.tar.xz sha256 $(cut -d' ' -f1 libmpv-linux-source.tar.xz.sha256)"
             echo "built on $(. /etc/os-release && echo "$PRETTY_NAME"), glibc $(ldd --version | head -1 | awk '{print $NF}')"
           } > dist/BUILD-INFO.txt
           cat dist/BUILD-INFO.txt
@@ -203,5 +257,6 @@ jobs:
           # asset must never be replaced. `gh release create` fails if the tag exists.
           tag="libmpv-linux-$MPV_REF-b$GITHUB_RUN_NUMBER"
           gh release create "$tag" libmpv-linux-x86_64.tar.gz libmpv-linux-x86_64.tar.gz.sha256 \
+            libmpv-linux-source.tar.xz libmpv-linux-source.tar.xz.sha256 \
             --target "$GITHUB_SHA" --title "libmpv $MPV_REF build $GITHUB_RUN_NUMBER (Linux, LGPL)" \
             --notes-file dist/BUILD-INFO.txt --prerelease

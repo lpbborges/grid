@@ -16,8 +16,9 @@ jobs:
         include:
           - platform: ubuntu-latest
             args: ''
-          - platform: windows-latest
-            args: ''
+          # No Windows leg: the pinned Windows libmpv is a community build whose
+          # complete source cannot be reconstructed, so Grid must not ship it
+          # (src-tauri/licenses/README.md). It returns with Grid's own build.
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -63,6 +64,16 @@ jobs:
         if: matrix.platform == 'ubuntu-latest'
         run: npm run setup:libmpv -- --bundle
 
+      # The LGPL wants the bundled libmpv's source offered beside the
+      # installers: link the pinned build's source archive from the release,
+      # and refuse to publish if that archive is missing.
+      - name: Locate the libmpv source (Linux)
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          url=$(node -p "require('./scripts/libmpv.lock.json')['linux-x86_64'].url.replace(/[^/]+$/, 'libmpv-linux-source.tar.xz')")
+          curl -fsSIL "$url" > /dev/null || { echo "::error::No source archive at $url"; exit 1; }
+          echo "LIBMPV_SOURCE_URL=$url" >> "$GITHUB_ENV"
+
       # tauri.windows.conf.json bundles the DLL beside grid.exe.
       - name: Set up libmpv (Windows)
         if: matrix.platform == 'windows-latest'
@@ -81,7 +92,10 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: 'Grid v__VERSION__'
-          releaseBody: 'Download the installers below for Linux and Windows.'
+          releaseBody: |
+            Download the installers below for Linux.
+
+            The Linux packages bundle libmpv and FFmpeg (LGPL-2.1-or-later). Their complete source: ${{ env.LIBMPV_SOURCE_URL }}. Licences and how to replace the library: src-tauri/licenses/README.md.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
