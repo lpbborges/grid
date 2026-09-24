@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../app.css';
   import { page } from '$app/state';
+  import GridLogo from '$lib/components/GridLogo.svelte';
   import Titlebar from '$lib/components/Titlebar.svelte';
   import { searchQuery } from '$lib/stores.svelte';
   let { children } = $props();
@@ -14,10 +15,8 @@
       <!-- Left: Logo -->
       <div class="flex w-1/4 items-center">
         <a href="/" class="group flex items-center gap-2">
-          <img
-            src="/logo.svg"
-            alt="Grid Logo"
-            class="h-8 w-8 transition-transform duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_10px_rgba(107,33,168,0.8)]"
+          <GridLogo
+            class="h-12 w-12 transition-transform duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]"
           />
           <span
             class="text-main font-cyber group-hover:text-primary text-xl tracking-[0.2em] uppercase transition-colors duration-300"
