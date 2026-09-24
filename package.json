@@ -17,7 +17,9 @@
     "test:e2e": "npm run build:e2e && npm run test:e2e:run",
     "test:e2e:run": "wdio run e2e/wdio.conf.ts",
     "build:e2e:native": "node e2e/build.ts --native",
-    "test:e2e:native": "npm run build:e2e:native && wdio run e2e/wdio.native.conf.ts",
+    "test:e2e:native": "npm run build:e2e:native && npm run test:e2e:native:run",
+    "test:e2e:native:run": "wdio run e2e/wdio.native.conf.ts",
+    "test:e2e:render:run": "wdio run e2e/wdio.render.conf.ts",
     "test:e2e:live": "npm run build:e2e:live && wdio run e2e/wdio.live.conf.ts",
     "tauri": "tauri",
     "lint": "eslint .",
@@ -25,7 +27,8 @@
     "test:frontend": "vitest run",
     "test:frontend:cov": "vitest run --coverage",
     "test:backend": "cd src-tauri && cargo test",
-    "test:backend:cov": "cd src-tauri && cargo llvm-cov"
+    "test:backend:cov": "cd src-tauri && cargo llvm-cov",
+    "setup:libmpv": "node scripts/setup-libmpv.mjs"
   },
   "lint-staged": {
     "*.{js,ts,svelte}": [

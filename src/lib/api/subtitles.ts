@@ -172,6 +172,8 @@ export function findPreferredSubtitleIndex(subtitles: SubtitleTrack[], preferenc
 // Popular titles list ~100 subtitles (dozens in English alone) with Portuguese
 // near the end, so fetching them all in API order got the user's language
 // rejected. Fetch a bounded, preference-first subset instead.
+// The native player writes them all to disk in one batch, capped by
+// MAX_SUBTITLE_FILES (src-tauri/src/player/model.rs): change both together.
 const MAX_EXTERNAL_SUBTITLE_FETCHES = 25;
 const MAX_EXTERNAL_SUBTITLES_PER_LANGUAGE = 2;
 

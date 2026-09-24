@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import PlayerShell from './PlayerShell.svelte';
 import type { PlayerBackend } from '$lib/types';
+import { playerState } from '$lib/stores.svelte';
 
 function fakeBackend(overrides: Partial<PlayerBackend> = {}): PlayerBackend {
   return {
@@ -123,6 +124,28 @@ describe('PlayerShell', () => {
     await fireEvent.mouseMove(container);
     await fireEvent.mouseLeave(container);
     vi.useRealTimers();
+  });
+
+  it('keeps the controls up when the pointer moves onto the titlebar', async () => {
+    // The titlebar sits above the player, outside it: reaching for its
+    // buttons fired mouseleave, which hid the controls and with them the
+    // titlebar, so the buttons vanished under the pointer.
+    const titlebar = document.createElement('div');
+    titlebar.setAttribute('data-titlebar', '');
+    const closeButton = document.createElement('button');
+    titlebar.append(closeButton);
+    document.body.append(titlebar);
+    render(PlayerShell, { props: { backend: fakeBackend(), surface: emptySurface } });
+    const container = screen.getByTestId('video-player-container');
+
+    await fireEvent.mouseMove(container);
+    await fireEvent.mouseLeave(container, { relatedTarget: closeButton });
+    expect(playerState.showControls).toBe(true);
+
+    // Leaving the window for anywhere else still hides them.
+    await fireEvent.mouseLeave(container, { relatedTarget: null });
+    expect(playerState.showControls).toBe(false);
+    titlebar.remove();
   });
 
   it('handles focus tracking for accessibility', async () => {

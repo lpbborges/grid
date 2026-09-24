@@ -2,112 +2,105 @@
 
 Grid itself is MIT licensed (see `LICENSE` at the repository root).
 
-## Status: the mpv sidecar is not shipped yet
+## libmpv
 
-`src-tauri/bin/mpv-*` is gitignored on purpose. A local copy is fine for
-development, but no mpv binary is committed or distributed while this is open.
+### How Grid uses it
 
-`src-tauri/tauri.windows.conf.json` is gitignored for the same reason and **must
-land in the same commit as the binary**. It registers `bin/mpv` as an
-`externalBin`, and Tauri's build script fails with `resource path
-bin\mpv-x86_64-pc-windows-msvc.exe doesn't exist` when the file is missing -
-which breaks every Windows build, not just bundling. Its contents are:
+On Linux and Windows, Grid **dynamically links libmpv and runs it in-process**
+(`src-tauri/src/player/`). There is no separate mpv process. macOS never links
+libmpv; it plays through the `<video>` element.
 
-```json
-{
-  "$schema": "https://schema.tauri.app/config/2",
-  "bundle": {
-    "externalBin": ["bin/rqbit", "bin/mpv"]
-  }
-}
-```
-
-It repeats `bin/rqbit` because Tauri's platform merge replaces arrays rather
-than concatenating them.
-
-**The decision: ship an LGPL build, not a GPL one.**
-
-### Why
-
-Grid runs mpv as a separate process over JSON IPC and never links
-`libmpv-2.dll`, so Grid's own code stays MIT either way — that was never the
-risk. The risk is the _distribution_ obligation: GPLv2 section 3 requires anyone
-shipping the binary to also ship its corresponding source, or a written offer
-valid for three years. That is a permanent, per-release burden.
-
-An LGPL build removes it. What GPL buys in an mpv build is:
-
-- **Encoders** — `libx264`, `libx265`, `libxvid`. Grid decodes; it never encodes.
-- **GPL-only filters** — the `pp`/`spp`/`uspp` postprocessing family, `delogo`,
-  `owdenoise`. Grid applies none of them, and launches mpv with `--no-config`
-  so a user's own filter settings cannot reach it either.
-- **GPL-only mpv subsystems** — X11 video output, OSS audio, NVIDIA vdpau. All
-  Linux-only; the Windows player uses `--gpu-api=d3d11` and WASAPI.
-
-Nothing in the decode path is GPL. H.264, HEVC, VP9, AV1, AC3, E-AC3, DTS and
-AAC decoding is FFmpeg's own LGPL code, `d3d11va` hardware decoding is core, and
-libass (subtitle rendering) is ISC. Confirmed against the bundled build: `--vd=help`
-lists `h264` and `hevc` as decoders, while `libx264`/`libx265` appear only under
-`--ovc`, the encoder list.
+Because libmpv is linked into Grid's own process, its licence applies to what
+Grid ships, not just to a separate program Grid happens to launch:
 
 - mpv is GPLv2+ by default and LGPLv2.1+ when built with `-Dgpl=false`
   (mpv's `Copyright` file).
 - FFmpeg is LGPLv2.1+ by default and only becomes GPL via `--enable-gpl`
   (https://www.ffmpeg.org/legal.html).
 
-### What this needs
+Linking a GPL libmpv would make the distributed Grid binary a GPL derivative.
+Dynamically linking an LGPL one keeps Grid's own code MIT, provided users can
+swap in their own build of the library.
 
-**No prebuilt LGPL `mpv.exe` exists.** The `lgpl` artifacts published by the
-community winbuild repos are FFmpeg libraries and `mpv-dev-lgpl` (the libmpv
-DLL) — the player executable ships GPL-only. So the binary has to be built:
+### The rule
 
-`.github/workflows/build-mpv-lgpl.yml` does this. It is a manual
-(`workflow_dispatch`) job that clones `shinchiro/mpv-winbuild-cmake` at a pinned
-revision, patches the build definitions, builds, and uploads the sidecar.
+- **Grid must only ever ship an LGPL-2.1-or-later libmpv build.** Never a GPL
+  build, on any platform.
+- **Development may link the system libmpv.** On Linux that is the
+  distribution's package (`libmpv-dev`, or Arch's `mpv`), which is usually a GPL
+  build. That is fine for a local build nobody receives; it is not fine for a
+  release.
+- **No mpv code is distributed yet.** Release packaging that bundles libmpv is
+  PR 2 of the libmpv plan; until it lands, `.github/workflows/release.yml` fails
+  on purpose before building anything.
 
-Upstream has no LGPL switch, so the job edits the build definitions:
+### What an LGPL build gives up
 
-| File           | Change                                                                                                                                  |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `ffmpeg.cmake` | drop `--enable-gpl`, `libx264`, `libx265`, `libdvdnav`, `libdvdread`, `librubberband`, `libzvbi`, `davs2`, and their dependency entries |
-| `ffmpeg.cmake` | drop `--enable-openssl`, `libssh`, `libsrt` and `--enable-version3` (see below)                                                         |
-| `mpv.cmake`    | add `-Dgpl=false`; drop `dvdnav` and `rubberband`                                                                                       |
+What GPL buys in an mpv build is nothing Grid uses:
 
-OpenSSL is Apache-2.0, whose patent clause is incompatible with LGPLv2.1 — that
-is exactly what upstream's `--enable-version3` is there to resolve. `libssh` and
-`libsrt` link it. Grid only ever streams plain HTTP from its own 127.0.0.1 proxy,
-so dropping all three lets the build target LGPLv2.1 rather than LGPLv3, and
-makes the binary smaller.
+- **Encoders** — `libx264`, `libx265`, `libxvid`. Grid decodes; it never encodes.
+- **GPL-only filters** — the `pp`/`spp`/`uspp` postprocessing family, `delogo`,
+  `owdenoise`. Grid applies none of them, and initialises libmpv with
+  `config=no` and `load-scripts=no`, so a user's own configuration cannot reach
+  it either.
+- **GPL-only mpv subsystems** — X11 video output, OSS audio, NVIDIA vdpau. Grid
+  draws through libmpv's render API on Linux and `gpu-api=d3d11` on Windows.
 
-Every removal asserts that the flag is present first, so an upstream rename fails
-the job loudly instead of quietly producing a GPL binary. After the build, a
-licence gate reads FFmpeg's generated `config.h` and fails unless `CONFIG_GPL 0`
-holds, no GPL component is enabled, and the decoders Grid needs (H.264, HEVC,
-AC3, E-AC3, AAC, Matroska, D3D11VA) all survived.
+Nothing in the decode path is GPL. H.264, HEVC, VP9, AV1, AC3, E-AC3, DTS and
+AAC decoding is FFmpeg's own LGPL code, `d3d11va` hardware decoding is core, and
+libass (subtitle rendering) is ISC.
 
-**The workflow has never completed a run.** The patch steps were dry-run against
-the current upstream files and produce a clean result, but the build itself takes
-hours and must succeed once before the artifact can be trusted. Treat the first
-run as the real authoring step, then record the version and revision here.
+### Windows: the pinned DLL
 
-### Caveat on third-party LGPL claims
+`npm run setup:libmpv` downloads a prebuilt LGPL libmpv for Windows builds,
+pinned in `scripts/libmpv.lock.json` and verified by SHA256 before it is used:
 
-The community LGPL builds carry an explicit disclaimer that their authors are not
-lawyers and cannot guarantee every LGPL-incompatible component was disabled, and
-at least some statically link FFmpeg under LGPLv3 — static linking carries its own
-relinking obligation. Building it yourself, from a dependency set you control, is
-the point.
+- **Source:** [`zhongfly/mpv-winbuild`](https://github.com/zhongfly/mpv-winbuild),
+  asset `mpv-dev-lgpl-x86_64-20260923-git-bdefd6cb42.7z`
+- **Tag:** `2026-09-23-bdefd6cb42`
+- **SHA256:** `f44eb9a2e3a187af66e16bd7d8be37bfa46ac0c894297145937bab9116f2aec1`
+- **Licence:** LGPL-2.1-or-later
+
+Checked when it was pinned:
+
+- `strings libmpv-2.dll | grep -c -- '--enable-gpl'` prints `0`: FFmpeg's
+  recorded configuration has no `--enable-gpl`.
+- The licence notices embedded in the DLL are the LGPL 2.1 "or (at your option)
+  any later version" wording throughout; no GPL notice was found.
+- The archive ships no `mpv.def`, so `setup:libmpv` generates the import
+  library from the DLL's export table.
+
+**Caveat:** `zhongfly/mpv-winbuild` is a rolling nightly repository that
+publishes a new build on every mpv commit. The pin keeps builds reproducible
+for as long as that tag exists, but it is not a versioned release and nothing
+guarantees it stays published. Whether to mirror the artifact somewhere Grid
+controls is a PR 2 decision. Community LGPL builds also carry their authors'
+own disclaimer that they cannot guarantee every LGPL-incompatible component was
+disabled, so the checks above are evidence, not a guarantee.
+
+`.github/workflows/build-mpv-lgpl.yml` predates the in-process player: it builds
+an LGPL mpv _executable_ from `shinchiro/mpv-winbuild-cmake`, which Grid no
+longer runs. Whether it is retired or turned into a libmpv build is also left to
+PR 2.
+
+### Left to PR 2
+
+Shipping an LGPL library carries obligations that land together with the first
+release that bundles it:
+
+- ship the LGPL-2.1 licence text alongside the library in every package;
+- provide the corresponding source for the exact libmpv (and FFmpeg) build
+  shipped, or a written offer for it;
+- bundle the library on Linux as well, so releases never depend on the
+  distribution's (usually GPL) libmpv.
+
+None of that is done here, because nothing is distributed yet.
 
 ## Licence texts
 
-- `COPYING.GPLv2.txt` — GNU General Public License v2, kept for reference while
-  the local development binary is still the GPL build. Replace with the LGPL text
-  when the LGPL binary lands.
+- `COPYING.GPLv2.txt` — GNU General Public License v2, left over from an
+  earlier prototype. Grid distributes no GPL code. PR 2 replaces it with the
+  LGPL-2.1 text that ships with the bundled library.
 
-## If this decision is ever reversed
-
-Bundling the GPL build means satisfying GPLv2 section 3 on every release:
-publishing the exact mpv, FFmpeg and build-script sources at their pinned
-revisions, or including a written offer with a contact address valid for three
-years. Linking to upstream is not sufficient — the offer must come from the
-distributor. That needs review by someone qualified; nothing here is legal advice.
+Nothing here is legal advice; the distribution obligations above need review by
+someone qualified before the first release that bundles libmpv.

@@ -48,13 +48,78 @@ export interface NativePlayOptions {
  *
  * That function was extracted from `VideoPlayer`, where it worked on DOM
  * `audioTracks` labels, so it matches on human-readable language names rather
- * than codes. mpv gives a code and an optional title, so both are folded in.
+ * than codes. It is also the label the audio and subtitle menus show.
  */
 export function nativeTrackLabel(track: NativeTrack): string {
+  const code = trackLanguage(track);
+  // Without a language the release's own title is all there is to go on.
+  if (!code) return track.title?.trim() ?? '';
+
+  const language = languageName(code);
+  // Release titles mostly restate the language ("German (Germany)"), which
+  // next to the Portuguese name reads as the language twice. Only a variant
+  // of the language itself is shown - never track details such as SDH or
+  // forced. Tracks that still share a label end up grouped as
+  // "Opção 1 / Opção 2" in the menu, like external subtitles.
+  // The tag's region counts too: "es-419" is Latin American Spanish.
+  const source = `${track.title ?? ''} ${track.lang ?? ''}`;
+  const variant = LANGUAGE_VARIANTS.find(([pattern]) => pattern.test(source))?.[1];
+  // A table entry like "Espanhol (América Latina)" already names its variant.
+  return variant && !language.includes('(') ? `${language} (${variant})` : language;
+}
+
+/** Variants of a language a release title can name, as the menus show them. */
+const LANGUAGE_VARIANTS: [RegExp, string][] = [
+  [/latin|latino|latam|419|mexic/i, 'Latino'],
+  [/canad|-ca\b/i, 'Canadá'],
+  [/simplified|\bhans\b/i, 'Simplificado'],
+  [/traditional|\bhant\b/i, 'Tradicional']
+];
+
+/**
+ * The track's language code, with Brazilian and European Portuguese told
+ * apart: they are two languages, not a variant of one. Any other region tag
+ * ("en-US", "es-419") is reduced to its language, which is what the menus
+ * name and the preferences match on; nativeTrackLabel still reads the region
+ * for a variant.
+ *
+ * Matroska often tags both "por" and only the title says which one it is;
+ * newer files carry the region in the tag ("pt-BR", "pt-PT"). Brazilian comes
+ * back as "pob" and European as "por" - the codes getLanguageName names
+ * "Português BR" and "Português", and the 'pt' subtitle preference ranks
+ * Brazilian first.
+ */
+export function trackLanguage(track: NativeTrack): string | null {
+  if (!track.lang) return null;
+  const code = track.lang.toLowerCase().replace('_', '-');
+  if (['pob', 'pb', 'ptbr', 'pt-br'].includes(code)) return 'pob';
+  if (code === 'pt-pt') return 'por';
+  if ((code === 'por' || code === 'pt') && /brazil|brasil|\bpt-?br\b/i.test(track.title ?? '')) {
+    return 'pob';
+  }
+  const [base] = code.split('-');
+  return base !== code ? base : track.lang;
+}
+
+/**
+ * Grid's own Portuguese names first (they match what the preference resolvers
+ * expect), then the platform's for everything the table lacks - "bg" becomes
+ * "Búlgaro" rather than "Bg".
+ */
+function languageName(code: string): string {
+  const known = getLanguageName(code, true);
+  if (known) return known;
+  try {
+    const name = new Intl.DisplayNames(['pt-BR'], { type: 'language' }).of(code);
+    if (name && name.toLowerCase() !== code.toLowerCase()) {
+      return name.charAt(0).toUpperCase() + name.slice(1);
+    }
+  } catch {
+    // Not a valid language tag; fall through to the capitalised code.
+  }
   // Non-strict getLanguageName never returns null: an unrecognised code comes
   // back capitalised, which is still a usable label.
-  const language = track.lang ? getLanguageName(track.lang) : '';
-  return [language, track.title].filter(Boolean).join(' ').trim();
+  return getLanguageName(code) ?? code;
 }
 
 /**
@@ -92,7 +157,7 @@ export function resolveNativeTracks(
   const parsedSubs: SubtitleTrack[] = subs.map((track) => ({
     id: String(track.id),
     url: '',
-    lang: track.external ? (externalLangs[externalSeen++] ?? '') : (track.lang ?? ''),
+    lang: track.external ? (externalLangs[externalSeen++] ?? '') : (trackLanguage(track) ?? ''),
     label: nativeTrackLabel(track),
     group: track.external ? 'Extra' : 'Embedded'
   }));
@@ -359,6 +424,27 @@ export function useMpvBackend() {
     }
   }
 
+  // Derived, not rebuilt per read: SubtitleMenu finds a row with
+  // `subtitles.indexOf(sub)` across separate reads (the list and the grouped
+  // lists PlayerShell builds from it), which only works on the same objects.
+  const audioRows: ParsedAudioTrack[] = $derived(
+    audioTrackList().map((track, index) => ({
+      index,
+      id: String(track.id),
+      label: nativeTrackLabel(track) || `Faixa ${index + 1}`,
+      enabled: track.selected
+    }))
+  );
+  const subtitleRows: SubtitleTrack[] = $derived(
+    subtitleTrackList().map((track, index) => ({
+      id: String(track.id),
+      url: '',
+      lang: trackLanguage(track) ?? '',
+      label: nativeTrackLabel(track) || `Legenda ${index + 1}`,
+      group: track.external ? 'Extra' : 'Embedded'
+    }))
+  );
+
   $effect(() => {
     return () => {
       void detach();
@@ -394,24 +480,13 @@ export function useMpvBackend() {
       return hasVideo;
     },
     get audioTracks(): ParsedAudioTrack[] {
-      return audioTrackList().map((track, index) => ({
-        index,
-        id: String(track.id),
-        label: nativeTrackLabel(track) || `Faixa ${index + 1}`,
-        enabled: track.selected
-      }));
+      return audioRows;
     },
     get activeAudioIndex() {
       return audioTrackList().findIndex((t) => t.selected);
     },
     get subtitles(): SubtitleTrack[] {
-      return subtitleTrackList().map((track, index) => ({
-        id: String(track.id),
-        url: '',
-        lang: track.lang ?? '',
-        label: nativeTrackLabel(track) || `Legenda ${index + 1}`,
-        group: track.external ? 'Extra' : 'Embedded'
-      }));
+      return subtitleRows;
     },
     get activeSubtitleIndex() {
       return subtitleTrackList().findIndex((t) => t.selected);

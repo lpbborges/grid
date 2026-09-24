@@ -5,6 +5,11 @@
 
   const appWindow = getCurrentWindow();
   let isMaximized = $state(false);
+  // During playback the titlebar follows the player's auto-hiding controls,
+  // but never while the pointer is on it: its buttons would vanish (and stop
+  // taking clicks) under the pointer reaching for them.
+  let hovered = $state(false);
+  const hidden = $derived(playerState.isPlaying && !playerState.showControls && !hovered);
 
   onMount(() => {
     // Check initial state
@@ -37,10 +42,14 @@
 
 <div
   data-titlebar
-  class="from-dark/90 via-dark/40 relative z-[110] flex h-8 items-center justify-between bg-gradient-to-b to-transparent transition-opacity duration-300 select-none {playerState.isPlaying &&
-  !playerState.showControls
+  class="from-dark/90 via-dark/40 relative z-[110] flex h-8 items-center justify-between bg-gradient-to-b to-transparent transition-opacity duration-300 select-none {hidden
     ? 'pointer-events-none opacity-0'
     : 'opacity-100'}"
+  role="toolbar"
+  tabindex="-1"
+  aria-label="Janela"
+  onmouseenter={() => (hovered = true)}
+  onmouseleave={() => (hovered = false)}
 >
   <div data-tauri-drag-region class="flex h-full flex-1"></div>
 
