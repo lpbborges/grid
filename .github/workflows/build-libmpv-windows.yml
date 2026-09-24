@@ -373,7 +373,8 @@ jobs:
               curl -fsSL --retry 3 -o "$RUNNER_TEMP/libass.src.tar.zst" \
                 "https://repo.msys2.org/mingw/sources/mingw-w64-libass-$v.src.tar.zst"
               mkdir -p dist/LICENSES/libass
-              tar --zstd -xOf "$RUNNER_TEMP/libass.src.tar.zst" "mingw-w64-libass/libass-$up.tar.xz" \
+              # --force-local: $RUNNER_TEMP is D:\a\_temp, and tar reads "D:" as a remote host.
+              tar --force-local --zstd -xOf "$RUNNER_TEMP/libass.src.tar.zst" "mingw-w64-libass/libass-$up.tar.xz" \
                 | tar -xJOf - "libass-$up/COPYING" > dist/LICENSES/libass/COPYING
               grep -q 'ISC License' dist/LICENSES/libass/COPYING
             else
