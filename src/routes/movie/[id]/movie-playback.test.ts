@@ -11,6 +11,13 @@ import { settingsStore } from '$lib/stores/settings.svelte';
 import { clearExternalSubtitleCache } from '$lib/api/subtitles';
 import { ADD_ATTEMPT_TIMEOUTS_MS } from '$lib/engine/torrent';
 
+// This suite drives the <video> path, which Linux no longer plays through by
+// default; pin it rather than depend on the test runner's user agent.
+vi.mock('$lib/engine/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/engine/platform')>()),
+  playbackMode: () => 'embedded'
+}));
+
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 
 const HASH = '792b54cacb8c5d54cf8941b6215cbb9bdf08632c';

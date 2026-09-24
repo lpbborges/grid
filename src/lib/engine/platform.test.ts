@@ -11,8 +11,11 @@ describe('resolvePlaybackMode', () => {
     expect(resolvePlaybackMode(WINDOWS_UA, undefined)).toBe('native');
   });
 
-  it('keeps the <video> element everywhere else', () => {
-    expect(resolvePlaybackMode(LINUX_UA, undefined)).toBe('embedded');
+  it('plays natively on Linux too, where the <video> element loses embedded subtitles', () => {
+    expect(resolvePlaybackMode(LINUX_UA, undefined)).toBe('native');
+  });
+
+  it('keeps the <video> element on macOS', () => {
     expect(resolvePlaybackMode('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', undefined)).toBe(
       'embedded'
     );
@@ -23,6 +26,10 @@ describe('resolvePlaybackMode', () => {
     expect(resolvePlaybackMode(WINDOWS_UA, 'off')).toBe('embedded');
   });
 
+  it('lets the E2E build force the <video> path on Linux', () => {
+    expect(resolvePlaybackMode(LINUX_UA, 'off')).toBe('embedded');
+  });
+
   it('lets the E2E build force the native path anywhere', () => {
     expect(resolvePlaybackMode(LINUX_UA, 'on')).toBe('native');
   });
@@ -30,7 +37,7 @@ describe('resolvePlaybackMode', () => {
   it('ignores an unset or unrecognised override', () => {
     for (const override of ['', '   ', 'yes', 'true']) {
       expect(resolvePlaybackMode(WINDOWS_UA, override)).toBe('native');
-      expect(resolvePlaybackMode(LINUX_UA, override)).toBe('embedded');
+      expect(resolvePlaybackMode(LINUX_UA, override)).toBe('native');
     }
   });
 

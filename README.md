@@ -15,7 +15,7 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
 - **Global Playback Preferences:** Audio, Subtitle, and Quality preferences set once and remembered across the app (persisted locally). Grid ranks and picks the best matching source from YTS + Torrentio behind the scenes and silently enables the right embedded audio/subtitle track when playback starts, resolving the movie/show's real original language instead of guessing.
 - **Frameless Design:** Desktop window with custom controls and a draggable header.
 - **Cyberpunk Theme:** A unique visual identity built with Tailwind CSS v4 featuring neon glows, digital grid backgrounds, and cyberpunk typography (Orbitron/Rajdhani, bundled locally).
-- **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles. The same Svelte UI and playback orchestration (`usePlayer`) drives both backends: a `<video>` element on macOS, and libmpv running inside Grid on Linux and Windows, drawing beneath the same Svelte controls (Linux: behind `VITE_GRID_NATIVE_PLAYER=on` until release packaging ships libmpv).
+- **Advanced Media Player:** Dedicated full-screen cinematic player overlay featuring real-time download progress tracking, custom Svelte 5 video controls, multi-track audio selection, on-the-fly SRT-to-VTT subtitle conversion, and grouped menus for both Embedded and Extra (downloaded) subtitles. The same Svelte UI and playback orchestration (`usePlayer`) drives both backends: a `<video>` element on macOS, and libmpv running inside Grid on Linux and Windows, drawing beneath the same Svelte controls. On Linux, libmpv is the default, so the subtitle and audio tracks embedded in the file show up in the menus there too (the `<video>` element in WebKitGTK loses them).
 - **Test-Driven:** Vitest and Svelte Testing Library tests for the frontend, plus Rust unit tests for the backend. Run `npm run test:frontend:cov` for the current coverage report.
 - **Robust Error Handling:** Resilient polling for engine startup, a specific error when the engine cannot start, dynamic port allocation to prevent address conflicts, and timeouts on external API calls; starting playback automatically retries with a fresh request when a source stops responding. Metadata translation tries Google Translate first and MyMemory as a backup; if both fail, the original English text is shown.
 
@@ -32,7 +32,7 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
 
 - The libmpv development files, for native playback. Linux: `sudo apt install libmpv-dev` (Debian/Ubuntu) or the `mpv` package (Arch, which ships the headers alongside the player); Linux development needs libmpv from mpv 0.33 or newer. Windows: 7-Zip and the MSVC build tools, then run `npm run setup:libmpv` once to fetch the pinned DLL and generate its import library. macOS needs nothing here: it plays through the `<video>` element and never links libmpv.
 
-- On Linux, `tauri dev` and the `VITE_GRID_NATIVE_PLAYER` flag off still play through the webview's `<video>` element, which needs the GStreamer decoders below. They are not installed by default on a clean Ubuntu or Fedora, and without them 4K HEVC and E-AC3 releases fail with "este vídeo precisa de componentes de vídeo que não estão instalados no sistema". Release packages no longer declare them as dependencies — Linux release builds play through the bundled libmpv instead (see [libmpv](#libmpv-linux-and-windows)) — so install them yourself for `tauri dev` (Debian/Ubuntu):
+- Linux playback, in `tauri dev` and in release builds, goes through libmpv and needs no GStreamer plugins. Only the `<video>` element does: set `VITE_GRID_NATIVE_PLAYER=off` (for example `VITE_GRID_NATIVE_PLAYER=off npm run tauri dev`) to force it for comparison, and the E2E build forces it too. It then decodes through GStreamer in WebKitGTK, whose decoders are not installed by default on a clean Ubuntu or Fedora; without them 4K HEVC and E-AC3 releases fail with "este vídeo precisa de componentes de vídeo que não estão instalados no sistema". Release packages do not declare them as dependencies, so install them yourself when you need that path (Debian/Ubuntu):
 
   ```sh
   sudo apt-get install -y gstreamer1.0-libav gstreamer1.0-plugins-good \
@@ -128,7 +128,7 @@ SvelteKit UI (static build, runs in the Tauri webview)
   │                         stop_native_player    (Linux/Windows: drives libmpv)
   ├─ fetch ──────────► rqbit HTTP API on 127.0.0.1 (add, stats)
   └─ usePlayer() ────► PlayerBackend
-                         ├─ useDomBackend ──► stream proxy on 127.0.0.1  (Linux/macOS)
+                         ├─ useDomBackend ──► stream proxy on 127.0.0.1  (macOS, or forced off)
                          └─ useMpvBackend ──► libmpv (in-process)        (Linux/Windows)
 ```
 
@@ -136,7 +136,7 @@ SvelteKit UI (static build, runs in the Tauri webview)
 
   The patch exists only for WebKitGTK. Anything that demuxes Matroska correctly would see an empty subtitle menu instead, so the proxy also serves an unpatched variant at `?raw=1`, which is what the libmpv path asks for.
 
-- **Decoding:** macOS plays in a `<video>` element; so does Linux until release packaging ships libmpv, decoding through GStreamer in WebKitGTK — hence the plugin requirement above. WebView2 decodes neither HEVC nor E-AC3 and cannot demux Matroska, so Windows plays through libmpv inside Grid's own window, with the same Svelte controls on top; Linux does the same with `VITE_GRID_NATIVE_PLAYER=on` (see [Player](#player-linux-and-windows)).
+- **Decoding:** Linux and Windows play through libmpv inside Grid's own window, with the same Svelte controls on top (see [Player](#player-linux-and-windows)): WebView2 decodes neither HEVC nor E-AC3 and cannot demux Matroska, and WebKitGTK's `<video>` element needs extra GStreamer plugins and loses the embedded subtitle and audio tracks. macOS plays in a `<video>` element. `VITE_GRID_NATIVE_PLAYER=off` forces the `<video>` element on Linux and Windows (the E2E build does this; `on` forces libmpv).
 
 - `src/lib/api/` wraps external services, `src/lib/engine/` drives playback (engine, cache, ranking), `src/lib/composables/` and `src/lib/stores/` hold reactive state, and `src/lib/components/` holds the UI.
 - **Where state lives:**

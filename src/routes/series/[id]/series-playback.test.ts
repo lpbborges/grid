@@ -9,6 +9,13 @@ import {
 } from '$lib/engine/__fixtures__/playbackBoundary';
 import { clearExternalSubtitleCache } from '$lib/api/subtitles';
 
+// This suite drives the <video> path, which Linux no longer plays through by
+// default; pin it rather than depend on the test runner's user agent.
+vi.mock('$lib/engine/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/engine/platform')>()),
+  playbackMode: () => 'embedded'
+}));
+
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 
 const HASH = '4c1d2b0e8f3a6d5c7b9e1f2a3b4c5d6e7f8a9b0c';
