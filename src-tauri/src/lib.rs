@@ -278,36 +278,17 @@ fn evict_for_space_blocking(
         cache::pick_eviction_candidates(&manifest, exclude_info_hash, needed_bytes, limit_bytes);
 
     for info_hash in &to_evict {
-        if let Some(entry) = cache::remove_entry(&mut manifest, info_hash) {
-            let mut is_safe = true;
-            for component in std::path::Path::new(&entry.file_name).components() {
-                if matches!(
-                    component,
-                    std::path::Component::ParentDir
-                        | std::path::Component::RootDir
-                        | std::path::Component::Prefix(_)
-                ) {
-                    is_safe = false;
-                    break;
-                }
-            }
-            if !is_safe {
-                continue;
-            }
-
-            let entry_path = downloads_dir.join(&entry.file_name);
-            cache::remove_path_best_effort(&entry_path);
-
-            let mut current = entry_path.parent();
-            while let Some(parent) = current {
-                if parent == downloads_dir {
-                    break;
-                }
-                if std::fs::remove_dir(parent).is_err() {
-                    break;
-                }
-                current = parent.parent();
-            }
+        let Some(entry) = cache::remove_entry(&mut manifest, info_hash) else {
+            continue;
+        };
+        // The torrent's whole folder, not only the file played last.
+        let Some(std::path::Component::Normal(top)) =
+            std::path::Path::new(&entry.file_name).components().next()
+        else {
+            continue;
+        };
+        if top != "manifest.json" {
+            cache::remove_path_best_effort(&downloads_dir.join(top));
         }
     }
 
@@ -1002,6 +983,69 @@ mod tests {
             name,
             std::process::id()
         ))
+    }
+
+    #[test]
+    fn eviction_removes_every_file_of_a_season_pack() {
+        let app_data_dir =
+            std::env::temp_dir().join(format!("grid-evict-pack-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+        let hash = "a".repeat(40);
+        let pack = cache::downloads_dir(&app_data_dir).join(&hash).join("Show");
+        std::fs::create_dir_all(&pack).unwrap();
+        std::fs::write(pack.join("S01E01.mkv"), b"one").unwrap();
+        std::fs::write(pack.join("S01E02.mkv"), b"two").unwrap();
+        let manifest = cache::Manifest {
+            entries: vec![cache::CacheEntry {
+                info_hash: hash.clone(),
+                magnet: String::new(),
+                media_id: None,
+                season: Some(1),
+                episode: Some(2),
+                file_name: format!("{hash}/Show/S01E02.mkv"),
+                total_bytes: 100,
+                downloaded_bytes: 100,
+                complete: true,
+                last_accessed_at: 0,
+            }],
+        };
+        cache::write_manifest(&cache::manifest_path(&app_data_dir), &manifest).unwrap();
+
+        let evicted = evict_for_space_blocking(&app_data_dir, "other", 50, 100).unwrap();
+
+        assert_eq!(evicted, vec![hash.clone()]);
+        assert!(!cache::downloads_dir(&app_data_dir).join(&hash).exists());
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+    }
+
+    #[test]
+    fn eviction_never_deletes_outside_the_downloads_folder() {
+        let app_data_dir =
+            std::env::temp_dir().join(format!("grid-evict-escape-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+        std::fs::create_dir_all(cache::downloads_dir(&app_data_dir)).unwrap();
+        let outside = app_data_dir.join("outside.mkv");
+        std::fs::write(&outside, b"keep").unwrap();
+        let manifest = cache::Manifest {
+            entries: vec![cache::CacheEntry {
+                info_hash: "b".repeat(40),
+                magnet: String::new(),
+                media_id: None,
+                season: None,
+                episode: None,
+                file_name: "../outside.mkv".to_string(),
+                total_bytes: 100,
+                downloaded_bytes: 100,
+                complete: true,
+                last_accessed_at: 0,
+            }],
+        };
+        cache::write_manifest(&cache::manifest_path(&app_data_dir), &manifest).unwrap();
+
+        evict_for_space_blocking(&app_data_dir, "other", 50, 100).unwrap();
+
+        assert!(outside.exists());
+        let _ = std::fs::remove_dir_all(&app_data_dir);
     }
 
     #[test]

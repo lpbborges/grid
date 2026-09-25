@@ -164,7 +164,7 @@ describe('Movie playback wiring', () => {
         mediaId: movie.id,
         fileName: `${HASH}/${VIDEO}`,
         totalBytes: 259767,
-        downloadedBytes: 259767,
+        downloadedBytes: 259767 + 50,
         complete: true
       }
     });
