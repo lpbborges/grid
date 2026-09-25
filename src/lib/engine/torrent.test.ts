@@ -157,6 +157,47 @@ describe('torrent engine', () => {
     expect(hashes).toEqual(['123', '456']);
   });
 
+  it('forgetTorrent and deleteTorrent never send an invalid info hash to the engine', async () => {
+    await torrent.forgetTorrent('../torrents');
+    await torrent.deleteTorrent('not-a-hash');
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('getLoadedTorrentInfoHashes skips entries without an info hash', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ torrents: [{ info_hash: '123' }, { id: 1 }, null, 'x'] })
+    });
+    expect(await torrent.getLoadedTorrentInfoHashes()).toEqual(['123']);
+  });
+
+  it('getLoadedTorrentInfoHashes returns an empty array for an unexpected body', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    expect(await torrent.getLoadedTorrentInfoHashes()).toEqual([]);
+  });
+
+  it('rejects an add whose response has no usable torrent details', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ details: { info_hash: 'a'.repeat(40), files: [{ name: 1 }] } })
+    });
+
+    await expect(torrent.addTorrent('magnet:?xt=test')).rejects.toThrow(/unexpected response/i);
+  });
+
+  it('getTorrentStats keeps only well-formed progress', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        file_progress: 'lots',
+        live: { snapshot: { downloaded_and_checked_bytes: 'x' } }
+      })
+    });
+
+    expect(await torrent.getTorrentStats('a'.repeat(40))).toEqual({});
+  });
+
   it('getLoadedTorrentInfoHashes returns an empty array on failure', async () => {
     (globalThis.fetch as any).mockRejectedValueOnce(new Error('network error'));
     const hashes = await torrent.getLoadedTorrentInfoHashes();

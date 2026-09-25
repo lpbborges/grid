@@ -26,6 +26,22 @@ describe('torrentio api', () => {
     vi.resetAllMocks();
   });
 
+  it('drops streams that are not objects and an unexpected body', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          streams: [{ name: 'Torrentio', infoHash: 'a' }, { fileIdx: '1' }, null, 'x', 3]
+        })
+      )
+    );
+    expect(await getMovieStreams('tt1')).toEqual([{ name: 'Torrentio', infoHash: 'a' }]);
+
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ streams: 'x' }))
+    );
+    expect(await getMovieStreams('tt1')).toEqual([]);
+  });
+
   describe('getSeriesStreams', () => {
     it('returns streams on success', async () => {
       const mockResponse = {
