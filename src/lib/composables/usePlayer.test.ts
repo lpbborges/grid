@@ -103,6 +103,19 @@ describe('usePlayer', () => {
     expect(streamPlayer.stop).toHaveBeenCalled();
   });
 
+  it('does not mark the title watched when playback ends before 95%', async () => {
+    const onwatched = vi.fn();
+    const { player, backend } = await mountPlayer({ mode: 'native', onwatched });
+    await player.play('magnet:?xt=urn:btih:abc', { mediaId: 'tt1' });
+
+    backend.duration = 100;
+    backend.currentTime = 50;
+    await tick();
+    backend.emitEnded();
+
+    expect(onwatched).not.toHaveBeenCalled();
+  });
+
   it('marks the title watched past 95% on the mpv backend too', async () => {
     const onwatched = vi.fn();
     const { player, backend } = await mountPlayer({ mode: 'native', onwatched });

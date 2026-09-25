@@ -76,9 +76,9 @@ export function usePlayer(
     currentRequest = request;
     const started = await backend.start({
       ...request,
+      // Fires on close and on errors too, so only the 95% check marks watched.
       onended: () => {
         stop();
-        if (options.onwatched) options.onwatched();
       }
     });
     if (!started) {
