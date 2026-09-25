@@ -2,7 +2,7 @@ use crate::media_patch::{self, FileView, Patch, Step};
 use crate::subtitles::{is_valid_file_idx, is_valid_info_hash};
 use futures_util::StreamExt;
 use reqwest::{Method, StatusCode};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -10,7 +10,45 @@ use tokio::sync::OnceCell;
 
 pub type EnginePort = Arc<dyn Fn() -> Option<u16> + Send + Sync>;
 
-type PatchCache = Arc<Mutex<HashMap<String, Arc<OnceCell<Option<Arc<Patch>>>>>>>;
+type PatchCell = Arc<OnceCell<Option<Arc<Patch>>>>;
+type SharedPatchCache = Arc<Mutex<PatchCache>>;
+
+const MAX_CACHED_PATCHES: usize = 64;
+const PROBE_REQUEST_TIMEOUT: std::time::Duration = if cfg!(test) {
+    std::time::Duration::from_millis(500)
+} else {
+    std::time::Duration::from_secs(30)
+};
+const ENGINE_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Header patches by stream URL, dropping the oldest past `MAX_CACHED_PATCHES`.
+#[derive(Default)]
+struct PatchCache {
+    cells: HashMap<String, PatchCell>,
+    order: VecDeque<String>,
+}
+
+impl PatchCache {
+    fn cell(&mut self, url: &str) -> PatchCell {
+        if let Some(cell) = self.cells.get(url) {
+            return cell.clone();
+        }
+        if self.order.len() >= MAX_CACHED_PATCHES {
+            if let Some(oldest) = self.order.pop_front() {
+                self.cells.remove(&oldest);
+            }
+        }
+        let cell = PatchCell::default();
+        self.cells.insert(url.to_string(), cell.clone());
+        self.order.push_back(url.to_string());
+        cell
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.cells.len()
+    }
+}
 
 const MAX_REQUEST_HEAD_BYTES: usize = 16 * 1024;
 const MAX_PROBE_STEPS: usize = 32;
@@ -37,8 +75,11 @@ pub fn engine_stream_url(port: u16, info_hash: &str, file_idx: i64) -> String {
 }
 
 pub async fn serve(listener: TcpListener, engine_port: EnginePort) {
-    let client = reqwest::Client::new();
-    let cache = PatchCache::default();
+    let client = reqwest::Client::builder()
+        .connect_timeout(ENGINE_CONNECT_TIMEOUT)
+        .build()
+        .expect("the stream proxy's HTTP client builds");
+    let cache = SharedPatchCache::default();
     loop {
         match listener.accept().await {
             Ok((socket, _)) => {
@@ -58,7 +99,7 @@ async fn handle_connection(
     mut socket: TcpStream,
     engine_port: EnginePort,
     client: reqwest::Client,
-    cache: PatchCache,
+    cache: SharedPatchCache,
 ) {
     let Some(request) = read_request(&mut socket).await else {
         return;
@@ -84,7 +125,7 @@ async fn forward(
     request: ProxyRequest,
     engine_port: &EnginePort,
     client: &reqwest::Client,
-    cache: &PatchCache,
+    cache: &SharedPatchCache,
 ) -> Result<(reqwest::Response, Option<Arc<Patch>>), StatusCode> {
     if request.method != Method::GET && request.method != Method::HEAD {
         return Err(StatusCode::METHOD_NOT_ALLOWED);
@@ -193,13 +234,12 @@ fn wants_raw(path: &str) -> bool {
         .any(|param| param.split_once('=') == Some(("raw", "1")))
 }
 
-async fn patch_for(client: &reqwest::Client, url: &str, cache: &PatchCache) -> Option<Arc<Patch>> {
-    let cell = cache
-        .lock()
-        .unwrap()
-        .entry(url.to_string())
-        .or_default()
-        .clone();
+async fn patch_for(
+    client: &reqwest::Client,
+    url: &str,
+    cache: &SharedPatchCache,
+) -> Option<Arc<Patch>> {
+    let cell = cache.lock().unwrap_or_else(|e| e.into_inner()).cell(url);
     cell.get_or_try_init(|| probe_patch(client, url))
         .await
         .ok()
@@ -235,6 +275,7 @@ async fn fetch_range(
 ) -> Result<(Vec<u8>, u64), ProbeFailed> {
     let response = client
         .get(url)
+        .timeout(PROBE_REQUEST_TIMEOUT)
         .header(
             reqwest::header::RANGE,
             format!("bytes={}-{}", offset, offset + len - 1),
@@ -401,6 +442,45 @@ mod tests {
             }
         });
         (port, requests)
+    }
+
+    #[test]
+    fn keeps_only_the_most_recent_patches() {
+        let mut cache = PatchCache::default();
+        let first = cache.cell("stream-0");
+        for i in 1..=MAX_CACHED_PATCHES {
+            cache.cell(&format!("stream-{i}"));
+        }
+
+        assert_eq!(cache.len(), MAX_CACHED_PATCHES);
+        assert!(!Arc::ptr_eq(&first, &cache.cell("stream-0")));
+    }
+
+    #[test]
+    fn reuses_the_patch_of_a_stream_played_again() {
+        let mut cache = PatchCache::default();
+        let first = cache.cell("stream");
+
+        assert!(Arc::ptr_eq(&first, &cache.cell("stream")));
+    }
+
+    #[tokio::test]
+    async fn gives_up_on_a_header_probe_the_engine_never_answers() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((socket, _)) = listener.accept().await {
+                held.push(socket);
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let url = engine_stream_url(port, HASH, 0);
+        let result =
+            tokio::time::timeout(PROBE_REQUEST_TIMEOUT * 3, probe_patch(&client, &url)).await;
+
+        assert!(matches!(result, Ok(Err(ProbeFailed))));
     }
 
     async fn spawn_proxy_with(engine_port: EnginePort) -> u16 {

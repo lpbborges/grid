@@ -78,6 +78,44 @@ describe('Movie native playback wiring', () => {
     document.body.classList.remove('native-player-active');
   });
 
+  it('picks the Brazilian subtitle bundled with the video over the online one', async () => {
+    settingsStore.subtitle = 'pt';
+    boundary = installPlaybackBoundary({
+      ...baseOptions,
+      files: [...baseOptions.files, { name: 'Subs/Portuguese (Brazil).srt', length: 50 }],
+      externalSubtitles: [
+        { id: 'os-1', url: 'https://subs5.strem.io/pb/fixture.srt', lang: 'pob' }
+      ],
+      nativePlayback: {
+        tracks: [1, 2].map((id) => ({
+          id,
+          type: 'sub',
+          lang: null,
+          title: null,
+          codec: 'subrip',
+          default: false,
+          forced: false,
+          external: true,
+          selected: false,
+          original: false,
+          hearing_impaired: false
+        })),
+        duration: 100
+      }
+    });
+    render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+    await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
+
+    await waitFor(
+      () =>
+        expect(invoke).toHaveBeenCalledWith('native_player_set_tracks', {
+          aid: null,
+          sid: 1
+        }),
+      { timeout: 5000 }
+    );
+  });
+
   it('shows the in-app surface rather than a <video> element', async () => {
     await openAndPlay();
 

@@ -22,10 +22,14 @@ struct EngineState {
     port: Mutex<Option<u16>>,
 }
 
+#[derive(Default)]
 struct SubtitleRateLimit {
-    counts: Mutex<HashMap<String, (u32, Instant)>>,
+    buckets: Mutex<HashMap<String, (f64, Instant)>>,
 }
 
+/// Token bucket per key: holds two playbacks' worth of subtitle fetches (the
+/// frontend caps, pinned by a test) and refills continuously.
+const SUBTITLE_RATE_LIMIT_BURST: u32 = 50;
 const SUBTITLE_RATE_LIMIT_PER_MINUTE: u32 = 30;
 
 /// Hard cap on how many bytes of a subtitle response we'll buffer into
@@ -37,17 +41,22 @@ const SUBTITLE_RATE_LIMIT_PER_MINUTE: u32 = 30;
 const MAX_SUBTITLE_RESPONSE_BYTES: usize = 5 * 1024 * 1024;
 
 fn check_subtitle_rate_limit(state: &SubtitleRateLimit, key: &str) -> bool {
-    let mut counts = state.counts.lock().unwrap();
-    let now = Instant::now();
-    let entry = counts.entry(key.to_string()).or_insert((0, now));
-    if now.duration_since(entry.1).as_secs() >= 60 {
-        *entry = (1, now);
-        return true;
-    }
-    if entry.0 >= SUBTITLE_RATE_LIMIT_PER_MINUTE {
+    take_subtitle_token(state, key, Instant::now())
+}
+
+fn take_subtitle_token(state: &SubtitleRateLimit, key: &str, now: Instant) -> bool {
+    let mut buckets = state.buckets.lock().unwrap_or_else(|e| e.into_inner());
+    let burst = f64::from(SUBTITLE_RATE_LIMIT_BURST);
+    let (tokens, last) = buckets.entry(key.to_string()).or_insert((burst, now));
+    let refill = now.saturating_duration_since(*last).as_secs_f64()
+        * f64::from(SUBTITLE_RATE_LIMIT_PER_MINUTE)
+        / 60.0;
+    *tokens = (*tokens + refill).min(burst);
+    *last = now;
+    if *tokens < 1.0 {
         return false;
     }
-    entry.0 += 1;
+    *tokens -= 1.0;
     true
 }
 
@@ -237,16 +246,29 @@ async fn read_capped_body_as_string(
 #[tauri::command]
 async fn get_cache_manifest(app: tauri::AppHandle) -> Result<Vec<cache::CacheEntry>, String> {
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    Ok(cache::read_manifest(&cache::manifest_path(&app_data_dir)).entries)
+    tauri::async_runtime::spawn_blocking(move || {
+        cache::read_manifest(&cache::manifest_path(&app_data_dir)).entries
+    })
+    .await
+    .map_err(|e| format!("Cache manifest task failed: {}", e))
 }
 
 #[tauri::command]
 async fn upsert_cache_entry(app: tauri::AppHandle, entry: cache::CacheEntry) -> Result<(), String> {
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let path = cache::manifest_path(&app_data_dir);
-    let mut manifest = cache::read_manifest(&path);
-    cache::upsert_entry(&mut manifest, entry);
-    cache::write_manifest(&path, &manifest).map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || upsert_cache_entry_blocking(&app_data_dir, entry))
+        .await
+        .map_err(|e| format!("Cache update task failed: {}", e))?
+}
+
+fn upsert_cache_entry_blocking(
+    app_data_dir: &Path,
+    entry: cache::CacheEntry,
+) -> Result<(), String> {
+    cache::update_manifest(&cache::manifest_path(app_data_dir), |manifest| {
+        cache::upsert_entry(manifest, entry)
+    })
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -271,29 +293,27 @@ fn evict_for_space_blocking(
     limit_bytes: u64,
 ) -> Result<Vec<String>, String> {
     let downloads_dir = cache::downloads_dir(app_data_dir);
-    let path = cache::manifest_path(app_data_dir);
-    let mut manifest = cache::read_manifest(&path);
+    cache::update_manifest(&cache::manifest_path(app_data_dir), |manifest| {
+        let to_evict =
+            cache::pick_eviction_candidates(manifest, exclude_info_hash, needed_bytes, limit_bytes);
 
-    let to_evict =
-        cache::pick_eviction_candidates(&manifest, exclude_info_hash, needed_bytes, limit_bytes);
-
-    for info_hash in &to_evict {
-        let Some(entry) = cache::remove_entry(&mut manifest, info_hash) else {
-            continue;
-        };
-        // The torrent's whole folder, not only the file played last.
-        let Some(std::path::Component::Normal(top)) =
-            std::path::Path::new(&entry.file_name).components().next()
-        else {
-            continue;
-        };
-        if top != "manifest.json" {
-            cache::remove_path_best_effort(&downloads_dir.join(top));
+        for info_hash in &to_evict {
+            let Some(entry) = cache::remove_entry(manifest, info_hash) else {
+                continue;
+            };
+            // The torrent's whole folder, not only the file played last.
+            let Some(std::path::Component::Normal(top)) =
+                std::path::Path::new(&entry.file_name).components().next()
+            else {
+                continue;
+            };
+            if top != "manifest.json" {
+                cache::remove_path_best_effort(&downloads_dir.join(top));
+            }
         }
-    }
-
-    cache::write_manifest(&path, &manifest).map_err(|e| e.to_string())?;
-    Ok(to_evict)
+        to_evict
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// Path to the PID file tracking the currently-running (or most recently
@@ -836,9 +856,7 @@ pub fn run() {
             pid: Mutex::new(None),
             port: Mutex::new(None),
         })
-        .manage(SubtitleRateLimit {
-            counts: Mutex::new(HashMap::new()),
-        })
+        .manage(SubtitleRateLimit::default())
         .manage(player::NativePlayerState::default())
         .manage(StreamProxyState {
             port: Mutex::new(None),
@@ -906,14 +924,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rate_limit_allows_then_blocks_after_threshold() {
-        let state = SubtitleRateLimit {
-            counts: Mutex::new(HashMap::new()),
-        };
-        for _ in 0..SUBTITLE_RATE_LIMIT_PER_MINUTE {
-            assert!(check_subtitle_rate_limit(&state, "k"));
+    fn rate_limit_allows_a_burst_then_blocks() {
+        let state = SubtitleRateLimit::default();
+        let now = Instant::now();
+        for _ in 0..SUBTITLE_RATE_LIMIT_BURST {
+            assert!(take_subtitle_token(&state, "k", now));
         }
-        assert!(!check_subtitle_rate_limit(&state, "k"));
+        assert!(!take_subtitle_token(&state, "k", now));
+    }
+
+    #[test]
+    fn rate_limit_refills_continuously() {
+        let state = SubtitleRateLimit::default();
+        let start = Instant::now();
+        for _ in 0..SUBTITLE_RATE_LIMIT_BURST {
+            take_subtitle_token(&state, "k", start);
+        }
+        let one_token = std::time::Duration::from_secs(60) / SUBTITLE_RATE_LIMIT_PER_MINUTE;
+
+        assert!(take_subtitle_token(&state, "k", start + one_token));
+        assert!(!take_subtitle_token(&state, "k", start + one_token));
+    }
+
+    #[test]
+    fn rate_limit_fits_two_playbacks_of_subtitle_fetches() {
+        for (file, constant) in [
+            (
+                include_str!("../../src/lib/api/subtitles.ts"),
+                "const MAX_EXTERNAL_SUBTITLE_FETCHES = ",
+            ),
+            (
+                include_str!("../../src/lib/engine/torrent.ts"),
+                "const MAX_TORRENT_SUBTITLE_FETCHES = ",
+            ),
+        ] {
+            let cap: u32 = file
+                .lines()
+                .find_map(|line| {
+                    line.trim()
+                        .strip_prefix(constant)?
+                        .trim_end_matches(';')
+                        .parse()
+                        .ok()
+                })
+                .unwrap_or_else(|| panic!("{constant} is declared"));
+            assert!(
+                SUBTITLE_RATE_LIMIT_BURST >= 2 * cap,
+                "{constant}{cap} does not fit twice in the burst ({SUBTITLE_RATE_LIMIT_BURST})"
+            );
+        }
     }
 
     /// Starts a tiny raw-socket HTTP server that always replies with a 302
@@ -1015,6 +1074,44 @@ mod tests {
 
         assert_eq!(evicted, vec![hash.clone()]);
         assert!(!cache::downloads_dir(&app_data_dir).join(&hash).exists());
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+    }
+
+    #[test]
+    fn concurrent_cache_updates_keep_every_entry() {
+        let app_data_dir =
+            std::env::temp_dir().join(format!("grid-cache-concurrent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+        let hashes: Vec<String> = (0..16).map(|i| format!("{i:040x}")).collect();
+
+        std::thread::scope(|scope| {
+            for hash in &hashes {
+                let app_data_dir = &app_data_dir;
+                scope.spawn(move || {
+                    upsert_cache_entry_blocking(
+                        app_data_dir,
+                        cache::CacheEntry {
+                            info_hash: hash.clone(),
+                            magnet: String::new(),
+                            media_id: None,
+                            season: None,
+                            episode: None,
+                            file_name: format!("{hash}/movie.mkv"),
+                            total_bytes: 100,
+                            downloaded_bytes: 0,
+                            complete: false,
+                            last_accessed_at: 0,
+                        },
+                    )
+                    .unwrap();
+                });
+            }
+        });
+
+        let manifest = cache::read_manifest(&cache::manifest_path(&app_data_dir));
+        let mut stored: Vec<String> = manifest.entries.into_iter().map(|e| e.info_hash).collect();
+        stored.sort();
+        assert_eq!(stored, hashes);
         let _ = std::fs::remove_dir_all(&app_data_dir);
     }
 
@@ -1294,9 +1391,7 @@ mod tests {
     }
 
     fn test_rate_limit_state() -> SubtitleRateLimit {
-        SubtitleRateLimit {
-            counts: Mutex::new(HashMap::new()),
-        }
+        SubtitleRateLimit::default()
     }
 
     #[tokio::test]

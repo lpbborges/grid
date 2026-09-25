@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { writeStored } from './storage';
 import { isAudioPreference, type AudioPreference } from '$lib/types';
 
 export const MAX_CACHE_LIMIT_BYTES = 50 * 1024 * 1024 * 1024;
@@ -70,7 +71,7 @@ class SettingsStore {
   }
 
   private persist(key: string, value: string) {
-    if (browser) localStorage.setItem(key, value);
+    writeStored(key, value);
   }
 }
 

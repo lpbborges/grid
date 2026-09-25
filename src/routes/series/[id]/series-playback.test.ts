@@ -101,6 +101,37 @@ describe('Series playback wiring', () => {
     );
   });
 
+  it('keeps playing after navigating to another series on the same page', async () => {
+    const hash = 'b'.repeat(40);
+    boundary = installPlaybackBoundary({
+      files,
+      streams: [
+        { name: 'Torrentio\n1080p', title: 'Season pack\n👤 30', infoHash: hash, fileIdx: 0 }
+      ]
+    });
+    const { rerender } = render(SeriesPage, {
+      props: { data: { seriesId: series.id, series, error: null } }
+    });
+    const other = {
+      ...series,
+      id: 'tt0000003',
+      title: 'Grid Series Two',
+      videos: [{ id: 'tt0000003:1:1', season: 1, episode: 1, name: 'Other Pilot' }]
+    };
+    await rerender({ data: { seriesId: other.id, series: other, error: null } });
+
+    await fireEvent.click(await screen.findByText(/Other Pilot/));
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(video).toBeInTheDocument();
+    expect(video.getAttribute('src')).toBe(`${PROXY_ORIGIN}/torrents/${hash}/stream/0`);
+    const forget = boundary.rqbit.requests.find(
+      (r) => r.method === 'POST' && r.path === `/torrents/${hash}/forget`
+    );
+    expect(forget).toBeUndefined();
+  });
+
   it('records the episode in the cache entry', async () => {
     await playEpisode(/Pilot/);
     await screen.findByTestId('video-element', {}, { timeout: 5000 });

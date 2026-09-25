@@ -219,6 +219,27 @@ describe('Movie playback wiring', () => {
     expect(boundary.unhandledRequests).toEqual([]);
   });
 
+  it('keeps playing after navigating to another movie on the same page', async () => {
+    const hash = 'a'.repeat(40);
+    boundary = installPlaybackBoundary({
+      ...baseOptions,
+      streams: [{ ...baseOptions.streams[0], infoHash: hash }]
+    });
+    const { rerender } = render(MoviePage, {
+      props: { data: { movieId: movie.id, movie, error: null } }
+    });
+    const other = { ...movie, id: 'tt0000002', title: 'Grid Fixture Two' };
+    await rerender({ data: { movieId: other.id, movie: other, error: null } });
+
+    await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(video).toBeInTheDocument();
+    expect(video.getAttribute('src')).toBe(`${PROXY_ORIGIN}/torrents/${hash}/stream/1`);
+    expect(rqbitRequest('POST', `/torrents/${hash}/forget`)).toBeUndefined();
+  });
+
   it('deletes a stream that is too large for the cache when the player closes', async () => {
     settingsStore.cacheLimitBytes = 1000;
     await openAndPlay();

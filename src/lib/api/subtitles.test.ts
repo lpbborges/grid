@@ -265,6 +265,22 @@ describe('subtitles api', () => {
       expect(findPreferredSubtitleIndex(subs, 'pt')).toBe(1);
     });
 
+    it('prefers an embedded track over an external one of the same language', () => {
+      const subs = [
+        sub('pob', 'Externa'),
+        { ...sub('pob', 'Embutida'), group: 'Embedded' as const }
+      ];
+      expect(findPreferredSubtitleIndex(subs, 'pt')).toBe(1);
+    });
+
+    it('prefers an external Brazilian track over an embedded European one', () => {
+      const subs = [
+        { ...sub('por', 'Embutida'), group: 'Embedded' as const },
+        sub('pob', 'Externa')
+      ];
+      expect(findPreferredSubtitleIndex(subs, 'pt')).toBe(1);
+    });
+
     it('matches English and Spanish by 2- or 3-letter codes, case-insensitively', () => {
       const subs = [sub('POR', 'Português'), sub('EN', 'Inglês'), sub('spa', 'Espanhol')];
       expect(findPreferredSubtitleIndex(subs, 'en')).toBe(1);

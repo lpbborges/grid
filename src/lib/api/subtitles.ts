@@ -20,6 +20,7 @@ export function getLanguageName(code: string, strict = false): string | null {
     brazilian: 'Português BR',
     por: 'Português',
     pt: 'Português',
+    portuguese: 'Português',
     eng: 'Inglês',
     en: 'Inglês',
     english: 'Inglês',
@@ -142,10 +143,10 @@ export function getLanguageName(code: string, strict = false): string | null {
 const PREFERRED_SUBTITLE_CODES: Record<string, string[][]> = {
   pt: [
     ['pob', 'pb', 'ptbr', 'pt-br', 'pt_br'],
-    ['por', 'pt']
+    ['por', 'pt', 'portuguese']
   ],
-  en: [['eng', 'en']],
-  es: [['spa', 'es', 'es-419']]
+  en: [['eng', 'en', 'english']],
+  es: [['spa', 'es', 'es-419', 'spanish']]
 };
 
 function normalizeLanguageCode(code: string | undefined): string {
@@ -162,13 +163,16 @@ export function findPreferredSubtitleIndex(subtitles: SubtitleTrack[], preferenc
   const tiers = PREFERRED_SUBTITLE_CODES[preference];
   if (!tiers) return -1;
   for (const codes of tiers) {
-    const idx = subtitles.findIndex((s) => codes.includes(normalizeLanguageCode(s.lang)));
+    const matches = (s: SubtitleTrack) => codes.includes(normalizeLanguageCode(s.lang));
+    const embedded = subtitles.findIndex((s) => s.group === 'Embedded' && matches(s));
+    if (embedded !== -1) return embedded;
+    const idx = subtitles.findIndex(matches);
     if (idx !== -1) return idx;
   }
   return -1;
 }
 
-// fetch_external_subtitle (src-tauri/src/lib.rs) allows 30 calls per minute.
+// fetch_external_subtitle (src-tauri/src/lib.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
 // Popular titles list ~100 subtitles (dozens in English alone) with Portuguese
 // near the end, so fetching them all in API order got the user's language
 // rejected. Fetch a bounded, preference-first subset instead.
@@ -205,16 +209,19 @@ function releaseMatchScore(entry: ExternalSubtitleEntry, fileTokens: Set<string>
   return score;
 }
 
+/** Sort key for a subtitle language: 0 is the most preferred. */
+export function preferredLanguageRank(lang: string | undefined, preference?: string): number {
+  const preferredCodes = (preference && PREFERRED_SUBTITLE_CODES[preference]?.flat()) || [];
+  const idx = preferredCodes.indexOf(normalizeLanguageCode(lang));
+  return idx === -1 ? preferredCodes.length : idx;
+}
+
 function selectSubtitlesToFetch(
   entries: ExternalSubtitleEntry[],
   preference?: string,
   release?: SubtitleRelease
 ): ExternalSubtitleEntry[] {
-  const preferredCodes = (preference && PREFERRED_SUBTITLE_CODES[preference]?.flat()) || [];
-  const rank = (entry: ExternalSubtitleEntry) => {
-    const idx = preferredCodes.indexOf(normalizeLanguageCode(entry.lang));
-    return idx === -1 ? preferredCodes.length : idx;
-  };
+  const rank = (entry: ExternalSubtitleEntry) => preferredLanguageRank(entry.lang, preference);
   const fileTokens = releaseTokens(release?.filename ?? '');
   const scores = new Map(entries.map((entry) => [entry, releaseMatchScore(entry, fileTokens)]));
   // Array.prototype.sort is stable, so API order is kept among equal matches.

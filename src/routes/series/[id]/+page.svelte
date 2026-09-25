@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { logger } from '$lib/logger';
   import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
   import { buildMagnet, getSeriesStreams, parseSeedCount } from '$lib/api/torrentio';
@@ -57,7 +58,7 @@
       selectedSeason = null;
       translatedEpisodes = {};
       if (hasMountedTorrentEffect) {
-        player.stop();
+        untrack(() => player.stop());
       }
       hasMountedTorrentEffect = true;
     }

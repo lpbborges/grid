@@ -12,21 +12,9 @@ class Logger {
   }
 
   private log(level: LogLevel, message: unknown, context?: LogContext) {
-    if (level === 'error') {
-      if (context) console.error(message, context);
-      else console.error(message);
-    } else if (level === 'warn') {
-      if (context) console.warn(message, context);
-      else console.warn(message);
-    } else if (level === 'info') {
-      if (context) console.info(message, context);
-      else console.info(message);
-    } else if (level === 'debug') {
-      if (this.level === 'debug') {
-        if (context) console.debug(message, context);
-        else console.debug(message);
-      }
-    }
+    if (level === 'debug' && this.level !== 'debug') return;
+    const args = context === undefined ? [message] : [message, context];
+    console[level](...args);
   }
 
   debug(message: unknown, context?: LogContext) {

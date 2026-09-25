@@ -54,6 +54,21 @@ pub fn write_manifest(path: &Path, manifest: &Manifest) -> std::io::Result<()> {
     std::fs::rename(&tmp_path, path)
 }
 
+static MANIFEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Reads, changes and writes the manifest while holding a process-wide lock,
+/// so concurrent commands can't lose each other's updates.
+pub fn update_manifest<T>(
+    path: &Path,
+    change: impl FnOnce(&mut Manifest) -> T,
+) -> std::io::Result<T> {
+    let _guard = MANIFEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut manifest = read_manifest(path);
+    let result = change(&mut manifest);
+    write_manifest(path, &manifest)?;
+    Ok(result)
+}
+
 pub fn upsert_entry(manifest: &mut Manifest, entry: CacheEntry) {
     if let Some(existing) = manifest
         .entries

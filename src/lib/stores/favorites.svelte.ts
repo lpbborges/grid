@@ -1,29 +1,15 @@
-import { browser } from '$app/environment';
+import { readStoredIds, writeStored } from './storage';
 import { watchedStore } from './watched.svelte';
 
 class FavoritesStore {
   favoriteIds = $state<string[]>([]);
 
   constructor() {
-    if (browser) {
-      const stored = localStorage.getItem('grid-favorites');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            this.favoriteIds = parsed.map(String);
-          }
-        } catch (e) {
-          console.error('Failed to load favorites state', e);
-        }
-      }
-    }
+    this.favoriteIds = readStoredIds('grid-favorites');
   }
 
   private save() {
-    if (browser) {
-      localStorage.setItem('grid-favorites', JSON.stringify(this.favoriteIds));
-    }
+    writeStored('grid-favorites', JSON.stringify(this.favoriteIds));
   }
 
   has(id: string | number): boolean {

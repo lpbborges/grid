@@ -1,9 +1,10 @@
 import { logger } from '$lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
-import { getLanguageName } from '../api/subtitles';
+import { getLanguageName, preferredLanguageRank } from '../api/subtitles';
 import { FetchTimeoutError, fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { hasExtension } from '../utils/fileExtension';
+import { isRecord } from '../utils/isRecord';
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm'];
 const SUBTITLE_EXTENSIONS = ['.srt', '.vtt'];
@@ -112,8 +113,11 @@ export async function getLoadedTorrentInfoHashes(): Promise<string[]> {
   try {
     const res = await fetchWithTimeout(`${ENGINE_URL}/torrents`, {}, 30000);
     if (!res.ok) return [];
-    const data = await res.json();
-    return (data.torrents || []).map((t: { info_hash: string }) => t.info_hash);
+    const data: unknown = await res.json();
+    if (!isRecord(data) || !Array.isArray(data.torrents)) return [];
+    return data.torrents
+      .map((t: unknown) => (isRecord(t) ? t.info_hash : undefined))
+      .filter((hash): hash is string => typeof hash === 'string');
   } catch (error) {
     logger.warn('Failed to list loaded torrents:', error);
     return [];
@@ -121,6 +125,10 @@ export async function getLoadedTorrentInfoHashes(): Promise<string[]> {
 }
 
 export async function forgetTorrent(infoHash: string): Promise<void> {
+  if (!isValidInfoHash(infoHash)) {
+    logger.warn(`Refusing to forget an invalid info hash: ${infoHash}`);
+    return;
+  }
   try {
     await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/forget`, { method: 'POST' }, 8000);
   } catch (error) {
@@ -129,6 +137,10 @@ export async function forgetTorrent(infoHash: string): Promise<void> {
 }
 
 export async function deleteTorrent(infoHash: string): Promise<void> {
+  if (!isValidInfoHash(infoHash)) {
+    logger.warn(`Refusing to delete an invalid info hash: ${infoHash}`);
+    return;
+  }
   try {
     await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/delete`, { method: 'POST' }, 8000);
   } catch (error) {
@@ -210,8 +222,10 @@ export async function addTorrent(
       );
     }
 
-    const data = await res.json();
-    return data.details as TorrentEngineDetails;
+    const data: unknown = await res.json();
+    const details = isRecord(data) ? parseEngineDetails(data.details) : null;
+    if (!details) throw new Error('The engine returned an unexpected response to the add');
+    return details;
   }
 
   throw new AddTorrentTimeoutError(ADD_ATTEMPT_TIMEOUTS_MS.length);
@@ -293,27 +307,57 @@ export function getStreamUrl(
   return `${STREAM_URL}/torrents/${infoHash}/stream/${fileIdx}${query}`;
 }
 
+// fetch_torrent_subtitle (src-tauri/src/lib.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
+const MAX_TORRENT_SUBTITLE_FETCHES = 25;
+
+const BRAZILIAN_MARKERS = new Set(['br', 'ptbr', 'pob', 'pb', 'brazil', 'brazilian', 'brasil']);
+const PORTUGUESE_NAMES = new Set(['pt', 'por', 'portuguese']);
+const SUBTITLE_TAGS = new Set(['forced', 'sdh', 'cc', 'full', 'default']);
+
+function subtitleFileLanguage(path: string): string {
+  const baseName = (path.split(/[/\\]/).pop() || path).replace(/\.[^.]+$/, '');
+  const tokens = baseName.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  while (tokens.length > 1 && SUBTITLE_TAGS.has(tokens[tokens.length - 1].toLowerCase())) {
+    tokens.pop();
+  }
+  const code = tokens[tokens.length - 1] ?? '';
+  const last = code.toLowerCase();
+  const previous = tokens[tokens.length - 2]?.toLowerCase() ?? '';
+  if (
+    BRAZILIAN_MARKERS.has(last) ||
+    (PORTUGUESE_NAMES.has(last) && BRAZILIAN_MARKERS.has(previous))
+  ) {
+    return 'pob';
+  }
+  if (getLanguageName(last, true) || (tokens.length > 1 && /^[a-z]{2,3}$/.test(last))) return code;
+  return 'Unknown';
+}
+
 export async function getTorrentSubtitles(
   infoHash: string,
-  files: { name: string; length: number }[]
+  files: { name: string; length: number }[],
+  preference?: string
 ): Promise<
   { id: string; url: string; lang: string; label: string; group: 'Embedded' | 'Extra' }[]
 > {
   const candidates: {
     idx: number;
-    name: string;
+    lang: string;
   }[] = [];
   files.forEach((f, idx) => {
     if (hasExtension(f.name, SUBTITLE_EXTENSIONS)) {
-      candidates.push({ idx, name: f.name });
+      candidates.push({ idx, lang: subtitleFileLanguage(f.name) });
     }
   });
+  const selected = candidates
+    .sort(
+      (a, b) =>
+        preferredLanguageRank(a.lang, preference) - preferredLanguageRank(b.lang, preference)
+    )
+    .slice(0, MAX_TORRENT_SUBTITLE_FETCHES);
 
   const results = await Promise.allSettled(
-    candidates.map(async ({ idx, name }) => {
-      const baseName = name.split(/[/\\]/).pop() || name;
-      const langMatch = baseName.match(/(?:^|[._-])([a-zA-Z]{2,3})\.(?:srt|vtt)$/i);
-      const lang = langMatch ? langMatch[1] : 'Unknown';
+    selected.map(async ({ idx, lang }) => {
       const langName = getLanguageName(lang);
 
       const vtt = await invoke<string>('fetch_torrent_subtitle', {
@@ -363,6 +407,38 @@ export interface TorrentStats {
   };
 }
 
+function parseEngineDetails(value: unknown): TorrentEngineDetails | null {
+  if (!isRecord(value) || typeof value.info_hash !== 'string' || !Array.isArray(value.files)) {
+    return null;
+  }
+  const files: TorrentEngineDetails['files'] = [];
+  for (const file of value.files) {
+    if (!isRecord(file) || typeof file.name !== 'string' || typeof file.length !== 'number') {
+      return null;
+    }
+    files.push({ name: file.name, length: file.length });
+  }
+  return { info_hash: value.info_hash, files };
+}
+
+function parseTorrentStats(value: unknown): TorrentStats {
+  if (!isRecord(value)) return {};
+  const stats: TorrentStats = {};
+  if (
+    Array.isArray(value.file_progress) &&
+    value.file_progress.every((bytes) => typeof bytes === 'number')
+  ) {
+    stats.file_progress = value.file_progress;
+  }
+  const snapshot = isRecord(value.live) ? value.live.snapshot : undefined;
+  if (isRecord(snapshot) && typeof snapshot.downloaded_and_checked_bytes === 'number') {
+    stats.live = {
+      snapshot: { downloaded_and_checked_bytes: snapshot.downloaded_and_checked_bytes }
+    };
+  }
+  return stats;
+}
+
 export async function getTorrentStats(infoHash: string): Promise<TorrentStats | null> {
   if (!isValidInfoHash(infoHash)) {
     return null;
@@ -370,7 +446,7 @@ export async function getTorrentStats(infoHash: string): Promise<TorrentStats | 
   try {
     const res = await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/stats/v1`, {}, 8000);
     if (!res.ok) return null;
-    return await res.json();
+    return parseTorrentStats(await res.json());
   } catch {
     return null;
   }

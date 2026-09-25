@@ -82,6 +82,7 @@ describe('nativeTrackLabel', () => {
       nativeTrackLabel(track({ id: 1, type: 'sub', lang, title }));
     expect(label('por', 'Portuguese (Brazil)')).toBe('Português BR');
     expect(label('por', 'Brazilian')).toBe('Português BR');
+    expect(label('por', 'Português (BR)')).toBe('Português BR');
     expect(label('pt-BR')).toBe('Português BR');
     expect(label('por', 'Portuguese (Portugal)')).toBe('Português');
     expect(label('pt-PT')).toBe('Português');

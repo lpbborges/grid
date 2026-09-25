@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { watchedStore } from './watched.svelte';
+import { readStoredJson, writeStored } from './storage';
 
 export type ProgressData = {
   time: number;
@@ -9,23 +10,40 @@ export type ProgressData = {
 
 export const PROGRESS_PERSIST_INTERVAL_MS = 5000;
 
+function isProgressData(value: unknown): value is ProgressData {
+  if (typeof value !== 'object' || value === null) return false;
+  const { time, duration, updatedAt } = value as Record<string, unknown>;
+  return (
+    typeof time === 'number' &&
+    Number.isFinite(time) &&
+    time >= 0 &&
+    typeof duration === 'number' &&
+    Number.isFinite(duration) &&
+    duration > 0 &&
+    typeof updatedAt === 'number' &&
+    Number.isFinite(updatedAt)
+  );
+}
+
+function readStoredProgress(): Record<string, ProgressData> {
+  const parsed = readStoredJson('grid-progress');
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+  const progress: Record<string, ProgressData> = {};
+  for (const [key, entry] of Object.entries(parsed)) {
+    if (isProgressData(entry)) {
+      progress[key] = { time: entry.time, duration: entry.duration, updatedAt: entry.updatedAt };
+    }
+  }
+  return progress;
+}
+
 class ProgressStore {
   progress = $state<Record<string, ProgressData>>({});
   #persistTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
+    this.progress = readStoredProgress();
     if (browser) {
-      const stored = localStorage.getItem('grid-progress');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (typeof parsed === 'object' && parsed !== null) {
-            this.progress = parsed;
-          }
-        } catch (e) {
-          console.error('Failed to load progress state', e);
-        }
-      }
       window.addEventListener('pagehide', () => this.persistNow());
     }
   }
@@ -33,9 +51,7 @@ class ProgressStore {
   private persistNow() {
     clearTimeout(this.#persistTimer);
     this.#persistTimer = undefined;
-    if (browser) {
-      localStorage.setItem('grid-progress', JSON.stringify(this.progress));
-    }
+    writeStored('grid-progress', JSON.stringify(this.progress));
   }
 
   private schedulePersist() {

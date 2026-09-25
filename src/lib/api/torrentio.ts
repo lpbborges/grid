@@ -1,5 +1,6 @@
 import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+import { isRecord } from '../utils/isRecord';
 import { defaultTrackers, endpoints } from './endpoints';
 import { settingsStore } from '../stores/settings.svelte';
 
@@ -40,6 +41,22 @@ const AUDIO_TO_TORRENTIO_LANG: Record<string, string> = {
   es: 'spanish'
 };
 
+function isStream(value: unknown): value is Stream {
+  if (!isRecord(value)) return false;
+  const optional = (field: unknown, type: 'string' | 'number') =>
+    field === undefined || typeof field === type;
+  return (
+    optional(value.name, 'string') &&
+    optional(value.title, 'string') &&
+    optional(value.infoHash, 'string') &&
+    optional(value.fileIdx, 'number') &&
+    optional(value.url, 'string') &&
+    (value.sources === undefined ||
+      (Array.isArray(value.sources) && value.sources.every((s) => typeof s === 'string'))) &&
+    (value.behaviorHints === undefined || isRecord(value.behaviorHints))
+  );
+}
+
 async function fetchTorrentioStreams(path: string): Promise<Stream[]> {
   try {
     const prefLang =
@@ -50,8 +67,9 @@ async function fetchTorrentioStreams(path: string): Promise<Stream[]> {
     if (!res.ok) {
       throw new Error(`Failed to fetch streams: ${res.statusText}`);
     }
-    const data = await res.json();
-    return data.streams || [];
+    const data: unknown = await res.json();
+    if (!isRecord(data) || !Array.isArray(data.streams)) return [];
+    return data.streams.filter(isStream);
   } catch (error) {
     logger.error(error);
     return [];

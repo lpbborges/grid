@@ -157,6 +157,47 @@ describe('torrent engine', () => {
     expect(hashes).toEqual(['123', '456']);
   });
 
+  it('forgetTorrent and deleteTorrent never send an invalid info hash to the engine', async () => {
+    await torrent.forgetTorrent('../torrents');
+    await torrent.deleteTorrent('not-a-hash');
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('getLoadedTorrentInfoHashes skips entries without an info hash', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ torrents: [{ info_hash: '123' }, { id: 1 }, null, 'x'] })
+    });
+    expect(await torrent.getLoadedTorrentInfoHashes()).toEqual(['123']);
+  });
+
+  it('getLoadedTorrentInfoHashes returns an empty array for an unexpected body', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    expect(await torrent.getLoadedTorrentInfoHashes()).toEqual([]);
+  });
+
+  it('rejects an add whose response has no usable torrent details', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ details: { info_hash: 'a'.repeat(40), files: [{ name: 1 }] } })
+    });
+
+    await expect(torrent.addTorrent('magnet:?xt=test')).rejects.toThrow(/unexpected response/i);
+  });
+
+  it('getTorrentStats keeps only well-formed progress', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        file_progress: 'lots',
+        live: { snapshot: { downloaded_and_checked_bytes: 'x' } }
+      })
+    });
+
+    expect(await torrent.getTorrentStats('a'.repeat(40))).toEqual({});
+  });
+
   it('getLoadedTorrentInfoHashes returns an empty array on failure', async () => {
     (globalThis.fetch as any).mockRejectedValueOnce(new Error('network error'));
     const hashes = await torrent.getLoadedTorrentInfoHashes();
@@ -627,6 +668,60 @@ describe('getTorrentSubtitles', () => {
       label: 'Desconhecido',
       group: 'Embedded'
     });
+  });
+
+  it('fetches at most 25 subtitles, the preferred language first', async () => {
+    const { getTorrentSubtitles } = await import('./torrent');
+    const files = [
+      { name: 'Show.S01E01.mkv', length: 1000 },
+      ...Array.from({ length: 30 }, (_, i) => ({ name: `Subs/${i}.en.srt`, length: 100 })),
+      { name: 'Subs/pilot.pt.srt', length: 100 },
+      { name: 'Subs/pilot.pob.srt', length: 100 }
+    ];
+
+    const subs = await getTorrentSubtitles('dummyHash', files, 'pt');
+
+    const fetched = (invoke as any).mock.calls
+      .filter(([command]: [string]) => command === 'fetch_torrent_subtitle')
+      .map(([, args]: [string, { fileIdx: number }]) => args.fileIdx);
+    expect(fetched).toHaveLength(25);
+    expect(subs.slice(0, 2).map((s) => s.lang)).toEqual(['pob', 'pt']);
+  });
+
+  it('tells Brazilian from European Portuguese by the file name', async () => {
+    const { getTorrentSubtitles } = await import('./torrent');
+    const brazilian = [
+      'Movie.pt-BR.srt',
+      'Movie.pt_br.srt',
+      'Movie.ptbr.srt',
+      'Movie.PT-BR.forced.srt',
+      'Subs/Brazilian.srt',
+      'Subs/22_Brazilian Portuguese.srt',
+      'Subs/Portuguese (Brazil).srt'
+    ];
+    const european = ['Movie.pt.srt', 'Movie.por.srt', 'Subs/21_Portuguese.srt'];
+    const files = [...brazilian, ...european].map((name) => ({ name, length: 100 }));
+
+    const subs = await getTorrentSubtitles('dummyHash', files);
+
+    expect(subs.slice(0, brazilian.length).map((s) => s.label)).toEqual(
+      brazilian.map(() => 'Português BR')
+    );
+    expect(subs.slice(brazilian.length).map((s) => s.label)).toEqual(
+      european.map(() => 'Português')
+    );
+  });
+
+  it('reads the language before a forced or SDH tag', async () => {
+    const { getTorrentSubtitles } = await import('./torrent');
+    const files = [
+      { name: 'Movie.en.sdh.srt', length: 100 },
+      { name: 'Subs/3_English.srt', length: 100 }
+    ];
+
+    const subs = await getTorrentSubtitles('dummyHash', files);
+
+    expect(subs.map((s) => s.label)).toEqual(['Inglês', 'Inglês']);
   });
 
   it('treats uppercase subtitle extensions as subtitles', async () => {
