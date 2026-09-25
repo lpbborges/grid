@@ -295,7 +295,11 @@ describe('useMpvBackend', () => {
     expect(ok).toBe(true);
     expect(player.isRunning).toBe(true);
     const commands = vi.mocked(invoke).mock.calls.map((call) => call[0]);
-    expect(commands).toEqual(['start_native_player', 'native_player_set_tracks']);
+    expect(commands).toEqual([
+      'start_native_player',
+      'native_player_set_volume',
+      'native_player_set_tracks'
+    ]);
     // D4 is dropped: mpv renders inside this window, so minimizing it would
     // hide the player itself.
     expect(windowApi.minimize).not.toHaveBeenCalled();
@@ -492,6 +496,27 @@ describe('useMpvBackend', () => {
     // make every film nearly silent.
     expect(invoke).toHaveBeenCalledWith('native_player_set_volume', { percent: 65 });
     expect(player.volume).toBe(0.65);
+  });
+
+  it('starts every playback at the volume the controls show', async () => {
+    const { player } = await start();
+    await player.setVolume(0);
+    await player.stop();
+    vi.mocked(invoke).mockClear();
+
+    await player.start({
+      url: 'http://127.0.0.1:1/x',
+      mediaId: 'tt2',
+      subtitles: [],
+      startSeconds: 0
+    });
+
+    expect(player.volume).toBe(1);
+    const commands = vi.mocked(invoke).mock.calls.map((call) => call[0]);
+    expect(commands.indexOf('native_player_set_volume')).toBeLessThan(
+      commands.indexOf('native_player_set_tracks')
+    );
+    expect(invoke).toHaveBeenCalledWith('native_player_set_volume', { percent: 100 });
   });
 
   it('tracks position from native-player-time', async () => {

@@ -316,6 +316,7 @@ export function useMpvBackend() {
         options.originalLanguage,
         external.map((subtitle) => subtitle.lang)
       );
+      await invoke('native_player_set_volume', { percent: volume * 100 });
       // mpv launches paused; this applies the preferences and starts playback.
       await invoke('native_player_set_tracks', { aid, sid });
       // The flags still describe mpv's own defaults, so without this the menu
