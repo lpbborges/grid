@@ -120,7 +120,12 @@ jobs:
           cat > "$RUNNER_TEMP/helpers.sh" <<'EOF'
           P=mingw-w64-ucrt-x86_64-
           # Imported DLL names of a PE file, lower-cased.
-          imports() { objdump -p "$1" | sed -n 's/^[[:space:]]*DLL Name: //p' | tr -d '\r' | tr '[:upper:]' '[:lower:]'; }
+          # Fails if objdump does, whether or not the caller has pipefail.
+          imports() {
+            local out
+            out=$(objdump -p "$1") || return 1
+            sed -n 's/^[[:space:]]*DLL Name: //p' <<< "$out" | tr -d '\r' | tr '[:upper:]' '[:lower:]'
+          }
           # A field of an installed package, read from its exact local-DB entry
           # (no globbing): pkginfo <full package name> <BASE|VERSION|LICENSE>.
           # Multi-line fields (LICENSE) are joined with ';'.
@@ -213,7 +218,13 @@ jobs:
             seen[$n]=1
             if [ -n "${where[$n]:-}" ]; then
               echo "${where[$n]}" >> "$RUNNER_TEMP/closure.txt"
-              for dep in $(imports "${where[$n]}"); do
+              # Every DLL imports something (kernel32 at least): an empty list
+              # means objdump could not read it, and its dependencies would be lost.
+              deps=$(imports "${where[$n]}") || deps=
+              if [ -z "$deps" ]; then
+                echo "::error::could not read the imports of ${where[$n]}"; bad=1; continue
+              fi
+              for dep in $deps; do
                 needed_by[$dep]=${needed_by[$dep]:-$n}; queue+=("$dep")
               done
               continue
@@ -245,7 +256,7 @@ jobs:
             done
           done
           imp=$(imports /ucrt64/bin/libshaderc_shared.dll)
-          if grep -qE '^(glslang|spirv|libspirv|libstdc\+\+|libgcc_s|libwinpthread)' <<< "$imp"; then
+          if grep -qE '^(lib)?(glslang|spirv)|^libstdc|^libgcc_s|^libwinpthread' <<< "$imp"; then
             echo "::error::libshaderc_shared.dll now imports glslang/SPIRV-Tools/the C++ runtime as DLLs; revisit the static manifest"; exit 1
           fi
 
@@ -302,6 +313,9 @@ jobs:
           done < "$RUNNER_TEMP/reviewed-static.txt"
           grep -q 'Bison Exception' /ucrt64/share/licenses/glslang/LICENSE.txt \
             || { echo "::error::glslang's LICENSE.txt no longer carries the Bison exception"; bad=1; }
+          # freetype ships under FTL, the OR alternative: its text must be there.
+          [ -s /ucrt64/share/licenses/freetype/FTL.TXT ] \
+            || { echo "::error::freetype no longer installs FTL.TXT, the licence it ships under"; bad=1; }
           [ "$bad" = 0 ] || exit 1
           cut -d' ' -f2 "$RUNNER_TEMP/dll-packages.txt" | sort -u > "$RUNNER_TEMP/packages.txt"
           while IFS= read -r line; do col "$line" 1; done < "$RUNNER_TEMP/reviewed-static.txt" > "$RUNNER_TEMP/static-packages.txt"
@@ -338,7 +352,7 @@ jobs:
             curl -fsSL --retry 3 -o "src/msys2/$src.src.tar.zst" "$url" \
               || { echo "::error::no source package at $url (MSYS2 replaced it since the install: re-run)"; exit 1; }
           done < "$RUNNER_TEMP/sources.txt"
-          [ "$(ls src/msys2 | wc -l)" = "$(wc -l < "$RUNNER_TEMP/sources.txt")" ]
+          [ "$(find src/msys2 -type f | wc -l)" = "$(wc -l < "$RUNNER_TEMP/sources.txt")" ]
           echo "MSYS2 source packages:"; cat "$RUNNER_TEMP/sources.txt"
           XZ_OPT=-T0 tar -cJf libmpv-windows-source.tar.xz --exclude-vcs \
             --transform 's|^src|libmpv-windows-source|' src
@@ -357,11 +371,16 @@ jobs:
           cp ffmpeg/COPYING.LGPLv2.1 dist/LICENSES/ffmpeg-LGPL-2.1.txt
           cp libplacebo/LICENSE dist/LICENSES/libplacebo-LGPL-2.1.txt
           cp libplacebo/3rdparty/fast_float/LICENSE-MIT dist/LICENSES/fast_float-MIT.txt
-          cp libplacebo/3rdparty/glad/LICENSE dist/LICENSES/glad-MIT-and-Khronos.txt
+          # No glad notice: with -Dopengl=disabled libplacebo neither generates nor
+          # compiles its GL loader. Vulkan-Headers is compiled in even with
+          # -Dvulkan=disabled (vulkan/stubs.c includes libplacebo/vulkan.h, which
+          # includes <vulkan/vulkan.h> from 3rdparty/), so its texts ship as on Linux.
           cp libplacebo/3rdparty/Vulkan-Headers/LICENSE.md dist/LICENSES/Vulkan-Headers-LICENSE.md
+          cp libplacebo/3rdparty/Vulkan-Headers/LICENSES/Apache-2.0.txt dist/LICENSES/Vulkan-Headers-Apache-2.0.txt
+          cp libplacebo/3rdparty/Vulkan-Headers/LICENSES/MIT.txt dist/LICENSES/Vulkan-Headers-MIT.txt
           # One folder per shipped DLL's package and per static part (D3, D5).
           while read -r short; do
-            if [ -d "/ucrt64/share/licenses/$short" ]; then
+            if [ -n "$(find "/ucrt64/share/licenses/$short" -type f -print -quit 2>/dev/null)" ]; then
               cp -r "/ucrt64/share/licenses/$short" "dist/LICENSES/$short"
             elif [ "$short" = libass ]; then
               # MSYS2's libass installs no licence file: take COPYING from the
@@ -378,7 +397,7 @@ jobs:
             else
               echo "::error::$P$short installs no licence files"; exit 1
             fi
-          done < <(cat "$RUNNER_TEMP/packages.txt" "$RUNNER_TEMP/static-packages.txt")
+          done < <(sort -u "$RUNNER_TEMP/packages.txt" "$RUNNER_TEMP/static-packages.txt")
           # Read back from the configured builds, not echoed (as on Linux).
           ffconf=$(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' ffmpeg/config.h)
           [ -n "$ffconf" ] || { echo "::error::FFMPEG_CONFIGURATION not found in ffmpeg/config.h"; exit 1; }
