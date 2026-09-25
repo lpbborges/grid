@@ -1,11 +1,13 @@
 // Downloads the pinned LGPL libmpv for this platform into src-tauri/lib/<os>/.
 //
-// Windows: always needed to build (libmpv-2.dll + an MSVC import library).
+// Windows: always needed to build (libmpv-2.dll, the DLLs it loads, their
+// licences, and an MSVC import library).
 // Linux: only with --bundle (release packaging, Task 9); development links the
 // system libmpv. macOS: nothing to do, it plays through <video>.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -18,6 +20,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { assertNoSymlinks, isWindowsSetUp, windowsRuntimeDlls } from './libmpv-archive.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const lock = JSON.parse(readFileSync(path.join(root, 'scripts', 'libmpv.lock.json'), 'utf8'));
@@ -32,19 +35,6 @@ async function fetchVerified(entry, dest) {
     throw new Error(`checksum mismatch for ${entry.url}: expected ${entry.sha256}, got ${actual}`);
   }
   writeFileSync(dest, bytes);
-}
-
-function findFile(dir, name) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const found = findFile(full, name);
-      if (found) return found;
-    } else if (entry.name === name) {
-      return full;
-    }
-  }
-  return null;
 }
 
 function msvcTool(name) {
@@ -122,9 +112,12 @@ async function setupWindows() {
   const stamp = path.join(out, STAMP);
   const current = existsSync(stamp) ? readFileSync(stamp, 'utf8').trim() : '';
   if (
-    current === entry.sha256 &&
-    existsSync(path.join(out, 'mpv.lib')) &&
-    existsSync(path.join(out, 'libmpv-2.dll'))
+    isWindowsSetUp({
+      stamp: current,
+      sha256: entry.sha256,
+      hasMpvLib: existsSync(path.join(out, 'mpv.lib')),
+      hasLibmpvDll: existsSync(path.join(out, 'libmpv-2.dll'))
+    })
   ) {
     console.log('libmpv already set up in', out);
     return;
@@ -132,19 +125,29 @@ async function setupWindows() {
   if (current && current !== entry.sha256) {
     console.log('libmpv.lock.json changed; replacing the libmpv in', out);
   }
+  rmSync(stamp, { force: true });
+  rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   const work = mkdtempSync(path.join(tmpdir(), 'grid-libmpv-'));
   try {
-    const archive = path.join(work, 'libmpv.7z');
+    const archive = path.join(work, 'libmpv.tar.gz');
     await fetchVerified(entry, archive);
-    execFileSync('7z', ['x', archive, `-o${work}`, '-y'], { stdio: 'inherit' });
-
-    const dll = findFile(work, 'libmpv-2.dll');
-    if (!dll) throw new Error('libmpv-2.dll not found in the archive');
-    copyFileSync(dll, path.join(out, 'libmpv-2.dll'));
-
-    const def = findFile(work, 'mpv.def') ?? path.join(work, 'mpv.def');
-    if (!existsSync(def)) defFromExports(dll, def);
+    // Windows' own bsdtar: a GNU tar earlier on PATH (Git Bash) reads the
+    // drive letter in C:\... as a remote host.
+    execFileSync(
+      path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe'),
+      ['-xzf', archive, '-C', work],
+      { stdio: 'inherit' }
+    );
+    assertNoSymlinks(work);
+    const bin = path.join(work, 'bin');
+    for (const dll of windowsRuntimeDlls(readdirSync(bin, { withFileTypes: true }))) {
+      copyFileSync(path.join(bin, dll), path.join(out, dll));
+    }
+    cpSync(path.join(work, 'LICENSES'), path.join(out, 'LICENSES'), { recursive: true });
+    const dll = path.join(out, 'libmpv-2.dll');
+    const def = path.join(work, 'mpv.def');
+    defFromExports(dll, def);
     execFileSync(
       msvcTool('lib.exe'),
       [`/def:${def}`, `/out:${path.join(out, 'mpv.lib')}`, '/machine:x64', '/name:libmpv-2.dll'],

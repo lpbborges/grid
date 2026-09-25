@@ -302,7 +302,7 @@ jobs:
         run: npm run setup:libmpv
       - name: Build the MSI and NSIS installers
         run: npx tauri build --bundles msi,nsis
-      - name: Check the MSI installs libmpv-2.dll and its licence texts beside grid.exe
+      - name: Check the MSI installs every libmpv DLL and its licence texts beside grid.exe
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -321,20 +321,15 @@ jobs:
           if ($exe.Count -ne 1) { throw "expected exactly one grid.exe, found $($exe.Count)" }
           $dir = $exe[0].DirectoryName
           Write-Host "grid.exe is in $dir"
-          $required = @(
-            'libmpv-2.dll',
-            'LICENSES\mpv-LGPL-2.1.txt',
-            'LICENSES\ffmpeg-LGPL-2.1.txt',
-            'LICENSES\libplacebo-LGPL-2.1.txt',
-            'LICENSES\dav1d-BSD-2.txt'
-          )
+          $required = @(./scripts/windows-layout-required.ps1)
+          Write-Host "checking $($required.Count) paths"
           $missing = @($required | Where-Object { -not (Test-Path -PathType Leaf (Join-Path $dir $_)) })
           if ($missing.Count -gt 0) {
             $missing | ForEach-Object { Write-Host "::error::MSI does not install $_ beside grid.exe" }
             exit 1
           }
           $required | ForEach-Object { Write-Host "present beside grid.exe: $_" }
-      - name: Check the NSIS installer carries libmpv-2.dll and its licence texts
+      - name: Check the NSIS installer carries every libmpv DLL and its licence texts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -345,17 +340,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "7z could not list the NSIS installer" }
           $paths = @($listing | Where-Object { $_ -like 'Path = *' } | ForEach-Object { $_.Substring(7) })
           $paths
-          $missing = @(
-            'libmpv-2.dll',
-            'LICENSES\mpv-LGPL-2.1.txt',
-            'LICENSES\ffmpeg-LGPL-2.1.txt',
-            'LICENSES\libplacebo-LGPL-2.1.txt',
-            'LICENSES\dav1d-BSD-2.txt'
-          ) | Where-Object { $paths -notcontains $_ }
+          $required = @(./scripts/windows-layout-required.ps1)
+          Write-Host "checking $($required.Count) paths"
+          $missing = @($required | Where-Object { $paths -notcontains $_ })
           if ($missing) {
             $missing | ForEach-Object { Write-Host "::error::NSIS installer does not carry $_" }
             exit 1
           }
+          $required | ForEach-Object { Write-Host "carried by the NSIS installer: $_" }
 
   e2e:
     needs: [frontend, rust]
