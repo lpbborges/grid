@@ -193,16 +193,20 @@ export async function prepareStream({
     // Subtitle failures must never block video playback, which does not
     // depend on them, so each source is isolated with its own catch and
     // fetched concurrently rather than sequentially.
+    const videoFileName = details.files[bestFileIdx]?.name.split(/[/\\]/).pop();
+    const release = videoFileName ? { filename: videoFileName, videoSize: totalBytes } : undefined;
     const [tSubs, eSubs] = await Promise.all([
       getTorrentSubtitles(details.info_hash, details.files).catch((error) => {
         logger.warn('Failed to fetch torrent subtitles, continuing without them:', error);
         return [];
       }),
       mediaId
-        ? getExternalSubtitles(mediaId, season, episode, settingsStore.subtitle).catch((error) => {
-            logger.warn('Failed to fetch external subtitles, continuing without them:', error);
-            return [];
-          })
+        ? getExternalSubtitles(mediaId, season, episode, settingsStore.subtitle, release).catch(
+            (error) => {
+              logger.warn('Failed to fetch external subtitles, continuing without them:', error);
+              return [];
+            }
+          )
         : Promise.resolve([])
     ]);
 

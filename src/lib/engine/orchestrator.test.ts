@@ -296,6 +296,33 @@ describe('prepareStream', () => {
     expect(statusCb).toHaveBeenCalledWith('Carregando vídeo...');
   });
 
+  it('asks for external subtitles matching the chosen file', async () => {
+    vi.mocked(torrentApi.addTorrent).mockResolvedValue(
+      mockDetails({
+        files: [
+          { name: 'Show/sample.mkv', length: 100 },
+          { name: 'Show/Show.S01E02.mkv', length: 200 }
+        ]
+      }) as any
+    );
+
+    await prepareStream({
+      magnet: 'magnet:?xt=test',
+      onStatus: vi.fn(),
+      mediaId: 'tt1',
+      season: 1,
+      episode: 2
+    });
+
+    expect(subtitlesApi.getExternalSubtitles).toHaveBeenCalledWith(
+      'tt1',
+      1,
+      2,
+      settingsStore.subtitle,
+      { filename: 'Show.S01E02.mkv', videoSize: 200 }
+    );
+  });
+
   it('hands the stream URL to the player without probing it', async () => {
     vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
 

@@ -175,19 +175,52 @@ export function findPreferredSubtitleIndex(subtitles: SubtitleTrack[], preferenc
 // The native player writes them all to disk in one batch, capped by
 // MAX_SUBTITLE_FILES (src-tauri/src/player/model.rs): change both together.
 const MAX_EXTERNAL_SUBTITLE_FETCHES = 25;
-const MAX_EXTERNAL_SUBTITLES_PER_LANGUAGE = 2;
+const MAX_EXTERNAL_SUBTITLES_PER_LANGUAGE = 5;
+
+/** The file being played, used to find the subtitles made for that release. */
+export interface SubtitleRelease {
+  filename: string;
+  videoSize: number;
+}
+
+function releaseTokens(name: string): Set<string> {
+  return new Set(
+    name
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 1)
+  );
+}
+
+// How many name tokens (source, resolution, codec, release group, ...) a
+// subtitle shares with the playing file. The service ignores the file name, so
+// subtitles made for this exact release are found here instead.
+function releaseMatchScore(entry: ExternalSubtitleEntry, fileTokens: Set<string>): number {
+  const names = [entry.movieReleaseName, entry.subtitleFileName].filter(
+    (name): name is string => typeof name === 'string'
+  );
+  const entryTokens = releaseTokens(names.join(' '));
+  let score = 0;
+  for (const token of entryTokens) if (fileTokens.has(token)) score++;
+  return score;
+}
 
 function selectSubtitlesToFetch(
   entries: ExternalSubtitleEntry[],
-  preference?: string
+  preference?: string,
+  release?: SubtitleRelease
 ): ExternalSubtitleEntry[] {
   const preferredCodes = (preference && PREFERRED_SUBTITLE_CODES[preference]?.flat()) || [];
   const rank = (entry: ExternalSubtitleEntry) => {
     const idx = preferredCodes.indexOf(normalizeLanguageCode(entry.lang));
     return idx === -1 ? preferredCodes.length : idx;
   };
-  // Array.prototype.sort is stable, so API order is kept within each rank.
-  const ordered = [...entries].sort((a, b) => rank(a) - rank(b));
+  const fileTokens = releaseTokens(release?.filename ?? '');
+  const scores = new Map(entries.map((entry) => [entry, releaseMatchScore(entry, fileTokens)]));
+  // Array.prototype.sort is stable, so API order is kept among equal matches.
+  const ordered = [...entries].sort(
+    (a, b) => rank(a) - rank(b) || (scores.get(b) ?? 0) - (scores.get(a) ?? 0)
+  );
 
   const perLanguage = new Map<string, number>();
   const selected: ExternalSubtitleEntry[] = [];
@@ -223,24 +256,34 @@ export function clearExternalSubtitleCache(): void {
   externalSubtitleCache.clear();
 }
 
+// Stremio addon "extra" arguments, sent the same way Stremio sends them.
+function releaseExtra(release: SubtitleRelease | undefined): string {
+  if (!release) return '';
+  const args = [`filename=${encodeURIComponent(release.filename)}`];
+  if (release.videoSize > 0) args.push(`videoSize=${release.videoSize}`);
+  return `/${args.join('&')}`;
+}
+
 export async function getExternalSubtitles(
   imdbId: string,
   season?: number,
   episode?: number,
-  preference?: string
+  preference?: string,
+  release?: SubtitleRelease
 ): Promise<SubtitleTrack[]> {
   try {
-    const url =
+    const id =
       season !== undefined && episode !== undefined
-        ? `${endpoints.openSubtitles}/subtitles/series/${imdbId}:${season}:${episode}.json`
-        : `${endpoints.openSubtitles}/subtitles/movie/${imdbId}.json`;
+        ? `series/${imdbId}:${season}:${episode}`
+        : `movie/${imdbId}`;
+    const url = `${endpoints.openSubtitles}/subtitles/${id}${releaseExtra(release)}.json`;
     const res = await fetchWithTimeout(url);
     if (!res.ok) return [];
     const data: { subtitles?: ExternalSubtitleEntry[] } = await res.json();
     if (!Array.isArray(data.subtitles)) return [];
 
     const results = await Promise.allSettled(
-      selectSubtitlesToFetch(data.subtitles, preference).map(async (sub) => {
+      selectSubtitlesToFetch(data.subtitles, preference, release).map(async (sub) => {
         const langName = getLanguageName(sub.lang);
         const vtt = await fetchExternalSubtitleContent(sub.url);
         const blob = new Blob([vtt], { type: 'text/vtt' });
