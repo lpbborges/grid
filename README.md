@@ -213,9 +213,7 @@ platforms use a pinned **LGPL** build, recorded by URL and SHA256 in
   (`libmpv-windows-source.tar.xz`). `npm run setup:libmpv` puts every DLL, their
   `LICENSES/` and a generated `mpv.lib` import library in
   `src-tauri/lib/windows/`, and `src-tauri/tauri.windows.conf.json` bundles each
-  `lib/windows/*.dll` and `LICENSES/` beside `grid.exe`. **Windows releases are
-  still off** until FFmpeg is bumped to `n7.1.5` for both platforms and the
-  installer passes a check on a clean Windows machine.
+  `lib/windows/*.dll` and `LICENSES/` beside `grid.exe`.
 
 See [`src-tauri/licenses/README.md`](src-tauri/licenses/README.md) for the
 licensing route, the source offer and how to replace the library.
@@ -251,4 +249,4 @@ Grid does not host, index, or distribute any content. It only plays streams that
 
 [MIT](LICENSE) © 2026 LP
 
-The Linux and Windows builds link libmpv (and the FFmpeg it uses) in-process. The Linux release packages (and, once Windows releases return, the Windows installers) bundle an LGPL-2.1-or-later build of it together with its licence texts and a link to its complete source — see [`src-tauri/licenses/`](src-tauri/licenses/) for the licensing route, the source offer and how to replace the library.
+The Linux and Windows builds link libmpv (and the FFmpeg it uses) in-process. The Linux release packages and the Windows installers bundle an LGPL-2.1-or-later build of it together with its licence texts and a link to its complete source — see [`src-tauri/licenses/`](src-tauri/licenses/) for the licensing route, the source offer and how to replace the library.

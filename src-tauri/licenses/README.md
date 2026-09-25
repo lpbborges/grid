@@ -104,12 +104,6 @@ upstream revisions and the flags each one was built with:
 
 ### Windows: built by Grid
 
-**Windows releases are still off** (`release.yml` has no Windows leg). They
-return once FFmpeg has been bumped to `n7.1.5` and re-pinned for both
-platforms, and the installer has been checked on a clean Windows machine.
-Until then, CI's `package-windows` job builds the installers against this build
-to check their layout, but does not upload them.
-
 `.github/workflows/build-libmpv-windows.yml` builds mpv (`-Dgpl=false`), FFmpeg
 (no `--enable-gpl`, `--enable-version3` or `--enable-nonfree`) and libplacebo
 from their upstream tags as DLLs in MSYS2's UCRT64 environment on
@@ -241,8 +235,9 @@ and the exact MSYS2 source packages (under `msys2/`) of every LGPL part:
 fribidi, glib2, graphite2, libiconv, gettext (`libintl-8.dll`) and the
 MinGW-w64 `headers`. The other MSYS2 packages are under licences that ask only
 for their notice, which ships in `LICENSES/`; `BUILD-INFO.txt` names each one's
-exact source package on `repo.msys2.org/mingw/sources/`. Once Windows releases
-return, `release.yml` will link this archive the same way.
+exact source package on `repo.msys2.org/mingw/sources/`. `release.yml` links
+this archive from every Grid release the same way and refuses to publish if it
+is missing.
 
 **Retention.** Never delete or edit a `libmpv-*` prerelease that any published
 Grid release has pinned. It is where that release's LGPL source is offered.
