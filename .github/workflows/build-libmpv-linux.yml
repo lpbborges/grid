@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mpv_ref: { description: mpv tag, required: true, default: v0.41.0 }
-      ffmpeg_ref: { description: FFmpeg tag, required: true, default: n7.1 }
+      ffmpeg_ref: { description: FFmpeg tag, required: true, default: n7.1.5 }
       libplacebo_ref: { description: libplacebo tag, required: true, default: v7.351.0 }
       dav1d_ref: { description: dav1d tag, required: true, default: 1.5.1 }
       libdisplay_info_ref: { description: libdisplay-info tag, required: true, default: 0.2.0 }
@@ -18,7 +18,7 @@ permissions:
 
 env:
   MPV_REF: ${{ inputs.mpv_ref || 'v0.41.0' }}
-  FFMPEG_REF: ${{ inputs.ffmpeg_ref || 'n7.1' }}
+  FFMPEG_REF: ${{ inputs.ffmpeg_ref || 'n7.1.5' }}
   LIBPLACEBO_REF: ${{ inputs.libplacebo_ref || 'v7.351.0' }}
   # dav1d is bundled because its soname differs across distributions.
   DAV1D_REF: ${{ inputs.dav1d_ref || '1.5.1' }}
