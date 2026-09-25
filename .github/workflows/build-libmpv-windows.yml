@@ -45,6 +45,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           path: grid
+          persist-credentials: false
           sparse-checkout: .github/workflows/build-libmpv-windows.yml
           sparse-checkout-cone-mode: false
       - name: Fetch sources
@@ -52,6 +53,16 @@ jobs:
           git clone --depth 1 --branch "$FFMPEG_REF" https://git.ffmpeg.org/ffmpeg.git
           git clone --depth 1 --branch "$LIBPLACEBO_REF" --recurse-submodules https://code.videolan.org/videolan/libplacebo.git
           git clone --depth 1 --branch "$MPV_REF" https://github.com/mpv-player/mpv.git
+      - name: Snapshot the source trees
+        run: |
+          # Taken before anything is built, as on Linux: FFmpeg builds in its
+          # tree and meson leaves byproducts (e.g. __pycache__) in the source
+          # trees. A plain copy keeps libplacebo's submodules, which a local git
+          # clone would fetch again from the network. The archive step adds the
+          # MSYS2 source packages and checks each HEAD against the built tree.
+          mkdir -p src/msys2
+          cp -r ffmpeg libplacebo mpv src/
+          cp grid/.github/workflows/build-libmpv-windows.yml src/
       - name: FFmpeg (LGPL-2.1 - no gpl, no version3, no nonfree)
         run: |
           export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig:$PKG_CONFIG_PATH"
@@ -317,16 +328,13 @@ jobs:
       - name: Archive the corresponding source
         run: |
           . "$RUNNER_TEMP/helpers.sh"
-          # The pinned upstream trees + the exact MSYS2 source package of every
-          # package whose licence asks for the source (source = yes in the
-          # manifests: the LGPL DLLs). FFmpeg builds in-tree, so it is cloned
-          # again clean; the meson projects build in build/, which is dropped
-          # from the copies.
-          mkdir -p src/msys2
-          git clone -q --depth 1 --branch "$FFMPEG_REF" https://git.ffmpeg.org/ffmpeg.git src/ffmpeg
-          cp -r libplacebo src/libplacebo && rm -rf src/libplacebo/build
-          cp -r mpv src/mpv && rm -rf src/mpv/build
-          cp grid/.github/workflows/build-libmpv-windows.yml src/
+          # The pinned upstream trees (snapshotted before the build) + the exact
+          # MSYS2 source package of every package whose licence asks for the
+          # source (source = yes in the manifests: the LGPL parts).
+          for t in ffmpeg libplacebo mpv; do
+            [ "$(git -C "src/$t" rev-parse HEAD)" = "$(git -C "$t" rev-parse HEAD)" ] \
+              || { echo "::error::src/$t is not the $t tree that was built"; exit 1; }
+          done
           # One source package per base and version (gettext-runtime's base is
           # mingw-w64-gettext).
           while read -r short; do
@@ -344,7 +352,7 @@ jobs:
           echo "MSYS2 source packages:"; cat "$RUNNER_TEMP/sources.txt"
           XZ_OPT=-T0 tar -cJf libmpv-windows-source.tar.xz --exclude-vcs \
             --transform 's|^src|libmpv-windows-source|' src
-          sha256sum libmpv-windows-source.tar.xz | tee libmpv-windows-source.tar.xz.sha256
+          sha256sum --text libmpv-windows-source.tar.xz | tee libmpv-windows-source.tar.xz.sha256
       - name: Package
         run: |
           . "$RUNNER_TEMP/helpers.sh"
@@ -412,7 +420,7 @@ jobs:
           } > dist/BUILD-INFO.txt
           cat dist/BUILD-INFO.txt
           tar -C dist -czf libmpv-windows-x86_64.tar.gz .
-          sha256sum libmpv-windows-x86_64.tar.gz | tee libmpv-windows-x86_64.tar.gz.sha256
+          sha256sum --text libmpv-windows-x86_64.tar.gz | tee libmpv-windows-x86_64.tar.gz.sha256
       - name: Publish
         # Git for Windows' bash (the runner's `bash`), not MSYS2's: the runner's
         # preinstalled gh is on its PATH, and the script stays identical to the
