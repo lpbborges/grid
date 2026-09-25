@@ -87,6 +87,7 @@ export function installPlaybackBoundary(options: PlaybackBoundaryOptions): Playb
       case 'native_player_set_volume':
       case 'native_player_select_audio':
       case 'native_player_select_subtitle':
+      case 'native_player_set_subtitle_position':
       case 'stop_native_player':
         return undefined;
       default:

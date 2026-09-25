@@ -197,6 +197,25 @@ describe('Movie native playback wiring', () => {
     expect(watchedStore.has(movie.id)).toBe(false);
   });
 
+  it('keeps the subtitles above the controls while they are shown', async () => {
+    await openAndPlay();
+    await waitFor(
+      () =>
+        expect(invoke).toHaveBeenCalledWith('native_player_set_subtitle_position', {
+          percent: 80
+        }),
+      { timeout: 5000 }
+    );
+
+    await fireEvent.mouseLeave(screen.getByTestId('video-player-container'));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
+        percent: 100
+      })
+    );
+  });
+
   it('surfaces mid-playback errors on the overlay rather than tearing down silently', async () => {
     await openAndPlay();
     await waitFor(() => expect(handlers['native-player-error']).toBeDefined(), { timeout: 5000 });

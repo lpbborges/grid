@@ -709,6 +709,13 @@ impl Controller {
             .map_err(|e| describe_error(&e))
     }
 
+    /// `percent` is mpv's `sub-pos`: 100 puts the subtitles at the bottom.
+    pub fn set_subtitle_position(&self, percent: f64) -> Result<(), String> {
+        self.mpv
+            .set_property("sub-pos", percent)
+            .map_err(|e| describe_error(&e))
+    }
+
     /// `None` means no subtitles.
     pub fn set_subtitle_track(&self, id: Option<i64>) -> Result<(), String> {
         self.mpv
@@ -1205,6 +1212,15 @@ mod tests {
             |e| matches!(e, PlayerEvent::Time(t) if *t > 0.0),
         )
         .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn moves_the_subtitles_to_the_requested_height() {
+        let player = Controller::new(VideoOutput::Null).unwrap();
+        let (_playback, _events) = player.load(&fixture_mkv(), 0.0, &[]).await.unwrap();
+        player.set_subtitle_position(80.0).unwrap();
+        let position: f64 = player.mpv().get_property("sub-pos").unwrap();
+        assert_eq!(position, 80.0);
     }
 
     #[tokio::test(flavor = "multi_thread")]

@@ -770,6 +770,18 @@ async fn native_player_select_subtitle(
     running_player(&state)?.set_subtitle_track(sid)
 }
 
+/// Raises the subtitles above the player controls, on mpv's 0-100 `sub-pos` scale.
+#[tauri::command]
+async fn native_player_set_subtitle_position(
+    state: State<'_, player::NativePlayerState>,
+    percent: f64,
+) -> Result<(), String> {
+    if !percent.is_finite() || !(0.0..=100.0).contains(&percent) {
+        return Err("Invalid subtitle position".to_string());
+    }
+    running_player(&state)?.set_subtitle_position(percent)
+}
+
 /// Ends the current file. The player itself lives for the whole app run.
 #[tauri::command]
 async fn stop_native_player(
@@ -876,6 +888,7 @@ pub fn run() {
             native_player_set_volume,
             native_player_select_audio,
             native_player_select_subtitle,
+            native_player_set_subtitle_position,
             stop_native_player,
             cache_native_subtitles
         ])
