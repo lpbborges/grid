@@ -45,6 +45,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           path: grid
+          persist-credentials: false
           sparse-checkout: .github/workflows/build-libmpv-windows.yml
           sparse-checkout-cone-mode: false
       - name: Fetch sources
@@ -52,6 +53,16 @@ jobs:
           git clone --depth 1 --branch "$FFMPEG_REF" https://git.ffmpeg.org/ffmpeg.git
           git clone --depth 1 --branch "$LIBPLACEBO_REF" --recurse-submodules https://code.videolan.org/videolan/libplacebo.git
           git clone --depth 1 --branch "$MPV_REF" https://github.com/mpv-player/mpv.git
+      - name: Snapshot the source trees
+        run: |
+          # Taken before anything is built, as on Linux: FFmpeg builds in its
+          # tree and meson leaves byproducts (e.g. __pycache__) in the source
+          # trees. A plain copy keeps libplacebo's submodules, which a local git
+          # clone would fetch again from the network. The archive step adds the
+          # MSYS2 source packages and checks each HEAD against the built tree.
+          mkdir -p src/msys2
+          cp -r ffmpeg libplacebo mpv src/
+          cp grid/.github/workflows/build-libmpv-windows.yml src/
       - name: FFmpeg (LGPL-2.1 - no gpl, no version3, no nonfree)
         run: |
           export PKG_CONFIG_PATH="$PWD/out/lib/pkgconfig:$PKG_CONFIG_PATH"
@@ -103,3 +114,337 @@ jobs:
           done
           echo "$features" > "$RUNNER_TEMP/mpv-features"
           ls out/bin
+      - name: DLL closure and licence gate (D3, D5)
+        run: |
+          # Helpers shared by this and the next steps.
+          cat > "$RUNNER_TEMP/helpers.sh" <<'EOF'
+          P=mingw-w64-ucrt-x86_64-
+          # Imported DLL names of a PE file, lower-cased.
+          # Fails if objdump does, whether or not the caller has pipefail.
+          imports() {
+            local out
+            out=$(objdump -p "$1") || return 1
+            sed -n 's/^[[:space:]]*DLL Name: //p' <<< "$out" | tr -d '\r' | tr '[:upper:]' '[:lower:]'
+          }
+          # A field of an installed package, read from its exact local-DB entry
+          # (no globbing): pkginfo <full package name> <BASE|VERSION|LICENSE>.
+          # Multi-line fields (LICENSE) are joined with ';'.
+          pkginfo() {
+            local q desc
+            q=$(pacman -Q "$1") || { echo "::error::$1 is not installed" >&2; return 1; }
+            desc="/var/lib/pacman/local/${q/ /-}/desc"
+            [ -f "$desc" ] || { echo "::error::no local DB entry $desc" >&2; return 1; }
+            awk -v f="%$2%" '$0 == f { on = 1; next } /^%/ { on = 0 } on && NF' "$desc" | paste -sd';'
+          }
+          # Manifest lines "a | b | c | d" -> trimmed field n.
+          col() { awk -F'|' -v n="$2" '{ gsub(/^[ \t]+|[ \t]+$/, "", $n); print $n }' <<< "$1"; }
+          # Where a package's exact source is: our source archive, or MSYS2's
+          # repository (source column = no, the licence asks only for the notice).
+          srcref() {
+            local src
+            src="$(pkginfo "$P$1" BASE)-$(pkginfo "$P$1" VERSION).src.tar.zst"
+            if grep -qxF "$1" "$RUNNER_TEMP/source-packages.txt"; then
+              echo "source: libmpv-windows-source.tar.xz, msys2/$src"
+            else
+              echo "source (not archived): https://repo.msys2.org/mingw/sources/$src"
+            fi
+          }
+          EOF
+          . "$RUNNER_TEMP/helpers.sh"
+
+          # D5: every MSYS2 DLL that may ship, reviewed by hand against the files
+          # in /ucrt64/share/licenses/<package>. Columns: DLL | package (without
+          # the mingw-w64-ucrt-x86_64- prefix) | licence field exactly as pacman
+          # records it (lines joined with ';') | source | why it may ship. Never
+          # widen this into a pattern: an unlisted DLL or a changed field fails
+          # the build. source = yes: the package's exact MSYS2 source package goes
+          # into the source archive, because its licence (LGPL) asks for the
+          # source; no: the licence asks only for the notice, which ships in
+          # LICENSES/, and BUILD-INFO.txt records where MSYS2 publishes the source.
+          cat > "$RUNNER_TEMP/reviewed-dlls.txt" <<'EOF'
+          libass-9.dll                | libass          | spdx:ISC | no  | ISC. The package installs no licence file; its notice is COPYING from the upstream tarball (Package step).
+          libbrotlicommon.dll         | brotli          | spdx:MIT | no  | MIT. Needed by freetype.
+          libbrotlidec.dll            | brotli          | spdx:MIT | no  | MIT. Needed by freetype.
+          libbz2-1.dll                | bzip2           | custom | no  | bzip2-1.0.6 (BSD-style, LICENSE read). Needed by freetype.
+          libdav1d-7.dll              | dav1d           | spdx:BSD-2-Clause | no  | BSD-2-Clause, plus dav1d's royalty-free PATENTS grant.
+          libexpat-1.dll              | expat           | spdx:MIT | no  | MIT. Needed by fontconfig.
+          libfontconfig-1.dll         | fontconfig      | custom | no  | HPND-style permissive notice (COPYING read). Needed by libass, which tries DirectWrite first on Windows.
+          libfreetype-6.dll           | freetype        | spdx:GPL-2.0-or-later OR FTL | no  | Shipped under FTL, the OR alternative (FTL.TXT). FTL asks for a credit in the documentation (Task 5).
+          libfribidi-0.dll            | fribidi         | spdx:LGPL-2.1-or-later | yes | LGPL-2.1-or-later, separate replaceable DLL.
+          libgcc_s_seh-1.dll          | libgcc          | spdx:GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later | no  | GCC runtime: the Runtime Library Exception (COPYING.RUNTIME) lets it ship under any terms; GFDL covers GCC's manuals, not shipped.
+          libglib-2.0-0.dll           | glib2           | spdx:LGPL-2.1-or-later | yes | LGPL-2.1-or-later, separate replaceable DLL. Needed by harfbuzz.
+          libgraphite2.dll            | graphite2       | spdx:LGPL-2.1-or-later | yes | LGPL-2.1-or-later (upstream also offers MPL-2.0). Needed by harfbuzz.
+          libharfbuzz-0.dll           | harfbuzz        | spdx:MIT | no  | MIT ("Old MIT", COPYING read).
+          libiconv-2.dll              | libiconv        | spdx:LGPL-2.1-or-later;documentation:spdx:GPL-3.0-or-later | yes | The DLL is LGPL-2.1-or-later (COPYING.LIB); GPL-3.0 covers only the documentation, not shipped.
+          libintl-8.dll               | gettext-runtime | spdx:GPL-3.0-or-later AND LGPL-2.1-or-later | yes | The DLL is libintl, LGPL-2.1-or-later (intl/COPYING.LIB); GPL-3.0 covers gettext's programs, not shipped.
+          libpcre2-8-0.dll            | pcre2           | spdx:BSD-3-Clause | no  | BSD-3-Clause. Needed by glib2.
+          libpng16-16.dll             | libpng          | custom | no  | libpng-2.0 (PNG Reference Library License v2, LICENSE read). Needed by freetype.
+          libshaderc_shared.dll       | shaderc         | spdx:Apache-2.0 | no  | Apache-2.0. Statically contains glslang, SPIRV-Tools, libstdc++, libgcc, winpthreads: see the static manifest.
+          libspirv-cross-c-shared.dll | spirv-cross     | spdx:Apache-2.0 | no  | Apache-2.0.
+          libstdc++-6.dll             | libstdc++       | spdx:GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later | no  | GCC runtime, as libgcc_s_seh-1.dll.
+          libunibreak-7.dll           | libunibreak     | spdx:Zlib | no  | Zlib. Needed by libass.
+          libwinpthread-1.dll         | libwinpthread   | spdx:MIT AND BSD-3-Clause-Clear | no  | MIT plus Lockless Inc.'s BSD-3-Clause-Clear notice, both in COPYING; permissive.
+          zlib1.dll                   | zlib            | spdx:Zlib | no  | Zlib.
+          EOF
+          # D3: code compiled statically into the shipped DLLs. Columns: package |
+          # licence field | source | where it is compiled in. Same checks as above.
+          cat > "$RUNNER_TEMP/reviewed-static.txt" <<'EOF'
+          crt           | spdx:ZPL-2.1 | no | MinGW-w64 runtime (startup objects, libmingwex, libmingw32) in every DLL, ours and MSYS2's.
+          headers       | spdx:ZPL-2.1 AND LGPL-2.1-or-later | yes | Inline code from the MinGW-w64 Windows headers in every DLL. The headers and IDLs imported from Wine (COPYING.MinGW-w64-runtime.txt; our DLLs are built against d3d11, dxgi, dxva2api, dwrite and more) and the DDK headers (ddk-readme.txt) are LGPL-2.1-or-later, so the source ships.
+          gcc           | spdx:GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later | no | Static libgcc parts in every DLL; libstdc++ inside libshaderc_shared.dll. Runtime Library Exception.
+          winpthreads   | spdx:MIT AND BSD-3-Clause-Clear | no | Inside libshaderc_shared.dll.
+          glslang       | spdx:BSD-3-Clause | no | Inside libshaderc_shared.dll. The field under-reports: LICENSE.txt also covers Apache-2.0/MIT parts and the GPL-3.0 Bison parser under the Bison exception (checked below).
+          spirv-tools   | spdx:Apache-2.0 | no | Inside libshaderc_shared.dll.
+          spirv-headers | spdx:MIT | no | SPIR-V grammar tables inside libshaderc_shared.dll.
+          EOF
+
+          # The closure: walk import tables from libmpv-2.dll. ntldd -R is not
+          # used: it recurses into System32 and reports API-set names
+          # (api-ms-win-*, ext-ms-*) as "not found". Static imports only: DLLs
+          # loaded with LoadLibrary at run time are covered by CI's
+          # e2e (windows-latest) job and the clean-VM check (D7), nothing here.
+          declare -A where needed_by seen
+          # Beside grid.exe beats System32, so out/bin and /ucrt64/bin are looked
+          # up first; out/bin is read last so our builds win a name clash.
+          for f in /ucrt64/bin/*.dll out/bin/*.dll; do
+            n=$(basename "$f" | tr '[:upper:]' '[:lower:]'); where[$n]=$f
+          done
+          sys="$(cygpath -u "$SYSTEMROOT")/System32"
+          : > "$RUNNER_TEMP/closure.txt"; : > "$RUNNER_TEMP/system-dlls.txt"
+          queue=(libmpv-2.dll); bad=0
+          while [ ${#queue[@]} -gt 0 ]; do
+            n=${queue[0]}; queue=("${queue[@]:1}")
+            [ -z "${seen[$n]:-}" ] || continue
+            seen[$n]=1
+            if [ -n "${where[$n]:-}" ]; then
+              echo "${where[$n]}" >> "$RUNNER_TEMP/closure.txt"
+              # Every DLL imports something (kernel32 at least): an empty list
+              # means objdump could not read it, and its dependencies would be lost.
+              deps=$(imports "${where[$n]}") || deps=
+              if [ -z "$deps" ]; then
+                echo "::error::could not read the imports of ${where[$n]}"; bad=1; continue
+              fi
+              for dep in $deps; do
+                needed_by[$dep]=${needed_by[$dep]:-$n}; queue+=("$dep")
+              done
+              continue
+            fi
+            case "$n" in
+              vcruntime*|msvcp*|concrt*|vccorlib*|ucrtbased.dll)
+                echo "::error::$n (needed by ${needed_by[$n]}) is a Visual C++ redistributable, not part of Windows"; bad=1 ;;
+              api-ms-win-*|ext-ms-*)
+                echo "$n (API set)" >> "$RUNNER_TEMP/system-dlls.txt" ;;
+              *)
+                if [ -e "$sys/$n" ]; then echo "$n" >> "$RUNNER_TEMP/system-dlls.txt"
+                else echo "::error::$n (needed by ${needed_by[$n]}) is in neither out/bin, /ucrt64/bin nor System32"; bad=1
+                fi ;;
+            esac
+          done
+          sort -u -o "$RUNNER_TEMP/closure.txt" "$RUNNER_TEMP/closure.txt"
+          echo "closure ($(wc -l < "$RUNNER_TEMP/closure.txt") DLLs):"; cat "$RUNNER_TEMP/closure.txt"
+          echo "system DLLs imported (not shipped):"; sort -u "$RUNNER_TEMP/system-dlls.txt"
+          [ "$bad" = 0 ] || exit 1
+
+          # Static-linking guards: the static manifest is only true while these hold.
+          # (Imports are captured first: under pipefail, `imports | grep -q` can
+          # fail on SIGPIPE and flip the result.)
+          for f in out/bin/libmpv-2.dll out/bin/libplacebo-*.dll; do
+            imp=$(imports "$f")
+            for want in libshaderc_shared.dll libspirv-cross-c-shared.dll; do
+              grep -qx "$want" <<< "$imp" \
+                || { echo "::error::$f does not import $want: it is linked statically; revisit the static manifest"; exit 1; }
+            done
+          done
+          imp=$(imports /ucrt64/bin/libshaderc_shared.dll)
+          if grep -qE '^(lib)?(glslang|spirv)|^libstdc|^libgcc_s|^libwinpthread' <<< "$imp"; then
+            echo "::error::libshaderc_shared.dll now imports glslang/SPIRV-Tools/the C++ runtime as DLLs; revisit the static manifest"; exit 1
+          fi
+
+          # D5 gate, per DLL. Built here (D2): the names our three builds produce.
+          # An LGPL or MPL field must ship its source (source = yes).
+          check_src() { # <name> <reviewed licence field> <source column>
+            case "$3" in
+              yes) ;;
+              no) if grep -qE 'LGPL|MPL' <<< "$2"; then
+                    echo "::error::$1 is under '$2' but its source column says no"; return 1
+                  fi ;;
+              *) echo "::error::$1 has source column '$3' (want yes or no)"; return 1 ;;
+            esac
+          }
+          declare -A rev_pkg rev_lic rev_src
+          while IFS= read -r line; do
+            d=$(col "$line" 1); rev_pkg[$d]=$(col "$line" 2); rev_lic[$d]=$(col "$line" 3); rev_src[$d]=$(col "$line" 4)
+            check_src "$d" "${rev_lic[$d]}" "${rev_src[$d]}" || bad=1
+          done < "$RUNNER_TEMP/reviewed-dlls.txt"
+          : > "$RUNNER_TEMP/dll-packages.txt"
+          while read -r f; do
+            d=$(basename "$f" | tr '[:upper:]' '[:lower:]')
+            case "$f" in
+              out/bin/*)
+                case "$d" in
+                  libmpv-2.dll|avcodec-*.dll|avformat-*.dll|avutil-*.dll|avfilter-*.dll|swresample-*.dll|swscale-*.dll|libplacebo-*.dll) ;;
+                  *) echo "::error::$f was built here but is none of mpv, FFmpeg or libplacebo"; bad=1 ;;
+                esac ;;
+              /ucrt64/bin/*)
+                pkg=$(pacman -Qqo "$f"); short=${pkg#"$P"}
+                lic=$(pkginfo "$pkg" LICENSE)
+                echo "$d $short $lic"
+                if [ -z "${rev_pkg[$d]:-}" ]; then
+                  echo "::error::$d ($short, licence '$lic') is not in the reviewed DLL manifest"; bad=1
+                elif [ "${rev_pkg[$d]}" != "$short" ]; then
+                  echo "::error::$d now comes from $short, reviewed as ${rev_pkg[$d]}"; bad=1
+                elif [ "${rev_lic[$d]}" != "$lic" ]; then
+                  echo "::error::$short's licence field is now '$lic', reviewed as '${rev_lic[$d]}': re-review it"; bad=1
+                else
+                  echo "$d $short" >> "$RUNNER_TEMP/dll-packages.txt"
+                fi ;;
+            esac
+          done < "$RUNNER_TEMP/closure.txt"
+          for d in "${!rev_pkg[@]}"; do
+            grep -qxF "$d" < <(cut -d' ' -f1 "$RUNNER_TEMP/dll-packages.txt") \
+              || echo "::warning::$d is reviewed but no longer in the closure; drop its manifest line"
+          done
+          while IFS= read -r line; do
+            short=$(col "$line" 1); want=$(col "$line" 2)
+            check_src "$short" "$want" "$(col "$line" 3)" || bad=1
+            lic=$(pkginfo "$P$short" LICENSE) || { bad=1; continue; }
+            echo "static $short $lic"
+            [ "$lic" = "$want" ] || { echo "::error::static $short's licence field is now '$lic', reviewed as '$want': re-review it"; bad=1; }
+          done < "$RUNNER_TEMP/reviewed-static.txt"
+          grep -q 'Bison Exception' /ucrt64/share/licenses/glslang/LICENSE.txt \
+            || { echo "::error::glslang's LICENSE.txt no longer carries the Bison exception"; bad=1; }
+          # freetype ships under FTL, the OR alternative: its text must be there.
+          [ -s /ucrt64/share/licenses/freetype/FTL.TXT ] \
+            || { echo "::error::freetype no longer installs FTL.TXT, the licence it ships under"; bad=1; }
+          [ "$bad" = 0 ] || exit 1
+          cut -d' ' -f2 "$RUNNER_TEMP/dll-packages.txt" | sort -u > "$RUNNER_TEMP/packages.txt"
+          while IFS= read -r line; do col "$line" 1; done < "$RUNNER_TEMP/reviewed-static.txt" > "$RUNNER_TEMP/static-packages.txt"
+          # The packages whose MSYS2 source goes into the source archive.
+          {
+            while read -r d short; do
+              if [ "${rev_src[$d]}" = yes ]; then echo "$short"; fi
+            done < "$RUNNER_TEMP/dll-packages.txt"
+            while IFS= read -r line; do
+              if [ "$(col "$line" 3)" = yes ]; then col "$line" 1; fi
+            done < "$RUNNER_TEMP/reviewed-static.txt"
+          } | sort -u > "$RUNNER_TEMP/source-packages.txt"
+          echo "source ships for:"; cat "$RUNNER_TEMP/source-packages.txt"
+      - name: Archive the corresponding source
+        run: |
+          . "$RUNNER_TEMP/helpers.sh"
+          # The pinned upstream trees (snapshotted before the build) + the exact
+          # MSYS2 source package of every package whose licence asks for the
+          # source (source = yes in the manifests: the LGPL parts).
+          for t in ffmpeg libplacebo mpv; do
+            [ "$(git -C "src/$t" rev-parse HEAD)" = "$(git -C "$t" rev-parse HEAD)" ] \
+              || { echo "::error::src/$t is not the $t tree that was built"; exit 1; }
+          done
+          # One source package per base and version (gettext-runtime's base is
+          # mingw-w64-gettext).
+          while read -r short; do
+            base=$(pkginfo "$P$short" BASE); ver=$(pkginfo "$P$short" VERSION)
+            [ -n "$base" ] && [ -n "$ver" ] || { echo "::error::no %BASE%/%VERSION% for $P$short"; exit 1; }
+            echo "$base-$ver"
+          done < "$RUNNER_TEMP/source-packages.txt" > "$RUNNER_TEMP/sources.unsorted"
+          sort -u "$RUNNER_TEMP/sources.unsorted" > "$RUNNER_TEMP/sources.txt"
+          while read -r src; do
+            url="https://repo.msys2.org/mingw/sources/$src.src.tar.zst"
+            curl -fsSL --retry 3 -o "src/msys2/$src.src.tar.zst" "$url" \
+              || { echo "::error::no source package at $url (MSYS2 replaced it since the install: re-run)"; exit 1; }
+          done < "$RUNNER_TEMP/sources.txt"
+          [ "$(find src/msys2 -type f | wc -l)" = "$(wc -l < "$RUNNER_TEMP/sources.txt")" ]
+          echo "MSYS2 source packages:"; cat "$RUNNER_TEMP/sources.txt"
+          XZ_OPT=-T0 tar -cJf libmpv-windows-source.tar.xz --exclude-vcs \
+            --transform 's|^src|libmpv-windows-source|' src
+          sha256sum --text libmpv-windows-source.tar.xz | tee libmpv-windows-source.tar.xz.sha256
+      - name: Package
+        run: |
+          . "$RUNNER_TEMP/helpers.sh"
+          mkdir -p dist/bin dist/include dist/LICENSES
+          while read -r f; do cp "$f" dist/bin/; done < "$RUNNER_TEMP/closure.txt"
+          # Our builds only, as on Linux: meson's release buildtype drops -g,
+          # and this catches anything that still carries debug info. MSYS2's
+          # DLLs ship stripped already.
+          for f in out/bin/*.dll; do strip --strip-debug "dist/bin/$(basename "$f")"; done
+          cp -a out/include/mpv dist/include/
+          cp mpv/LICENSE.LGPL dist/LICENSES/mpv-LGPL-2.1.txt
+          cp ffmpeg/COPYING.LGPLv2.1 dist/LICENSES/ffmpeg-LGPL-2.1.txt
+          cp libplacebo/LICENSE dist/LICENSES/libplacebo-LGPL-2.1.txt
+          cp libplacebo/3rdparty/fast_float/LICENSE-MIT dist/LICENSES/fast_float-MIT.txt
+          # No glad notice: with -Dopengl=disabled libplacebo neither generates nor
+          # compiles its GL loader. Vulkan-Headers is compiled in even with
+          # -Dvulkan=disabled (vulkan/stubs.c includes libplacebo/vulkan.h, which
+          # includes <vulkan/vulkan.h> from 3rdparty/), so its texts ship as on Linux.
+          cp libplacebo/3rdparty/Vulkan-Headers/LICENSE.md dist/LICENSES/Vulkan-Headers-LICENSE.md
+          cp libplacebo/3rdparty/Vulkan-Headers/LICENSES/Apache-2.0.txt dist/LICENSES/Vulkan-Headers-Apache-2.0.txt
+          cp libplacebo/3rdparty/Vulkan-Headers/LICENSES/MIT.txt dist/LICENSES/Vulkan-Headers-MIT.txt
+          # One folder per shipped DLL's package and per static part (D3, D5).
+          while read -r short; do
+            if [ -n "$(find "/ucrt64/share/licenses/$short" -type f -print -quit 2>/dev/null)" ]; then
+              cp -r "/ucrt64/share/licenses/$short" "dist/LICENSES/$short"
+            elif [ "$short" = libass ]; then
+              # MSYS2's libass installs no licence file: take COPYING from the
+              # upstream tarball inside its exact source package (ISC, so the
+              # package itself is not archived).
+              v=$(pkginfo "${P}libass" VERSION); up=${v%-*}
+              curl -fsSL --retry 3 -o "$RUNNER_TEMP/libass.src.tar.zst" \
+                "https://repo.msys2.org/mingw/sources/mingw-w64-libass-$v.src.tar.zst"
+              mkdir -p dist/LICENSES/libass
+              # --force-local: $RUNNER_TEMP is D:\a\_temp, and tar reads "D:" as a remote host.
+              tar --force-local --zstd -xOf "$RUNNER_TEMP/libass.src.tar.zst" "mingw-w64-libass/libass-$up.tar.xz" \
+                | tar -xJOf - "libass-$up/COPYING" > dist/LICENSES/libass/COPYING
+              grep -q 'ISC License' dist/LICENSES/libass/COPYING
+            else
+              echo "::error::$P$short installs no licence files"; exit 1
+            fi
+          done < <(sort -u "$RUNNER_TEMP/packages.txt" "$RUNNER_TEMP/static-packages.txt")
+          # Read back from the configured builds, not echoed (as on Linux).
+          ffconf=$(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' ffmpeg/config.h)
+          [ -n "$ffconf" ] || { echo "::error::FFMPEG_CONFIGURATION not found in ffmpeg/config.h"; exit 1; }
+          if grep -qE -- '--enable-(gpl|version3|nonfree)' <<< "$ffconf"; then
+            echo "::error::FFmpeg was configured with $ffconf"; exit 1
+          fi
+          gpl=$(meson introspect --buildoptions mpv/build \
+            | python3 -c 'import json,sys; print(json.dumps([o["value"] for o in json.load(sys.stdin) if o["name"] == "gpl"][0]))')
+          [ "$gpl" = false ]
+          {
+            echo "mpv $MPV_REF $(git -C mpv rev-parse HEAD) gpl=$gpl"
+            echo "  meson setup: $(cat "$RUNNER_TEMP/mpv-options")"
+            echo "  features: $(cat "$RUNNER_TEMP/mpv-features")"
+            echo "ffmpeg $FFMPEG_REF $(git -C ffmpeg rev-parse HEAD)"
+            echo "  configure: $ffconf"
+            echo "libplacebo $LIBPLACEBO_REF $(git -C libplacebo rev-parse HEAD)"
+            echo "  meson setup: $(cat "$RUNNER_TEMP/libplacebo-options")"
+            echo "MSYS2 UCRT64 DLLs shipped (DLL: package version, licence as pacman records it):"
+            while read -r d short; do
+              echo "  $d: $(pacman -Q "$P$short"), $(pkginfo "$P$short" LICENSE); $(srcref "$short")"
+            done < "$RUNNER_TEMP/dll-packages.txt"
+            echo "Compiled statically into the DLLs above (package version, licence):"
+            while read -r short; do
+              echo "  $(pacman -Q "$P$short"), $(pkginfo "$P$short" LICENSE); $(srcref "$short")"
+            done < "$RUNNER_TEMP/static-packages.txt"
+            echo "  libshaderc_shared.dll's static parts were built by $(strings /ucrt64/bin/libshaderc_shared.dll | grep -m1 '^GCC: ')"
+            echo "toolchain: $(pacman -Q "${P}gcc" "${P}crt" "${P}headers" "${P}binutils" | paste -sd' ')"
+            echo "source: libmpv-windows-source.tar.xz sha256 $(cut -d' ' -f1 libmpv-windows-source.tar.xz.sha256)"
+          } > dist/BUILD-INFO.txt
+          cat dist/BUILD-INFO.txt
+          tar -C dist -czf libmpv-windows-x86_64.tar.gz .
+          sha256sum --text libmpv-windows-x86_64.tar.gz | tee libmpv-windows-x86_64.tar.gz.sha256
+      - name: Publish
+        # Git for Windows' bash (the runner's `bash`), not MSYS2's: the runner's
+        # preinstalled gh is on its PATH, and the script stays identical to the
+        # Linux workflow's. Both shells start in the workspace, where the files are.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Every build is its own immutable release: scripts/libmpv.lock.json pins
+          # a URL and SHA256, and the build is not bit-reproducible, so a published
+          # asset must never be replaced. `gh release create` fails if the tag exists.
+          gh --version
+          tag="libmpv-windows-$MPV_REF-b$GITHUB_RUN_NUMBER"
+          gh release create "$tag" libmpv-windows-x86_64.tar.gz libmpv-windows-x86_64.tar.gz.sha256 \
+            libmpv-windows-source.tar.xz libmpv-windows-source.tar.xz.sha256 \
+            --target "$GITHUB_SHA" --title "libmpv $MPV_REF build $GITHUB_RUN_NUMBER (Windows, LGPL)" \
+            --notes-file dist/BUILD-INFO.txt --prerelease
