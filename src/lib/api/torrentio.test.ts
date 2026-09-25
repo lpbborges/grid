@@ -111,11 +111,16 @@ describe('buildMagnet', () => {
   const hash = 'a'.repeat(40);
 
   it('adds every tracker source Torrentio lists', () => {
-    const magnet = buildMagnet(hash, 'Grid Movie', [
-      'tracker:udp://tracker.example.org:1337/announce',
-      'dht:' + hash,
-      'tracker:http://other.example.net/announce'
-    ]);
+    const magnet = buildMagnet(
+      hash,
+      'Grid Movie',
+      [
+        'tracker:udp://tracker.example.org:1337/announce',
+        'dht:' + hash,
+        'tracker:http://other.example.net/announce'
+      ],
+      []
+    );
 
     expect(magnet).toBe(
       `magnet:?xt=urn:btih:${hash}&dn=Grid%20Movie` +
@@ -125,6 +130,23 @@ describe('buildMagnet', () => {
   });
 
   it('builds a plain magnet when there are no sources', () => {
-    expect(buildMagnet(hash, 'Grid Movie')).toBe(`magnet:?xt=urn:btih:${hash}&dn=Grid%20Movie`);
+    expect(buildMagnet(hash, 'Grid Movie', [], [])).toBe(
+      `magnet:?xt=urn:btih:${hash}&dn=Grid%20Movie`
+    );
+  });
+
+  it('adds the default trackers once, after the ones Torrentio lists', () => {
+    const magnet = buildMagnet(
+      hash,
+      'Grid Movie',
+      ['tracker:udp://a.example.org:1337/announce'],
+      ['udp://a.example.org:1337/announce', 'udp://b.example.org:6969/announce']
+    );
+
+    expect(magnet).toBe(
+      `magnet:?xt=urn:btih:${hash}&dn=Grid%20Movie` +
+        '&tr=udp%3A%2F%2Fa.example.org%3A1337%2Fannounce' +
+        '&tr=udp%3A%2F%2Fb.example.org%3A6969%2Fannounce'
+    );
   });
 });

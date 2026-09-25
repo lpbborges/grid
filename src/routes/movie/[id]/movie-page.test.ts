@@ -140,7 +140,7 @@ describe('Movie page integration flow', () => {
 
     // Verify prepareStream was called with the correct magnet
     expect(prepareStreamMock).toHaveBeenCalledWith({
-      magnet: 'magnet:?xt=urn:btih:abc&dn=Some%20Movie',
+      magnet: expect.stringMatching(/^magnet:\?xt=urn:btih:abc&dn=Some%20Movie(&|$)/),
       onStatus: expect.any(Function),
       mediaId: 'tt1',
       season: undefined,
@@ -200,7 +200,7 @@ describe('Movie page integration flow', () => {
     await fireEvent.click(playButton);
 
     expect(prepareStreamMock).toHaveBeenCalledWith({
-      magnet: 'magnet:?xt=urn:btih:xyz&dn=Another%20Movie',
+      magnet: expect.stringMatching(/^magnet:\?xt=urn:btih:xyz&dn=Another%20Movie(&|$)/),
       onStatus: expect.any(Function),
       mediaId: 'tt2',
       season: undefined,
@@ -264,7 +264,7 @@ describe('Movie page integration flow', () => {
     expect(prepareStreamMock).toHaveBeenCalledTimes(1);
     expect(prepareStreamMock.mock.calls[0][0].magnet).not.toContain(staleHash);
     expect(prepareStreamMock).toHaveBeenCalledWith({
-      magnet: 'magnet:?xt=urn:btih:xyz&dn=Another%20Movie',
+      magnet: expect.stringMatching(/^magnet:\?xt=urn:btih:xyz&dn=Another%20Movie(&|$)/),
       onStatus: expect.any(Function),
       mediaId: 'tt2',
       season: undefined,

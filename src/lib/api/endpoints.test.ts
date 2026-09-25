@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { endpoints, resolveEndpoints } from './endpoints';
+import { endpoints, resolveDefaultTrackers, resolveEndpoints } from './endpoints';
 
 const REAL = {
   cinemeta: 'https://v3-cinemeta.strem.io',
@@ -34,5 +34,17 @@ describe('endpoints', () => {
   it('refuses an override that is not a loopback mock', () => {
     expect(() => resolveEndpoints('https://evil.example.com')).toThrow(/127\.0\.0\.1/);
     expect(() => resolveEndpoints('http://localhost:47100')).toThrow(/127\.0\.0\.1/);
+  });
+});
+
+describe('default trackers', () => {
+  it('lists public tracker announce URLs for real builds', () => {
+    const trackers = resolveDefaultTrackers(undefined);
+    expect(trackers.length).toBeGreaterThan(0);
+    for (const tracker of trackers) expect(tracker).toMatch(/^(udp|https?):\/\/.+\/announce$/);
+  });
+
+  it('lists none when the E2E sandbox is configured, so rqbit stays offline', () => {
+    expect(resolveDefaultTrackers('http://127.0.0.1:4321')).toEqual([]);
   });
 });

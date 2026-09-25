@@ -9,6 +9,7 @@ import {
 } from '$lib/engine/__fixtures__/playbackBoundary';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { clearExternalSubtitleCache } from '$lib/api/subtitles';
+import { defaultTrackers } from '$lib/api/endpoints';
 import { ADD_ATTEMPT_TIMEOUTS_MS } from '$lib/engine/torrent';
 
 // This suite drives the <video> path, which Linux no longer plays through by
@@ -147,6 +148,15 @@ describe('Movie playback wiring', () => {
 
     expect(rqbitRequest('POST', '/torrents')?.body).toContain(
       '&tr=udp%3A%2F%2Ftracker.example.org%3A1337%2Fannounce'
+    );
+  });
+
+  it('adds the default trackers when the source lists none', async () => {
+    await openAndPlay();
+    await screen.findByTestId('video-element', {}, { timeout: 5000 });
+
+    expect(rqbitRequest('POST', '/torrents')?.body).toContain(
+      `&tr=${encodeURIComponent(defaultTrackers[0])}`
     );
   });
 
