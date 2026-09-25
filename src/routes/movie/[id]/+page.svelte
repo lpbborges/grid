@@ -50,7 +50,7 @@
       selectedTorrentHash = '';
       combinedTorrents = [];
       if (hasMountedTorrentEffect) {
-        player.stop();
+        untrack(() => player.stop());
       }
       hasMountedTorrentEffect = true;
     }
