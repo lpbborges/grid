@@ -419,6 +419,12 @@ jobs:
       - name: Run render smoke E2E (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24 +extension GLX" npm run test:e2e:render:run
+      # No GPU on the runner: mpv's d3d11 output draws through WARP, Windows'
+      # software rasteriser, so this exercises the D3D11 renderer and the DLLs
+      # libplacebo and shaderc load at run time.
+      - name: Run render smoke E2E (Windows)
+        if: runner.os == 'Windows'
+        run: npm run test:e2e:render:run
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
