@@ -153,7 +153,7 @@ licence field as pacman records it; it covers the whole package, and the
 reviewed manifest in the workflow records what applies to the DLL. The
 **Source** column says whether the package's exact MSYS2 source package is in
 `libmpv-windows-source.tar.xz` (the LGPL ones) or only named, with its
-repo.msys2.org URL, in `BUILD-INFO.txt` (licences that ask only for the notice):
+repo.msys2.org URL, in `BUILD-INFO.txt` (licences that ask for no source):
 
 | DLL                           | MSYS2 package (`mingw-w64-ucrt-x86_64-…`) | Version                  | Licence field                                                 | Source   |
 | ----------------------------- | ----------------------------------------- | ------------------------ | ------------------------------------------------------------- | -------- |
@@ -188,15 +188,15 @@ GCC's manuals, which are not shipped.
 DLL, ours and MSYS2's, and `libshaderc_shared.dll` carries its dependencies
 inside it (its static parts were built by MSYS2's GCC 16.1.0, Rev5):
 
-| MSYS2 package (`mingw-w64-ucrt-x86_64-…`) | Version                  | Licence field                                                 | Compiled into                                                           | Source   |
-| ----------------------------------------- | ------------------------ | ------------------------------------------------------------- | ----------------------------------------------------------------------- | -------- |
-| `crt`                                     | 14.0.0.r420.g61d40c4c0-1 | ZPL-2.1                                                       | every DLL (startup objects, `libmingwex`, `libmingw32`)                 | named    |
-| `headers`                                 | 14.0.0.r420.g61d40c4c0-1 | ZPL-2.1 AND LGPL-2.1-or-later                                 | every DLL (inline code from the Windows headers, some from Wine)        | archived |
-| `gcc`                                     | 16.2.0-4                 | GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later | every DLL (static `libgcc` parts); libstdc++ in `libshaderc_shared.dll` | named    |
-| `winpthreads`                             | 14.0.0.r420.g61d40c4c0-1 | MIT AND BSD-3-Clause-Clear                                    | `libshaderc_shared.dll`                                                 | named    |
-| `glslang`                                 | 16.3.0-1                 | BSD-3-Clause (plus its GPL-3.0 Bison parser, Bison exception) | `libshaderc_shared.dll`                                                 | named    |
-| `spirv-tools`                             | 3~1.4.357.0-1            | Apache-2.0                                                    | `libshaderc_shared.dll`                                                 | named    |
-| `spirv-headers`                           | 2~1.4.357.0-1            | MIT                                                           | `libshaderc_shared.dll`                                                 | named    |
+| MSYS2 package (`mingw-w64-ucrt-x86_64-…`) | Version                  | Licence field                                                                          | Compiled into                                                           | Source   |
+| ----------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------- |
+| `crt`                                     | 14.0.0.r420.g61d40c4c0-1 | ZPL-2.1                                                                                | every DLL (startup objects, `libmingwex`, `libmingw32`)                 | named    |
+| `headers`                                 | 14.0.0.r420.g61d40c4c0-1 | ZPL-2.1 AND LGPL-2.1-or-later                                                          | every DLL (inline code from the Windows headers, some from Wine)        | archived |
+| `gcc`                                     | 16.2.0-4                 | GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later                          | every DLL (static `libgcc` parts); libstdc++ in `libshaderc_shared.dll` | named    |
+| `winpthreads`                             | 14.0.0.r420.g61d40c4c0-1 | MIT AND BSD-3-Clause-Clear                                                             | `libshaderc_shared.dll`                                                 | named    |
+| `glslang`                                 | 16.3.0-1                 | BSD-3-Clause (plus Apache-2.0/MIT parts and its GPL-3.0 Bison parser, Bison exception) | `libshaderc_shared.dll`                                                 | named    |
+| `spirv-tools`                             | 3~1.4.357.0-1            | Apache-2.0                                                                             | `libshaderc_shared.dll`                                                 | named    |
+| `spirv-headers`                           | 2~1.4.357.0-1            | MIT                                                                                    | `libshaderc_shared.dll`                                                 | named    |
 
 The build's toolchain was MSYS2's `gcc` 16.2.0-4, `crt` and `headers`
 14.0.0.r420.g61d40c4c0-1 and `binutils` 2.47-3.
@@ -211,8 +211,11 @@ package, a licence field that changed, or an LGPL line that does not ship its
 source. Nothing parses licence strings: a new dependency or a relicensed
 package stops the build until someone reads its licence files and edits the
 manifest. DLLs loaded only at run time (`LoadLibrary`) are invisible to the
-walk; CI's `e2e (windows-latest)` job, which plays through this DLL set, and the
-clean-machine check before the first Windows release cover them.
+walk. CI's `e2e (windows-latest)` job loads this DLL set and decodes through it
+with `vo=null ao=null`. The D3D11 renderer (libplacebo, with shaderc at run
+time), d3d11va hardware decoding and WASAPI audio output, where run-time-loaded
+system DLLs such as `dxgi`, `d3d11` and `d3dcompiler_47` come in, are covered
+only by the clean-machine check before the first Windows release.
 
 **FreeType:** Portions of this software are copyright © 2026 The FreeType
 Project (www.freetype.org). All rights reserved.
@@ -242,8 +245,9 @@ return, `release.yml` will link this archive the same way.
 
 **Retention.** Never delete or edit a `libmpv-*` prerelease that any published
 Grid release has pinned. It is where that release's LGPL source is offered.
-Only an unpinned build may be deleted, and only after checking
-`git log -p scripts/libmpv.lock.json` shows no tagged Grid release pinned it.
+Only an unpinned build may be deleted, and only after
+`git show <tag>:scripts/libmpv.lock.json` for each Grid release tag shows that
+none of them pinned it.
 
 ## Replacing the library
 

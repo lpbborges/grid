@@ -107,7 +107,7 @@ pub fn options_for(output: VideoOutput) -> Vec<(&'static str, String)> {
 }
 
 /// Switches for mpv's built-in Lua scripts. mpv only has them when it is built
-/// with Lua, which the LGPL builds Grid ships on Linux and Windows are not (see
+/// with Lua, which the LGPL builds Grid pins for Linux and Windows are not (see
 /// src-tauri/licenses/README.md), and newer releases keep adding scripts
 /// (`load-console` replaced `load-osd-console`). A libmpv without the switch
 /// has no such script to turn off. `load-scripts=no` covers only scripts from
