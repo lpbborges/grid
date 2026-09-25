@@ -183,11 +183,9 @@ jobs:
           EOF
           # D3: code compiled statically into the shipped DLLs. Columns: package |
           # licence field | source | where it is compiled in. Same checks as above.
-          # headers is no-ddk-only: its LGPL part is the DDK headers alone
-          # (ddk-readme.txt), and a guard below fails if a build here includes one.
           cat > "$RUNNER_TEMP/reviewed-static.txt" <<'EOF'
           crt           | spdx:ZPL-2.1 | no | MinGW-w64 runtime (startup objects, libmingwex, libmingw32) in every DLL, ours and MSYS2's.
-          headers       | spdx:ZPL-2.1 AND LGPL-2.1-or-later | no-ddk-only | Inline code from the MinGW-w64 Windows headers in every DLL; the LGPL part is the DDK headers (ddk-readme.txt).
+          headers       | spdx:ZPL-2.1 AND LGPL-2.1-or-later | yes | Inline code from the MinGW-w64 Windows headers in every DLL. The headers and IDLs imported from Wine (COPYING.MinGW-w64-runtime.txt; our DLLs are built against d3d11, dxgi, dxva2api, dwrite and more) and the DDK headers (ddk-readme.txt) are LGPL-2.1-or-later, so the source ships.
           gcc           | spdx:GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later | no | Static libgcc parts in every DLL; libstdc++ inside libshaderc_shared.dll. Runtime Library Exception.
           winpthreads   | spdx:MIT AND BSD-3-Clause-Clear | no | Inside libshaderc_shared.dll.
           glslang       | spdx:BSD-3-Clause | no | Inside libshaderc_shared.dll. The field under-reports: LICENSE.txt also covers Apache-2.0/MIT parts and the GPL-3.0 Bison parser under the Bison exception (checked below).
@@ -252,15 +250,13 @@ jobs:
           fi
 
           # D5 gate, per DLL. Built here (D2): the names our three builds produce.
-          # An LGPL or MPL field must ship its source (source = yes). no-ddk-only
-          # is the one reviewed exception, for headers.
+          # An LGPL or MPL field must ship its source (source = yes).
           check_src() { # <name> <reviewed licence field> <source column>
             case "$3" in
               yes) ;;
               no) if grep -qE 'LGPL|MPL' <<< "$2"; then
                     echo "::error::$1 is under '$2' but its source column says no"; return 1
                   fi ;;
-              no-ddk-only) [ "$1" = headers ] || { echo "::error::$1: no-ddk-only is for headers only"; return 1; } ;;
               *) echo "::error::$1 has source column '$3' (want yes or no)"; return 1 ;;
             esac
           }
@@ -306,12 +302,6 @@ jobs:
           done < "$RUNNER_TEMP/reviewed-static.txt"
           grep -q 'Bison Exception' /ucrt64/share/licenses/glslang/LICENSE.txt \
             || { echo "::error::glslang's LICENSE.txt no longer carries the Bison exception"; bad=1; }
-          # headers' no-ddk-only holds only while nothing built here includes a
-          # DDK header (the LGPL part of mingw-w64-headers).
-          if grep -rlE '#[[:space:]]*include[[:space:]]*[<"]ddk/' ffmpeg mpv libplacebo \
-              --include='*.c' --include='*.h' --include='*.cpp'; then
-            echo "::error::a build here includes a MinGW-w64 DDK header (LGPL): set headers' source column to yes"; bad=1
-          fi
           [ "$bad" = 0 ] || exit 1
           cut -d' ' -f2 "$RUNNER_TEMP/dll-packages.txt" | sort -u > "$RUNNER_TEMP/packages.txt"
           while IFS= read -r line; do col "$line" 1; done < "$RUNNER_TEMP/reviewed-static.txt" > "$RUNNER_TEMP/static-packages.txt"
