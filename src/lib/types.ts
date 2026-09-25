@@ -75,6 +75,8 @@ export interface ExternalSubtitleEntry {
   id: string;
   url: string;
   lang: string;
+  movieReleaseName?: unknown;
+  subtitleFileName?: unknown;
 }
 
 export interface TorrentEngineDetails {

@@ -177,17 +177,50 @@ export function findPreferredSubtitleIndex(subtitles: SubtitleTrack[], preferenc
 const MAX_EXTERNAL_SUBTITLE_FETCHES = 25;
 const MAX_EXTERNAL_SUBTITLES_PER_LANGUAGE = 5;
 
+/** The file being played, used to find the subtitles made for that release. */
+export interface SubtitleRelease {
+  filename: string;
+  videoSize: number;
+}
+
+function releaseTokens(name: string): Set<string> {
+  return new Set(
+    name
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 1)
+  );
+}
+
+// How many name tokens (source, resolution, codec, release group, ...) a
+// subtitle shares with the playing file. The service ignores the file name, so
+// subtitles made for this exact release are found here instead.
+function releaseMatchScore(entry: ExternalSubtitleEntry, fileTokens: Set<string>): number {
+  const names = [entry.movieReleaseName, entry.subtitleFileName].filter(
+    (name): name is string => typeof name === 'string'
+  );
+  const entryTokens = releaseTokens(names.join(' '));
+  let score = 0;
+  for (const token of entryTokens) if (fileTokens.has(token)) score++;
+  return score;
+}
+
 function selectSubtitlesToFetch(
   entries: ExternalSubtitleEntry[],
-  preference?: string
+  preference?: string,
+  release?: SubtitleRelease
 ): ExternalSubtitleEntry[] {
   const preferredCodes = (preference && PREFERRED_SUBTITLE_CODES[preference]?.flat()) || [];
   const rank = (entry: ExternalSubtitleEntry) => {
     const idx = preferredCodes.indexOf(normalizeLanguageCode(entry.lang));
     return idx === -1 ? preferredCodes.length : idx;
   };
-  // Array.prototype.sort is stable, so API order is kept within each rank.
-  const ordered = [...entries].sort((a, b) => rank(a) - rank(b));
+  const fileTokens = releaseTokens(release?.filename ?? '');
+  const scores = new Map(entries.map((entry) => [entry, releaseMatchScore(entry, fileTokens)]));
+  // Array.prototype.sort is stable, so API order is kept among equal matches.
+  const ordered = [...entries].sort(
+    (a, b) => rank(a) - rank(b) || (scores.get(b) ?? 0) - (scores.get(a) ?? 0)
+  );
 
   const perLanguage = new Map<string, number>();
   const selected: ExternalSubtitleEntry[] = [];
@@ -223,12 +256,6 @@ export function clearExternalSubtitleCache(): void {
   externalSubtitleCache.clear();
 }
 
-/** The file being played, which OpenSubtitles uses to rank release-matched subtitles first. */
-export interface SubtitleRelease {
-  filename: string;
-  videoSize: number;
-}
-
 // Stremio addon "extra" arguments, sent the same way Stremio sends them.
 function releaseExtra(release: SubtitleRelease | undefined): string {
   if (!release) return '';
@@ -256,7 +283,7 @@ export async function getExternalSubtitles(
     if (!Array.isArray(data.subtitles)) return [];
 
     const results = await Promise.allSettled(
-      selectSubtitlesToFetch(data.subtitles, preference).map(async (sub) => {
+      selectSubtitlesToFetch(data.subtitles, preference, release).map(async (sub) => {
         const langName = getLanguageName(sub.lang);
         const vtt = await fetchExternalSubtitleContent(sub.url);
         const blob = new Blob([vtt], { type: 'text/vtt' });

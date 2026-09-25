@@ -178,6 +178,69 @@ describe('subtitles api', () => {
       expect(subs.map((s) => s.id)).toEqual(['eng-0', 'eng-1', 'eng-2', 'eng-3', 'eng-4']);
     });
 
+    const release = { filename: 'Show.S01E02.720p.BluRay.x264-DEMAND.mkv', videoSize: 1 };
+    const mockReleases = (
+      entries: { id: string; lang: string; movieReleaseName?: string; subtitleFileName?: string }[]
+    ) => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            subtitles: entries.map((e) => ({ ...e, url: `https://subs5.strem.io/${e.id}.srt` }))
+          })
+      });
+    };
+
+    it('lists subtitles made for the playing release first', async () => {
+      mockReleases([
+        { id: 'dvd', lang: 'pob', movieReleaseName: 'Show.S01.DVDRip.XviD-ORPHEUS' },
+        { id: 'bluray', lang: 'pob', movieReleaseName: 'Show.S01E02.720p.BluRay.x264-DEMAND' },
+        { id: 'web', lang: 'pob', subtitleFileName: 'Show.S01E02.720p.WEB-DL.srt' }
+      ]);
+
+      const subs = await getExternalSubtitles('tt1', 1, 2, 'pt', release);
+
+      expect(subs.map((s) => s.id)).toEqual(['bluray', 'web', 'dvd']);
+    });
+
+    it('keeps the best-matching releases when a language has more than the cap', async () => {
+      mockReleases([
+        ...Array.from({ length: 6 }, (_, i) => ({
+          id: `other-${i}`,
+          lang: 'eng',
+          movieReleaseName: 'Show.S01.DVDRip'
+        })),
+        { id: 'match', lang: 'eng', movieReleaseName: 'Show.S01E02.720p.BluRay.x264-DEMAND' }
+      ]);
+
+      const subs = await getExternalSubtitles('tt1', 1, 2, undefined, release);
+
+      expect(subs.map((s) => s.id)).toContain('match');
+      expect(subs[0].id).toBe('match');
+    });
+
+    it('still puts the preferred language before a better release match', async () => {
+      mockReleases([
+        { id: 'eng-match', lang: 'eng', movieReleaseName: 'Show.S01E02.720p.BluRay.x264-DEMAND' },
+        { id: 'pob-other', lang: 'pob', movieReleaseName: 'Show.S01.DVDRip' }
+      ]);
+
+      const subs = await getExternalSubtitles('tt1', 1, 2, 'pt', release);
+
+      expect(subs.map((s) => s.id)).toEqual(['pob-other', 'eng-match']);
+    });
+
+    it('ignores release names that are not strings', async () => {
+      mockReleases([
+        { id: 'a', lang: 'eng', movieReleaseName: 42 as unknown as string },
+        { id: 'b', lang: 'eng', movieReleaseName: 'Show.S01E02.720p.BluRay.x264-DEMAND' }
+      ]);
+
+      const subs = await getExternalSubtitles('tt1', 1, 2, undefined, release);
+
+      expect(subs.map((s) => s.id)).toEqual(['b', 'a']);
+    });
+
     it('reuses already-fetched subtitle content instead of fetching it again', async () => {
       mockList([{ id: 'pob-0', lang: 'pob' }]);
 
