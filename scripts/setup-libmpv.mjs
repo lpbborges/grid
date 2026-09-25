@@ -20,7 +20,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { windowsRuntimeDlls } from './libmpv-archive.mjs';
+import { assertNoSymlinks, windowsRuntimeDlls } from './libmpv-archive.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const lock = JSON.parse(readFileSync(path.join(root, 'scripts', 'libmpv.lock.json'), 'utf8'));
@@ -136,8 +136,9 @@ async function setupWindows() {
       ['-xzf', archive, '-C', work],
       { stdio: 'inherit' }
     );
+    assertNoSymlinks(work);
     const bin = path.join(work, 'bin');
-    for (const dll of windowsRuntimeDlls(readdirSync(bin))) {
+    for (const dll of windowsRuntimeDlls(readdirSync(bin, { withFileTypes: true }))) {
       copyFileSync(path.join(bin, dll), path.join(out, dll));
     }
     cpSync(path.join(work, 'LICENSES'), path.join(out, 'LICENSES'), { recursive: true });
