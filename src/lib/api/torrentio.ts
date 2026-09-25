@@ -9,6 +9,7 @@ export interface Stream {
   infoHash?: string;
   fileIdx?: number;
   url?: string;
+  sources?: string[];
   behaviorHints?: Record<string, unknown>;
 }
 
@@ -16,6 +17,13 @@ export interface Stream {
 export function parseSeedCount(title: string | undefined): number {
   const match = title?.match(/👤\s*(\d+)/u);
   return match ? Number(match[1]) : 0;
+}
+
+export function buildMagnet(infoHash: string, name: string, sources: string[] = []): string {
+  const trackers = sources
+    .filter((source) => source.startsWith('tracker:'))
+    .map((source) => `&tr=${encodeURIComponent(source.slice('tracker:'.length))}`);
+  return `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(name)}${trackers.join('')}`;
 }
 
 const AUDIO_TO_TORRENTIO_LANG: Record<string, string> = {

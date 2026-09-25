@@ -134,6 +134,22 @@ describe('Movie playback wiring', () => {
     expect(JSON.parse(update?.body ?? '{}')).toEqual({ only_files: [1, 0] });
   });
 
+  it('adds the magnet with the trackers Torrentio lists', async () => {
+    await openAndPlay({
+      streams: [
+        {
+          ...baseOptions.streams[0],
+          sources: ['tracker:udp://tracker.example.org:1337/announce', `dht:${HASH}`]
+        }
+      ]
+    });
+    await screen.findByTestId('video-element', {}, { timeout: 5000 });
+
+    expect(rqbitRequest('POST', '/torrents')?.body).toContain(
+      '&tr=udp%3A%2F%2Ftracker.example.org%3A1337%2Fannounce'
+    );
+  });
+
   it('loads the bundled and the external subtitles', async () => {
     await openAndPlay();
     await screen.findByTestId('video-element', {}, { timeout: 5000 });

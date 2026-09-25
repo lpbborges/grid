@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import { logger } from '$lib/logger';
   import { translateMediaInfo } from '$lib/api/translate';
-  import { getMovieStreams, parseSeedCount } from '$lib/api/torrentio';
+  import { buildMagnet, getMovieStreams, parseSeedCount } from '$lib/api/torrentio';
   import Player from '$lib/components/Player.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
@@ -80,7 +80,13 @@
     seeds?: number;
     peers?: number;
     url?: string;
-    rawStream?: { title?: string; name?: string; fileIdx?: number; infoHash?: string };
+    rawStream?: {
+      title?: string;
+      name?: string;
+      fileIdx?: number;
+      infoHash?: string;
+      sources?: string[];
+    };
   }
 
   let combinedTorrents = $state<CombinedStreamOption[]>([]);
@@ -177,7 +183,11 @@
     const selectedTorrent =
       combinedTorrents.find((t) => t.hash === selectedTorrentHash) || combinedTorrents[0];
     const fileIdx = selectedTorrent.rawStream?.fileIdx;
-    const magnet = `magnet:?xt=urn:btih:${selectedTorrent.hash}&dn=${encodeURIComponent(movie?.title || '')}`;
+    const magnet = buildMagnet(
+      selectedTorrent.hash,
+      movie?.title || '',
+      selectedTorrent.rawStream?.sources
+    );
 
     const requestedId = movieId;
     const ok = await player.play(magnet, {
