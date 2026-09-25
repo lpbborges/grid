@@ -8,6 +8,7 @@ import {
   resolveNativeTracks,
   withExternalLangs,
   nativeTrackLabel,
+  MAX_NATIVE_SUBTITLE_FILES,
   type NativeTrack,
   type useMpvBackend
 } from './useMpvBackend.svelte';
@@ -295,7 +296,11 @@ describe('useMpvBackend', () => {
     expect(ok).toBe(true);
     expect(player.isRunning).toBe(true);
     const commands = vi.mocked(invoke).mock.calls.map((call) => call[0]);
-    expect(commands).toEqual(['start_native_player', 'native_player_set_tracks']);
+    expect(commands).toEqual([
+      'start_native_player',
+      'native_player_set_volume',
+      'native_player_set_tracks'
+    ]);
     // D4 is dropped: mpv renders inside this window, so minimizing it would
     // hide the player itself.
     expect(windowApi.minimize).not.toHaveBeenCalled();
@@ -448,6 +453,24 @@ describe('useMpvBackend', () => {
     );
   });
 
+  it('hands mpv no more subtitles than the native cache accepts', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ text: async () => 'WEBVTT' }) as never;
+    const subtitles = Array.from({ length: MAX_NATIVE_SUBTITLE_FILES + 5 }, (_, i) => ({
+      id: `s${i}`,
+      url: `blob:${i}`,
+      lang: 'pob',
+      label: 'PT',
+      group: 'Extra' as const
+    }));
+
+    await start({ subtitles });
+
+    const cached = vi.mocked(invoke).mock.calls.find((c) => c[0] === 'cache_native_subtitles');
+    expect((cached?.[1] as { contents: string[] }).contents).toHaveLength(
+      MAX_NATIVE_SUBTITLE_FILES
+    );
+  });
+
   it('still plays when a subtitle cannot be prepared', async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('gone')) as never;
 
@@ -492,6 +515,27 @@ describe('useMpvBackend', () => {
     // make every film nearly silent.
     expect(invoke).toHaveBeenCalledWith('native_player_set_volume', { percent: 65 });
     expect(player.volume).toBe(0.65);
+  });
+
+  it('starts every playback at the volume the controls show', async () => {
+    const { player } = await start();
+    await player.setVolume(0);
+    await player.stop();
+    vi.mocked(invoke).mockClear();
+
+    await player.start({
+      url: 'http://127.0.0.1:1/x',
+      mediaId: 'tt2',
+      subtitles: [],
+      startSeconds: 0
+    });
+
+    expect(player.volume).toBe(1);
+    const commands = vi.mocked(invoke).mock.calls.map((call) => call[0]);
+    expect(commands.indexOf('native_player_set_volume')).toBeLessThan(
+      commands.indexOf('native_player_set_tracks')
+    );
+    expect(invoke).toHaveBeenCalledWith('native_player_set_volume', { percent: 100 });
   });
 
   it('tracks position from native-player-time', async () => {

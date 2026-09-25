@@ -205,7 +205,7 @@ async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
     }
 }
 
-/// Reads `res`'s body as a UTF-8 string, streaming it in chunks and
+/// Reads `res`'s body as subtitle text, streaming it in chunks and
 /// aborting with an error as soon as more than `max_bytes` have been read.
 /// This is defense in depth on top of the subtitle-file-name validation in
 /// `fetch_torrent_subtitle`: even if a non-subtitle (e.g. multi-gigabyte
@@ -231,7 +231,7 @@ async fn read_capped_body_as_string(
         buf.extend_from_slice(&chunk);
     }
 
-    String::from_utf8(buf).map_err(|e| format!("Response body was not valid UTF-8: {}", e))
+    Ok(subtitles::decode_subtitle(&buf))
 }
 
 #[tauri::command]
@@ -1241,10 +1241,14 @@ mod tests {
     /// `GET /torrents/{hash}/stream/{idx}` (the raw file-content endpoint),
     /// for however many requests are made against it. Returns the server's
     /// base URL port.
-    async fn spawn_mock_engine_server(details_json: String, stream_body: String) -> u16 {
+    async fn spawn_mock_engine_server(
+        details_json: String,
+        stream_body: impl Into<Vec<u8>>,
+    ) -> u16 {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         use tokio::net::TcpListener;
 
+        let stream_body = stream_body.into();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
 
@@ -1269,18 +1273,18 @@ mod tests {
                         .unwrap_or("");
 
                     let (content_type, body) = if path.contains("/stream/") {
-                        ("text/plain", stream_body.as_str())
+                        ("text/plain", stream_body.as_slice())
                     } else {
-                        ("application/json", details_json.as_str())
+                        ("application/json", details_json.as_bytes())
                     };
 
-                    let response = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    let head = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                         content_type,
-                        body.len(),
-                        body
+                        body.len()
                     );
-                    let _ = socket.write_all(response.as_bytes()).await;
+                    let _ = socket.write_all(head.as_bytes()).await;
+                    let _ = socket.write_all(body).await;
                     let _ = socket.shutdown().await;
                 });
             }
@@ -1313,6 +1317,32 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Requested file is not a subtitle");
+    }
+
+    const SUBTITLE_DETAILS_JSON: &str = r#"{"info_hash":"deadbeef","files":[{"name":"pt.srt"}]}"#;
+
+    #[tokio::test]
+    async fn fetch_torrent_subtitle_reads_a_windows_1252_srt() {
+        let srt = b"1\n00:00:01,000 --> 00:00:02,000\nOl\xe1, voc\xea!\n".to_vec();
+        let port = spawn_mock_engine_server(SUBTITLE_DETAILS_JSON.to_string(), srt).await;
+
+        let vtt = fetch_torrent_subtitle_impl("a".repeat(40), 0, port, &test_rate_limit_state())
+            .await
+            .expect("a Windows-1252 subtitle should be accepted");
+
+        assert!(vtt.contains("Olá, você!"));
+    }
+
+    #[tokio::test]
+    async fn fetch_torrent_subtitle_keeps_a_vtt_with_a_byte_order_mark_as_is() {
+        let vtt = "\u{FEFF}WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nOi\n";
+        let port = spawn_mock_engine_server(SUBTITLE_DETAILS_JSON.to_string(), vtt).await;
+
+        let result = fetch_torrent_subtitle_impl("a".repeat(40), 0, port, &test_rate_limit_state())
+            .await
+            .unwrap();
+
+        assert_eq!(result, "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nOi\n");
     }
 
     #[tokio::test]

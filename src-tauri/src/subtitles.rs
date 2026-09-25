@@ -54,6 +54,21 @@ pub fn srt_to_vtt(input: &str) -> String {
     format!("WEBVTT\n\n{}", converted)
 }
 
+/// Decodes subtitle bytes, honouring a BOM and falling back to Windows-1252,
+/// the usual encoding of subtitles that are not UTF-8.
+pub fn decode_subtitle(bytes: &[u8]) -> String {
+    if let Some((encoding, _)) = encoding_rs::Encoding::for_bom(bytes) {
+        return encoding.decode_with_bom_removal(bytes).0.into_owned();
+    }
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.to_owned(),
+        Err(_) => encoding_rs::WINDOWS_1252
+            .decode_without_bom_handling(bytes)
+            .0
+            .into_owned(),
+    }
+}
+
 pub fn is_valid_info_hash(value: &str) -> bool {
     let len = value.len();
     (len == 40 || len == 64) && value.chars().all(|c| c.is_ascii_hexdigit())

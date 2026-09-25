@@ -8,6 +8,7 @@ import {
   type PlaybackBoundaryOptions
 } from '$lib/engine/__fixtures__/playbackBoundary';
 import { clearExternalSubtitleCache } from '$lib/api/subtitles';
+import { watchedStore } from '$lib/stores/watched.svelte';
 
 // This suite drives the <video> path, which Linux no longer plays through by
 // default; pin it rather than depend on the test runner's user agent.
@@ -65,6 +66,7 @@ describe('Series playback wiring', () => {
   beforeEach(() => {
     localStorage.clear();
     clearExternalSubtitleCache();
+    watchedStore.watchedIds = [];
   });
 
   afterEach(() => {
@@ -134,5 +136,18 @@ describe('Series playback wiring', () => {
       await screen.findByText(/nenhuma fonte encontrada para este episódio/i)
     ).toBeInTheDocument();
     expect(boundary.rqbit.requests).toEqual([]);
+  });
+
+  it('marks only the finished episode as watched, not the whole series', async () => {
+    await playEpisode(/Pilot/);
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await waitFor(() => expect(video.getAttribute('src')).toBeTruthy());
+
+    Object.defineProperty(video, 'duration', { configurable: true, value: 100 });
+    Object.defineProperty(video, 'currentTime', { configurable: true, value: 96 });
+    await fireEvent.timeUpdate(video);
+
+    await waitFor(() => expect(watchedStore.has(series.id, 1, 1)).toBe(true));
+    expect(watchedStore.has(series.id)).toBe(false);
   });
 });

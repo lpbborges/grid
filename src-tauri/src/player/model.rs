@@ -446,6 +446,22 @@ mod tests {
     }
 
     #[test]
+    fn matches_the_frontend_native_subtitle_cap() {
+        let source = include_str!("../../../src/lib/composables/useMpvBackend.svelte.ts");
+        let frontend_cap: usize = source
+            .lines()
+            .find_map(|line| {
+                line.trim()
+                    .strip_prefix("export const MAX_NATIVE_SUBTITLE_FILES = ")?
+                    .trim_end_matches(';')
+                    .parse()
+                    .ok()
+            })
+            .expect("MAX_NATIVE_SUBTITLE_FILES is declared in useMpvBackend.svelte.ts");
+        assert_eq!(MAX_SUBTITLE_FILES, frontend_cap);
+    }
+
+    #[test]
     fn throttles_time_updates_to_one_per_interval() {
         let mut throttle = TimeThrottle::new();
         let start = Instant::now();
