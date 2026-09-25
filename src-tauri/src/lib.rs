@@ -435,6 +435,18 @@ fn forward_engine_output(stream: impl std::io::Read + Send + 'static, to_stderr:
     });
 }
 
+/// Drops an engine whose process has exited, so the next start spawns a new one.
+fn forget_exited_engine(child: &mut Option<std::process::Child>) {
+    if let Some(process) = child {
+        match process.try_wait() {
+            Ok(None) => return,
+            Ok(Some(status)) => eprintln!("The engine exited ({status}); it will be restarted"),
+            Err(e) => eprintln!("Could not check the engine process: {e}"),
+        }
+        *child = None;
+    }
+}
+
 fn engine_environment() -> [(&'static str, &'static str); 1] {
     [("CORS_ALLOW_REGEXP", r"^http://tauri\.localhost$")]
 }
@@ -450,7 +462,8 @@ async fn start_torrent_engine(
     // still polling for a stale process to die, otherwise closing the
     // window could block on this same mutex.
     {
-        let child_guard = state.child.lock().unwrap();
+        let mut child_guard = state.child.lock().unwrap();
+        forget_exited_engine(&mut child_guard);
         let port_guard = state.port.lock().unwrap();
         if child_guard.is_some() {
             if let Some(p) = *port_guard {
@@ -474,6 +487,7 @@ async fn start_torrent_engine(
         .map_err(|e| e.to_string())?;
 
     let mut child_guard = state.child.lock().unwrap();
+    forget_exited_engine(&mut child_guard);
     let mut pid_guard = state.pid.lock().unwrap();
     let mut port_guard = state.port.lock().unwrap();
     // Re-check in case another invocation raced us while cleanup ran.
@@ -988,6 +1002,37 @@ mod tests {
             name,
             std::process::id()
         ))
+    }
+
+    #[test]
+    fn forgets_an_engine_whose_process_has_exited() {
+        let mut exited = std::process::Command::new(env!("CARGO"))
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        exited.wait().unwrap();
+        let mut child = Some(exited);
+
+        forget_exited_engine(&mut child);
+
+        assert!(child.is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn keeps_an_engine_that_is_still_running() {
+        let running = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        let mut child = Some(running);
+
+        forget_exited_engine(&mut child);
+
+        let mut kept = child.expect("a running engine must be kept");
+        let _ = kept.kill();
+        let _ = kept.wait();
     }
 
     #[test]
