@@ -328,6 +328,12 @@ jobs:
             exit 1
           }
           $required | ForEach-Object { Write-Host "carried by the NSIS installer: $_" }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-installers
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*-setup.exe
 
   e2e:
     needs: [frontend, rust]
