@@ -321,12 +321,8 @@ jobs:
           if ($exe.Count -ne 1) { throw "expected exactly one grid.exe, found $($exe.Count)" }
           $dir = $exe[0].DirectoryName
           Write-Host "grid.exe is in $dir"
-          $dlls = @(Get-ChildItem src-tauri/lib/windows -Filter *.dll | ForEach-Object { $_.Name })
-          # The closure is ~31 DLLs (8 built by Grid, 23 from MSYS2 on 2026-09-24); the
-          # floor only catches a missing or half-extracted lib/windows, not MSYS2 churn.
-          if ($dlls.Count -lt 25) { throw "suspiciously few DLLs in src-tauri/lib/windows: $($dlls.Count)" }
-          $required = $dlls + @('LICENSES\mpv-LGPL-2.1.txt', 'LICENSES\ffmpeg-LGPL-2.1.txt', 'LICENSES\libplacebo-LGPL-2.1.txt',
-            'LICENSES\libass\COPYING', 'LICENSES\crt\COPYING.MinGW-w64-runtime.txt', 'LICENSES\glslang\LICENSE.txt')
+          $required = @(./scripts/windows-layout-required.ps1)
+          Write-Host "checking $($required.Count) paths"
           $missing = @($required | Where-Object { -not (Test-Path -PathType Leaf (Join-Path $dir $_)) })
           if ($missing.Count -gt 0) {
             $missing | ForEach-Object { Write-Host "::error::MSI does not install $_ beside grid.exe" }
@@ -344,17 +340,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "7z could not list the NSIS installer" }
           $paths = @($listing | Where-Object { $_ -like 'Path = *' } | ForEach-Object { $_.Substring(7) })
           $paths
-          $dlls = @(Get-ChildItem src-tauri/lib/windows -Filter *.dll | ForEach-Object { $_.Name })
-          # The closure is ~31 DLLs (8 built by Grid, 23 from MSYS2 on 2026-09-24); the
-          # floor only catches a missing or half-extracted lib/windows, not MSYS2 churn.
-          if ($dlls.Count -lt 25) { throw "suspiciously few DLLs in src-tauri/lib/windows: $($dlls.Count)" }
-          $required = $dlls + @('LICENSES\mpv-LGPL-2.1.txt', 'LICENSES\ffmpeg-LGPL-2.1.txt', 'LICENSES\libplacebo-LGPL-2.1.txt',
-            'LICENSES\libass\COPYING', 'LICENSES\crt\COPYING.MinGW-w64-runtime.txt', 'LICENSES\glslang\LICENSE.txt')
+          $required = @(./scripts/windows-layout-required.ps1)
+          Write-Host "checking $($required.Count) paths"
           $missing = @($required | Where-Object { $paths -notcontains $_ })
           if ($missing) {
             $missing | ForEach-Object { Write-Host "::error::NSIS installer does not carry $_" }
             exit 1
           }
+          $required | ForEach-Object { Write-Host "carried by the NSIS installer: $_" }
 
   e2e:
     needs: [frontend, rust]
