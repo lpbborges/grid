@@ -225,7 +225,7 @@ Grid talks to these services directly from your machine. Every host must also be
 - **Cinemeta** (`v3-cinemeta.strem.io`): catalog, search, and movie/series metadata.
 - **YTS mirror** (`movies-api.accel.li`): extra movie details.
 - **Torrentio** (`torrentio.strem.fun`): stream sources for movies and episodes.
-- **OpenSubtitles via strem.io** (`opensubtitles-v3.strem.io`, `*.strem.io`): external subtitles.
+- **OpenSubtitles via strem.io** (`opensubtitles-v3.strem.io`, `*.strem.io`): external subtitles. Like Stremio, Grid sends the name and size of the video file being played so the service can match subtitles to that release.
 - **Google Translate** (unofficial `translate.googleapis.com` endpoint) and **MyMemory** (`api.mymemory.translated.net`): metadata translation.
 
 **Peer discovery:** the streaming engine (not the webview, so the CSP does not apply) announces each stream to the trackers Torrentio lists for it plus a few public trackers (`defaultTrackers` in `src/lib/api/endpoints.ts`), and to the DHT. They see your IP address and the hash of what you play. E2E builds use none of them.

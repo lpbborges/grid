@@ -175,7 +175,7 @@ export function findPreferredSubtitleIndex(subtitles: SubtitleTrack[], preferenc
 // The native player writes them all to disk in one batch, capped by
 // MAX_SUBTITLE_FILES (src-tauri/src/player/model.rs): change both together.
 const MAX_EXTERNAL_SUBTITLE_FETCHES = 25;
-const MAX_EXTERNAL_SUBTITLES_PER_LANGUAGE = 2;
+const MAX_EXTERNAL_SUBTITLES_PER_LANGUAGE = 5;
 
 function selectSubtitlesToFetch(
   entries: ExternalSubtitleEntry[],
@@ -223,17 +223,33 @@ export function clearExternalSubtitleCache(): void {
   externalSubtitleCache.clear();
 }
 
+/** The file being played, which OpenSubtitles uses to rank release-matched subtitles first. */
+export interface SubtitleRelease {
+  filename: string;
+  videoSize: number;
+}
+
+// Stremio addon "extra" arguments, sent the same way Stremio sends them.
+function releaseExtra(release: SubtitleRelease | undefined): string {
+  if (!release) return '';
+  const args = [`filename=${encodeURIComponent(release.filename)}`];
+  if (release.videoSize > 0) args.push(`videoSize=${release.videoSize}`);
+  return `/${args.join('&')}`;
+}
+
 export async function getExternalSubtitles(
   imdbId: string,
   season?: number,
   episode?: number,
-  preference?: string
+  preference?: string,
+  release?: SubtitleRelease
 ): Promise<SubtitleTrack[]> {
   try {
-    const url =
+    const id =
       season !== undefined && episode !== undefined
-        ? `${endpoints.openSubtitles}/subtitles/series/${imdbId}:${season}:${episode}.json`
-        : `${endpoints.openSubtitles}/subtitles/movie/${imdbId}.json`;
+        ? `series/${imdbId}:${season}:${episode}`
+        : `movie/${imdbId}`;
+    const url = `${endpoints.openSubtitles}/subtitles/${id}${releaseExtra(release)}.json`;
     const res = await fetchWithTimeout(url);
     if (!res.ok) return [];
     const data: { subtitles?: ExternalSubtitleEntry[] } = await res.json();

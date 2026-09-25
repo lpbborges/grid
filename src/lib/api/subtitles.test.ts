@@ -34,6 +34,36 @@ describe('subtitles api', () => {
       );
     });
 
+    it('sends the release file name and size so matching subtitles rank first', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ subtitles: [] })
+      });
+      await getExternalSubtitles('tt123456', 1, 2, undefined, {
+        filename: 'Show S01E02 [1080p]&x.mkv',
+        videoSize: 1234567
+      });
+      expect(fetch).toHaveBeenCalledWith(
+        'https://opensubtitles-v3.strem.io/subtitles/series/tt123456:1:2/filename=Show%20S01E02%20%5B1080p%5D%26x.mkv&videoSize=1234567.json',
+        expect.objectContaining({ signal: expect.anything() })
+      );
+    });
+
+    it('omits an unknown video size from the request', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ subtitles: [] })
+      });
+      await getExternalSubtitles('tt123456', undefined, undefined, undefined, {
+        filename: 'movie.mkv',
+        videoSize: 0
+      });
+      expect(fetch).toHaveBeenCalledWith(
+        'https://opensubtitles-v3.strem.io/subtitles/movie/tt123456/filename=movie.mkv.json',
+        expect.objectContaining({ signal: expect.anything() })
+      );
+    });
+
     it('returns formatted subtitles on success', async () => {
       const mockResponse = {
         subtitles: [
@@ -122,29 +152,30 @@ describe('subtitles api', () => {
       expect(subs[0].id).toBe('pob-late');
     });
 
-    it('fetches at most two subtitles per language', async () => {
+    it('fetches at most five subtitles per language', async () => {
       mockList([
-        { id: 'eng-0', lang: 'eng' },
-        { id: 'eng-1', lang: 'eng' },
-        { id: 'eng-2', lang: 'eng' },
+        ...Array.from({ length: 6 }, (_, i) => ({ id: `eng-${i}`, lang: 'eng' })),
         { id: 'spa-0', lang: 'spa' }
       ]);
 
       const subs = await getExternalSubtitles('tt1');
 
-      expect(subs.map((s) => s.id)).toEqual(['eng-0', 'eng-1', 'spa-0']);
+      expect(subs.map((s) => s.id)).toEqual(['eng-0', 'eng-1', 'eng-2', 'eng-3', 'eng-4', 'spa-0']);
     });
 
     it('treats language codes case-insensitively for the per-language cap', async () => {
       mockList([
         { id: 'eng-0', lang: 'eng' },
         { id: 'eng-1', lang: 'ENG' },
-        { id: 'eng-2', lang: 'Eng' }
+        { id: 'eng-2', lang: 'Eng' },
+        { id: 'eng-3', lang: 'eNg' },
+        { id: 'eng-4', lang: 'enG' },
+        { id: 'eng-5', lang: 'ENg' }
       ]);
 
       const subs = await getExternalSubtitles('tt1');
 
-      expect(subs.map((s) => s.id)).toEqual(['eng-0', 'eng-1']);
+      expect(subs.map((s) => s.id)).toEqual(['eng-0', 'eng-1', 'eng-2', 'eng-3', 'eng-4']);
     });
 
     it('reuses already-fetched subtitle content instead of fetching it again', async () => {
