@@ -14,7 +14,7 @@ $licenceRoot = Join-Path $lib 'LICENSES'
 $licences = @(Get-ChildItem -Recurse -File $licenceRoot | ForEach-Object {
     'LICENSES\' + $_.FullName.Substring($licenceRoot.Length + 1).Replace('/', '\')
   })
-# The b4 archive ships 54 licence files; the floor catches a missing or
+# The b5 archive ships 54 licence files; the floor catches a missing or
 # half-copied LICENSES (which would make the checks pass vacuously), with
 # headroom for a dependency dropping out of the closure.
 if ($licences.Count -lt 50) { throw "suspiciously few licence files in $licenceRoot`: $($licences.Count)" }

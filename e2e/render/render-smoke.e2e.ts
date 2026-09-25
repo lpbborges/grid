@@ -1,6 +1,7 @@
 import { $, browser, expect } from '@wdio/globals';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ARTIFACTS } from '../support/driver.ts';
 import { MKV_MOVIE } from '../support/catalog.ts';
 import { openTitle } from '../specs/helpers.ts';
@@ -9,16 +10,41 @@ import { openTitle } from '../specs/helpers.ts';
 // transparent webview, the middle row of the screen contains several fully
 // saturated bars; if the surface is missing, covered by an opaque layer, or
 // black, it contains none. WebDriver screenshots only see the webview, so this
-// reads the X server's framebuffer with ImageMagick's `import`.
+// reads the screen itself: the X server's framebuffer with ImageMagick's
+// `import` on Linux, the desktop through screen-row.ps1 on Windows (where the
+// GPU-less runner draws through D3D11's WARP software rasteriser).
 
 type Rgb = [number, number, number];
 
-function screenRow(y: number, width: number): Rgb[] {
-  const text = execFileSync(
-    'import',
-    ['-window', 'root', '-depth', '8', '-crop', `${width}x1+0+${y}`, '+repage', 'txt:-'],
+const IS_WINDOWS = process.platform === 'win32';
+const SCREEN_ROW_PS1 = path.join(path.dirname(fileURLToPath(import.meta.url)), 'screen-row.ps1');
+
+function powershell(...args: string[]): string {
+  return execFileSync(
+    'powershell',
+    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCREEN_ROW_PS1, ...args],
     { encoding: 'utf8' }
   );
+}
+
+/** One row of screen pixels through the middle of Grid's window. */
+function screenRow(height: number, width: number): Rgb[] {
+  const text = IS_WINDOWS
+    ? powershell()
+    : execFileSync(
+        'import',
+        [
+          '-window',
+          'root',
+          '-depth',
+          '8',
+          '-crop',
+          `${width}x1+0+${Math.floor(height / 2)}`,
+          '+repage',
+          'txt:-'
+        ],
+        { encoding: 'utf8' }
+      );
   return text.split('\n').flatMap((line) => {
     const hex = /#([0-9A-F]{6})\b/i.exec(line)?.[1];
     if (!hex) return [];
@@ -38,7 +64,12 @@ function barColour([r, g, b]: Rgb): string | null {
   return null;
 }
 
-describe('Native render (Linux)', () => {
+function saveScreen(file: string): void {
+  if (IS_WINDOWS) powershell('-Png', file);
+  else execFileSync('import', ['-window', 'root', file]);
+}
+
+describe('Native render', () => {
   it('draws the video beneath the webview', async () => {
     await openTitle('movie', MKV_MOVIE.id);
     const play = await $('button*=Reproduzir');
@@ -72,7 +103,7 @@ describe('Native render (Linux)', () => {
       await browser.waitUntil(
         async () => {
           seen = new Set(
-            screenRow(Math.floor(height / 2), width)
+            screenRow(height, width)
               .map(barColour)
               .filter((c): c is string => c !== null)
           );
@@ -86,9 +117,9 @@ describe('Native render (Linux)', () => {
       );
     } catch (error) {
       // WebDriver's own screenshot only sees the webview, never mpv: keep what
-      // the X server actually showed, so a failure can be told apart from a
+      // the screen actually showed, so a failure can be told apart from a
       // capture or geometry problem.
-      execFileSync('import', ['-window', 'root', path.join(ARTIFACTS, 'render-smoke-screen.png')]);
+      saveScreen(path.join(ARTIFACTS, 'render-smoke-screen.png'));
       throw error;
     }
     expect(seen.size).toBeGreaterThanOrEqual(3);

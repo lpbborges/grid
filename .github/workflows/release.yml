@@ -16,9 +16,9 @@ jobs:
         include:
           - platform: ubuntu-latest
             args: ''
-          # No Windows leg yet: Grid's own LGPL build is pinned
-          # (src-tauri/licenses/README.md), and the leg returns once FFmpeg n7.1.5
-          # is pinned for both platforms and the MSI passes a clean-machine check.
+          # Grid's own LGPL libmpv build (src-tauri/licenses/README.md).
+          - platform: windows-latest
+            args: ''
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -72,12 +72,29 @@ jobs:
         run: |
           url=$(node -p "require('./scripts/libmpv.lock.json')['linux-x86_64'].url.replace(/[^/]+$/, 'libmpv-linux-source.tar.xz')")
           curl -fsSIL "$url" > /dev/null || { echo "::error::No source archive at $url"; exit 1; }
-          echo "LIBMPV_SOURCE_URL=$url" >> "$GITHUB_ENV"
 
-      # tauri.windows.conf.json bundles the DLL beside grid.exe.
+      # tauri.windows.conf.json bundles every lib/windows/*.dll and LICENSES\
+      # beside grid.exe.
       - name: Set up libmpv (Windows)
         if: matrix.platform == 'windows-latest'
         run: npm run setup:libmpv
+
+      - name: Locate the libmpv source (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          url=$(node -p "require('./scripts/libmpv.lock.json')['windows-x86_64'].url.replace(/[^/]+$/, 'libmpv-windows-source.tar.xz')")
+          curl -fsSIL "$url" > /dev/null || { echo "::error::No source archive at $url"; exit 1; }
+
+      # releaseBody is shared by both legs (the last one to finish writes it),
+      # so every leg names both platforms' source archives.
+      - name: libmpv source URLs (both platforms)
+        shell: bash
+        run: |
+          for p in linux windows; do
+            url=$(node -p "require('./scripts/libmpv.lock.json')['$p-x86_64'].url.replace(/[^/]+\$/, 'libmpv-$p-source.tar.xz')")
+            echo "LIBMPV_${p^^}_SOURCE_URL=$url" >> "$GITHUB_ENV"
+          done
 
       - name: Build and Publish Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -93,9 +110,9 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Grid v__VERSION__'
           releaseBody: |
-            Download the installers below for Linux.
+            Download the installers below for Linux and Windows.
 
-            The Linux packages bundle libmpv and FFmpeg (LGPL-2.1-or-later). Their complete source: ${{ env.LIBMPV_SOURCE_URL }}. Licences and how to replace the library: src-tauri/licenses/README.md.
+            The Linux and Windows packages bundle libmpv and FFmpeg (LGPL-2.1-or-later). Their complete source: Linux ${{ env.LIBMPV_LINUX_SOURCE_URL }}, Windows ${{ env.LIBMPV_WINDOWS_SOURCE_URL }}. Licences and how to replace the library: src-tauri/licenses/README.md.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
