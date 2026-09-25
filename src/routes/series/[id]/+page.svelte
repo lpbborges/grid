@@ -21,7 +21,6 @@
 
   const player = usePlayer(() => videoElement, {
     onwatched: () => {
-      watchedStore.add(seriesId);
       if (lastAttemptedEpisode) {
         watchedStore.add(seriesId, lastAttemptedEpisode.season, lastAttemptedEpisode.episode);
       }
