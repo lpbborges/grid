@@ -237,16 +237,29 @@ async fn read_capped_body_as_string(
 #[tauri::command]
 async fn get_cache_manifest(app: tauri::AppHandle) -> Result<Vec<cache::CacheEntry>, String> {
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    Ok(cache::read_manifest(&cache::manifest_path(&app_data_dir)).entries)
+    tauri::async_runtime::spawn_blocking(move || {
+        cache::read_manifest(&cache::manifest_path(&app_data_dir)).entries
+    })
+    .await
+    .map_err(|e| format!("Cache manifest task failed: {}", e))
 }
 
 #[tauri::command]
 async fn upsert_cache_entry(app: tauri::AppHandle, entry: cache::CacheEntry) -> Result<(), String> {
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let path = cache::manifest_path(&app_data_dir);
-    let mut manifest = cache::read_manifest(&path);
-    cache::upsert_entry(&mut manifest, entry);
-    cache::write_manifest(&path, &manifest).map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || upsert_cache_entry_blocking(&app_data_dir, entry))
+        .await
+        .map_err(|e| format!("Cache update task failed: {}", e))?
+}
+
+fn upsert_cache_entry_blocking(
+    app_data_dir: &Path,
+    entry: cache::CacheEntry,
+) -> Result<(), String> {
+    cache::update_manifest(&cache::manifest_path(app_data_dir), |manifest| {
+        cache::upsert_entry(manifest, entry)
+    })
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -271,29 +284,27 @@ fn evict_for_space_blocking(
     limit_bytes: u64,
 ) -> Result<Vec<String>, String> {
     let downloads_dir = cache::downloads_dir(app_data_dir);
-    let path = cache::manifest_path(app_data_dir);
-    let mut manifest = cache::read_manifest(&path);
+    cache::update_manifest(&cache::manifest_path(app_data_dir), |manifest| {
+        let to_evict =
+            cache::pick_eviction_candidates(manifest, exclude_info_hash, needed_bytes, limit_bytes);
 
-    let to_evict =
-        cache::pick_eviction_candidates(&manifest, exclude_info_hash, needed_bytes, limit_bytes);
-
-    for info_hash in &to_evict {
-        let Some(entry) = cache::remove_entry(&mut manifest, info_hash) else {
-            continue;
-        };
-        // The torrent's whole folder, not only the file played last.
-        let Some(std::path::Component::Normal(top)) =
-            std::path::Path::new(&entry.file_name).components().next()
-        else {
-            continue;
-        };
-        if top != "manifest.json" {
-            cache::remove_path_best_effort(&downloads_dir.join(top));
+        for info_hash in &to_evict {
+            let Some(entry) = cache::remove_entry(manifest, info_hash) else {
+                continue;
+            };
+            // The torrent's whole folder, not only the file played last.
+            let Some(std::path::Component::Normal(top)) =
+                std::path::Path::new(&entry.file_name).components().next()
+            else {
+                continue;
+            };
+            if top != "manifest.json" {
+                cache::remove_path_best_effort(&downloads_dir.join(top));
+            }
         }
-    }
-
-    cache::write_manifest(&path, &manifest).map_err(|e| e.to_string())?;
-    Ok(to_evict)
+        to_evict
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// Path to the PID file tracking the currently-running (or most recently
@@ -1015,6 +1026,44 @@ mod tests {
 
         assert_eq!(evicted, vec![hash.clone()]);
         assert!(!cache::downloads_dir(&app_data_dir).join(&hash).exists());
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+    }
+
+    #[test]
+    fn concurrent_cache_updates_keep_every_entry() {
+        let app_data_dir =
+            std::env::temp_dir().join(format!("grid-cache-concurrent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+        let hashes: Vec<String> = (0..16).map(|i| format!("{i:040x}")).collect();
+
+        std::thread::scope(|scope| {
+            for hash in &hashes {
+                let app_data_dir = &app_data_dir;
+                scope.spawn(move || {
+                    upsert_cache_entry_blocking(
+                        app_data_dir,
+                        cache::CacheEntry {
+                            info_hash: hash.clone(),
+                            magnet: String::new(),
+                            media_id: None,
+                            season: None,
+                            episode: None,
+                            file_name: format!("{hash}/movie.mkv"),
+                            total_bytes: 100,
+                            downloaded_bytes: 0,
+                            complete: false,
+                            last_accessed_at: 0,
+                        },
+                    )
+                    .unwrap();
+                });
+            }
+        });
+
+        let manifest = cache::read_manifest(&cache::manifest_path(&app_data_dir));
+        let mut stored: Vec<String> = manifest.entries.into_iter().map(|e| e.info_hash).collect();
+        stored.sort();
+        assert_eq!(stored, hashes);
         let _ = std::fs::remove_dir_all(&app_data_dir);
     }
 
