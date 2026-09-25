@@ -30,7 +30,7 @@ Grid is a native desktop application built with **Tauri**, **SvelteKit**, **Type
     libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
   ```
 
-- The libmpv development files, for native playback. Linux: `sudo apt install libmpv-dev` (Debian/Ubuntu) or the `mpv` package (Arch, which ships the headers alongside the player); Linux development needs libmpv from mpv 0.33 or newer. Windows: 7-Zip and the MSVC build tools, then run `npm run setup:libmpv` once to fetch the pinned DLL and generate its import library. macOS needs nothing here: it plays through the `<video>` element and never links libmpv.
+- The libmpv development files, for native playback. Linux: `sudo apt install libmpv-dev` (Debian/Ubuntu) or the `mpv` package (Arch, which ships the headers alongside the player); Linux development needs libmpv from mpv 0.33 or newer. Windows: the MSVC build tools (`dumpbin` and `lib`), then run `npm run setup:libmpv` once to fetch the pinned DLLs and generate libmpv's import library; it unpacks the archive with the `tar.exe` built into Windows 10 1803 and later. macOS needs nothing here: it plays through the `<video>` element and never links libmpv.
 
 - Linux playback, in `tauri dev` and in release builds, goes through libmpv and needs no GStreamer plugins. Only the `<video>` element does: set `VITE_GRID_NATIVE_PLAYER=off` (for example `VITE_GRID_NATIVE_PLAYER=off npm run tauri dev`) to force it for comparison, and the E2E build forces it too. It then decodes through GStreamer in WebKitGTK, whose decoders are not installed by default on a clean Ubuntu or Fedora; without them 4K HEVC and E-AC3 releases fail with "este vídeo precisa de componentes de vídeo que não estão instalados no sistema". Release packages do not declare them as dependencies, so install them yourself when you need that path (Debian/Ubuntu):
 
@@ -56,7 +56,7 @@ The first `tauri dev` compiles the Rust backend, which takes a few minutes. To p
 npm run tauri build
 ```
 
-Bundles are written to `src-tauri/target/release/bundle/`. On Windows, run `npm run setup:libmpv` first; the installers ship `libmpv-2.dll` beside `grid.exe`. On Linux, use `npm run setup:libmpv -- --bundle && npm run bundle:linux` instead — it fetches the bundled LGPL libmpv, then builds the `.deb`, `.rpm` and AppImage with the environment linuxdeploy needs to find and package it (see [libmpv](#libmpv-linux-and-windows)); `npm run tauri build` alone does not set that up.
+Bundles are written to `src-tauri/target/release/bundle/`. On Windows, run `npm run setup:libmpv` first; the installers ship `libmpv-2.dll`, every DLL it loads and their `LICENSES\` folder beside `grid.exe`. On Linux, use `npm run setup:libmpv -- --bundle && npm run bundle:linux` instead — it fetches the bundled LGPL libmpv, then builds the `.deb`, `.rpm` and AppImage with the environment linuxdeploy needs to find and package it (see [libmpv](#libmpv-linux-and-windows)); `npm run tauri build` alone does not set that up.
 
 ## Recommended IDE Setup
 
@@ -180,7 +180,8 @@ top. The commands are the only way in; there is no generic mpv passthrough.
   system libmpv (see [Prerequisites](#prerequisites)).
 - **Windows:** libmpv is given Grid's window handle (`wid`) and creates its own
   child window, which `window_embed.rs` pushes beneath WebView2. Run
-  `npm run setup:libmpv` once to fetch the pinned LGPL `libmpv-2.dll`.
+  `npm run setup:libmpv` once to fetch Grid's pinned LGPL `libmpv-2.dll` and
+  the DLLs it loads.
 
 ### libmpv (Linux and Windows)
 
@@ -205,12 +206,16 @@ platforms use a pinned **LGPL** build, recorded by URL and SHA256 in
   bundled libmpv) into its own `usr/lib` and rewrites RUNPATH to point there, so
   a second copy under `usr/lib/grid` would just be dead weight. Requires glibc
   2.39 (Ubuntu 24.04+, Debian 13+, Fedora 40+; see [Prerequisites](#prerequisites)).
-- **Windows** links a community `mpv-dev-lgpl` `libmpv-2.dll` for development
-  and CI: `npm run setup:libmpv` puts it and a generated import library in
-  `src-tauri/lib/windows/`, and `src-tauri/tauri.windows.conf.json` bundles the
-  DLL beside `grid.exe`. **Windows releases are paused**: that DLL's complete
-  source cannot be reconstructed, so it is not shipped until Grid builds its
-  own.
+- **Windows** development, CI and the installers use Grid's own build
+  (`.github/workflows/build-libmpv-windows.yml`): `libmpv-2.dll`, FFmpeg and
+  libplacebo built from pinned tags, plus the MSYS2 DLLs they need, published
+  as a never-overwritten prerelease together with their LGPL source
+  (`libmpv-windows-source.tar.xz`). `npm run setup:libmpv` puts every DLL, their
+  `LICENSES/` and a generated `mpv.lib` import library in
+  `src-tauri/lib/windows/`, and `src-tauri/tauri.windows.conf.json` bundles each
+  `lib/windows/*.dll` and `LICENSES/` beside `grid.exe`. **Windows releases are
+  still off** until FFmpeg is bumped to `n7.1.5` for both platforms and the
+  installer passes a check on a clean Windows machine.
 
 See [`src-tauri/licenses/README.md`](src-tauri/licenses/README.md) for the
 licensing route, the source offer and how to replace the library.
@@ -246,4 +251,4 @@ Grid does not host, index, or distribute any content. It only plays streams that
 
 [MIT](LICENSE) © 2026 LP
 
-The Linux and Windows builds link libmpv (and the FFmpeg it uses) in-process. The Linux release packages bundle an LGPL-2.1-or-later build of it together with its licence texts and a link to its complete source — see [`src-tauri/licenses/`](src-tauri/licenses/) for the licensing route, the source offer and how to replace the library.
+The Linux and Windows builds link libmpv (and the FFmpeg it uses) in-process. The Linux release packages (and, once Windows releases return, the Windows installers) bundle an LGPL-2.1-or-later build of it together with its licence texts and a link to its complete source — see [`src-tauri/licenses/`](src-tauri/licenses/) for the licensing route, the source offer and how to replace the library.

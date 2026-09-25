@@ -102,34 +102,123 @@ upstream revisions and the flags each one was built with:
 | dav1d           | `1.5.1`    | `42b2b24fb8819f1ed3643aa9cf2a62f03868e3aa` | `meson setup --buildtype=release -Denable_tools=false -Denable_tests=false -Denable_examples=false`                                                                                                                                                               |
 | libdisplay-info | `0.2.0`    | `66b802d05b374cd8f388dc6ad1e7ae4f08cb3300` | `meson setup --buildtype=release` (empty PNP ID table)                                                                                                                                                                                                            |
 
-### Windows: not shipped yet
+### Windows: built by Grid
 
-**Windows releases are paused** (`release.yml` has no Windows leg). Windows
-development and CI link a community build, but Grid must not distribute it:
+**Windows releases are still off** (`release.yml` has no Windows leg). They
+return once FFmpeg has been bumped to `n7.1.5` and re-pinned for both
+platforms, and the installer has been checked on a clean Windows machine.
+Until then, CI's `package-windows` job builds the installers against this build
+to check their layout, but does not upload them.
 
-- **What it is:** `mpv-dev-lgpl-x86_64-20260923-git-bdefd6cb42.7z` from tag
-  [`2026-09-23-bdefd6cb42`](https://github.com/zhongfly/mpv-winbuild/releases/tag/2026-09-23-bdefd6cb42)
-  of `zhongfly/mpv-winbuild` (SHA256
-  `f44eb9a2e3a187af66e16bd7d8be37bfa46ac0c894297145937bab9116f2aec1`), built by
-  [run 35871217838](https://github.com/zhongfly/mpv-winbuild/actions/runs/35871217838)
-  with `shinchiro/mpv-winbuild-cmake` at `05a60b3cfd04e3e3b89918f4a27f3dde2935dff2`
-  plus zhongfly's `compile-lgpl-libmpv.patch`.
-- **Why it cannot ship:** one 100 MB DLL statically linking **74 components**.
-  Its FFmpeg is configured with `--enable-version3`, so it is
-  **LGPL-3.0-or-later** (the build log says `License: LGPL version 3 or later`),
-  not 2.1. The build takes most packages from a cached git checkout and
-  records no revision for them, so the exact corresponding source cannot be
-  reconstructed. Components with source obligations include mpv, FFmpeg,
-  libplacebo, LAME, libbluray, libsoxr, FriBidi, libiconv, OpenAL Soft, libssh,
-  libudfread, uchardet and subrandr (MPL-2.0).
-- **Earlier evidence was vacuous:** `strings libmpv-2.dll | grep -- --enable-gpl`
-  printed 0 because the DLL holds no FFmpeg configure string at all (dropped at
-  link time), not because the configuration was checked.
+`.github/workflows/build-libmpv-windows.yml` builds mpv (`-Dgpl=false`), FFmpeg
+(no `--enable-gpl`, `--enable-version3` or `--enable-nonfree`) and libplacebo
+from their upstream tags as DLLs in MSYS2's UCRT64 environment on
+`windows-latest`. Every other DLL libmpv needs comes from an MSYS2 package. The
+workflow asserts the LGPL configuration from the configured builds themselves
+(`CONFIG_GPL 0`, `CONFIG_VERSION3 0` and `CONFIG_NONFREE 0` in FFmpeg's
+`config.h`, mpv's `gpl` option `false`) and publishes the result as a
+never-overwritten prerelease:
 
-Grid will build its own Windows libmpv (LGPL-2.1, a small set of shared
-DLLs, published with its source) before Windows releases resume. CI's
-`package-windows` job still builds the installers to check their layout, but
-no longer uploads them.
+- **Release:** [`libmpv-windows-v0.41.0-b4`](https://github.com/lpbborges/grid/releases/tag/libmpv-windows-v0.41.0-b4),
+  asset `libmpv-windows-x86_64.tar.gz`, with its corresponding source in
+  `libmpv-windows-source.tar.xz`
+- **Built by:** [workflow run 4](https://github.com/lpbborges/grid/actions/runs/36083746815),
+  from commit `9d9a91fd36d64de2d7bfc8d28c81ddc0284e0fd6`
+- **SHA256:** `c0e0c8dd9aa232c270614785f088dc7371434cfc3762912fcbc2c83fc0bb7d2d`
+  (source archive: `162ab04fa08de2ecd6e212f95857ac4b58b80617296e2b2048f2b28b1a360ed7`)
+- **Licence:** LGPL-2.1-or-later. The archive holds 31 DLLs: the 8 built here
+  (`libmpv-2.dll`, `avcodec-61.dll`, `avformat-61.dll`, `avutil-59.dll`,
+  `avfilter-10.dll`, `swresample-5.dll`, `swscale-8.dll`, `libplacebo-351.dll`)
+  and the 23 MSYS2 DLLs below. `libplacebo-351.dll` also contains fast_float
+  (MIT) and Vulkan-Headers (Apache-2.0 OR MIT). Every notice is in `LICENSES/`.
+- **Build `b3`:** [`libmpv-windows-v0.41.0-b3`](https://github.com/lpbborges/grid/releases/tag/libmpv-windows-v0.41.0-b3)
+  exists but was never pinned.
+
+**Hardware decoding:** `d3d11va`, through `gpu-api=d3d11` and
+`hwdec=auto-safe`. The build fails unless mpv's enabled features include
+`d3d11`, `d3d-hwaccel`, `libass`, `libplacebo`, `shaderc` and `spirv-cross`,
+and never includes `gpl`, `lua`, `javascript` or `libavdevice`.
+
+The archive's `BUILD-INFO.txt` (also the release notes) records the exact
+upstream revisions, the flags and every MSYS2 package:
+
+| Component  | Tag        | Commit                                     | Built with                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | ---------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| mpv        | `v0.41.0`  | `41f6a645068483470267271e1d09966ca3b9f413` | `meson setup --buildtype=release -Dgpl=false -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled -Dlibarchive=disabled -Dlibbluray=disabled -Duchardet=disabled -Drubberband=disabled -Dlcms2=disabled -Djpeg=disabled -Dvapoursynth=disabled -Dsdl2-gamepad=disabled -Dwin32-smtc=disabled -Dvulkan=disabled -Dgl=disabled -Degl-angle=disabled -Dlibavdevice=disabled -Dd3d11=enabled -Dd3d-hwaccel=enabled -Dspirv-cross=enabled -Dshaderc=enabled` |
+| FFmpeg     | `n7.1`     | `b08d7969c550a804a59511c7b83f2dd8cc0499b8` | `configure --enable-shared --disable-static --disable-programs --disable-doc --disable-debug --disable-encoders --disable-muxers --disable-avdevice --enable-libdav1d --enable-d3d11va --enable-dxva2 --disable-bzlib --disable-lzma --disable-iconv --disable-sdl2 --disable-schannel`                                                                                                                                                                               |
+| libplacebo | `v7.351.0` | `3188549fba13bbdf3a5a98de2a38c2e71f04e21e` | `meson setup --buildtype=release -Dd3d11=enabled -Dvulkan=disabled -Dopengl=disabled -Dshaderc=enabled -Dglslang=disabled -Dlcms=disabled -Ddovi=disabled -Dlibdovi=disabled -Ddemos=false -Dtests=false`                                                                                                                                                                                                                                                             |
+
+MSYS2 UCRT64 DLLs shipped beside them. The licence column is the package's
+licence field as pacman records it; it covers the whole package, and the
+reviewed manifest in the workflow records what applies to the DLL. The
+**Source** column says whether the package's exact MSYS2 source package is in
+`libmpv-windows-source.tar.xz` (the LGPL ones) or only named, with its
+repo.msys2.org URL, in `BUILD-INFO.txt` (licences that ask for no source):
+
+| DLL                           | MSYS2 package (`mingw-w64-ucrt-x86_64-…`) | Version                  | Licence field                                                 | Source   |
+| ----------------------------- | ----------------------------------------- | ------------------------ | ------------------------------------------------------------- | -------- |
+| `libass-9.dll`                | `libass`                                  | 0.17.5-1                 | ISC                                                           | named    |
+| `libbrotlicommon.dll`         | `brotli`                                  | 1.2.0-1                  | MIT                                                           | named    |
+| `libbrotlidec.dll`            | `brotli`                                  | 1.2.0-1                  | MIT                                                           | named    |
+| `libbz2-1.dll`                | `bzip2`                                   | 1.0.8-4                  | custom (bzip2-1.0.6)                                          | named    |
+| `libdav1d-7.dll`              | `dav1d`                                   | 1.5.4-1                  | BSD-2-Clause                                                  | named    |
+| `libexpat-1.dll`              | `expat`                                   | 2.8.5-1                  | MIT                                                           | named    |
+| `libfontconfig-1.dll`         | `fontconfig`                              | 2.18.3-1                 | custom (HPND-style)                                           | named    |
+| `libfreetype-6.dll`           | `freetype`                                | 2.14.3-1                 | GPL-2.0-or-later OR FTL (shipped under FTL)                   | named    |
+| `libfribidi-0.dll`            | `fribidi`                                 | 1.0.17-1                 | LGPL-2.1-or-later                                             | archived |
+| `libgcc_s_seh-1.dll`          | `libgcc`                                  | 16.2.0-4                 | GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later | named    |
+| `libglib-2.0-0.dll`           | `glib2`                                   | 2.90.0-1                 | LGPL-2.1-or-later                                             | archived |
+| `libgraphite2.dll`            | `graphite2`                               | 1.3.15-1                 | LGPL-2.1-or-later                                             | archived |
+| `libharfbuzz-0.dll`           | `harfbuzz`                                | 14.5.0-1                 | MIT                                                           | named    |
+| `libiconv-2.dll`              | `libiconv`                                | 1.19-1                   | LGPL-2.1-or-later; documentation: GPL-3.0-or-later            | archived |
+| `libintl-8.dll`               | `gettext-runtime`                         | 1.0-1                    | GPL-3.0-or-later AND LGPL-2.1-or-later (the DLL is LGPL-2.1+) | archived |
+| `libpcre2-8-0.dll`            | `pcre2`                                   | 10.48-3                  | BSD-3-Clause                                                  | named    |
+| `libpng16-16.dll`             | `libpng`                                  | 1.6.58-1                 | custom (libpng-2.0)                                           | named    |
+| `libshaderc_shared.dll`       | `shaderc`                                 | 2026.3-1                 | Apache-2.0                                                    | named    |
+| `libspirv-cross-c-shared.dll` | `spirv-cross`                             | 1~1.4.357.0-1            | Apache-2.0                                                    | named    |
+| `libstdc++-6.dll`             | `libstdc++`                               | 16.2.0-4                 | GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later | named    |
+| `libunibreak-7.dll`           | `libunibreak`                             | 7.0-1                    | Zlib                                                          | named    |
+| `libwinpthread-1.dll`         | `libwinpthread`                           | 14.0.0.r420.g61d40c4c0-1 | MIT AND BSD-3-Clause-Clear                                    | named    |
+| `zlib1.dll`                   | `zlib`                                    | 1.3.2-2                  | Zlib                                                          | named    |
+
+GCC's runtime DLLs ship under the GCC Runtime Library Exception; GFDL covers
+GCC's manuals, which are not shipped.
+
+**Compiled statically into the DLLs.** MinGW-w64 links some code into every
+DLL, ours and MSYS2's, and `libshaderc_shared.dll` carries its dependencies
+inside it (its static parts were built by MSYS2's GCC 16.1.0, Rev5):
+
+| MSYS2 package (`mingw-w64-ucrt-x86_64-…`) | Version                  | Licence field                                                                          | Compiled into                                                           | Source   |
+| ----------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------- |
+| `crt`                                     | 14.0.0.r420.g61d40c4c0-1 | ZPL-2.1                                                                                | every DLL (startup objects, `libmingwex`, `libmingw32`)                 | named    |
+| `headers`                                 | 14.0.0.r420.g61d40c4c0-1 | ZPL-2.1 AND LGPL-2.1-or-later                                                          | every DLL (inline code from the Windows headers, some from Wine)        | archived |
+| `gcc`                                     | 16.2.0-4                 | GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later                          | every DLL (static `libgcc` parts); libstdc++ in `libshaderc_shared.dll` | named    |
+| `winpthreads`                             | 14.0.0.r420.g61d40c4c0-1 | MIT AND BSD-3-Clause-Clear                                                             | `libshaderc_shared.dll`                                                 | named    |
+| `glslang`                                 | 16.3.0-1                 | BSD-3-Clause (plus Apache-2.0/MIT parts and its GPL-3.0 Bison parser, Bison exception) | `libshaderc_shared.dll`                                                 | named    |
+| `spirv-tools`                             | 3~1.4.357.0-1            | Apache-2.0                                                                             | `libshaderc_shared.dll`                                                 | named    |
+| `spirv-headers`                           | 2~1.4.357.0-1            | MIT                                                                                    | `libshaderc_shared.dll`                                                 | named    |
+
+The build's toolchain was MSYS2's `gcc` 16.2.0-4, `crt` and `headers`
+14.0.0.r420.g61d40c4c0-1 and `binutils` 2.47-3.
+
+**The licence gate.** The workflow walks the import tables from
+`libmpv-2.dll` to find every DLL it needs, and checks each MSYS2 DLL against a
+manifest reviewed by hand: one line per DLL that may ship, with its package,
+the licence field exactly as pacman records it, whether its source ships, and
+why it may ship (the static parts have a manifest of their own). The build
+fails on a DLL the manifest does not list, a DLL that now comes from another
+package, a licence field that changed, or an LGPL line that does not ship its
+source. Nothing parses licence strings: a new dependency or a relicensed
+package stops the build until someone reads its licence files and edits the
+manifest. DLLs loaded only at run time (`LoadLibrary`) are invisible to the
+walk. CI's `e2e (windows-latest)` job loads this DLL set and decodes through it
+with `vo=null ao=null`. The D3D11 renderer (libplacebo, with shaderc at run
+time), d3d11va hardware decoding and WASAPI audio output, where run-time-loaded
+system DLLs such as `dxgi`, `d3d11` and `d3dcompiler_47` come in, are covered
+only by the clean-machine check before the first Windows release.
+
+**FreeType:** Portions of this software are copyright © 2026 The FreeType
+Project (www.freetype.org). All rights reserved.
 
 ## Source
 
@@ -144,6 +233,22 @@ release and refuses to publish if it is missing. The superseded build
 from the commits its `BUILD-INFO.txt` records, including the hwdata source
 package its PNP ID table came from.
 
+For Windows it is `libmpv-windows-source.tar.xz` in the same release as the
+pinned binaries: the exact source trees of mpv, FFmpeg and libplacebo (with its
+submodules), taken before anything was built, the workflow that built them,
+and the exact MSYS2 source packages (under `msys2/`) of every LGPL part:
+fribidi, glib2, graphite2, libiconv, gettext (`libintl-8.dll`) and the
+MinGW-w64 `headers`. The other MSYS2 packages are under licences that ask only
+for their notice, which ships in `LICENSES/`; `BUILD-INFO.txt` names each one's
+exact source package on `repo.msys2.org/mingw/sources/`. Once Windows releases
+return, `release.yml` will link this archive the same way.
+
+**Retention.** Never delete or edit a `libmpv-*` prerelease that any published
+Grid release has pinned. It is where that release's LGPL source is offered.
+Only an unpinned build may be deleted, and only after
+`git show <tag>:scripts/libmpv.lock.json` for each Grid release tag shows that
+none of them pinned it.
+
 ## Replacing the library
 
 libmpv is never linked statically. Each package installs it as a separate
@@ -156,9 +261,13 @@ LGPL's relinking requirement:
   `$ORIGIN/../lib/grid`, then `$ORIGIN/../lib`.
 - **Linux AppImage:** `usr/lib/libmpv.so.2` inside the image; extract it with
   `--appimage-extract`, replace the file and run `squashfs-root/AppRun`.
+- **Windows (MSI, NSIS):** `libmpv-2.dll` and every DLL it loads (FFmpeg,
+  libplacebo and the MSYS2 DLLs above) sit beside `grid.exe` in the install
+  directory. Windows loads DLLs from the executable's directory first, so each
+  one can be swapped individually.
 
 A replacement must provide the same libmpv client API under the same file name
-(`libmpv.so.2`).
+(`libmpv.so.2` on Linux, `libmpv-2.dll` on Windows).
 
 ## Licence texts shipped with each package
 
@@ -170,7 +279,13 @@ A replacement must provide the same libmpv client API under the same file name
   `spirv-headers-copyright.txt`, `fast_float-MIT.txt`,
   `glad-MIT-and-Khronos.txt` and the three `Vulkan-Headers-*` files. CI's
   `package-linux` job fails if any is missing from a package.
-- **Windows:** none yet (not shipped; see above).
+- **Windows (MSI, NSIS):** `LICENSES\` beside `grid.exe`, copied from the
+  Windows artifact: `mpv-LGPL-2.1.txt`, `ffmpeg-LGPL-2.1.txt`,
+  `libplacebo-LGPL-2.1.txt`, `fast_float-MIT.txt`, the three
+  `Vulkan-Headers-*` files, and one folder per MSYS2 package, shipped or
+  compiled in, with the licence files it installs (54 files in `b4`). CI's
+  `package-windows` job fails if any DLL or licence file in the artifact is
+  missing from either installer (`scripts/windows-layout-required.ps1`).
 
 Nothing here is legal advice. The obligations above were checked against the
 licence texts, not reviewed by a lawyer.
