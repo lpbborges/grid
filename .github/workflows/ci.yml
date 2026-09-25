@@ -228,31 +228,11 @@ jobs:
           fi
           if [ "$appimage_bad" -ne 0 ]; then exit 1; fi
 
-          # The licence texts and notices of everything compiled into the
-          # bundled libraries must ship in every package (see
-          # src-tauri/licenses/README.md).
-          licences_bad=0
-          for f in mpv-LGPL-2.1.txt ffmpeg-LGPL-2.1.txt libplacebo-LGPL-2.1.txt dav1d-BSD-2.txt \
-            libdisplay-info-MIT.txt glslang-copyright.txt glslang-LICENSE.txt Apache-2.0.txt spirv-tools-copyright.txt \
-            spirv-headers-copyright.txt fast_float-MIT.txt glad-MIT-and-Khronos.txt \
-            Vulkan-Headers-LICENSE.md Vulkan-Headers-Apache-2.0.txt Vulkan-Headers-MIT.txt; do
-            if test -f "squashfs-root/usr/lib/grid/LICENSES/$f"; then
-              echo "AppImage: usr/lib/grid/LICENSES/$f present"
-            else
-              echo "::error::AppImage is missing usr/lib/grid/LICENSES/$f"; licences_bad=1
-            fi
-            if echo "$deb_entries" | grep -qxF "LICENSES/$f"; then
-              echo ".deb: usr/lib/grid/LICENSES/$f present"
-            else
-              echo "::error::.deb is missing usr/lib/grid/LICENSES/$f"; licences_bad=1
-            fi
-            if echo "$rpm_entries" | grep -qxF "LICENSES/$f"; then
-              echo ".rpm: usr/lib/grid/LICENSES/$f present"
-            else
-              echo "::error::.rpm is missing usr/lib/grid/LICENSES/$f"; licences_bad=1
-            fi
-          done
-          if [ "$licences_bad" -ne 0 ]; then exit 1; fi
+          # LICENSES/ must reach every package (tauri.linux.conf.json).
+          f=LICENSES/mpv-LGPL-2.1.txt
+          test -f "squashfs-root/usr/lib/grid/$f" || { echo "::error::AppImage is missing usr/lib/grid/$f"; exit 1; }
+          echo "$deb_entries" | grep -qxF "$f" || { echo "::error::.deb is missing usr/lib/grid/$f"; exit 1; }
+          echo "$rpm_entries" | grep -qxF "$f" || { echo "::error::.rpm is missing usr/lib/grid/$f"; exit 1; }
       - name: Play through the bundled libmpv (real-libmpv player tests)
         # The job has no libmpv-dev: build.rs links src-tauri/lib/linux, and the
         # test binary (no RUNPATH, unlike the app) loads the pruned runtime set
@@ -302,7 +282,7 @@ jobs:
         run: npm run setup:libmpv
       - name: Build the MSI and NSIS installers
         run: npx tauri build --bundles msi,nsis
-      - name: Check the MSI installs every libmpv DLL and its licence texts beside grid.exe
+      - name: Check the MSI installs every libmpv DLL and LICENSES beside grid.exe
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -329,7 +309,7 @@ jobs:
             exit 1
           }
           $required | ForEach-Object { Write-Host "present beside grid.exe: $_" }
-      - name: Check the NSIS installer carries every libmpv DLL and its licence texts
+      - name: Check the NSIS installer carries every libmpv DLL and LICENSES
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'

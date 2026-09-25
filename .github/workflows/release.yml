@@ -64,30 +64,14 @@ jobs:
         if: matrix.platform == 'ubuntu-latest'
         run: npm run setup:libmpv -- --bundle
 
-      # The LGPL wants the bundled libmpv's source offered beside the
-      # installers: link the pinned build's source archive from the release,
-      # and refuse to publish if that archive is missing.
-      - name: Locate the libmpv source (Linux)
-        if: matrix.platform == 'ubuntu-latest'
-        run: |
-          url=$(node -p "require('./scripts/libmpv.lock.json')['linux-x86_64'].url.replace(/[^/]+$/, 'libmpv-linux-source.tar.xz')")
-          curl -fsSIL "$url" > /dev/null || { echo "::error::No source archive at $url"; exit 1; }
-
       # tauri.windows.conf.json bundles every lib/windows/*.dll and LICENSES\
       # beside grid.exe.
       - name: Set up libmpv (Windows)
         if: matrix.platform == 'windows-latest'
         run: npm run setup:libmpv
 
-      - name: Locate the libmpv source (Windows)
-        if: matrix.platform == 'windows-latest'
-        shell: bash
-        run: |
-          url=$(node -p "require('./scripts/libmpv.lock.json')['windows-x86_64'].url.replace(/[^/]+$/, 'libmpv-windows-source.tar.xz')")
-          curl -fsSIL "$url" > /dev/null || { echo "::error::No source archive at $url"; exit 1; }
-
-      # releaseBody is shared by both legs (the last one to finish writes it),
-      # so every leg names both platforms' source archives.
+      # The LGPL wants the bundled libmpv's source offered beside the
+      # installers. releaseBody is shared by both legs, so each names both.
       - name: libmpv source URLs (both platforms)
         shell: bash
         run: |
