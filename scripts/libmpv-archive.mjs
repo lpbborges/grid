@@ -40,3 +40,11 @@ export function assertNoSymlinks(dir) {
     if (entry.isDirectory()) assertNoSymlinks(full);
   }
 }
+
+/**
+ * Whether src-tauri/lib/windows already holds the lock entry's libmpv: the
+ * stamp names its sha256 and the files the build needs are both present.
+ */
+export function isWindowsSetUp({ stamp, sha256, hasMpvLib, hasLibmpvDll }) {
+  return stamp.trim() === sha256 && hasMpvLib && hasLibmpvDll;
+}

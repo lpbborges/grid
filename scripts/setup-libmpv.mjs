@@ -20,7 +20,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { assertNoSymlinks, windowsRuntimeDlls } from './libmpv-archive.mjs';
+import { assertNoSymlinks, isWindowsSetUp, windowsRuntimeDlls } from './libmpv-archive.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const lock = JSON.parse(readFileSync(path.join(root, 'scripts', 'libmpv.lock.json'), 'utf8'));
@@ -112,9 +112,12 @@ async function setupWindows() {
   const stamp = path.join(out, STAMP);
   const current = existsSync(stamp) ? readFileSync(stamp, 'utf8').trim() : '';
   if (
-    current === entry.sha256 &&
-    existsSync(path.join(out, 'mpv.lib')) &&
-    existsSync(path.join(out, 'libmpv-2.dll'))
+    isWindowsSetUp({
+      stamp: current,
+      sha256: entry.sha256,
+      hasMpvLib: existsSync(path.join(out, 'mpv.lib')),
+      hasLibmpvDll: existsSync(path.join(out, 'libmpv-2.dll'))
+    })
   ) {
     console.log('libmpv already set up in', out);
     return;

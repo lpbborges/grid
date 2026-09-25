@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { assertNoSymlinks, windowsRuntimeDlls } from './libmpv-archive.mjs';
+import { assertNoSymlinks, isWindowsSetUp, windowsRuntimeDlls } from './libmpv-archive.mjs';
 
 /** A minimal stand-in for the fs.Dirent that readdirSync(..., { withFileTypes: true }) returns. */
 function entry(name, kind = 'file') {
@@ -82,5 +82,27 @@ describe('assertNoSymlinks', () => {
   it('refuses a symlink to a directory without following it', () => {
     symlinkSync('/', path.join(dir, 'LICENSES', 'root'));
     expect(() => assertNoSymlinks(dir)).toThrow(/symlink.*LICENSES[\\/]root/);
+  });
+});
+
+describe('isWindowsSetUp', () => {
+  const sha = 'c0e0c8dd';
+  const all = { stamp: `${sha}\n`, sha256: sha, hasMpvLib: true, hasLibmpvDll: true };
+
+  it('trusts a matching stamp when both files exist', () => {
+    expect(isWindowsSetUp(all)).toBe(true);
+  });
+
+  it('reinstalls when the stamp is from another lock entry', () => {
+    expect(isWindowsSetUp({ ...all, stamp: 'deadbeef\n' })).toBe(false);
+  });
+
+  it('reinstalls when there is no stamp', () => {
+    expect(isWindowsSetUp({ ...all, stamp: '' })).toBe(false);
+  });
+
+  it('reinstalls when a file is missing despite a matching stamp', () => {
+    expect(isWindowsSetUp({ ...all, hasMpvLib: false })).toBe(false);
+    expect(isWindowsSetUp({ ...all, hasLibmpvDll: false })).toBe(false);
   });
 });
