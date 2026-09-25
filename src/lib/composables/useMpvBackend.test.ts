@@ -8,6 +8,7 @@ import {
   resolveNativeTracks,
   withExternalLangs,
   nativeTrackLabel,
+  MAX_NATIVE_SUBTITLE_FILES,
   type NativeTrack,
   type useMpvBackend
 } from './useMpvBackend.svelte';
@@ -449,6 +450,24 @@ describe('useMpvBackend', () => {
     expect(invoke).toHaveBeenCalledWith(
       'start_native_player',
       expect.objectContaining({ subtitleFiles: ['C:/cache/sub-0.vtt'] })
+    );
+  });
+
+  it('hands mpv no more subtitles than the native cache accepts', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ text: async () => 'WEBVTT' }) as never;
+    const subtitles = Array.from({ length: MAX_NATIVE_SUBTITLE_FILES + 5 }, (_, i) => ({
+      id: `s${i}`,
+      url: `blob:${i}`,
+      lang: 'pob',
+      label: 'PT',
+      group: 'Extra' as const
+    }));
+
+    await start({ subtitles });
+
+    const cached = vi.mocked(invoke).mock.calls.find((c) => c[0] === 'cache_native_subtitles');
+    expect((cached?.[1] as { contents: string[] }).contents).toHaveLength(
+      MAX_NATIVE_SUBTITLE_FILES
     );
   });
 

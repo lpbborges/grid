@@ -8,6 +8,9 @@ import { findPreferredSubtitleIndex, getLanguageName } from '$lib/api/subtitles'
 import { resolvePreferredAudioTrack, type ParsedAudioTrack } from '$lib/utils/audioTrack';
 import type { SubtitleTrack } from '$lib/api/subtitles';
 
+/** Mirrors `MAX_SUBTITLE_FILES` in src-tauri/src/player/model.rs. */
+export const MAX_NATIVE_SUBTITLE_FILES = 25;
+
 /** What `start_native_player` returns once mpv has loaded the file. */
 export interface NativePlayback {
   tracks: NativeTrack[];
@@ -267,7 +270,7 @@ export function useMpvBackend() {
     hasVideo = false;
 
     try {
-      const external = options.subtitles ?? [];
+      const external = (options.subtitles ?? []).slice(0, MAX_NATIVE_SUBTITLE_FILES);
       const subtitleFiles = await cacheSubtitles(external);
       const playback = await invoke<NativePlayback>('start_native_player', {
         url: options.url,
