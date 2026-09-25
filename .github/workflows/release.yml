@@ -16,9 +16,9 @@ jobs:
         include:
           - platform: ubuntu-latest
             args: ''
-          # No Windows leg: the pinned Windows libmpv is a community build whose
-          # complete source cannot be reconstructed, so Grid must not ship it
-          # (src-tauri/licenses/README.md). It returns with Grid's own build.
+          # No Windows leg yet: Grid's own LGPL build is pinned
+          # (src-tauri/licenses/README.md), and the leg returns once FFmpeg n7.1.5
+          # is pinned for both platforms and the MSI passes a clean-machine check.
 
     runs-on: ${{ matrix.platform }}
     steps:
