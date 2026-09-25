@@ -22,10 +22,14 @@ struct EngineState {
     port: Mutex<Option<u16>>,
 }
 
+#[derive(Default)]
 struct SubtitleRateLimit {
-    counts: Mutex<HashMap<String, (u32, Instant)>>,
+    buckets: Mutex<HashMap<String, (f64, Instant)>>,
 }
 
+/// Token bucket per key: holds two playbacks' worth of subtitle fetches (the
+/// frontend caps, pinned by a test) and refills continuously.
+const SUBTITLE_RATE_LIMIT_BURST: u32 = 50;
 const SUBTITLE_RATE_LIMIT_PER_MINUTE: u32 = 30;
 
 /// Hard cap on how many bytes of a subtitle response we'll buffer into
@@ -37,17 +41,22 @@ const SUBTITLE_RATE_LIMIT_PER_MINUTE: u32 = 30;
 const MAX_SUBTITLE_RESPONSE_BYTES: usize = 5 * 1024 * 1024;
 
 fn check_subtitle_rate_limit(state: &SubtitleRateLimit, key: &str) -> bool {
-    let mut counts = state.counts.lock().unwrap();
-    let now = Instant::now();
-    let entry = counts.entry(key.to_string()).or_insert((0, now));
-    if now.duration_since(entry.1).as_secs() >= 60 {
-        *entry = (1, now);
-        return true;
-    }
-    if entry.0 >= SUBTITLE_RATE_LIMIT_PER_MINUTE {
+    take_subtitle_token(state, key, Instant::now())
+}
+
+fn take_subtitle_token(state: &SubtitleRateLimit, key: &str, now: Instant) -> bool {
+    let mut buckets = state.buckets.lock().unwrap_or_else(|e| e.into_inner());
+    let burst = f64::from(SUBTITLE_RATE_LIMIT_BURST);
+    let (tokens, last) = buckets.entry(key.to_string()).or_insert((burst, now));
+    let refill = now.saturating_duration_since(*last).as_secs_f64()
+        * f64::from(SUBTITLE_RATE_LIMIT_PER_MINUTE)
+        / 60.0;
+    *tokens = (*tokens + refill).min(burst);
+    *last = now;
+    if *tokens < 1.0 {
         return false;
     }
-    entry.0 += 1;
+    *tokens -= 1.0;
     true
 }
 
@@ -847,9 +856,7 @@ pub fn run() {
             pid: Mutex::new(None),
             port: Mutex::new(None),
         })
-        .manage(SubtitleRateLimit {
-            counts: Mutex::new(HashMap::new()),
-        })
+        .manage(SubtitleRateLimit::default())
         .manage(player::NativePlayerState::default())
         .manage(StreamProxyState {
             port: Mutex::new(None),
@@ -917,14 +924,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rate_limit_allows_then_blocks_after_threshold() {
-        let state = SubtitleRateLimit {
-            counts: Mutex::new(HashMap::new()),
-        };
-        for _ in 0..SUBTITLE_RATE_LIMIT_PER_MINUTE {
-            assert!(check_subtitle_rate_limit(&state, "k"));
+    fn rate_limit_allows_a_burst_then_blocks() {
+        let state = SubtitleRateLimit::default();
+        let now = Instant::now();
+        for _ in 0..SUBTITLE_RATE_LIMIT_BURST {
+            assert!(take_subtitle_token(&state, "k", now));
         }
-        assert!(!check_subtitle_rate_limit(&state, "k"));
+        assert!(!take_subtitle_token(&state, "k", now));
+    }
+
+    #[test]
+    fn rate_limit_refills_continuously() {
+        let state = SubtitleRateLimit::default();
+        let start = Instant::now();
+        for _ in 0..SUBTITLE_RATE_LIMIT_BURST {
+            take_subtitle_token(&state, "k", start);
+        }
+        let one_token = std::time::Duration::from_secs(60) / SUBTITLE_RATE_LIMIT_PER_MINUTE;
+
+        assert!(take_subtitle_token(&state, "k", start + one_token));
+        assert!(!take_subtitle_token(&state, "k", start + one_token));
+    }
+
+    #[test]
+    fn rate_limit_fits_two_playbacks_of_subtitle_fetches() {
+        for (file, constant) in [
+            (
+                include_str!("../../src/lib/api/subtitles.ts"),
+                "const MAX_EXTERNAL_SUBTITLE_FETCHES = ",
+            ),
+            (
+                include_str!("../../src/lib/engine/torrent.ts"),
+                "const MAX_TORRENT_SUBTITLE_FETCHES = ",
+            ),
+        ] {
+            let cap: u32 = file
+                .lines()
+                .find_map(|line| {
+                    line.trim()
+                        .strip_prefix(constant)?
+                        .trim_end_matches(';')
+                        .parse()
+                        .ok()
+                })
+                .unwrap_or_else(|| panic!("{constant} is declared"));
+            assert!(
+                SUBTITLE_RATE_LIMIT_BURST >= 2 * cap,
+                "{constant}{cap} does not fit twice in the burst ({SUBTITLE_RATE_LIMIT_BURST})"
+            );
+        }
     }
 
     /// Starts a tiny raw-socket HTTP server that always replies with a 302
@@ -1343,9 +1391,7 @@ mod tests {
     }
 
     fn test_rate_limit_state() -> SubtitleRateLimit {
-        SubtitleRateLimit {
-            counts: Mutex::new(HashMap::new()),
-        }
+        SubtitleRateLimit::default()
     }
 
     #[tokio::test]

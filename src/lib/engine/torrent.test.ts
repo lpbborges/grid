@@ -629,6 +629,24 @@ describe('getTorrentSubtitles', () => {
     });
   });
 
+  it('fetches at most 25 subtitles, the preferred language first', async () => {
+    const { getTorrentSubtitles } = await import('./torrent');
+    const files = [
+      { name: 'Show.S01E01.mkv', length: 1000 },
+      ...Array.from({ length: 30 }, (_, i) => ({ name: `Subs/${i}.en.srt`, length: 100 })),
+      { name: 'Subs/pilot.pt.srt', length: 100 },
+      { name: 'Subs/pilot.pob.srt', length: 100 }
+    ];
+
+    const subs = await getTorrentSubtitles('dummyHash', files, 'pt');
+
+    const fetched = (invoke as any).mock.calls
+      .filter(([command]: [string]) => command === 'fetch_torrent_subtitle')
+      .map(([, args]: [string, { fileIdx: number }]) => args.fileIdx);
+    expect(fetched).toHaveLength(25);
+    expect(subs.slice(0, 2).map((s) => s.lang)).toEqual(['pob', 'pt']);
+  });
+
   it('treats uppercase subtitle extensions as subtitles', async () => {
     const { getTorrentSubtitles } = await import('./torrent');
     const files = [

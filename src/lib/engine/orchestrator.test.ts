@@ -323,6 +323,18 @@ describe('prepareStream', () => {
     );
   });
 
+  it('asks for torrent subtitles in the preferred language first', async () => {
+    vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails() as any);
+
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'tt1' });
+
+    expect(torrentApi.getTorrentSubtitles).toHaveBeenCalledWith(
+      '1'.repeat(40),
+      expect.any(Array),
+      settingsStore.subtitle
+    );
+  });
+
   it('hands the stream URL to the player without probing it', async () => {
     vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
 

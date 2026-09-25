@@ -168,7 +168,7 @@ export function findPreferredSubtitleIndex(subtitles: SubtitleTrack[], preferenc
   return -1;
 }
 
-// fetch_external_subtitle (src-tauri/src/lib.rs) allows 30 calls per minute.
+// fetch_external_subtitle (src-tauri/src/lib.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
 // Popular titles list ~100 subtitles (dozens in English alone) with Portuguese
 // near the end, so fetching them all in API order got the user's language
 // rejected. Fetch a bounded, preference-first subset instead.
@@ -205,16 +205,19 @@ function releaseMatchScore(entry: ExternalSubtitleEntry, fileTokens: Set<string>
   return score;
 }
 
+/** Sort key for a subtitle language: 0 is the most preferred. */
+export function preferredLanguageRank(lang: string | undefined, preference?: string): number {
+  const preferredCodes = (preference && PREFERRED_SUBTITLE_CODES[preference]?.flat()) || [];
+  const idx = preferredCodes.indexOf(normalizeLanguageCode(lang));
+  return idx === -1 ? preferredCodes.length : idx;
+}
+
 function selectSubtitlesToFetch(
   entries: ExternalSubtitleEntry[],
   preference?: string,
   release?: SubtitleRelease
 ): ExternalSubtitleEntry[] {
-  const preferredCodes = (preference && PREFERRED_SUBTITLE_CODES[preference]?.flat()) || [];
-  const rank = (entry: ExternalSubtitleEntry) => {
-    const idx = preferredCodes.indexOf(normalizeLanguageCode(entry.lang));
-    return idx === -1 ? preferredCodes.length : idx;
-  };
+  const rank = (entry: ExternalSubtitleEntry) => preferredLanguageRank(entry.lang, preference);
   const fileTokens = releaseTokens(release?.filename ?? '');
   const scores = new Map(entries.map((entry) => [entry, releaseMatchScore(entry, fileTokens)]));
   // Array.prototype.sort is stable, so API order is kept among equal matches.

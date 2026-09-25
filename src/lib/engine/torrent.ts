@@ -1,7 +1,7 @@
 import { logger } from '$lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
-import { getLanguageName } from '../api/subtitles';
+import { getLanguageName, preferredLanguageRank } from '../api/subtitles';
 import { FetchTimeoutError, fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { hasExtension } from '../utils/fileExtension';
 
@@ -293,27 +293,36 @@ export function getStreamUrl(
   return `${STREAM_URL}/torrents/${infoHash}/stream/${fileIdx}${query}`;
 }
 
+// fetch_torrent_subtitle (src-tauri/src/lib.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
+const MAX_TORRENT_SUBTITLE_FETCHES = 25;
+
 export async function getTorrentSubtitles(
   infoHash: string,
-  files: { name: string; length: number }[]
+  files: { name: string; length: number }[],
+  preference?: string
 ): Promise<
   { id: string; url: string; lang: string; label: string; group: 'Embedded' | 'Extra' }[]
 > {
   const candidates: {
     idx: number;
-    name: string;
+    lang: string;
   }[] = [];
   files.forEach((f, idx) => {
     if (hasExtension(f.name, SUBTITLE_EXTENSIONS)) {
-      candidates.push({ idx, name: f.name });
+      const baseName = f.name.split(/[/\\]/).pop() || f.name;
+      const langMatch = baseName.match(/(?:^|[._-])([a-zA-Z]{2,3})\.(?:srt|vtt)$/i);
+      candidates.push({ idx, lang: langMatch ? langMatch[1] : 'Unknown' });
     }
   });
+  const selected = candidates
+    .sort(
+      (a, b) =>
+        preferredLanguageRank(a.lang, preference) - preferredLanguageRank(b.lang, preference)
+    )
+    .slice(0, MAX_TORRENT_SUBTITLE_FETCHES);
 
   const results = await Promise.allSettled(
-    candidates.map(async ({ idx, name }) => {
-      const baseName = name.split(/[/\\]/).pop() || name;
-      const langMatch = baseName.match(/(?:^|[._-])([a-zA-Z]{2,3})\.(?:srt|vtt)$/i);
-      const lang = langMatch ? langMatch[1] : 'Unknown';
+    selected.map(async ({ idx, lang }) => {
       const langName = getLanguageName(lang);
 
       const vtt = await invoke<string>('fetch_torrent_subtitle', {

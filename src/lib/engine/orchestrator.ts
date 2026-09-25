@@ -196,10 +196,12 @@ export async function prepareStream({
     const videoFileName = details.files[bestFileIdx]?.name.split(/[/\\]/).pop();
     const release = videoFileName ? { filename: videoFileName, videoSize: totalBytes } : undefined;
     const [tSubs, eSubs] = await Promise.all([
-      getTorrentSubtitles(details.info_hash, details.files).catch((error) => {
-        logger.warn('Failed to fetch torrent subtitles, continuing without them:', error);
-        return [];
-      }),
+      getTorrentSubtitles(details.info_hash, details.files, settingsStore.subtitle).catch(
+        (error) => {
+          logger.warn('Failed to fetch torrent subtitles, continuing without them:', error);
+          return [];
+        }
+      ),
       mediaId
         ? getExternalSubtitles(mediaId, season, episode, settingsStore.subtitle, release).catch(
             (error) => {
