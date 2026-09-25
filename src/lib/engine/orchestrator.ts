@@ -164,8 +164,12 @@ export async function prepareStream({
         ? `${parsedInfoHash}/${details.files[bestFileIdx].name}`
         : details.files[bestFileIdx].name;
       const sameFile = existingEntry?.fileName === fileName;
-      const onDisk = existingEntry?.downloadedBytes ?? 0;
-      const neededBytes = sameFile ? Math.max(totalBytes - onDisk, 0) : totalBytes;
+      const fileProgress = (await getTorrentStats(infoHash))?.file_progress;
+      const fileBytes =
+        fileProgress?.[bestFileIdx] ?? (sameFile ? existingEntry.downloadedBytes : 0);
+      const onDisk =
+        fileProgress?.reduce((sum, bytes) => sum + bytes, 0) ?? existingEntry?.downloadedBytes ?? 0;
+      const neededBytes = Math.max(totalBytes - fileBytes, 0);
       await evictForSpace(infoHash, neededBytes, cacheLimitBytes);
       signal?.throwIfAborted();
 
@@ -178,7 +182,7 @@ export async function prepareStream({
         fileName,
         totalBytes,
         downloadedBytes: onDisk,
-        complete: sameFile && existingEntry.complete,
+        complete: fileProgress ? fileBytes >= totalBytes : sameFile && existingEntry.complete,
         lastAccessedAt: Date.now()
       };
       await upsertCacheEntry(cacheEntry);

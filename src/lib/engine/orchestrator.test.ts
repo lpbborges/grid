@@ -71,6 +71,7 @@ describe('prepareStream', () => {
     vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails() as any);
     vi.mocked(torrentApi.waitForTorrentLive).mockResolvedValue(undefined);
+    vi.mocked(torrentApi.getTorrentStats).mockResolvedValue(null);
   });
 
   it('adds the torrent with sub_folder set to the parsed info hash and onlyFilesRegex', async () => {
@@ -217,6 +218,28 @@ describe('prepareStream', () => {
     expect(cacheApi.evictForSpace).toHaveBeenCalledWith('1'.repeat(40), 200, DEFAULT_LIMIT);
     expect(cacheApi.upsertCacheEntry).toHaveBeenCalledWith(
       expect.objectContaining({ downloadedBytes: 100, complete: false })
+    );
+  });
+
+  it('sizes the cache from what rqbit already has of this file and of the whole torrent', async () => {
+    vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({ file_progress: [100, 150] });
+
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' });
+
+    expect(cacheApi.evictForSpace).toHaveBeenCalledWith('1'.repeat(40), 50, DEFAULT_LIMIT);
+    expect(cacheApi.upsertCacheEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ downloadedBytes: 250, complete: false })
+    );
+  });
+
+  it('marks the entry complete when rqbit already has the whole file', async () => {
+    vi.mocked(torrentApi.getTorrentStats).mockResolvedValue({ file_progress: [0, 200] });
+
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' });
+
+    expect(cacheApi.evictForSpace).toHaveBeenCalledWith('1'.repeat(40), 0, DEFAULT_LIMIT);
+    expect(cacheApi.upsertCacheEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ downloadedBytes: 200, complete: true })
     );
   });
 
