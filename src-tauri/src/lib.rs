@@ -1063,11 +1063,22 @@ mod tests {
         assert!(child.is_none());
     }
 
-    #[cfg(unix)]
+    const ENGINE_STAND_IN: &str = "GRID_ENGINE_STAND_IN";
+
+    #[test]
+    #[ignore = "a long-running process for keeps_an_engine_that_is_still_running"]
+    fn engine_stand_in() {
+        if std::env::var_os(ENGINE_STAND_IN).is_some() {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+        }
+    }
+
     #[test]
     fn keeps_an_engine_that_is_still_running() {
-        let running = std::process::Command::new("sleep")
-            .arg("30")
+        let running = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "tests::engine_stand_in", "--ignored"])
+            .env(ENGINE_STAND_IN, "1")
+            .stdout(std::process::Stdio::null())
             .spawn()
             .unwrap();
         let mut child = Some(running);
