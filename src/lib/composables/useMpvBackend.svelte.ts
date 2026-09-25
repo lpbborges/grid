@@ -97,7 +97,10 @@ export function trackLanguage(track: NativeTrack): string | null {
   const code = track.lang.toLowerCase().replace('_', '-');
   if (['pob', 'pb', 'ptbr', 'pt-br'].includes(code)) return 'pob';
   if (code === 'pt-pt') return 'por';
-  if ((code === 'por' || code === 'pt') && /brazil|brasil|\bpt-?br\b/i.test(track.title ?? '')) {
+  if (
+    (code === 'por' || code === 'pt') &&
+    /brazil|brasil|\bpt-?br\b|\(br\)/i.test(track.title ?? '')
+  ) {
     return 'pob';
   }
   const [base] = code.split('-');

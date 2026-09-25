@@ -647,6 +647,42 @@ describe('getTorrentSubtitles', () => {
     expect(subs.slice(0, 2).map((s) => s.lang)).toEqual(['pob', 'pt']);
   });
 
+  it('tells Brazilian from European Portuguese by the file name', async () => {
+    const { getTorrentSubtitles } = await import('./torrent');
+    const brazilian = [
+      'Movie.pt-BR.srt',
+      'Movie.pt_br.srt',
+      'Movie.ptbr.srt',
+      'Movie.PT-BR.forced.srt',
+      'Subs/Brazilian.srt',
+      'Subs/22_Brazilian Portuguese.srt',
+      'Subs/Portuguese (Brazil).srt'
+    ];
+    const european = ['Movie.pt.srt', 'Movie.por.srt', 'Subs/21_Portuguese.srt'];
+    const files = [...brazilian, ...european].map((name) => ({ name, length: 100 }));
+
+    const subs = await getTorrentSubtitles('dummyHash', files);
+
+    expect(subs.slice(0, brazilian.length).map((s) => s.label)).toEqual(
+      brazilian.map(() => 'Português BR')
+    );
+    expect(subs.slice(brazilian.length).map((s) => s.label)).toEqual(
+      european.map(() => 'Português')
+    );
+  });
+
+  it('reads the language before a forced or SDH tag', async () => {
+    const { getTorrentSubtitles } = await import('./torrent');
+    const files = [
+      { name: 'Movie.en.sdh.srt', length: 100 },
+      { name: 'Subs/3_English.srt', length: 100 }
+    ];
+
+    const subs = await getTorrentSubtitles('dummyHash', files);
+
+    expect(subs.map((s) => s.label)).toEqual(['Inglês', 'Inglês']);
+  });
+
   it('treats uppercase subtitle extensions as subtitles', async () => {
     const { getTorrentSubtitles } = await import('./torrent');
     const files = [

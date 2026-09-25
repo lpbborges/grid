@@ -20,6 +20,7 @@ export function getLanguageName(code: string, strict = false): string | null {
     brazilian: 'Português BR',
     por: 'Português',
     pt: 'Português',
+    portuguese: 'Português',
     eng: 'Inglês',
     en: 'Inglês',
     english: 'Inglês',
@@ -142,10 +143,10 @@ export function getLanguageName(code: string, strict = false): string | null {
 const PREFERRED_SUBTITLE_CODES: Record<string, string[][]> = {
   pt: [
     ['pob', 'pb', 'ptbr', 'pt-br', 'pt_br'],
-    ['por', 'pt']
+    ['por', 'pt', 'portuguese']
   ],
-  en: [['eng', 'en']],
-  es: [['spa', 'es', 'es-419']]
+  en: [['eng', 'en', 'english']],
+  es: [['spa', 'es', 'es-419', 'spanish']]
 };
 
 function normalizeLanguageCode(code: string | undefined): string {
@@ -162,7 +163,10 @@ export function findPreferredSubtitleIndex(subtitles: SubtitleTrack[], preferenc
   const tiers = PREFERRED_SUBTITLE_CODES[preference];
   if (!tiers) return -1;
   for (const codes of tiers) {
-    const idx = subtitles.findIndex((s) => codes.includes(normalizeLanguageCode(s.lang)));
+    const matches = (s: SubtitleTrack) => codes.includes(normalizeLanguageCode(s.lang));
+    const embedded = subtitles.findIndex((s) => s.group === 'Embedded' && matches(s));
+    if (embedded !== -1) return embedded;
+    const idx = subtitles.findIndex(matches);
     if (idx !== -1) return idx;
   }
   return -1;
