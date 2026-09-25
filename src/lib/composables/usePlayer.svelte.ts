@@ -25,8 +25,11 @@ export function usePlayer(
 
   $effect(() => {
     if (!streamPlayer.isPlaying || !streamPlayer.infoHash) return;
-    const interval = setInterval(async () => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
       const stats = await getTorrentStats(streamPlayer.infoHash);
+      if (cancelled) return;
       if (stats && streamPlayer.totalBytes > 0) {
         let downloaded = 0;
         if (
@@ -40,8 +43,13 @@ export function usePlayer(
         }
         downloadPercent = Math.min((downloaded / streamPlayer.totalBytes) * 100, 100);
       }
-    }, 1000);
-    return () => clearInterval(interval);
+      timer = setTimeout(poll, 1000);
+    };
+    timer = setTimeout(poll, 1000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   });
 
   async function play(magnet: string, playOptions: PlayOptions & { originalLanguage?: string }) {

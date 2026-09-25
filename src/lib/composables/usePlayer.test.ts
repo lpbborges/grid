@@ -153,4 +153,45 @@ describe('usePlayer', () => {
 
     vi.useRealTimers();
   });
+
+  describe('download progress poll', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      mocks.streamPlayer.infoHash = 'abc123' + '0'.repeat(34);
+      mocks.streamPlayer.totalBytes = 1000;
+      mocks.streamPlayer.fileIdx = 0;
+      mocks.streamPlayer.isPlaying = true;
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      mocks.streamPlayer.isPlaying = false;
+    });
+
+    it('waits for a slow request before asking again', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}));
+
+      await mountPlayer();
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores a response that arrives after the player is gone', async () => {
+      let respond: (response: Response) => void = () => {};
+      vi.spyOn(globalThis, 'fetch').mockReturnValue(
+        new Promise((resolve) => {
+          respond = resolve;
+        })
+      );
+
+      const { player, unmount } = await mountPlayer();
+      await vi.advanceTimersByTimeAsync(1000);
+      unmount();
+      respond(new Response(JSON.stringify({ file_progress: [500] }), { status: 200 }));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(player.downloadPercent).toBe(0);
+    });
+  });
 });
