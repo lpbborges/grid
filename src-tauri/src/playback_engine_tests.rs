@@ -47,12 +47,20 @@ fn sidecar_path() -> PathBuf {
     manifest_dir().join("bin").join(format!("rqbit-{triple}"))
 }
 
+/// Ports from `bind(0)` come from the ephemeral range outgoing connections
+/// also use, so one could be taken before rqbit binds it. These sit below it.
 fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+    use std::sync::atomic::{AtomicU16, Ordering};
+    static NEXT: AtomicU16 = AtomicU16::new(0);
+    let base = 20_000 + (std::process::id() % 1_000) as u16 * 10;
+    loop {
+        let port = base + NEXT.fetch_add(1, Ordering::Relaxed) % 2_000;
+        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+            && std::net::UdpSocket::bind(("127.0.0.1", port)).is_ok()
+        {
+            return port;
+        }
+    }
 }
 
 async fn spawn_tracker(peer_ports: &[u16]) -> String {
