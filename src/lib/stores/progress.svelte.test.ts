@@ -21,6 +21,44 @@ describe('progressStore persistence', () => {
     vi.restoreAllMocks();
   });
 
+  it('drops stored entries that are not valid progress', async () => {
+    const valid = { time: 10, duration: 100, updatedAt: 1 };
+    localStorage.setItem(
+      'grid-progress',
+      JSON.stringify({
+        tt1: valid,
+        tt2: { time: 'x', duration: 100, updatedAt: 1 },
+        tt3: { time: 10, duration: 0, updatedAt: 1 },
+        tt4: null,
+        tt5: 5
+      })
+    );
+
+    const { progressStore } = await loadStore();
+
+    expect(progressStore.progress).toEqual({ tt1: valid });
+  });
+
+  it('starts empty when the stored value is not an object of entries', async () => {
+    localStorage.setItem('grid-progress', JSON.stringify(['tt1']));
+
+    const { progressStore } = await loadStore();
+
+    expect(progressStore.progress).toEqual({});
+  });
+
+  it('keeps working in memory when storage is full', async () => {
+    const { progressStore, PROGRESS_PERSIST_INTERVAL_MS } = await loadStore();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    });
+
+    progressStore.update('tt1', undefined, undefined, 10, 100);
+
+    expect(() => vi.advanceTimersByTime(PROGRESS_PERSIST_INTERVAL_MS)).not.toThrow();
+    expect(progressStore.get('tt1')?.time).toBe(10);
+  });
+
   it('updates in memory immediately but writes to localStorage only after the interval', async () => {
     const { progressStore, PROGRESS_PERSIST_INTERVAL_MS } = await loadStore();
 

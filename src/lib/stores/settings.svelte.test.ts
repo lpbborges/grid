@@ -58,3 +58,21 @@ describe('settingsStore.cacheLimitBytes', () => {
     expect(localStorage.getItem('grid-cache-limit-bytes')).toBe('500000000');
   });
 });
+
+describe('settingsStore persistence', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('keeps a new value in memory when storage is full', async () => {
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    });
+
+    expect(() => (settingsStore.subtitle = 'en')).not.toThrow();
+    expect(settingsStore.subtitle).toBe('en');
+    setItem.mockRestore();
+  });
+});

@@ -1,28 +1,14 @@
-import { browser } from '$app/environment';
+import { readStoredIds, writeStored } from './storage';
 
 class WatchedStore {
   watchedIds = $state<string[]>([]);
 
   constructor() {
-    if (browser) {
-      const stored = localStorage.getItem('grid-watched');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            this.watchedIds = parsed.map(String);
-          }
-        } catch (e) {
-          console.error('Failed to load watched state', e);
-        }
-      }
-    }
+    this.watchedIds = readStoredIds('grid-watched');
   }
 
   private save() {
-    if (browser) {
-      localStorage.setItem('grid-watched', JSON.stringify(this.watchedIds));
-    }
+    writeStored('grid-watched', JSON.stringify(this.watchedIds));
   }
 
   private getKey(id: string | number, season?: number, episode?: number): string {
