@@ -207,10 +207,10 @@ source. Nothing parses licence strings: a new dependency or a relicensed
 package stops the build until someone reads its licence files and edits the
 manifest. DLLs loaded only at run time (`LoadLibrary`) are invisible to the
 walk. CI's `e2e (windows-latest)` job loads this DLL set and decodes through it
-with `vo=null ao=null`. The D3D11 renderer (libplacebo, with shaderc at run
-time), d3d11va hardware decoding and WASAPI audio output, where run-time-loaded
-system DLLs such as `dxgi`, `d3d11` and `d3dcompiler_47` come in, are covered
-only by the clean-machine check before the first Windows release.
+with `vo=null ao=null`, and its render smoke test draws video through the D3D11
+renderer (libplacebo, with shaderc at run time, on the GPU-less runner's WARP
+software rasteriser), which loads `dxgi`, `d3d11` and `d3dcompiler_47`. d3d11va
+hardware decoding and WASAPI audio output are not exercised in CI.
 
 **FreeType:** Portions of this software are copyright © 2026 The FreeType
 Project (www.freetype.org). All rights reserved.
