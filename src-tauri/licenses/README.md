@@ -63,12 +63,12 @@ libdisplay-info from their upstream tags as shared libraries on Ubuntu 24.04
 configuration from the configured builds themselves, and publishes the result
 as a never-overwritten prerelease:
 
-- **Release:** [`libmpv-linux-v0.41.0-b7`](https://github.com/lpbborges/grid/releases/tag/libmpv-linux-v0.41.0-b7),
+- **Release:** [`libmpv-linux-v0.41.0-b8`](https://github.com/lpbborges/grid/releases/tag/libmpv-linux-v0.41.0-b8),
   asset `libmpv-linux-x86_64.tar.gz`, with its complete source in
   `libmpv-linux-source.tar.xz`
-- **Built by:** [workflow run 7](https://github.com/lpbborges/grid/actions/runs/36039471424),
-  from commit `f4fb7f6f6c95e8f7738feada5d0bf2baab9c1546`
-- **SHA256:** `5f7373d9074c9d65257fd78f5e11e89a15b6320c0551730cd6a5daff8b5af0b6`
+- **Built by:** [workflow run 8](https://github.com/lpbborges/grid/actions/runs/36138053745),
+  from commit `e21f17043fa8022c99f24ef40ee9d16bc6d2e316`
+- **SHA256:** `947ac3b56c2e259156e034c705d4fc0e0fc8ed460e3c90437ab28c727ff2eb62`
 - **Licence:** LGPL-2.1-or-later (dav1d: BSD-2-Clause; libdisplay-info: MIT).
   `libplacebo.so` also contains, statically, glslang and SPIRV-Tools (Ubuntu
   24.04's packages; BSD/MIT/Apache-2.0, plus glslang's GPL-3.0 Bison parser
@@ -97,7 +97,7 @@ upstream revisions and the flags each one was built with:
 | Component       | Tag        | Commit                                     | Built with                                                                                                                                                                                                                                                        |
 | --------------- | ---------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | mpv             | `v0.41.0`  | `41f6a645068483470267271e1d09966ca3b9f413` | `meson setup -Dgpl=false -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled -Djpeg=disabled -Dlcms2=disabled -Dvaapi=enabled -Dvaapi-drm=enabled -Ddrm=enabled -Degl=enabled -Dx11=disabled -Dwayland=disabled -Dgbm=disabled -Degl-drm=disabled` |
-| FFmpeg          | `n7.1`     | `b08d7969c550a804a59511c7b83f2dd8cc0499b8` | `configure --enable-shared --disable-static --disable-programs --disable-doc --disable-debug --enable-libdav1d --enable-vaapi --disable-bzlib --disable-lzma`                                                                                                     |
+| FFmpeg          | `n7.1.5`   | `3a0867c2bfda4a4d4309ca1a8cbdc6175e67f587` | `configure --enable-shared --disable-static --disable-programs --disable-doc --disable-debug --enable-libdav1d --enable-vaapi --disable-bzlib --disable-lzma`                                                                                                     |
 | libplacebo      | `v7.351.0` | `3188549fba13bbdf3a5a98de2a38c2e71f04e21e` | `meson setup -Dvulkan=enabled -Dopengl=enabled -Dshaderc=disabled -Dglslang=enabled -Dlcms=disabled -Ddemos=false -Dtests=false`                                                                                                                                  |
 | dav1d           | `1.5.1`    | `42b2b24fb8819f1ed3643aa9cf2a62f03868e3aa` | `meson setup --buildtype=release -Denable_tools=false -Denable_tests=false -Denable_examples=false`                                                                                                                                                               |
 | libdisplay-info | `0.2.0`    | `66b802d05b374cd8f388dc6ad1e7ae4f08cb3300` | `meson setup --buildtype=release` (empty PNP ID table)                                                                                                                                                                                                            |
@@ -119,20 +119,21 @@ workflow asserts the LGPL configuration from the configured builds themselves
 `config.h`, mpv's `gpl` option `false`) and publishes the result as a
 never-overwritten prerelease:
 
-- **Release:** [`libmpv-windows-v0.41.0-b4`](https://github.com/lpbborges/grid/releases/tag/libmpv-windows-v0.41.0-b4),
+- **Release:** [`libmpv-windows-v0.41.0-b5`](https://github.com/lpbborges/grid/releases/tag/libmpv-windows-v0.41.0-b5),
   asset `libmpv-windows-x86_64.tar.gz`, with its corresponding source in
   `libmpv-windows-source.tar.xz`
-- **Built by:** [workflow run 4](https://github.com/lpbborges/grid/actions/runs/36083746815),
-  from commit `9d9a91fd36d64de2d7bfc8d28c81ddc0284e0fd6`
-- **SHA256:** `c0e0c8dd9aa232c270614785f088dc7371434cfc3762912fcbc2c83fc0bb7d2d`
-  (source archive: `162ab04fa08de2ecd6e212f95857ac4b58b80617296e2b2048f2b28b1a360ed7`)
+- **Built by:** [workflow run 5](https://github.com/lpbborges/grid/actions/runs/36138056407),
+  from commit `e21f17043fa8022c99f24ef40ee9d16bc6d2e316`
+- **SHA256:** `cfdd112b6f83da3fdf7e4d436ed21a047fc6fd2e8410b5d03560a87c782a2312`
+  (source archive: `1c162edffba6cd99dbda9f661df1601d62189ea66317f0cb664275727d6276f6`)
 - **Licence:** LGPL-2.1-or-later. The archive holds 31 DLLs: the 8 built here
   (`libmpv-2.dll`, `avcodec-61.dll`, `avformat-61.dll`, `avutil-59.dll`,
   `avfilter-10.dll`, `swresample-5.dll`, `swscale-8.dll`, `libplacebo-351.dll`)
   and the 23 MSYS2 DLLs below. `libplacebo-351.dll` also contains fast_float
   (MIT) and Vulkan-Headers (Apache-2.0 OR MIT). Every notice is in `LICENSES/`.
-- **Build `b3`:** [`libmpv-windows-v0.41.0-b3`](https://github.com/lpbborges/grid/releases/tag/libmpv-windows-v0.41.0-b3)
-  exists but was never pinned.
+- **Earlier builds:** [`libmpv-windows-v0.41.0-b3`](https://github.com/lpbborges/grid/releases/tag/libmpv-windows-v0.41.0-b3)
+  was never pinned; [`libmpv-windows-v0.41.0-b4`](https://github.com/lpbborges/grid/releases/tag/libmpv-windows-v0.41.0-b4)
+  (FFmpeg `n7.1`) was pinned before this one but shipped in no Grid release.
 
 **Hardware decoding:** `d3d11va`, through `gpu-api=d3d11` and
 `hwdec=auto-safe`. The build fails unless mpv's enabled features include
@@ -145,7 +146,7 @@ upstream revisions, the flags and every MSYS2 package:
 | Component  | Tag        | Commit                                     | Built with                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------- | ---------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | mpv        | `v0.41.0`  | `41f6a645068483470267271e1d09966ca3b9f413` | `meson setup --buildtype=release -Dgpl=false -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled -Dlibarchive=disabled -Dlibbluray=disabled -Duchardet=disabled -Drubberband=disabled -Dlcms2=disabled -Djpeg=disabled -Dvapoursynth=disabled -Dsdl2-gamepad=disabled -Dwin32-smtc=disabled -Dvulkan=disabled -Dgl=disabled -Degl-angle=disabled -Dlibavdevice=disabled -Dd3d11=enabled -Dd3d-hwaccel=enabled -Dspirv-cross=enabled -Dshaderc=enabled` |
-| FFmpeg     | `n7.1`     | `b08d7969c550a804a59511c7b83f2dd8cc0499b8` | `configure --enable-shared --disable-static --disable-programs --disable-doc --disable-debug --disable-encoders --disable-muxers --disable-avdevice --enable-libdav1d --enable-d3d11va --enable-dxva2 --disable-bzlib --disable-lzma --disable-iconv --disable-sdl2 --disable-schannel`                                                                                                                                                                               |
+| FFmpeg     | `n7.1.5`   | `3a0867c2bfda4a4d4309ca1a8cbdc6175e67f587` | `configure --enable-shared --disable-static --disable-programs --disable-doc --disable-debug --disable-encoders --disable-muxers --disable-avdevice --enable-libdav1d --enable-d3d11va --enable-dxva2 --disable-bzlib --disable-lzma --disable-iconv --disable-sdl2 --disable-schannel`                                                                                                                                                                               |
 | libplacebo | `v7.351.0` | `3188549fba13bbdf3a5a98de2a38c2e71f04e21e` | `meson setup --buildtype=release -Dd3d11=enabled -Dvulkan=disabled -Dopengl=disabled -Dshaderc=enabled -Dglslang=disabled -Dlcms=disabled -Ddovi=disabled -Dlibdovi=disabled -Ddemos=false -Dtests=false`                                                                                                                                                                                                                                                             |
 
 MSYS2 UCRT64 DLLs shipped beside them. The licence column is the package's
@@ -178,7 +179,7 @@ repo.msys2.org URL, in `BUILD-INFO.txt` (licences that ask for no source):
 | `libspirv-cross-c-shared.dll` | `spirv-cross`                             | 1~1.4.357.0-1            | Apache-2.0                                                    | named    |
 | `libstdc++-6.dll`             | `libstdc++`                               | 16.2.0-4                 | GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later | named    |
 | `libunibreak-7.dll`           | `libunibreak`                             | 7.0-1                    | Zlib                                                          | named    |
-| `libwinpthread-1.dll`         | `libwinpthread`                           | 14.0.0.r420.g61d40c4c0-1 | MIT AND BSD-3-Clause-Clear                                    | named    |
+| `libwinpthread-1.dll`         | `libwinpthread`                           | 14.0.0.r426.g4564ee4b5-1 | MIT AND BSD-3-Clause-Clear                                    | named    |
 | `zlib1.dll`                   | `zlib`                                    | 1.3.2-2                  | Zlib                                                          | named    |
 
 GCC's runtime DLLs ship under the GCC Runtime Library Exception; GFDL covers
@@ -190,16 +191,16 @@ inside it (its static parts were built by MSYS2's GCC 16.1.0, Rev5):
 
 | MSYS2 package (`mingw-w64-ucrt-x86_64-…`) | Version                  | Licence field                                                                          | Compiled into                                                           | Source   |
 | ----------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------- |
-| `crt`                                     | 14.0.0.r420.g61d40c4c0-1 | ZPL-2.1                                                                                | every DLL (startup objects, `libmingwex`, `libmingw32`)                 | named    |
-| `headers`                                 | 14.0.0.r420.g61d40c4c0-1 | ZPL-2.1 AND LGPL-2.1-or-later                                                          | every DLL (inline code from the Windows headers, some from Wine)        | archived |
+| `crt`                                     | 14.0.0.r426.g4564ee4b5-1 | ZPL-2.1                                                                                | every DLL (startup objects, `libmingwex`, `libmingw32`)                 | named    |
+| `headers`                                 | 14.0.0.r426.g4564ee4b5-1 | ZPL-2.1 AND LGPL-2.1-or-later                                                          | every DLL (inline code from the Windows headers, some from Wine)        | archived |
 | `gcc`                                     | 16.2.0-4                 | GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later                          | every DLL (static `libgcc` parts); libstdc++ in `libshaderc_shared.dll` | named    |
-| `winpthreads`                             | 14.0.0.r420.g61d40c4c0-1 | MIT AND BSD-3-Clause-Clear                                                             | `libshaderc_shared.dll`                                                 | named    |
+| `winpthreads`                             | 14.0.0.r426.g4564ee4b5-1 | MIT AND BSD-3-Clause-Clear                                                             | `libshaderc_shared.dll`                                                 | named    |
 | `glslang`                                 | 16.3.0-1                 | BSD-3-Clause (plus Apache-2.0/MIT parts and its GPL-3.0 Bison parser, Bison exception) | `libshaderc_shared.dll`                                                 | named    |
 | `spirv-tools`                             | 3~1.4.357.0-1            | Apache-2.0                                                                             | `libshaderc_shared.dll`                                                 | named    |
 | `spirv-headers`                           | 2~1.4.357.0-1            | MIT                                                                                    | `libshaderc_shared.dll`                                                 | named    |
 
 The build's toolchain was MSYS2's `gcc` 16.2.0-4, `crt` and `headers`
-14.0.0.r420.g61d40c4c0-1 and `binutils` 2.47-3.
+14.0.0.r426.g4564ee4b5-1 and `binutils` 2.47-3.
 
 **The licence gate.** The workflow walks the import tables from
 `libmpv-2.dll` to find every DLL it needs, and checks each MSYS2 DLL against a

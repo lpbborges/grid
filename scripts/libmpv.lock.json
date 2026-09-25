@@ -1,12 +1,12 @@
 {
   "windows-x86_64": {
-    "url": "https://github.com/lpbborges/grid/releases/download/libmpv-windows-v0.41.0-b4/libmpv-windows-x86_64.tar.gz",
-    "sha256": "c0e0c8dd9aa232c270614785f088dc7371434cfc3762912fcbc2c83fc0bb7d2d",
+    "url": "https://github.com/lpbborges/grid/releases/download/libmpv-windows-v0.41.0-b5/libmpv-windows-x86_64.tar.gz",
+    "sha256": "cfdd112b6f83da3fdf7e4d436ed21a047fc6fd2e8410b5d03560a87c782a2312",
     "licence": "LGPL-2.1-or-later"
   },
   "linux-x86_64": {
-    "url": "https://github.com/lpbborges/grid/releases/download/libmpv-linux-v0.41.0-b7/libmpv-linux-x86_64.tar.gz",
-    "sha256": "5f7373d9074c9d65257fd78f5e11e89a15b6320c0551730cd6a5daff8b5af0b6",
+    "url": "https://github.com/lpbborges/grid/releases/download/libmpv-linux-v0.41.0-b8/libmpv-linux-x86_64.tar.gz",
+    "sha256": "947ac3b56c2e259156e034c705d4fc0e0fc8ed460e3c90437ab28c727ff2eb62",
     "licence": "LGPL-2.1-or-later"
   }
 }
