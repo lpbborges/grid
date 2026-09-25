@@ -2,7 +2,6 @@ import { logger } from '$lib/logger';
 import type { CinemetaMeta, Movie, Series } from '../types';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { endpoints } from './endpoints';
-import { enrichMovieWithTmdb, enrichSeriesWithTmdb } from './tmdb';
 
 function mapCinemetaMeta(m: CinemetaMeta): Movie {
   return {
@@ -158,7 +157,7 @@ export async function getMovieDetails(
   // so callers can compare against 'pt'/'en'/'es' regardless of media type.
   movie.language = mapLanguageWordToCode(movie.language);
 
-  return enrichMovieWithTmdb(movie.id as string, movie, customFetch);
+  return movie;
 }
 
 const LANGUAGE_WORD_TO_CODE: Record<string, string> = {
@@ -243,5 +242,5 @@ export async function getSeriesDetails(
     torrents: []
   };
 
-  return enrichSeriesWithTmdb(series.id as string, series, customFetch);
+  return series;
 }

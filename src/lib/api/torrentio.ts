@@ -1,6 +1,6 @@
 import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
-import { endpoints } from './endpoints';
+import { defaultTrackers, endpoints } from './endpoints';
 import { settingsStore } from '../stores/settings.svelte';
 
 export interface Stream {
@@ -9,6 +9,7 @@ export interface Stream {
   infoHash?: string;
   fileIdx?: number;
   url?: string;
+  sources?: string[];
   behaviorHints?: Record<string, unknown>;
 }
 
@@ -16,6 +17,21 @@ export interface Stream {
 export function parseSeedCount(title: string | undefined): number {
   const match = title?.match(/👤\s*(\d+)/u);
   return match ? Number(match[1]) : 0;
+}
+
+export function buildMagnet(
+  infoHash: string,
+  name: string,
+  sources: string[] = [],
+  extraTrackers: string[] = defaultTrackers
+): string {
+  const listed = sources
+    .filter((source) => source.startsWith('tracker:'))
+    .map((source) => source.slice('tracker:'.length));
+  const trackers = [...new Set([...listed, ...extraTrackers])]
+    .map((tracker) => `&tr=${encodeURIComponent(tracker)}`)
+    .join('');
+  return `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(name)}${trackers}`;
 }
 
 const AUDIO_TO_TORRENTIO_LANG: Record<string, string> = {

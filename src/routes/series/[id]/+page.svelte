@@ -1,7 +1,7 @@
 <script lang="ts">
   import { logger } from '$lib/logger';
   import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
-  import { getSeriesStreams, parseSeedCount } from '$lib/api/torrentio';
+  import { buildMagnet, getSeriesStreams, parseSeedCount } from '$lib/api/torrentio';
   import Player from '$lib/components/Player.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
@@ -132,7 +132,11 @@
         return;
       }
 
-      const magnet = `magnet:?xt=urn:btih:${bestStream.infoHash}&dn=${encodeURIComponent(`${series.title} S${episode.season}E${episode.episode}`)}`;
+      const magnet = buildMagnet(
+        bestStream.infoHash,
+        `${series.title} S${episode.season}E${episode.episode}`,
+        bestStream.sources
+      );
 
       const ok = await player.play(magnet, {
         mediaId: seriesId,

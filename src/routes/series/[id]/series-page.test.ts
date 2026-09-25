@@ -139,7 +139,7 @@ describe('Series page integration flow', () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(prepareStreamMock).toHaveBeenCalledWith({
-      magnet: 'magnet:?xt=urn:btih:def&dn=Some%20Series%20S1E1',
+      magnet: expect.stringMatching(/^magnet:\?xt=urn:btih:def&dn=Some%20Series%20S1E1(&|$)/),
       onStatus: expect.any(Function),
       mediaId: 'tt1',
       season: 1,

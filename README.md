@@ -228,6 +228,8 @@ Grid talks to these services directly from your machine. Every host must also be
 - **OpenSubtitles via strem.io** (`opensubtitles-v3.strem.io`, `*.strem.io`): external subtitles.
 - **Google Translate** (unofficial `translate.googleapis.com` endpoint) and **MyMemory** (`api.mymemory.translated.net`): metadata translation.
 
+**Peer discovery:** the streaming engine (not the webview, so the CSP does not apply) announces each stream to the trackers Torrentio lists for it plus a few public trackers (`defaultTrackers` in `src/lib/api/endpoints.ts`), and to the DHT. They see your IP address and the hash of what you play. E2E builds use none of them.
+
 **Translation privacy:** when the system language is not English, the title, synopsis, and episode names of the titles you open are sent in plain text to Google Translate (and to MyMemory if Google fails). No account data or playback history is sent. There is currently no setting to turn translation off.
 
 ## Troubleshooting

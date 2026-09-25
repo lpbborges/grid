@@ -23,3 +23,17 @@ export function resolveEndpoints(override: string | undefined): Endpoints {
 }
 
 export const endpoints: Endpoints = resolveEndpoints(import.meta.env.VITE_E2E_API_BASE);
+
+const PUBLIC_TRACKERS = [
+  'udp://tracker.opentrackr.org:1337/announce',
+  'udp://open.demonii.com:1337/announce',
+  'udp://open.stealth.si:80/announce',
+  'udp://tracker.torrent.eu.org:451/announce',
+  'udp://exodus.desync.com:6969/announce'
+];
+
+export function resolveDefaultTrackers(override: string | undefined): string[] {
+  return override?.trim() ? [] : [...PUBLIC_TRACKERS];
+}
+
+export const defaultTrackers: string[] = resolveDefaultTrackers(import.meta.env.VITE_E2E_API_BASE);

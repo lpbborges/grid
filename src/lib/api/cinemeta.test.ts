@@ -294,4 +294,25 @@ describe('yts api', () => {
     expect(series.length).toBe(1);
     expect(series[0].title).toBe('Series Result');
   });
+
+  it('loads details from Cinemeta alone, even with a TMDB key configured', async () => {
+    vi.stubEnv('VITE_TMDB_API_KEY', 'test-key');
+    vi.resetModules();
+    const cinemeta = await import('./cinemeta');
+    (globalThis.fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'ok', data: { movie: mockMovie } })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ meta: { id: 'tt987', name: 'Series', year: '2024' } })
+      });
+
+    await cinemeta.getMovieDetails(1);
+    await cinemeta.getSeriesDetails('tt987');
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    vi.unstubAllEnvs();
+  });
 });

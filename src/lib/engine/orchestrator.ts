@@ -160,8 +160,16 @@ export async function prepareStream({
     const isCacheable = totalBytes > 0 && totalBytes <= cacheLimitBytes;
 
     if (isCacheable) {
-      const alreadyHave = existingEntry?.downloadedBytes ?? 0;
-      const neededBytes = Math.max(totalBytes - alreadyHave, 0);
+      const fileName = parsedInfoHash
+        ? `${parsedInfoHash}/${details.files[bestFileIdx].name}`
+        : details.files[bestFileIdx].name;
+      const sameFile = existingEntry?.fileName === fileName;
+      const fileProgress = (await getTorrentStats(infoHash))?.file_progress;
+      const fileBytes =
+        fileProgress?.[bestFileIdx] ?? (sameFile ? existingEntry.downloadedBytes : 0);
+      const onDisk =
+        fileProgress?.reduce((sum, bytes) => sum + bytes, 0) ?? existingEntry?.downloadedBytes ?? 0;
+      const neededBytes = Math.max(totalBytes - fileBytes, 0);
       await evictForSpace(infoHash, neededBytes, cacheLimitBytes);
       signal?.throwIfAborted();
 
@@ -171,12 +179,10 @@ export async function prepareStream({
         mediaId,
         season,
         episode,
-        fileName: parsedInfoHash
-          ? `${parsedInfoHash}/${details.files[bestFileIdx].name}`
-          : details.files[bestFileIdx].name,
+        fileName,
         totalBytes,
-        downloadedBytes: alreadyHave,
-        complete: existingEntry?.complete ?? false,
+        downloadedBytes: onDisk,
+        complete: fileProgress ? fileBytes >= totalBytes : sameFile && existingEntry.complete,
         lastAccessedAt: Date.now()
       };
       await upsertCacheEntry(cacheEntry);
@@ -265,19 +271,19 @@ async function runFinalizeStream({
   if (cacheEntry) {
     try {
       const stats = await getTorrentStats(infoHash);
-      let downloadedBytes = stats?.live?.snapshot?.downloaded_and_checked_bytes;
-      if (
-        fileIdx !== undefined &&
-        stats?.file_progress &&
-        stats.file_progress[fileIdx] !== undefined
-      ) {
-        downloadedBytes = stats.file_progress[fileIdx];
-      }
-      if (downloadedBytes !== undefined) {
+      const fileProgress = stats?.file_progress;
+      const downloadedBytes = fileProgress
+        ? fileProgress.reduce((sum, bytes) => sum + bytes, 0)
+        : stats?.live?.snapshot?.downloaded_and_checked_bytes;
+      const playedBytes =
+        fileIdx !== undefined && fileProgress?.[fileIdx] !== undefined
+          ? fileProgress[fileIdx]
+          : downloadedBytes;
+      if (downloadedBytes !== undefined && playedBytes !== undefined) {
         await upsertCacheEntry({
           ...cacheEntry,
           downloadedBytes,
-          complete: downloadedBytes >= cacheEntry.totalBytes,
+          complete: playedBytes >= cacheEntry.totalBytes,
           lastAccessedAt: Date.now()
         });
       }

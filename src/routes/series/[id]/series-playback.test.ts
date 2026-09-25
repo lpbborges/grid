@@ -111,6 +111,24 @@ describe('Series playback wiring', () => {
     });
   });
 
+  it('adds the magnet with the trackers Torrentio lists', async () => {
+    await playEpisode(/Pilot/, {
+      streams: [
+        {
+          name: 'Torrentio\n1080p',
+          title: 'Season pack\n👤 30',
+          infoHash: HASH,
+          fileIdx: 0,
+          sources: ['tracker:udp://tracker.example.org:1337/announce']
+        }
+      ]
+    });
+    await screen.findByTestId('video-element', {}, { timeout: 5000 });
+
+    const add = boundary.rqbit.requests.find((r) => r.method === 'POST' && r.path === '/torrents');
+    expect(add?.body).toContain('&tr=udp%3A%2F%2Ftracker.example.org%3A1337%2Fannounce');
+  });
+
   it('tells the user when no source exists for the episode', async () => {
     await playEpisode(/Pilot/, { streams: [] });
 

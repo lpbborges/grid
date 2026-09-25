@@ -9,6 +9,7 @@ import {
 } from '$lib/engine/__fixtures__/playbackBoundary';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { clearExternalSubtitleCache } from '$lib/api/subtitles';
+import { defaultTrackers } from '$lib/api/endpoints';
 import { ADD_ATTEMPT_TIMEOUTS_MS } from '$lib/engine/torrent';
 
 // This suite drives the <video> path, which Linux no longer plays through by
@@ -134,6 +135,31 @@ describe('Movie playback wiring', () => {
     expect(JSON.parse(update?.body ?? '{}')).toEqual({ only_files: [1, 0] });
   });
 
+  it('adds the magnet with the trackers Torrentio lists', async () => {
+    await openAndPlay({
+      streams: [
+        {
+          ...baseOptions.streams[0],
+          sources: ['tracker:udp://tracker.example.org:1337/announce', `dht:${HASH}`]
+        }
+      ]
+    });
+    await screen.findByTestId('video-element', {}, { timeout: 5000 });
+
+    expect(rqbitRequest('POST', '/torrents')?.body).toContain(
+      '&tr=udp%3A%2F%2Ftracker.example.org%3A1337%2Fannounce'
+    );
+  });
+
+  it('adds the default trackers when the source lists none', async () => {
+    await openAndPlay();
+    await screen.findByTestId('video-element', {}, { timeout: 5000 });
+
+    expect(rqbitRequest('POST', '/torrents')?.body).toContain(
+      `&tr=${encodeURIComponent(defaultTrackers[0])}`
+    );
+  });
+
   it('loads the bundled and the external subtitles', async () => {
     await openAndPlay();
     await screen.findByTestId('video-element', {}, { timeout: 5000 });
@@ -164,7 +190,7 @@ describe('Movie playback wiring', () => {
         mediaId: movie.id,
         fileName: `${HASH}/${VIDEO}`,
         totalBytes: 259767,
-        downloadedBytes: 259767,
+        downloadedBytes: 259767 + 50,
         complete: true
       }
     });
