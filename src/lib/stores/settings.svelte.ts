@@ -14,6 +14,7 @@ class SettingsStore {
   #subtitle = $state('pt');
   #quality = $state('1080p');
   #cacheLimitBytes = $state(3 * 1024 * 1024 * 1024);
+  #acceptedDisclaimer = $state(false);
 
   constructor() {
     if (browser) {
@@ -25,6 +26,9 @@ class SettingsStore {
 
       const storedQuality = localStorage.getItem('grid-quality');
       if (storedQuality) this.#quality = storedQuality;
+
+      const storedDisclaimer = localStorage.getItem('grid-accepted-disclaimer');
+      if (storedDisclaimer === 'true') this.#acceptedDisclaimer = true;
 
       const storedCacheLimit = localStorage.getItem('grid-cache-limit-bytes');
       const parsedCacheLimit = normalizeCacheLimit(
@@ -68,6 +72,14 @@ class SettingsStore {
     if (normalized === null) return;
     this.#cacheLimitBytes = normalized;
     this.persist('grid-cache-limit-bytes', String(normalized));
+  }
+
+  get acceptedDisclaimer() {
+    return this.#acceptedDisclaimer;
+  }
+  set acceptedDisclaimer(value: boolean) {
+    this.#acceptedDisclaimer = value;
+    this.persist('grid-accepted-disclaimer', String(value));
   }
 
   private persist(key: string, value: string) {

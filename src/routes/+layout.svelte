@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import GridLogo from '$lib/components/GridLogo.svelte';
   import SplashScreen from '$lib/components/SplashScreen.svelte';
+  import DisclaimerModal from '$lib/components/DisclaimerModal.svelte';
   import Titlebar from '$lib/components/Titlebar.svelte';
   import { searchQuery } from '$lib/stores.svelte';
   let { children } = $props();
@@ -10,6 +11,7 @@
 
 <div class="text-main bg-dark flex h-screen flex-col overflow-hidden">
   <SplashScreen />
+  <DisclaimerModal />
   <Titlebar />
   {#if !page.url.pathname.startsWith('/movie') && !page.url.pathname.startsWith('/series')}
     <!-- Top navigation bar -->
