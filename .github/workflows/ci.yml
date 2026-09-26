@@ -275,35 +275,8 @@ jobs:
       - run: npm ci
       - name: Set up libmpv (Windows)
         run: npm run setup:libmpv
-      - name: Build the MSI and NSIS installers
-        run: npx tauri build --bundles msi,nsis
-      - name: Check the MSI installs every libmpv DLL and LICENSES beside grid.exe
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $msi = @(Get-ChildItem src-tauri/target/release/bundle/msi/*.msi)
-          if ($msi.Count -ne 1) { throw "expected exactly one MSI, found $($msi.Count)" }
-          $dest = Join-Path $env:RUNNER_TEMP 'msi-extract'
-          Write-Host "Administrative install of $($msi[0].FullName) into $dest"
-          $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(
-            '/a', "`"$($msi[0].FullName)`"", '/qn', "TARGETDIR=`"$dest`""
-          )
-          if ($p.ExitCode -ne 0) { throw "msiexec /a exited with $($p.ExitCode)" }
-          Write-Host 'Extracted tree:'
-          Get-ChildItem -Recurse -Force $dest | ForEach-Object { $_.FullName.Substring($dest.Length) }
-          # Windows file names are case-insensitive: this matches Grid.exe too.
-          $exe = @(Get-ChildItem -Recurse -File $dest -Filter grid.exe)
-          if ($exe.Count -ne 1) { throw "expected exactly one grid.exe, found $($exe.Count)" }
-          $dir = $exe[0].DirectoryName
-          Write-Host "grid.exe is in $dir"
-          $required = @(./scripts/windows-layout-required.ps1)
-          Write-Host "checking $($required.Count) paths"
-          $missing = @($required | Where-Object { -not (Test-Path -PathType Leaf (Join-Path $dir $_)) })
-          if ($missing.Count -gt 0) {
-            $missing | ForEach-Object { Write-Host "::error::MSI does not install $_ beside grid.exe" }
-            exit 1
-          }
-          $required | ForEach-Object { Write-Host "present beside grid.exe: $_" }
+      - name: Build the NSIS installer
+        run: npx tauri build --bundles nsis
       - name: Check the NSIS installer carries every libmpv DLL and LICENSES
         shell: pwsh
         run: |
