@@ -83,6 +83,7 @@ jobs:
         working-directory: src-tauri
 
   package-linux:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -256,15 +257,9 @@ jobs:
           passed="$(sed -n 's/^test result: ok\. \([0-9]*\) passed.*/\1/p' /tmp/player-tests.txt | head -1)"
           echo "player tests passed: ${passed:-0}"
           [ "${passed:-0}" -gt 0 ] || { echo "::error::no player tests ran"; exit 1; }
-      - uses: actions/upload-artifact@v7
-        with:
-          name: linux-packages
-          path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/rpm/*.rpm
-            src-tauri/target/release/bundle/appimage/*.AppImage
 
   package-windows:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -328,12 +323,6 @@ jobs:
             exit 1
           }
           $required | ForEach-Object { Write-Host "carried by the NSIS installer: $_" }
-      - uses: actions/upload-artifact@v7
-        with:
-          name: windows-installers
-          path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*-setup.exe
 
   e2e:
     needs: [frontend, rust]
