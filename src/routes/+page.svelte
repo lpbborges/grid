@@ -2,7 +2,7 @@
   import MediaRow from '$lib/components/MediaRow.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import type { Movie } from '$lib/types';
-  import { searchQuery } from '$lib/stores.svelte';
+  import { appReady, searchQuery } from '$lib/stores.svelte';
   import { searchCatalog } from '$lib/api/cinemeta';
 
   let { data } = $props();
@@ -34,6 +34,7 @@
       popularSeries = seriesResult.status === 'fulfilled' ? seriesResult.value : [];
       popularError = moviesResult.status === 'rejected' && seriesResult.status === 'rejected';
       popularLoading = false;
+      appReady.value = true;
     });
 
     return () => {

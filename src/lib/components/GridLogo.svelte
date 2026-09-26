@@ -1,7 +1,23 @@
 <script lang="ts">
   // Inline copy of static/logo.svg, so the hover animation can reach its parts.
-  // The animation is driven by the nearest `group` ancestor (the header link).
-  let { class: className = '' }: { class?: string } = $props();
+  // The animation is driven by the nearest `group` ancestor (the header link),
+  // or loops on its own when `animated` is set.
+  let { class: className = '', animated = false }: { class?: string; animated?: boolean } =
+    $props();
+
+  const anim = $derived(
+    animated
+      ? {
+          scan: 'motion-safe:animate-logo-scan',
+          chroma: 'motion-safe:animate-logo-chroma',
+          glitch: 'motion-safe:animate-logo-glitch'
+        }
+      : {
+          scan: 'motion-safe:group-hover:animate-logo-scan',
+          chroma: 'motion-safe:group-hover:animate-logo-chroma',
+          glitch: 'motion-safe:group-hover:animate-logo-glitch'
+        }
+  );
 
   const uid = $props.id();
   const ids = {
@@ -26,11 +42,7 @@
 
 {#snippet mark()}
   <g mask="url(#{ids.scan})">
-    <g
-      class="stroke-orange motion-safe:group-hover:animate-logo-chroma"
-      transform="translate(-7 0)"
-      opacity=".85"
-    >
+    <g class="stroke-orange {anim.chroma}" transform="translate(-7 0)" opacity=".85">
       <path d={G_PATH} fill="none" stroke-width="40" stroke-linecap="round" />
     </g>
     <g filter="url(#{ids.glow})">
@@ -71,7 +83,7 @@
     </filter>
     <mask id={ids.scan} maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
       <rect width="512" height="512" fill="white" />
-      <g data-testid="logo-scanlines" class="motion-safe:group-hover:animate-logo-scan">
+      <g data-testid="logo-scanlines" class={anim.scan}>
         {#each scanlines as y (y)}
           <rect x="0" {y} width="512" height="5" fill="black" />
         {/each}
@@ -87,11 +99,7 @@
   {@render mark()}
 
   {#each glitchBands as band, i (band.y)}
-    <g
-      data-testid="logo-glitch"
-      class="motion-safe:group-hover:animate-logo-glitch opacity-0"
-      style:animation-delay={band.delay}
-    >
+    <g data-testid="logo-glitch" class="{anim.glitch} opacity-0" style:animation-delay={band.delay}>
       <rect class="fill-dark" x="60" y={band.y} width="392" height={band.height} />
       <g clip-path="url(#{ids.band(i)})">
         <g transform="translate({band.shift} 0)">{@render mark()}</g>

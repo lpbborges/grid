@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/svelte';
 import HomePage from './+page.svelte';
 import type { Movie } from '$lib/types';
-import { searchQuery } from '$lib/stores.svelte';
+import { appReady, searchQuery } from '$lib/stores.svelte';
 
 const { searchCatalogMock } = vi.hoisted(() => ({
   searchCatalogMock: vi.fn()
@@ -48,6 +48,7 @@ describe('Home page search', () => {
     vi.resetAllMocks();
     vi.useFakeTimers();
     searchQuery.value = '';
+    appReady.value = false;
     searchCatalogMock.mockResolvedValue({ movies: [], series: [] });
   });
 
@@ -245,5 +246,30 @@ describe('Home page search', () => {
     await act(async () => {});
 
     expect(screen.getByText('Erro ao carregar dados')).toBeTruthy();
+  });
+
+  it('marks the app ready once the popular catalog arrives', async () => {
+    const movies = deferred<Movie[]>();
+    render(HomePage, {
+      data: { popularMovies: movies.promise, popularSeries: Promise.resolve([]) }
+    });
+    await act(async () => {});
+    expect(appReady.value).toBe(false);
+
+    await act(async () => movies.resolve([makeMovie('tt1', 'Popular Movie')]));
+
+    expect(appReady.value).toBe(true);
+  });
+
+  it('marks the app ready when the popular catalog fails', async () => {
+    render(HomePage, {
+      data: {
+        popularMovies: Promise.reject(new Error('network down')),
+        popularSeries: Promise.reject(new Error('network down'))
+      }
+    });
+    await act(async () => {});
+
+    expect(appReady.value).toBe(true);
   });
 });

@@ -136,15 +136,18 @@
  * deliberate exception to this scale, not an omission.
  */
 
-body {
-  @apply bg-dark text-main;
-  color-scheme: dark;
-  font-family: 'Rajdhani', sans-serif;
+@utility bg-grid {
   background-image:
     linear-gradient(rgba(107, 33, 168, 0.1) 1px, transparent 1px),
     linear-gradient(90deg, rgba(107, 33, 168, 0.1) 1px, transparent 1px);
   background-size: 30px 30px;
   background-position: center center;
+}
+
+body {
+  @apply bg-dark text-main bg-grid;
+  color-scheme: dark;
+  font-family: 'Rajdhani', sans-serif;
 }
 
 h1,
