@@ -1,4 +1,3 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod cache;
 mod engine_process;
 mod media_patch;
@@ -511,7 +510,6 @@ async fn start_torrent_engine(
         cache::remove_path_best_effort(&output_folder.join(orphan_name));
     }
 
-    // Find free ephemeral ports for HTTP API and peer listener
     let port = std::net::TcpListener::bind("127.0.0.1:0")
         .map_err(|e| e.to_string())?
         .local_addr()

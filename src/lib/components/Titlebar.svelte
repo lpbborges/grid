@@ -12,12 +12,10 @@
   const hidden = $derived(playerState.isPlaying && !playerState.showControls && !hovered);
 
   onMount(() => {
-    // Check initial state
     appWindow.isMaximized().then((res: boolean) => {
       isMaximized = res;
     });
 
-    // Listen for resize events to update icon (optional but good for robustness)
     const unlisten = appWindow.onResized(async () => {
       isMaximized = await appWindow.isMaximized();
     });

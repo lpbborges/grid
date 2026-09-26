@@ -36,7 +36,6 @@ describe('useDomBackend', () => {
         }
       }
     });
-    // Svelte 5 will flush the effect synchronously or we might need to wait
     return backend!;
   }
 

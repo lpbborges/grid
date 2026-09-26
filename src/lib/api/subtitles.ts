@@ -133,7 +133,6 @@ export function getLanguageName(code: string, strict = false): string | null {
   const normalized = (code || '').toLowerCase().trim();
   if (map[normalized]) return map[normalized];
   if (strict) return null;
-  // Capitalize first letter of fallback
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 

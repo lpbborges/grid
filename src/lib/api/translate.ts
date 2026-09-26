@@ -38,7 +38,6 @@ async function performTranslation(text: string, targetLang: string): Promise<str
 
 async function runTranslationCascade(text: string, targetLang: string): Promise<string> {
   try {
-    // google translate free endpoint
     const url = `${endpoints.googleTranslate}/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
     const res = await fetchWithTimeout(url, {}, TRANSLATE_TIMEOUT_MS);
     if (res.ok) {
@@ -56,7 +55,6 @@ async function runTranslationCascade(text: string, targetLang: string): Promise<
     const myMemoryRes = await fetchWithTimeout(myMemoryUrl, {}, TRANSLATE_TIMEOUT_MS);
     if (myMemoryRes.ok) {
       const myMemoryData = await myMemoryRes.json();
-      // MyMemory returns 200 status in JSON for success
       if (
         myMemoryData &&
         myMemoryData.responseStatus === 200 &&

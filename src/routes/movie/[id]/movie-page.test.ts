@@ -131,14 +131,11 @@ describe('Movie page integration flow', () => {
       props: { data: { movieId: 'tt1', movie, error: null } }
     });
 
-    // Wait for the page to render and the play button to appear
     const playButton = screen.getByRole('button', { name: /reproduzir/i });
     expect(playButton).toBeInTheDocument();
 
-    // Click play (which starts the selected torrent)
     await fireEvent.click(playButton);
 
-    // Verify prepareStream was called with the correct magnet
     expect(prepareStreamMock).toHaveBeenCalledWith({
       magnet: expect.stringMatching(/^magnet:\?xt=urn:btih:abc&dn=Some%20Movie(&|$)/),
       onStatus: expect.any(Function),
@@ -149,10 +146,6 @@ describe('Movie page integration flow', () => {
       signal: expect.any(AbortSignal)
     });
 
-    // Eventually the video player should be shown (represented by finding the "Voltar" or Titlebar, but we can check if VideoPlayer is rendered by checking for video controls)
-    // Wait for the video element to be present
-    // actually, `videoSrc` is returned, so VideoPlayer is rendered
-    // wait for the UI to update
     await new Promise((r) => setTimeout(r, 0));
 
     const video = document.querySelector('video');

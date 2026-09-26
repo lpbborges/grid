@@ -38,7 +38,6 @@ export async function getPopularMovies(limit = 24, customFetch?: typeof fetch): 
 
 export async function getPopularSeries(limit = 24, customFetch?: typeof fetch): Promise<Movie[]> {
   try {
-    // using cinemeta for popular series
     const res = await fetchWithTimeout(`${endpoints.cinemeta}/catalog/series/top.json`, {
       fetch: customFetch
     });
@@ -126,7 +125,6 @@ export async function getMovieDetails(
   }
   const movie = data.data.movie;
 
-  // Try to fetch director from cinemeta if we have an IMDB ID
   if (isImdbId || movie.imdb_code) {
     const imdbId = isImdbId ? movieId : movie.imdb_code;
     try {
@@ -147,7 +145,6 @@ export async function getMovieDetails(
     }
   }
 
-  // Normalize movie ID to be the IMDB code to match cinemeta and home screen
   if (movie.imdb_code) {
     movie.id = movie.imdb_code;
   }

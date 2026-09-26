@@ -68,7 +68,6 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
     currentTime = el.currentTime;
     duration = el.duration;
 
-    // Sometimes play events are missed
     if (stalled && !el.paused) {
       handlePlaying();
     }
@@ -211,8 +210,6 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
     },
     toggleFullscreen: () => {
       if (!document.fullscreenElement) {
-        // We use document.documentElement here. If a container is needed, it can be passed or inferred.
-        // The plan says: "taking the container element from a second getter argument or from getVideoElement()?.parentElement"
         const el = getVideoElement();
         const container =
           el?.parentElement?.closest('[data-testid="video-player-container"]') ||

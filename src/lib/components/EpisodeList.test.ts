@@ -29,7 +29,6 @@ describe('EpisodeList component', () => {
     expect(getByText(/1\. Ep 1 Translated/)).toBeInTheDocument();
     expect(getByText(/2\. Ep 2/)).toBeInTheDocument();
 
-    // Season 2 episode should not be visible
     expect(queryByText(/1\. Ep 3/)).not.toBeInTheDocument();
 
     const playButton = getByText(/1\. Ep 1 Translated/).closest('button');
