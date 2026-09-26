@@ -66,8 +66,17 @@ export async function mockState(): Promise<{
   };
 }
 
+export async function acceptDisclaimer(): Promise<void> {
+  const accept = await $('button=Entendi');
+  if (!(await accept.isExisting())) return;
+  await accept.click();
+  await accept.waitForExist({ reverse: true });
+}
+
 export async function openTitle(type: 'movie' | 'series', id: string): Promise<void> {
   const card = await $(`a[href="/${type}/${id}"]`);
+  await card.waitForExist({ timeout: 30000 });
+  await acceptDisclaimer();
   await card.waitForClickable({ timeout: 30000 });
   await card.click();
 }
