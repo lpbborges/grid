@@ -57,7 +57,7 @@ The first `tauri dev` compiles the Rust backend, which takes a few minutes. To p
 npm run tauri build
 ```
 
-Bundles are written to `src-tauri/target/release/bundle/`. On Windows, run `npm run setup:libmpv` first; the installers ship `libmpv-2.dll`, every DLL it loads and their `LICENSES\` folder beside `grid.exe`. On Linux, use `npm run setup:libmpv -- --bundle && npm run bundle:linux` instead — it fetches the bundled LGPL libmpv, then builds the `.deb`, `.rpm` and AppImage with the environment linuxdeploy needs to find and package it (see [libmpv](#libmpv-linux-and-windows)); `npm run tauri build` alone does not set that up.
+Bundles are written to `src-tauri/target/release/bundle/`. On Windows, run `npm run setup:libmpv` first; the setup `.exe` (the only Windows bundle) ships `libmpv-2.dll`, every DLL it loads and their `LICENSES\` folder beside `grid.exe`. On Linux, use `npm run setup:libmpv -- --bundle && npm run bundle:linux` instead — it fetches the bundled LGPL libmpv, then builds the `.deb`, `.rpm` and AppImage with the environment linuxdeploy needs to find and package it (see [libmpv](#libmpv-linux-and-windows)); `npm run tauri build` alone does not set that up.
 
 ## Recommended IDE Setup
 

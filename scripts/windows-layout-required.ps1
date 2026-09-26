@@ -1,7 +1,7 @@
 # Prints every path the Windows installers must put beside grid.exe, relative
 # to it: each DLL in src-tauri/lib/windows, plus one licence text to prove
-# LICENSES\ made it. CI's package-windows checks feed this to the MSI and NSIS
-# layout checks. Run from the repository root after `npm run setup:libmpv`.
+# LICENSES\ made it. CI's package-windows job feeds this to the NSIS layout
+# check. Run from the repository root after `npm run setup:libmpv`.
 $ErrorActionPreference = 'Stop'
 $lib = (Resolve-Path 'src-tauri/lib/windows').Path
 
