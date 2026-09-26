@@ -2,26 +2,24 @@
   import '../app.css';
   import { page } from '$app/state';
   import GridLogo from '$lib/components/GridLogo.svelte';
+  import SplashScreen from '$lib/components/SplashScreen.svelte';
   import Titlebar from '$lib/components/Titlebar.svelte';
   import { searchQuery } from '$lib/stores.svelte';
   let { children } = $props();
 </script>
 
 <div class="text-main bg-dark flex h-screen flex-col overflow-hidden">
+  <SplashScreen />
   <Titlebar />
   {#if !page.url.pathname.startsWith('/movie') && !page.url.pathname.startsWith('/series')}
     <!-- Top navigation bar -->
     <header class="bg-dark/80 flex items-center justify-between p-4 backdrop-blur">
       <!-- Left: Logo -->
       <div class="flex w-1/4 items-center">
-        <a href="/" class="group flex items-center gap-2">
+        <a href="/" class="group flex items-center">
           <GridLogo
             class="h-12 w-12 transition-transform duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]"
           />
-          <span
-            class="text-main font-cyber group-hover:text-primary text-xl tracking-[0.2em] uppercase transition-colors duration-300"
-            >Grid</span
-          >
         </a>
       </div>
 

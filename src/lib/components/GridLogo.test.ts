@@ -54,4 +54,14 @@ describe('GridLogo component', () => {
       expect(slice).toHaveClass('opacity-0', 'motion-safe:group-hover:animate-logo-glitch');
     }
   });
+
+  it('loops the animation without hover when animated', () => {
+    const { getByTestId, getAllByTestId } = render(GridLogo, { props: { animated: true } });
+
+    expect(getByTestId('logo-scanlines')).toHaveClass('motion-safe:animate-logo-scan');
+    for (const slice of getAllByTestId('logo-glitch')) {
+      expect(slice).toHaveClass('opacity-0', 'motion-safe:animate-logo-glitch');
+      expect(slice).not.toHaveClass('motion-safe:group-hover:animate-logo-glitch');
+    }
+  });
 });

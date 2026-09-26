@@ -4,3 +4,5 @@ export const playerState = $state({
 });
 
 export const searchQuery = $state({ value: '' });
+
+export const appReady = $state({ value: false });
