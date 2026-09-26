@@ -222,6 +222,7 @@ export function useMpvBackend() {
   let tracks = $state<NativeTrack[]>([]);
   let hasVideo = $state(false);
   let durationState = $state(0);
+  let subtitlePosition = 80;
 
   let unlisteners: UnlistenFn[] = [];
   let current: (PlaybackRequest & { onended?: () => void }) | undefined;
@@ -323,6 +324,7 @@ export function useMpvBackend() {
         external.map((subtitle) => subtitle.lang)
       );
       await invoke('native_player_set_volume', { percent: volume * 100 });
+      await invoke('native_player_set_subtitle_position', { percent: subtitlePosition });
       // mpv launches paused; this applies the preferences and starts playback.
       await invoke('native_player_set_tracks', { aid, sid });
       // The flags still describe mpv's own defaults, so without this the menu
@@ -361,6 +363,16 @@ export function useMpvBackend() {
     } catch (e) {
       logger.error('Erro ao alternar tela cheia', e);
     }
+  }
+
+  function syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean) {
+    const next = menusOpen ? 70 : controlsVisible ? 80 : 100;
+    if (next === subtitlePosition) return;
+    subtitlePosition = next;
+    if (!isRunning) return;
+    invoke('native_player_set_subtitle_position', { percent: next }).catch((e) =>
+      logger.error('Erro ao posicionar as legendas', e)
+    );
   }
 
   function onTime(seconds: number) {
@@ -518,6 +530,6 @@ export function useMpvBackend() {
     selectAudio,
     selectSubtitle,
     toggleFullscreen,
-    syncOverlayLayout() {}
+    syncOverlayLayout
   };
 }

@@ -300,6 +300,7 @@ describe('useMpvBackend', () => {
     expect(commands).toEqual([
       'start_native_player',
       'native_player_set_volume',
+      'native_player_set_subtitle_position',
       'native_player_set_tracks'
     ]);
     // D4 is dropped: mpv renders inside this window, so minimizing it would
@@ -537,6 +538,40 @@ describe('useMpvBackend', () => {
       commands.indexOf('native_player_set_tracks')
     );
     expect(invoke).toHaveBeenCalledWith('native_player_set_volume', { percent: 100 });
+  });
+
+  it('lifts the subtitles above the controls and the menus', async () => {
+    const { player } = await start();
+
+    player.syncOverlayLayout(false, false);
+    expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
+      percent: 100
+    });
+    player.syncOverlayLayout(true, false);
+    expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
+      percent: 80
+    });
+    player.syncOverlayLayout(true, true);
+    expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
+      percent: 70
+    });
+  });
+
+  it('applies the subtitle position asked for before mpv started', async () => {
+    const player = await mount();
+    player.syncOverlayLayout(false, false);
+    expect(invoke).not.toHaveBeenCalledWith('native_player_set_subtitle_position', {
+      percent: 100
+    });
+
+    await player.start({
+      url: 'http://127.0.0.1:1/x',
+      mediaId: 'tt1',
+      subtitles: [],
+      startSeconds: 0
+    });
+
+    expect(invoke).toHaveBeenCalledWith('native_player_set_subtitle_position', { percent: 100 });
   });
 
   it('tracks position from native-player-time', async () => {

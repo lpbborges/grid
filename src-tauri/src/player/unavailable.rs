@@ -37,6 +37,10 @@ impl Controller {
         match *self {}
     }
 
+    pub fn set_subtitle_position(&self, _percent: f64) -> Result<(), String> {
+        match *self {}
+    }
+
     pub fn set_audio_track(&self, _id: Option<i64>) -> Result<(), String> {
         match *self {}
     }
