@@ -92,11 +92,7 @@
   <div
     class="bg-surface/80 border-primary/20 group-hover:border-primary relative h-[45px] border-t p-3 transition-colors duration-300"
   >
-    <div
-      class="text-main font-cyber {favoritesStore.has(media.id)
-        ? 'group-hover:text-orange'
-        : 'group-hover:text-green'} w-full truncate text-center text-sm tracking-wider uppercase transition-colors duration-300"
-    >
+    <div class="text-main font-cyber w-full truncate text-center text-sm tracking-wider uppercase">
       {media.title}
     </div>
 
@@ -110,9 +106,7 @@
           : 'border-green'} pointer-events-none absolute -right-[1px] -bottom-[1px] z-40 h-2 w-2 border-r-2 border-b-2"
       ></div>
       <div
-        class="font-cyber {favoritesStore.has(media.id)
-          ? 'text-orange'
-          : 'text-green'} w-full text-center text-sm tracking-wider break-words uppercase"
+        class="text-main font-cyber w-full text-center text-sm tracking-wider break-words uppercase"
       >
         {media.title}
       </div>

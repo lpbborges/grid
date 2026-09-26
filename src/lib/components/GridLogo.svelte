@@ -1,7 +1,6 @@
 <script lang="ts">
   // Inline copy of static/logo.svg, so the hover animation can reach its parts.
-  // The animation is driven by the nearest `group` ancestor (the header link),
-  // so hovering the "Grid" label next to the mark animates it too.
+  // The animation is driven by the nearest `group` ancestor (the header link).
   let { class: className = '' }: { class?: string } = $props();
 
   const uid = $props.id();
