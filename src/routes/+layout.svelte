@@ -31,23 +31,53 @@
               type="text"
               placeholder="PROCURAR..."
               bind:value={searchQuery.value}
-              class="border-primary/50 text-main focus:border-green bg-surface/50 placeholder-muted font-cyber focus:bg-surface w-[300px] rounded border px-4 py-2 text-sm tracking-wider transition-all duration-300 outline-none focus:w-[450px] focus:shadow-[0_0_15px_rgba(54,211,83,0.3)]"
+              class="border-primary/50 text-main focus:border-green bg-surface/50 placeholder-muted font-cyber focus:bg-surface w-[300px] rounded border py-2 pr-10 pl-4 text-sm tracking-wider transition-all duration-300 outline-none focus:w-[450px] focus:shadow-[0_0_15px_rgba(54,211,83,0.3)]"
             />
-            <div class="text-primary/50 absolute top-1/2 right-3 -translate-y-1/2">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"
-                ></line></svg
+            {#if searchQuery.value}
+              <button
+                type="button"
+                class="text-primary/50 hover:text-green absolute top-1/2 right-3 -translate-y-1/2 cursor-pointer transition-colors"
+                onclick={() => (searchQuery.value = '')}
+                onmousedown={(e) => e.preventDefault()}
+                aria-label="Limpar pesquisa"
               >
-            </div>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  ><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"
+                  ></line></svg
+                >
+              </button>
+            {:else}
+              <div
+                class="text-primary/50 pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  ><circle cx="11" cy="11" r="8"></circle><line
+                    x1="21"
+                    y1="21"
+                    x2="16.65"
+                    y2="16.65"
+                  ></line></svg
+                >
+              </div>
+            {/if}
           </div>
         </div>
       </div>
