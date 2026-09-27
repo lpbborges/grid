@@ -66,7 +66,12 @@ export async function mockState(): Promise<{
   };
 }
 
+export async function waitForSplashToClear(): Promise<void> {
+  await $('[data-testid="splash-grid"]').waitForExist({ reverse: true, timeout: 30000 });
+}
+
 export async function acceptDisclaimer(): Promise<void> {
+  await waitForSplashToClear();
   const accept = await $('button=Entendi');
   if (!(await accept.isExisting())) return;
   await accept.click();
