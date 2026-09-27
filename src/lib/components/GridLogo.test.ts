@@ -48,7 +48,7 @@ describe('GridLogo component', () => {
 
     expect(getByTestId('logo-scanlines')).toHaveClass('motion-safe:group-hover:animate-logo-scan');
     const glitches = getAllByTestId('logo-glitch');
-    expect(glitches).toHaveLength(2);
+    expect(glitches.length).toBeGreaterThan(2);
     for (const slice of glitches) {
       // Hidden until the hover animation flashes it.
       expect(slice).toHaveClass('opacity-0', 'motion-safe:group-hover:animate-logo-glitch');

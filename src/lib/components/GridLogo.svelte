@@ -35,8 +35,11 @@
   const scanlines = Array.from({ length: 24 }, (_, i) => 62 + i * SCANLINE_PITCH);
   // Horizontal slices that flash out of place while hovered.
   const glitchBands = [
-    { y: 176, height: 26, shift: 20, delay: '0s' },
-    { y: 300, height: 20, shift: -16, delay: '0.55s' }
+    { y: 176, height: 26, shift: 20, delay: '0s', dur: '1.1s' },
+    { y: 300, height: 20, shift: -16, delay: '0.55s', dur: '1.3s' },
+    { y: 120, height: 14, shift: 35, delay: '0.2s', dur: '0.9s' },
+    { y: 240, height: 35, shift: -25, delay: '0.8s', dur: '1.7s' },
+    { y: 370, height: 18, shift: 15, delay: '0.4s', dur: '1.5s' }
   ];
 </script>
 
@@ -99,7 +102,12 @@
   {@render mark()}
 
   {#each glitchBands as band, i (band.y)}
-    <g data-testid="logo-glitch" class="{anim.glitch} opacity-0" style:animation-delay={band.delay}>
+    <g
+      data-testid="logo-glitch"
+      class="{anim.glitch} opacity-0"
+      style:animation-delay={band.delay}
+      style:animation-duration={band.dur}
+    >
       <rect class="fill-dark" x="60" y={band.y} width="392" height={band.height} />
       <g clip-path="url(#{ids.band(i)})">
         <g transform="translate({band.shift} 0)">{@render mark()}</g>
