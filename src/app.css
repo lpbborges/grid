@@ -68,33 +68,99 @@
   --animate-neon-on: neon-turn-on 2s ease-in forwards;
 
   @keyframes neon-turn-on {
-    0%   { color: var(--color-purple-950); filter: none; }
-    
-    10%  { color: var(--color-purple-950); filter: none; }
-    11%  { color: var(--color-primary); filter: drop-shadow(0 0 5px var(--color-primary)); }
-    12%  { color: var(--color-purple-950); filter: none; }
-    
-    25%  { color: var(--color-purple-950); filter: none; }
-    26%  { color: var(--color-primary); filter: drop-shadow(0 0 10px var(--color-primary)); }
-    28%  { color: var(--color-purple-950); filter: none; }
-    
-    45%  { color: var(--color-purple-950); filter: none; }
-    46%  { color: var(--color-primary); filter: drop-shadow(0 0 15px var(--color-primary)); }
-    47%  { color: var(--color-purple-950); filter: none; }
-    48%  { color: var(--color-primary); filter: drop-shadow(0 0 15px var(--color-primary)); }
-    49%  { color: var(--color-purple-950); filter: none; }
-    50%  { color: var(--color-primary); filter: drop-shadow(0 0 15px var(--color-primary)); }
-    52%  { color: var(--color-purple-950); filter: none; }
-    
-    70%  { color: var(--color-purple-950); filter: none; }
-    71%  { color: var(--color-primary); filter: drop-shadow(0 0 15px var(--color-primary)); }
-    74%  { color: var(--color-purple-500); filter: drop-shadow(0 0 5px var(--color-primary)); }
-    75%  { color: var(--color-purple-950); filter: none; }
-    77%  { color: var(--color-primary); filter: drop-shadow(0 0 15px var(--color-primary)); }
-    
-    85%  { color: var(--color-purple-950); filter: none; }
-    86%  { color: var(--color-primary); filter: drop-shadow(0 0 15px var(--color-primary)); }
-    100% { color: var(--color-primary); filter: drop-shadow(0 0 15px var(--color-primary)); }
+    0% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+
+    10% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+    11% {
+      color: var(--color-primary);
+      filter: drop-shadow(0 0 5px var(--color-primary));
+    }
+    12% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+
+    25% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+    26% {
+      color: var(--color-primary);
+      filter: drop-shadow(0 0 10px var(--color-primary));
+    }
+    28% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+
+    45% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+    46% {
+      color: var(--color-primary);
+      filter: drop-shadow(0 0 15px var(--color-primary));
+    }
+    47% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+    48% {
+      color: var(--color-primary);
+      filter: drop-shadow(0 0 15px var(--color-primary));
+    }
+    49% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+    50% {
+      color: var(--color-primary);
+      filter: drop-shadow(0 0 15px var(--color-primary));
+    }
+    52% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+
+    70% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+    71% {
+      color: var(--color-primary);
+      filter: drop-shadow(0 0 15px var(--color-primary));
+    }
+    74% {
+      color: var(--color-purple-500);
+      filter: drop-shadow(0 0 5px var(--color-primary));
+    }
+    75% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+    77% {
+      color: var(--color-primary);
+      filter: drop-shadow(0 0 15px var(--color-primary));
+    }
+
+    85% {
+      color: var(--color-purple-950);
+      filter: none;
+    }
+    86% {
+      color: var(--color-primary);
+      filter: drop-shadow(0 0 15px var(--color-primary));
+    }
+    100% {
+      color: var(--color-primary);
+      filter: drop-shadow(0 0 15px var(--color-primary));
+    }
   }
 
   /* 17px is GridLogo's SCANLINE_PITCH: one full line per loop */
