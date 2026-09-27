@@ -219,14 +219,12 @@
   {/if}
 
   <div class="relative z-10 flex flex-col gap-8 lg:flex-row">
-    <div class="w-full max-w-sm lg:w-1/4">
-      <div class="border-primary/30 bg-surface/40 rounded border p-2">
-        <img
-          src={series.large_cover_image}
-          alt={series.title}
-          class="h-auto w-full rounded object-cover shadow-lg"
-        />
-      </div>
+    <div class="w-full max-w-[240px] lg:w-1/4 xl:max-w-[280px] 2xl:max-w-sm">
+      <img
+        src={series.large_cover_image}
+        alt={series.title}
+        class="h-auto w-full rounded object-cover shadow-lg"
+      />
     </div>
 
     <div class="w-full lg:w-1/2">
