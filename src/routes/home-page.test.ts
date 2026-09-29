@@ -1,16 +1,33 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/svelte';
 import HomePage from './+page.svelte';
-import type { Movie } from '$lib/types';
+import type { MediaType, Movie, SearchResult } from '$lib/types';
 import { appReady, searchQuery } from '$lib/stores.svelte';
 
 const { searchCatalogMock } = vi.hoisted(() => ({
   searchCatalogMock: vi.fn()
 }));
 
-vi.mock('$lib/api/cinemeta', () => ({
+vi.mock('$lib/api/cinemeta', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/api/cinemeta')>()),
   searchCatalog: searchCatalogMock
 }));
+
+type SearchReport = (results: SearchResult[], done: boolean) => void;
+let searchReports: SearchReport[] = [];
+
+async function report(results: SearchResult[], done = true, search = searchReports.length - 1) {
+  await act(() => searchReports[search](results, done));
+}
+
+async function typeQuery(query: string) {
+  await act(() => {
+    searchQuery.value = query;
+  });
+  await act(async () => {
+    vi.advanceTimersByTime(300);
+  });
+}
 
 function makeMovie(id: string, title: string): Movie {
   return {
@@ -24,6 +41,10 @@ function makeMovie(id: string, title: string): Movie {
     description_full: 'Full description',
     torrents: []
   };
+}
+
+function makeResult(id: string, title: string, type: MediaType = 'movie') {
+  return { ...makeMovie(id, title), type };
 }
 
 function deferred<T>() {
@@ -49,7 +70,11 @@ describe('Home page search', () => {
     vi.useFakeTimers();
     searchQuery.value = '';
     appReady.value = false;
-    searchCatalogMock.mockResolvedValue({ movies: [], series: [] });
+    searchReports = [];
+    searchCatalogMock.mockImplementation((_query: string, onUpdate: SearchReport) => {
+      searchReports.push(onUpdate);
+      return new Promise(() => {});
+    });
   });
 
   afterEach(() => {
@@ -72,11 +97,6 @@ describe('Home page search', () => {
   });
 
   it('does not call the api immediately and only searches after the debounce', async () => {
-    searchCatalogMock.mockResolvedValue({
-      movies: [makeMovie('tt3', 'Searched Movie')],
-      series: []
-    });
-
     render(HomePage, { data: popularDataWith([], []) });
     await act(async () => {});
 
@@ -97,89 +117,89 @@ describe('Home page search', () => {
       vi.advanceTimersByTime(1);
     });
 
-    expect(searchCatalogMock).toHaveBeenCalledWith('inception');
+    expect(searchCatalogMock).toHaveBeenCalledWith('inception', expect.any(Function));
+    await report([makeResult('tt3', 'Searched Movie')]);
     expect(screen.getAllByText('Searched Movie')[0]).toBeTruthy();
   });
 
-  it('searches both movies and series through the catalog', async () => {
-    searchCatalogMock.mockResolvedValue({
-      movies: [makeMovie('tt3', 'Searched Movie')],
-      series: [makeMovie('tt4', 'Searched Series')]
-    });
-
+  it('shows movies and series together, each linking to its own page', async () => {
     render(HomePage, { data: popularDataWith([], []) });
     await act(async () => {});
 
-    await act(() => {
-      searchQuery.value = 'searched';
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(300);
-    });
+    await typeQuery('searched');
+    await report([
+      makeResult('tt3', 'Searched Movie'),
+      makeResult('tt4', 'Searched Series', 'series')
+    ]);
 
-    expect(searchCatalogMock).toHaveBeenCalledWith('searched');
-    expect(screen.getAllByText('Searched Movie')[0]).toBeTruthy();
-    expect(screen.getAllByText('Searched Series')[0]).toBeTruthy();
+    expect(screen.getByText('Resultados')).toBeTruthy();
+    expect(screen.queryByText('Filmes')).toBeNull();
+    expect(screen.queryByText('Séries')).toBeNull();
+    expect(screen.getAllByTestId('media-card').map((card) => card.getAttribute('href'))).toEqual([
+      '/movie/tt3',
+      '/series/tt4'
+    ]);
   });
 
-  it('shows a no-results message when nothing matches', async () => {
+  it('shows the first results while the rest of the search is still running', async () => {
     render(HomePage, { data: popularDataWith([], []) });
     await act(async () => {});
 
-    await act(() => {
-      searchQuery.value = 'zzzz';
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(300);
-    });
+    await typeQuery('insacia');
+    await report([makeResult('tt1', 'First Found')], false);
+
+    expect(screen.queryByText('Pesquisando...')).toBeNull();
+    expect(screen.getAllByText('First Found')[0]).toBeTruthy();
+
+    await report([makeResult('tt2', 'Found Later'), makeResult('tt1', 'First Found')]);
+
+    expect(screen.getAllByRole('img').map((img) => img.getAttribute('alt'))).toEqual([
+      'Found Later',
+      'First Found'
+    ]);
+  });
+
+  it('keeps searching while nothing is found yet but the search is still running', async () => {
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    await typeQuery('O Poderoso Chefão');
+    await report([], false);
+
+    expect(screen.getByText('Pesquisando...')).toBeTruthy();
+    expect(screen.queryByText(/Nenhum resultado/)).toBeNull();
+
+    await report([makeResult('tt0068646', 'The Godfather')]);
+
+    expect(screen.queryByText('Pesquisando...')).toBeNull();
+    expect(screen.getAllByText('The Godfather')[0]).toBeTruthy();
+  });
+
+  it('shows a no-results message when the finished search found nothing', async () => {
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    await typeQuery('zzzz');
+    await report([], false);
+    await report([]);
 
     expect(screen.getByText(/Nenhum resultado para "zzzz"/)).toBeTruthy();
   });
 
-  it('ignores stale responses from an outdated query', async () => {
-    let resolveFirst!: (value: { movies: Movie[]; series: Movie[] }) => void;
-    searchCatalogMock
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveFirst = resolve;
-          })
-      )
-      .mockResolvedValue({ movies: [makeMovie('tt5', 'Newer Result')], series: [] });
-
+  it('ignores results from an outdated query', async () => {
     render(HomePage, { data: popularDataWith([], []) });
     await act(async () => {});
 
-    await act(() => {
-      searchQuery.value = 'old';
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(300);
-    });
-
-    await act(() => {
-      searchQuery.value = 'new';
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(300);
-    });
-
-    expect(screen.getAllByText('Newer Result')[0]).toBeTruthy();
-
-    await act(async () => {
-      resolveFirst({ movies: [makeMovie('tt6', 'Stale Result')], series: [] });
-    });
+    await typeQuery('old');
+    await typeQuery('new');
+    await report([makeResult('tt5', 'Newer Result')]);
+    await report([makeResult('tt6', 'Stale Result')], true, 0);
 
     expect(screen.queryByText('Stale Result')).toBeNull();
     expect(screen.getAllByText('Newer Result')[0]).toBeTruthy();
   });
 
   it('returns to popular lists when the query is cleared', async () => {
-    searchCatalogMock.mockResolvedValue({
-      movies: [makeMovie('tt3', 'Searched Movie')],
-      series: []
-    });
-
     render(HomePage, {
       data: popularDataWith(
         [makeMovie('tt1', 'Popular Movie')],
@@ -188,12 +208,8 @@ describe('Home page search', () => {
     });
     await act(async () => {});
 
-    await act(() => {
-      searchQuery.value = 'inception';
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(300);
-    });
+    await typeQuery('inception');
+    await report([makeResult('tt3', 'Searched Movie')]);
     expect(screen.getAllByText('Searched Movie')[0]).toBeTruthy();
 
     await act(() => {

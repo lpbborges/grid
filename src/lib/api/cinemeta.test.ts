@@ -6,7 +6,8 @@ import {
   getSeriesDetails,
   searchMovies,
   searchSeries,
-  searchCatalog
+  searchCatalog,
+  searchLocalizedCatalog
 } from './cinemeta';
 
 const mockMovie = {
@@ -20,6 +21,23 @@ const mockMovie = {
   description_full: 'Full',
   torrents: []
 };
+
+function routeFetch(routes: Record<string, unknown>) {
+  (globalThis.fetch as any).mockImplementation(async (url: string) => {
+    const match = Object.keys(routes).find((fragment) => url.includes(fragment));
+    if (match === undefined) return { ok: false, statusText: 'Not Found' };
+    return { ok: true, json: async () => routes[match] };
+  });
+}
+
+function claims(values: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(values).map(([property, value]) => [
+      property,
+      [{ mainsnak: { datavalue: { value } } }]
+    ])
+  );
+}
 
 describe('yts api', () => {
   beforeEach(() => {
@@ -276,23 +294,119 @@ describe('yts api', () => {
     console.error = originalConsoleError;
   });
 
-  it('searchCatalog queries movies and series in parallel', async () => {
-    (globalThis.fetch as any)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ metas: [{ id: 'tt1', name: 'Movie Result', poster: 'a.jpg' }] })
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ metas: [{ id: 'tt2', name: 'Series Result', poster: 'b.jpg' }] })
-      });
+  it('searchCatalog lists movies and series together, alternating, with their type', async () => {
+    routeFetch({
+      'catalog/movie/top/search=result.json': {
+        metas: [
+          { id: 'tt1', name: 'Movie One' },
+          { id: 'tt2', name: 'Movie Two' },
+          { id: 'tt3', name: 'Movie Three' }
+        ]
+      },
+      'catalog/series/top/search=result.json': { metas: [{ id: 'tt4', name: 'Series One' }] },
+      wbsearchentities: { search: [] }
+    });
 
-    const { movies, series } = await searchCatalog('result');
-    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
-    expect(movies.length).toBe(1);
-    expect(movies[0].title).toBe('Movie Result');
-    expect(series.length).toBe(1);
-    expect(series[0].title).toBe('Series Result');
+    const results = await searchCatalog('result', () => {});
+    expect(results.map((r) => [r.title, r.type])).toEqual([
+      ['Movie One', 'movie'],
+      ['Series One', 'series'],
+      ['Movie Two', 'movie'],
+      ['Movie Three', 'movie']
+    ]);
+  });
+
+  it('searchCatalog reports what it found so far without waiting for a slow source', async () => {
+    let answerMovies!: () => void;
+    const moviesAnswered = new Promise<void>((resolve) => (answerMovies = resolve));
+    (globalThis.fetch as any).mockImplementation(async (url: string) => {
+      const json = (body: unknown) => ({ ok: true, json: async () => body });
+      if (url.includes('catalog/movie/top/search=')) {
+        await moviesAnswered;
+        return json({ metas: [{ id: 'tt1', name: 'Slow Movie' }] });
+      }
+      if (url.includes('catalog/series/top/search=')) {
+        return json({ metas: [{ id: 'tt2', name: 'Series' }] });
+      }
+      if (url.includes('wbsearchentities')) return json({ search: [{ id: 'Q1' }] });
+      if (url.includes('wbgetentities')) {
+        return json({ entities: { Q1: { claims: claims({ P345: 'tt3' }) } } });
+      }
+      if (url.includes('meta/movie/tt3.json')) return json({ meta: { id: 'tt3', name: 'Local' } });
+      return json({});
+    });
+
+    const reports: [string[], boolean][] = [];
+    const search = searchCatalog('x', (results, done) =>
+      reports.push([results.map((r) => r.title), done])
+    );
+    await vi.waitFor(() => expect(reports).toHaveLength(2));
+
+    expect(reports[reports.length - 1]).toEqual([['Local', 'Series'], false]);
+
+    answerMovies();
+    await search;
+
+    expect(reports[reports.length - 1]).toEqual([['Local', 'Slow Movie', 'Series'], true]);
+    expect(reports.filter(([, done]) => done)).toHaveLength(1);
+  });
+
+  it('searchLocalizedCatalog finds titles by their Brazilian or original name through Wikidata', async () => {
+    routeFetch({
+      wbsearchentities: { search: [{ id: 'Q25188' }, { id: 'Q886' }] },
+      wbgetentities: {
+        entities: {
+          Q25188: { claims: claims({ P345: 'tt1375666' }) },
+          Q886: { claims: claims({ P345: 'tt0096697' }) }
+        }
+      },
+      'meta/series/tt1375666.json': {},
+      'meta/movie/tt1375666.json': { meta: { id: 'tt1375666', name: 'Inception' } },
+      'meta/series/tt0096697.json': { meta: { id: 'tt0096697', name: 'The Simpsons' } },
+      'meta/movie/tt0096697.json': { meta: { id: 'tt0096697', name: 'The Simpsons' } }
+    });
+
+    const results = await searchLocalizedCatalog('A Origem');
+    expect(results.map((r) => [r.title, r.type])).toEqual([
+      ['Inception', 'movie'],
+      ['The Simpsons', 'series']
+    ]);
+  });
+
+  it('searchLocalizedCatalog skips Wikidata matches that Cinemeta does not know', async () => {
+    routeFetch({
+      wbsearchentities: { search: [{ id: 'Q1' }] },
+      wbgetentities: { entities: { Q1: { claims: claims({ P345: 'tt0000001' }) } } },
+      'meta/series/tt0000001.json': {},
+      'meta/movie/tt0000001.json': {}
+    });
+
+    expect(await searchLocalizedCatalog('desconhecido')).toEqual([]);
+  });
+
+  it('searchLocalizedCatalog finds nothing when Wikidata is unavailable', async () => {
+    routeFetch({});
+
+    expect(await searchLocalizedCatalog('A Origem')).toEqual([]);
+  });
+
+  it('searchCatalog lists a title found by both searches once, where Wikidata ranked it', async () => {
+    routeFetch({
+      'catalog/movie/top/search=': {
+        metas: [
+          { id: 'tt1', name: 'Catalog Movie' },
+          { id: 'tt1375666', name: 'Inception' }
+        ]
+      },
+      'catalog/series/top/search=': { metas: [] },
+      wbsearchentities: { search: [{ id: 'Q25188' }] },
+      wbgetentities: { entities: { Q25188: { claims: claims({ P345: 'tt1375666' }) } } },
+      'meta/series/tt1375666.json': {},
+      'meta/movie/tt1375666.json': { meta: { id: 'tt1375666', name: 'Inception' } }
+    });
+
+    const results = await searchCatalog('A Origem', () => {});
+    expect(results.map((r) => r.id)).toEqual(['tt1375666', 'tt1']);
   });
 
   it('loads details from Cinemeta alone, even with a TMDB key configured', async () => {

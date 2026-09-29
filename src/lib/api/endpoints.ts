@@ -4,7 +4,8 @@ const REAL_ENDPOINTS = {
   torrentio: 'https://torrentio.strem.fun',
   openSubtitles: 'https://opensubtitles-v3.strem.io',
   googleTranslate: 'https://translate.googleapis.com',
-  myMemory: 'https://api.mymemory.translated.net'
+  myMemory: 'https://api.mymemory.translated.net',
+  wikidata: 'https://www.wikidata.org'
 } as const;
 
 export type EndpointName = keyof typeof REAL_ENDPOINTS;

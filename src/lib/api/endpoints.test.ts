@@ -7,7 +7,8 @@ const REAL = {
   torrentio: 'https://torrentio.strem.fun',
   openSubtitles: 'https://opensubtitles-v3.strem.io',
   googleTranslate: 'https://translate.googleapis.com',
-  myMemory: 'https://api.mymemory.translated.net'
+  myMemory: 'https://api.mymemory.translated.net',
+  wikidata: 'https://www.wikidata.org'
 };
 
 describe('endpoints', () => {
@@ -27,7 +28,8 @@ describe('endpoints', () => {
       torrentio: 'http://127.0.0.1:47100/torrentio',
       openSubtitles: 'http://127.0.0.1:47100/openSubtitles',
       googleTranslate: 'http://127.0.0.1:47100/googleTranslate',
-      myMemory: 'http://127.0.0.1:47100/myMemory'
+      myMemory: 'http://127.0.0.1:47100/myMemory',
+      wikidata: 'http://127.0.0.1:47100/wikidata'
     });
   });
 

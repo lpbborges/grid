@@ -32,6 +32,13 @@ export interface Movie {
   language?: string;
 }
 
+export type MediaType = 'movie' | 'series';
+
+/** A search hit, which may be a movie or a series. */
+export interface SearchResult extends Movie {
+  type: MediaType;
+}
+
 export interface Episode {
   id: string;
   season: number;

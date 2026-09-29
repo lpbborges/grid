@@ -1,10 +1,10 @@
 <script lang="ts">
-  import type { Movie } from '../types';
+  import type { MediaType, Movie } from '../types';
   import { favoritesStore } from '$lib/stores/favorites.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
 
-  let { media, type = 'movie' } = $props<{ media: Movie; type?: 'movie' | 'series' }>();
+  let { media, type = 'movie' } = $props<{ media: Movie; type?: MediaType }>();
   let latestProgress = $derived(progressStore.latestFor(media.id));
 </script>
 

@@ -4,7 +4,7 @@ Grid is a native desktop application built with Tauri, SvelteKit, TypeScript, an
 
 ## Features
 
-Grid integrates with Cinemeta and YTS for catalog browsing and live search. It translates titles and synopses into the system language. Streaming runs through an `rqbit` sidecar via Torrentio, with downloaded videos kept in a 3 GB local cache. The app tracks watch progress and applies global preferences for audio, subtitles, and quality to pick the best source automatically. The player uses a `<video>` element on macOS and an in-process libmpv instance on Linux and Windows, supporting multi-track audio and on-the-fly subtitle conversion.
+Grid integrates with Cinemeta and YTS for catalog browsing and live search, which also finds titles by their Brazilian or original name through Wikidata. It translates titles and synopses into the system language. Streaming runs through an `rqbit` sidecar via Torrentio, with downloaded videos kept in a 3 GB local cache. The app tracks watch progress and applies global preferences for audio, subtitles, and quality to pick the best source automatically. The player uses a `<video>` element on macOS and an in-process libmpv instance on Linux and Windows, supporting multi-track audio and on-the-fly subtitle conversion.
 
 ## Prerequisites
 
@@ -52,7 +52,7 @@ Grid uses `rqbit` as a streaming engine sidecar. For native playback on Linux an
 
 ## Data sources and privacy
 
-Grid talks directly to Cinemeta and a YTS mirror for metadata, Torrentio for stream sources, and OpenSubtitles for external subtitles (sending the video file name and size). Metadata is sent to Google Translate or MyMemory if the system language is not English. The streaming engine announces streams to trackers and the DHT.
+Grid talks directly to Cinemeta and a YTS mirror for metadata, Wikidata to search by Brazilian or original titles (sending the search text), Torrentio for stream sources, and OpenSubtitles for external subtitles (sending the video file name and size). Metadata is sent to Google Translate or MyMemory if the system language is not English. The streaming engine announces streams to trackers and the DHT.
 
 ## Troubleshooting
 
