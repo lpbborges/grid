@@ -1341,6 +1341,13 @@ mod tests {
         assert!(csp_directive_sources("media-src").contains(&"http://127.0.0.1:*".to_string()));
     }
 
+    #[test]
+    fn csp_allows_wikidata_for_localized_title_search() {
+        assert!(
+            csp_directive_sources("connect-src").contains(&"https://www.wikidata.org".to_string())
+        );
+    }
+
     // --- fetch_torrent_subtitle file-idx validation (P0-1) ---
 
     /// A minimal mock of the rqbit engine HTTP API: serves a fixed JSON

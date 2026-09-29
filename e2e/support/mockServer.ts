@@ -158,6 +158,13 @@ export function startMockServer(catalog: Catalog, options: MockServerOptions): P
       }
     }
 
+    if (service === 'wikidata' && route === 'w/api.php') {
+      return send(
+        200,
+        url.searchParams.get('action') === 'wbgetentities' ? { entities: {} } : { search: [] }
+      );
+    }
+
     if (service === 'openSubtitles') return send(200, { subtitles: [] });
     if (service === 'googleTranslate' || service === 'myMemory') return send(503, {});
 

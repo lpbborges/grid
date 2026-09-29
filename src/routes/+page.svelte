@@ -1,14 +1,14 @@
 <script lang="ts">
+  import MediaGrid from '$lib/components/MediaGrid.svelte';
   import MediaRow from '$lib/components/MediaRow.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
-  import type { Movie } from '$lib/types';
+  import type { Movie, SearchResult } from '$lib/types';
   import { appReady, searchQuery } from '$lib/stores.svelte';
   import { searchCatalog } from '$lib/api/cinemeta';
 
   let { data } = $props();
 
-  let searchMovieResults = $state<Movie[]>([]);
-  let searchSeriesResults = $state<Movie[]>([]);
+  let searchResults = $state<SearchResult[]>([]);
   let searchLoading = $state(false);
 
   let popularMovies = $state<Movie[]>([]);
@@ -45,8 +45,7 @@
   $effect(() => {
     const query = searchQuery.value.trim();
     if (!query) {
-      searchMovieResults = [];
-      searchSeriesResults = [];
+      searchResults = [];
       searchLoading = false;
       return;
     }
@@ -54,13 +53,13 @@
     const version = ++searchVersion;
     searchLoading = true;
 
-    setTimeout(async () => {
+    setTimeout(() => {
       if (version !== searchVersion) return;
-      const { movies, series } = await searchCatalog(query);
-      if (version !== searchVersion) return;
-      searchMovieResults = movies;
-      searchSeriesResults = series;
-      searchLoading = false;
+      searchCatalog(query, (results, done) => {
+        if (version !== searchVersion) return;
+        searchResults = results;
+        searchLoading = results.length === 0 && !done;
+      });
     }, 300);
   });
 </script>
@@ -88,15 +87,12 @@
 {#if hasSearchQuery}
   {#if searchLoading}
     {@render loadingIndicator('Pesquisando...')}
-  {:else if searchMovieResults.length === 0 && searchSeriesResults.length === 0}
+  {:else if searchResults.length === 0}
     <div class="flex h-full min-h-[400px] items-center justify-center">
       <EmptyState message={`Nenhum resultado para "${searchQuery.value}"`} />
     </div>
   {:else}
-    <div>
-      <MediaRow heading="Filmes" items={searchMovieResults} type="movie" />
-      <MediaRow heading="Séries" items={searchSeriesResults} type="series" containerClass="" />
-    </div>
+    <MediaGrid heading="Resultados" items={searchResults} />
   {/if}
 {:else if popularLoading}
   {@render loadingIndicator('Carregando...')}
