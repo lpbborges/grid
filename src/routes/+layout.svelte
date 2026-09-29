@@ -18,7 +18,12 @@
     <header class="bg-dark/80 flex items-center justify-between p-4 backdrop-blur">
       <!-- Left: Logo -->
       <div class="flex w-1/4 items-center">
-        <a href="/" class="group flex items-center">
+        <a
+          href="/"
+          class="group flex items-center"
+          aria-label="Início"
+          onclick={() => (searchQuery.value = '')}
+        >
           <GridLogo
             class="h-12 w-12 transition-transform duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]"
           />
