@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import SeriesPage from './+page.svelte';
 import { EngineStartError } from '$lib/engine/torrent';
+import { progressStore } from '$lib/stores/progress.svelte';
 
 const {
   prepareStreamMock,
@@ -206,7 +207,8 @@ describe('Series page integration flow', () => {
     expect(await screen.findByText(/feche e abra o aplicativo novamente/i)).toBeInTheDocument();
   });
 
-  it('highlights the last played episode after the player closes', async () => {
+  async function renderTwoEpisodes() {
+    progressStore.remove('tt1');
     HTMLElement.prototype.scrollTo = vi.fn();
     getSeriesStreamsMock.mockResolvedValue([{ title: '1080p', infoHash: 'def', fileIdx: 0 }]);
     prepareStreamMock.mockResolvedValue({
@@ -214,32 +216,45 @@ describe('Series page integration flow', () => {
       subtitles: [],
       engineStatus: { status: 'downloading', progress: 0, downloadSpeed: 0, seeds: 1, peers: 1 }
     });
-    const twoEpisodes = {
-      ...series,
-      videos: [
-        { id: 'e1', season: 1, episode: 1, name: 'Pilot' },
-        { id: 'e2', season: 1, episode: 2, name: 'Second' }
-      ]
-    };
     render(SeriesPage, {
       props: {
         data: {
           seriesId: 'tt1',
-          series: twoEpisodes,
+          series: {
+            ...series,
+            videos: [
+              { id: 'e1', season: 1, episode: 1, name: 'Pilot' },
+              { id: 'e2', season: 1, episode: 2, name: 'Second' }
+            ]
+          },
           initialEpisode: { season: 1, episode: 1 },
           error: null
         }
       }
     });
+  }
+
+  function currentEpisode() {
+    return document.querySelector('[aria-current="true"]')?.getAttribute('data-episode');
+  }
+
+  it('highlights the last played episode after the player closes', async () => {
+    await renderTwoEpisodes();
+
+    await fireEvent.click(await screen.findByText(/Second/));
+    progressStore.update('tt1', 1, 2, 30, 100);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Fechar' }));
+
+    await waitFor(() => expect(currentEpisode()).toBe('2'));
+  });
+
+  it('keeps the highlight off an episode that has no progress yet', async () => {
+    await renderTwoEpisodes();
 
     await fireEvent.click(await screen.findByText(/Second/));
     await fireEvent.click(await screen.findByRole('button', { name: 'Fechar' }));
 
-    await waitFor(() =>
-      expect(document.querySelector('[data-episode="2"]')?.getAttribute('aria-current')).toBe(
-        'true'
-      )
-    );
-    expect(document.querySelector('[data-episode="1"]')?.hasAttribute('aria-current')).toBe(false);
+    await waitFor(() => expect(screen.getByText(/Second/)).toBeInTheDocument());
+    expect(currentEpisode()).toBe('1');
   });
 });

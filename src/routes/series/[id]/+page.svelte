@@ -10,6 +10,7 @@
 
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
+  import { progressStore } from '$lib/stores/progress.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
   import type { Episode, EpisodeRef } from '$lib/types';
   import { nextEpisode } from '$lib/utils/episodes';
@@ -20,7 +21,16 @@
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
-  let focusEpisode = $derived<EpisodeRef | null>(data.initialEpisode ?? null);
+  let playedEpisode = $state<(EpisodeRef & { seriesId: string }) | null>(null);
+  let focusEpisode = $derived.by<EpisodeRef | null>(() => {
+    if (
+      playedEpisode?.seriesId === seriesId &&
+      progressStore.get(seriesId, playedEpisode.season, playedEpisode.episode)
+    ) {
+      return { season: playedEpisode.season, episode: playedEpisode.episode };
+    }
+    return data.initialEpisode ?? null;
+  });
 
   const player = usePlayer(() => videoElement, {
     onwatched: () => {
@@ -98,7 +108,7 @@
     if (typeof window === 'undefined' || !series) return;
 
     lastAttemptedEpisode = episode;
-    focusEpisode = { season: episode.season, episode: episode.episode };
+    playedEpisode = { seriesId, season: episode.season, episode: episode.episode };
     const requestedId = seriesId;
 
     error = '';
