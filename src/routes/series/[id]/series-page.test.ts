@@ -248,6 +248,20 @@ describe('Series page integration flow', () => {
     await waitFor(() => expect(currentEpisode()).toBe('2'));
   });
 
+  it('moves the highlight to the next episode when the played one is finished', async () => {
+    await renderTwoEpisodes();
+
+    await fireEvent.click(await screen.findByText(/Pilot/));
+    progressStore.update('tt1', 1, 1, 50, 100);
+    progressStore.update('tt1', 1, 1, 99, 100, {
+      meta: { type: 'series', title: 'Test', poster: 'p.jpg' },
+      next: { season: 1, episode: 2 }
+    });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Fechar' }));
+
+    await waitFor(() => expect(currentEpisode()).toBe('2'));
+  });
+
   it('keeps the highlight off an episode that has no progress yet', async () => {
     await renderTwoEpisodes();
 

@@ -21,16 +21,11 @@
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
-  let playedEpisode = $state<(EpisodeRef & { seriesId: string }) | null>(null);
-  let focusEpisode = $derived.by<EpisodeRef | null>(() => {
-    if (
-      playedEpisode?.seriesId === seriesId &&
-      progressStore.get(seriesId, playedEpisode.season, playedEpisode.episode)
-    ) {
-      return { season: playedEpisode.season, episode: playedEpisode.episode };
-    }
-    return data.initialEpisode ?? null;
-  });
+  let playedSeriesId = $state<string | null>(null);
+  let focusEpisode = $derived<EpisodeRef | null>(
+    (playedSeriesId === seriesId && progressStore.latestEpisodeFor(seriesId)) ||
+      (data.initialEpisode ?? null)
+  );
 
   const player = usePlayer(() => videoElement, {
     onwatched: () => {
@@ -108,7 +103,7 @@
     if (typeof window === 'undefined' || !series) return;
 
     lastAttemptedEpisode = episode;
-    playedEpisode = { seriesId, season: episode.season, episode: episode.episode };
+    playedSeriesId = seriesId;
     const requestedId = seriesId;
 
     error = '';
