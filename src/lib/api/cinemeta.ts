@@ -387,7 +387,7 @@ export async function getSeriesDetails(
     })),
     director: meta.director || [],
     language: mapCountryToLanguage(meta.country),
-    videos: meta.videos || [],
+    videos: (meta.videos || []).filter((video) => video.season > 0),
     torrents: []
   };
 

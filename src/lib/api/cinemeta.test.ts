@@ -213,6 +213,25 @@ describe('yts api', () => {
     expect(details.id).toBe('tt987');
   });
 
+  it('leaves out the specials season', async () => {
+    routeFetch({
+      'meta/series/tt987.json': {
+        meta: {
+          name: 'Series',
+          poster: 'p.jpg',
+          videos: [
+            { id: 'tt987:0:1', season: 0, episode: 1, name: 'Special' },
+            { id: 'tt987:1:1', season: 1, episode: 1, name: 'Pilot' }
+          ]
+        }
+      }
+    });
+
+    const details = await getSeriesDetails('tt987');
+
+    expect(details.videos.map((v) => v.name)).toEqual(['Pilot']);
+  });
+
   it('throws an error when fetch fails in series details', async () => {
     (globalThis.fetch as any).mockResolvedValueOnce({
       ok: false,
