@@ -333,10 +333,41 @@ describe('progressStore finished episodes', () => {
         time: 0,
         duration: 100,
         updatedAt: 2000,
-        meta: seriesMeta
+        meta: seriesMeta,
+        upNext: true
       }
     ]);
-    expect(storedProgress()['tt1-S1E3'].time).toBe(0);
+    expect(storedProgress()['tt1-S1E3']).toMatchObject({ time: 0, upNext: true });
+  });
+
+  it('stops marking the next episode as up next once it is played', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.update('tt1', 1, 2, 10, 100, {
+      meta: seriesMeta,
+      next: { season: 1, episode: 3 }
+    });
+    progressStore.update('tt1', 1, 2, 96, 100, {
+      meta: seriesMeta,
+      next: { season: 1, episode: 3 }
+    });
+
+    progressStore.update('tt1', 1, 3, 5, 100, { meta: seriesMeta });
+
+    expect(progressStore.entries[0].upNext).toBeUndefined();
+  });
+
+  it('keeps the up-next mark across reloads and drops an invalid one', async () => {
+    localStorage.setItem(
+      'grid-progress',
+      JSON.stringify({
+        'tt1-S1E3': { time: 0, duration: 100, updatedAt: 2, upNext: true },
+        'tt2-S1E1': { time: 0, duration: 100, updatedAt: 1, upNext: 'yes' }
+      })
+    );
+    const { progressStore } = await loadStore();
+
+    expect(progressStore.get('tt1', 1, 3)?.upNext).toBe(true);
+    expect(progressStore.get('tt2', 1, 1)).toEqual({ time: 0, duration: 100, updatedAt: 1 });
   });
 
   it('drops the title when the last episode finishes', async () => {

@@ -74,6 +74,8 @@ export interface ProgressData {
   duration: number;
   updatedAt: number;
   meta?: ProgressMeta;
+  /** Set on the next episode when the previous one finishes, until it is played. */
+  upNext?: true;
 }
 
 /** One title's most recent progress, as listed in Continuar assistindo. */

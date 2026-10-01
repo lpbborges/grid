@@ -60,7 +60,7 @@
           media={item}
           href={item.href}
           episodeLabel={item.episodeLabel}
-          upNext={item.time === 0}
+          upNext={item.upNext}
           progress={item}
         />
         <button

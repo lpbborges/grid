@@ -30,7 +30,7 @@ function copyMeta(meta: ProgressMeta): ProgressMeta {
 
 function toProgressData(value: unknown): ProgressData | null {
   if (!isRecord(value)) return null;
-  const { time, duration, updatedAt, meta } = value;
+  const { time, duration, updatedAt, meta, upNext } = value;
   if (
     typeof time !== 'number' ||
     !Number.isFinite(time) ||
@@ -43,7 +43,13 @@ function toProgressData(value: unknown): ProgressData | null {
   ) {
     return null;
   }
-  return { time, duration, updatedAt, ...(isProgressMeta(meta) && { meta: copyMeta(meta) }) };
+  return {
+    time,
+    duration,
+    updatedAt,
+    ...(isProgressMeta(meta) && { meta: copyMeta(meta) }),
+    ...(upNext === true && { upNext })
+  };
 }
 
 function readStoredProgress(): Record<string, ProgressData> {
@@ -191,7 +197,7 @@ class ProgressStore {
     const existing = this.progress[nextKey];
     this.progress[nextKey] = existing
       ? { ...existing, updatedAt: Date.now() }
-      : { time: 0, duration, updatedAt: Date.now(), meta: context.meta };
+      : { time: 0, duration, updatedAt: Date.now(), meta: context.meta, upNext: true };
   }
 }
 
