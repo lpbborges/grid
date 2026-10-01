@@ -83,6 +83,13 @@ describe('Player', () => {
     expect(document.body.classList.contains('native-player-active')).toBe(false);
   });
 
+  it('lets the player hide the pointer over the video with the controls', () => {
+    vi.mocked(playbackMode).mockReturnValue('embedded');
+    render(Player, { props: { backend: domBackendWith({}) } });
+
+    expect(screen.getByTestId('video-element').className).not.toMatch(/\bcursor-/);
+  });
+
   it('tells the DOM backend when the video ends', async () => {
     vi.mocked(playbackMode).mockReturnValue('embedded');
     const handleEnded = vi.fn();

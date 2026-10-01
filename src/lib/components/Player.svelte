@@ -42,9 +42,7 @@
         bind:this={videoElement}
         src={dom.src}
         autoplay
-        class="h-full w-full cursor-pointer object-contain {dom.hasStarted
-          ? 'opacity-100'
-          : 'opacity-0'}"
+        class="h-full w-full object-contain {dom.hasStarted ? 'opacity-100' : 'opacity-0'}"
         data-testid="video-element"
         onclick={dom.togglePlay}
         onloadedmetadata={dom.handleLoadedMetadata}
