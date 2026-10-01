@@ -102,6 +102,7 @@
     {/if}
     {#if episodeLabel}
       <span
+        aria-hidden="true"
         data-testid="media-card-episode"
         class="{upNext
           ? 'border-green bg-green text-dark'
@@ -120,7 +121,6 @@
           data-testid="media-card-progress-track"
           class="bg-main/20 pointer-events-none absolute bottom-0 left-0 z-20 h-1 w-full"
         ></div>
-        <span class="sr-only">{Math.round(progressPercent)}% assistido</span>
       {/if}
       <div
         class="bg-green absolute bottom-0 left-0 z-20 h-1 shadow-[0_0_8px_rgba(54,211,83,0.8)] will-change-transform"
@@ -136,6 +136,11 @@
     <div class="text-main font-cyber w-full truncate text-center text-sm tracking-wider uppercase">
       {media.title}
     </div>
+    {#if progress}
+      <span class="sr-only">
+        {episodeLabel ? `${episodeLabel} ` : ''}{Math.round(progressPercent)}% assistido
+      </span>
+    {/if}
 
     <div
       aria-hidden="true"

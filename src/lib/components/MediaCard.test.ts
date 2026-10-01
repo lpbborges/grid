@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/svelte';
 import MediaCard from './MediaCard.svelte';
 import type { Movie } from '../types';
 import { progressStore } from '$lib/stores/progress.svelte';
@@ -127,6 +127,24 @@ describe('MediaCard component', () => {
 
     expect(getByTestId('media-card-progress-track')).toBeTruthy();
     expect(getByTestId('media-card').textContent).toContain('42% assistido');
+  });
+
+  it('names the link by title first, then episode and progress', () => {
+    render(MediaCard, {
+      media: mockMovie,
+      type: 'series',
+      episodeLabel: 'T2:E5',
+      progress: { time: 42.4, duration: 100 }
+    });
+
+    expect(screen.getByRole('link').getAttribute('aria-label')).toBeNull();
+    expect(screen.getByRole('link', { name: /^Test Movie.* T2:E5 42% assistido$/ })).toBeTruthy();
+  });
+
+  it('names a movie link by title, then progress', () => {
+    render(MediaCard, { media: mockMovie, progress: { time: 42.4, duration: 100 } });
+
+    expect(screen.getByRole('link', { name: /^Test Movie.* 42% assistido$/ })).toBeTruthy();
   });
 
   it('keeps the popular cards without a track or spoken percentage', () => {
