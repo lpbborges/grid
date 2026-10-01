@@ -1,6 +1,14 @@
 import { $, expect } from '@wdio/globals';
 import { FIXTURE_SERIES } from '../support/catalog.ts';
-import { backToCatalog, closePlayer, openTitle, waitForPlaybackPast } from './helpers.ts';
+import {
+  backToCatalog,
+  closePlayer,
+  openTitle,
+  seekTo,
+  storedJson,
+  videoState,
+  waitForPlaybackPast
+} from './helpers.ts';
 
 async function playEpisode(name: string): Promise<void> {
   const episode = await $(`button*=${name}`);
@@ -24,6 +32,30 @@ describe(`Playing ${FIXTURE_SERIES.title}`, () => {
 
     const state = await waitForPlaybackPast(2);
     expect(state.duration).toBeGreaterThan(13);
+
+    await closePlayer();
+    await backToCatalog();
+  });
+
+  it('starts the next episode when one finishes', async () => {
+    await openTitle('series', FIXTURE_SERIES.id);
+    await playEpisode('Fixture Pilot');
+    const pilot = await waitForPlaybackPast(1);
+    expect(pilot.duration).toBeLessThan(12);
+
+    await seekTo(pilot.duration - 1.5);
+    await $('[data-testid="up-next-card"]').waitForDisplayed({ timeout: 15000 });
+
+    await browser.waitUntil(
+      async () => {
+        const state = await videoState();
+        return !!state && state.duration > 13 && state.currentTime > 1;
+      },
+      { timeout: 90000, interval: 250, timeoutMsg: 'the next episode never started playing' }
+    );
+
+    const watched = await storedJson<string[]>('grid-watched');
+    expect(watched).toContain(`${FIXTURE_SERIES.id}-S1E1`);
 
     await closePlayer();
     await backToCatalog();

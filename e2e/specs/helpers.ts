@@ -108,3 +108,13 @@ export async function backToCatalog(): Promise<void> {
   await back.waitForClickable();
   await back.click();
 }
+
+export function storedJson<T>(key: string): Promise<T | null> {
+  return browser.execute((storageKey) => {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey) ?? 'null');
+    } catch {
+      return null;
+    }
+  }, key) as Promise<T | null>;
+}
