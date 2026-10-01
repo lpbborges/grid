@@ -577,15 +577,32 @@ describe('useMpvBackend', () => {
   it('lifts the subtitles above the controls and the menus', async () => {
     const { player } = await start();
 
-    player.syncOverlayLayout(false, false);
+    player.syncOverlayLayout(false, false, false);
     expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
       percent: 100
     });
-    player.syncOverlayLayout(true, false);
+    player.syncOverlayLayout(true, false, false);
     expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
       percent: 80
     });
-    player.syncOverlayLayout(true, true);
+    player.syncOverlayLayout(true, true, false);
+    expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
+      percent: 70
+    });
+  });
+
+  it('lifts the subtitles above the next episode card, over every other level', async () => {
+    const { player } = await start();
+
+    player.syncOverlayLayout(false, false, true);
+    expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
+      percent: 55
+    });
+    player.syncOverlayLayout(true, true, true);
+    expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
+      percent: 55
+    });
+    player.syncOverlayLayout(true, true, false);
     expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
       percent: 70
     });
@@ -593,7 +610,7 @@ describe('useMpvBackend', () => {
 
   it('applies the subtitle position asked for before mpv started', async () => {
     const player = await mount();
-    player.syncOverlayLayout(false, false);
+    player.syncOverlayLayout(false, false, false);
     expect(invoke).not.toHaveBeenCalledWith('native_player_set_subtitle_position', {
       percent: 100
     });

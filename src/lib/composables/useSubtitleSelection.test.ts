@@ -24,7 +24,8 @@ describe('useSubtitleSelection', () => {
       getVideoElement: vi.fn(),
       getSubtitles: vi.fn().mockReturnValue([]),
       getControlsVisible: vi.fn().mockReturnValue(false),
-      getAudioMenuOpen: vi.fn().mockReturnValue(false)
+      getAudioMenuOpen: vi.fn().mockReturnValue(false),
+      getCardVisible: vi.fn().mockReturnValue(false)
     };
     settingsStore.subtitle = 'pt';
   });
@@ -161,6 +162,20 @@ describe('useSubtitleSelection', () => {
     selection.showMenu = true;
     selection.applyCueLayout();
     expect(cues[0].line).toBe(70); // menu visible
+  });
+
+  it('applyCueLayout lifts cues above the next episode card, over the menus', () => {
+    const cues = [{ snapToLines: true, line: 0 }];
+    const fakeTracks = [{ mode: 'showing', cues }];
+    mockOptions.getVideoElement.mockReturnValue(createFakeVideoElement(fakeTracks));
+    mockOptions.getControlsVisible.mockReturnValue(true);
+    mockOptions.getCardVisible.mockReturnValue(true);
+
+    const selection = useSubtitleSelection(mockOptions);
+    selection.showMenu = true;
+    selection.applyCueLayout();
+
+    expect(cues[0].line).toBe(45);
   });
 
   it('resetTrackErrorState clears errors', () => {

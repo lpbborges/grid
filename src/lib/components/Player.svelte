@@ -1,20 +1,24 @@
 <script lang="ts">
   import PlayerShell from './PlayerShell.svelte';
   import { isDomBackend } from '$lib/composables/useDomBackend.svelte';
-  import type { PlayerBackend } from '$lib/types';
+  import type { PlayerBackend, UpNextCard } from '$lib/types';
 
   let {
     backend,
     videoElement = $bindable(null),
     engineStatus = '',
     downloadPercent = 0,
-    onclose
+    onclose,
+    upNext = null,
+    loadingLabel = ''
   } = $props<{
     backend: PlayerBackend;
     videoElement?: HTMLVideoElement | null;
     engineStatus?: string;
     downloadPercent?: number;
     onclose?: () => void;
+    upNext?: UpNextCard | null;
+    loadingLabel?: string;
   }>();
 
   const dom = $derived(isDomBackend(backend) ? backend : undefined);
@@ -72,4 +76,13 @@
   {/if}
 {/snippet}
 
-<PlayerShell {backend} {engineStatus} {downloadPercent} transparent={!dom} {surface} {onclose} />
+<PlayerShell
+  {backend}
+  {engineStatus}
+  {downloadPercent}
+  transparent={!dom}
+  {surface}
+  {onclose}
+  {upNext}
+  {loadingLabel}
+/>

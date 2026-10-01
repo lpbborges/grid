@@ -116,6 +116,20 @@ describe('useDomBackend', () => {
     expect(backend.duration).toBe(0);
   });
 
+  it('lifts the subtitle cues above the next episode card', async () => {
+    const backend = await mountBackend();
+    await backend.start(request());
+    const cue = { snapToLines: true, line: 0 };
+    Object.defineProperty(screen.getByTestId('video-element'), 'textTracks', {
+      configurable: true,
+      value: [{ mode: 'showing', cues: [cue] }]
+    });
+
+    backend.syncOverlayLayout(true, false, true);
+
+    expect(cue.line).toBe(45);
+  });
+
   it('describes a decode failure through describeMediaError', async () => {
     const backend = await mountBackend();
     await backend.start(request());

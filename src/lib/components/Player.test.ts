@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import Player from './Player.svelte';
 import { playbackMode } from '$lib/engine/platform';
 
@@ -91,6 +91,30 @@ describe('Player', () => {
     await fireEvent.ended(screen.getByTestId('video-element'));
 
     expect(handleEnded).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the next episode card inside the player container on both paths', () => {
+    const upNext = { title: 'T1:E2', secondsLeft: 10, onplay: vi.fn(), oncancel: vi.fn() };
+    for (const [mode, backend] of [
+      ['embedded', domBackendWith({ hasStarted: true })],
+      ['native', fakeMpvBackend({ hasStarted: true })]
+    ] as const) {
+      vi.mocked(playbackMode).mockReturnValue(mode);
+      const { unmount } = render(Player, { props: { backend, upNext } });
+
+      const container = screen.getByTestId('video-player-container');
+      expect(within(container).getByTestId('up-next-card')).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('passes the loading label on to the shell', () => {
+    vi.mocked(playbackMode).mockReturnValue('native');
+    render(Player, {
+      props: { backend: fakeMpvBackend({ hasStarted: false }), loadingLabel: 'T1:E2 · Segundo' }
+    });
+
+    expect(screen.getByTestId('loading-label')).toHaveTextContent('T1:E2 · Segundo');
   });
 
   it('renders an empty hole and adds the body class only once mpv paints', async () => {

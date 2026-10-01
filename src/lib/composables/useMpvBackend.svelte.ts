@@ -368,8 +368,8 @@ export function useMpvBackend() {
     }
   }
 
-  function syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean) {
-    const next = menusOpen ? 70 : controlsVisible ? 80 : 100;
+  function syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean, cardVisible: boolean) {
+    const next = cardVisible ? 55 : menusOpen ? 70 : controlsVisible ? 80 : 100;
     if (next === subtitlePosition) return;
     subtitlePosition = next;
     if (!isRunning) return;
