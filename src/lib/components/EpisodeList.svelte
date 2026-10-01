@@ -3,7 +3,7 @@
   import PreferenceSelectors from './PreferenceSelectors.svelte';
   import QualitySelector from './QualitySelector.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
-  import type { Episode } from '$lib/types';
+  import type { Episode, EpisodeRef } from '$lib/types';
 
   let {
     seriesId,
@@ -11,7 +11,8 @@
     translatedEpisodes = {},
     selectedSeason = $bindable(),
     onPlayEpisode,
-    originalLanguage
+    originalLanguage,
+    focusEpisode = null
   } = $props<{
     seriesId: string;
     episodes: Episode[];
@@ -20,6 +21,7 @@
 
     onPlayEpisode: (episode: Episode) => void;
     originalLanguage?: string;
+    focusEpisode?: EpisodeRef | null;
   }>();
 
   let availableSeasons = $derived(
@@ -32,6 +34,21 @@
     if (availableSeasons.length > 0 && selectedSeason === null) {
       selectedSeason = availableSeasons[0];
     }
+  });
+
+  let listElement = $state<HTMLDivElement>();
+  let scrolledTo = '';
+
+  $effect(() => {
+    if (!focusEpisode || !listElement || selectedSeason !== focusEpisode.season) return;
+    if (!filteredEpisodes.length) return;
+    const target = `${seriesId}:${focusEpisode.season}:${focusEpisode.episode}`;
+    if (scrolledTo === target) return;
+    const row = listElement.querySelector<HTMLElement>(`[data-episode="${focusEpisode.episode}"]`);
+    if (!row) return;
+    scrolledTo = target;
+    const offset = row.getBoundingClientRect().top - listElement.getBoundingClientRect().top;
+    listElement.scrollTo({ top: Math.max(0, listElement.scrollTop + offset - 12) });
   });
 </script>
 
@@ -73,23 +90,30 @@
     </div>
 
     <div
+      bind:this={listElement}
       class="scrollbar-thumb-primary/50 flex max-h-[600px] scrollbar-thin flex-col gap-3 overflow-y-auto pr-2"
     >
       {#each filteredEpisodes as episode}
         {@const isUnreleased = episode.firstAired
           ? new Date(episode.firstAired) > new Date()
           : false}
+        {@const isFocused =
+          focusEpisode?.season === episode.season && focusEpisode?.episode === episode.episode}
         <div
-          class="group border-primary/30 bg-surface/40 relative flex items-center justify-between rounded-sm border p-3 transition-all duration-300 {isUnreleased
+          data-episode={episode.episode}
+          aria-current={isFocused ? 'true' : undefined}
+          class="group relative flex items-center justify-between rounded-sm border p-3 transition-all duration-300 {isFocused
+            ? 'border-green bg-surface/80 shadow-[0_0_15px_rgba(54,211,83,0.25)]'
+            : 'border-primary/30 bg-surface/40'} {isUnreleased
             ? 'opacity-50 grayscale'
             : 'hover:border-green hover:bg-surface/80 hover:-translate-x-1 hover:shadow-[0_0_15px_rgba(54,211,83,0.3)]'}"
           title={isUnreleased ? 'Este episódio ainda não foi lançado' : undefined}
         >
           <!-- Cyberpunk inner border left -->
           <div
-            class="bg-primary absolute top-0 bottom-0 left-0 w-1 transition-colors duration-300 {isUnreleased
-              ? ''
-              : 'group-hover:bg-green'}"
+            class="absolute top-0 bottom-0 left-0 transition-colors duration-300 {isFocused
+              ? 'bg-green w-1.5'
+              : 'bg-primary w-1'} {isUnreleased ? '' : 'group-hover:bg-green'}"
           ></div>
 
           <button
@@ -101,7 +125,9 @@
           >
             <div class="flex flex-col pl-2">
               <span
-                class="text-main font-cyber text-sm tracking-wider uppercase transition-colors duration-300 {isUnreleased
+                class="{isFocused
+                  ? 'text-green'
+                  : 'text-main'} font-cyber text-sm tracking-wider uppercase transition-colors duration-300 {isUnreleased
                   ? ''
                   : 'group-hover:text-green'}"
               >
@@ -116,10 +142,19 @@
                   ).toLocaleDateString('pt-BR')}
                 </span>
               {/if}
+              {#if isFocused}
+                <span
+                  class="border-green/60 text-green mt-1 w-fit rounded-sm border px-1.5 py-px font-mono text-[10px] font-bold tracking-widest uppercase"
+                >
+                  Continuar
+                </span>
+              {/if}
             </div>
             <div
               aria-hidden="true"
-              class="border-primary/50 text-primary rounded-sm border p-2 transition-all duration-300 {isUnreleased
+              class="{isFocused
+                ? 'border-green bg-green text-dark'
+                : 'border-primary/50 text-primary'} rounded-sm border p-2 transition-all duration-300 {isUnreleased
                 ? ''
                 : 'group-hover:bg-green group-hover:text-dark'}"
             >

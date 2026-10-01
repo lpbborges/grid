@@ -56,7 +56,7 @@
   let hasMountedTorrentEffect = false;
   $effect(() => {
     if (seriesId) {
-      selectedSeason = null;
+      selectedSeason = untrack(() => data.initialEpisode?.season) ?? null;
       translatedEpisodes = {};
       if (hasMountedTorrentEffect) {
         untrack(() => player.stop());
@@ -270,6 +270,7 @@
           bind:selectedSeason
           onPlayEpisode={playEpisode}
           originalLanguage={series?.language}
+          focusEpisode={data.initialEpisode ?? null}
         />
       {/if}
     </div>

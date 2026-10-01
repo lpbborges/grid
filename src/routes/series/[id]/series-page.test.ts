@@ -58,7 +58,7 @@ describe('Series page error handling', () => {
     const rawMessage = 'TypeError: Failed to fetch at yts.ts:42';
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series: null, error: rawMessage } }
+      props: { data: { seriesId: 'tt1', series: null, initialEpisode: null, error: rawMessage } }
     });
 
     expect(screen.queryByText(rawMessage, { exact: false })).not.toBeInTheDocument();
@@ -67,7 +67,7 @@ describe('Series page error handling', () => {
 
   it('shows a retry button when the load fails', () => {
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series: null, error: 'boom' } }
+      props: { data: { seriesId: 'tt1', series: null, initialEpisode: null, error: 'boom' } }
     });
 
     expect(screen.getByRole('button', { name: /tentar novamente/i })).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe('Series page error handling', () => {
     const rawMessage = 'network down';
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series: null, error: rawMessage } }
+      props: { data: { seriesId: 'tt1', series: null, initialEpisode: null, error: rawMessage } }
     });
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(expect.anything(), rawMessage);
@@ -89,7 +89,7 @@ describe('Series page error handling', () => {
     getSeriesStreamsMock.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:1234'));
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series, error: null } }
+      props: { data: { seriesId: 'tt1', series, initialEpisode: null, error: null } }
     });
 
     const episodeButton = screen.getByText(/Pilot/i);
@@ -129,7 +129,7 @@ describe('Series page integration flow', () => {
     });
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series, error: null } }
+      props: { data: { seriesId: 'tt1', series, initialEpisode: null, error: null } }
     });
 
     const episodeButton = screen.getByText(/Pilot/i);
@@ -147,5 +147,44 @@ describe('Series page integration flow', () => {
       preferredFileIdx: 0,
       signal: expect.any(AbortSignal)
     });
+  });
+
+  it('preselects the season and episode from the deep link', async () => {
+    const scrollTo = vi.fn();
+    HTMLElement.prototype.scrollTo = scrollTo;
+    Element.prototype.scrollIntoView = vi.fn();
+    const deepSeries = {
+      ...series,
+      videos: [
+        { id: 'e1', season: 1, episode: 1, name: 'Pilot' },
+        { id: 'e25', season: 2, episode: 5, name: 'Fifth' }
+      ]
+    };
+
+    render(SeriesPage, {
+      props: {
+        data: {
+          seriesId: 'tt1',
+          series: deepSeries,
+          initialEpisode: { season: 2, episode: 5 },
+          error: null
+        }
+      }
+    });
+
+    expect(await screen.findByDisplayValue('Temporada 2')).toBeInTheDocument();
+    const row = document.querySelector('[data-episode="5"]')!;
+    expect(row.getAttribute('aria-current')).toBe('true');
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo.mock.contexts[0]).toBe(row.parentElement);
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('selects the first season when there is no episode to open on', async () => {
+    render(SeriesPage, {
+      props: { data: { seriesId: 'tt1', series, initialEpisode: null, error: null } }
+    });
+
+    expect(await screen.findByDisplayValue('Temporada 1')).toBeInTheDocument();
   });
 });

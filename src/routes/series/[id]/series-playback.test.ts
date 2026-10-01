@@ -63,7 +63,9 @@ async function playEpisode(name: RegExp, overrides: Partial<PlaybackBoundaryOpti
     ],
     ...overrides
   });
-  render(SeriesPage, { props: { data: { seriesId: series.id, series, error: null } } });
+  render(SeriesPage, {
+    props: { data: { seriesId: series.id, series, initialEpisode: null, error: null } }
+  });
   await fireEvent.click(await screen.findByText(name));
 }
 
@@ -149,7 +151,7 @@ describe('Series playback wiring', () => {
       ]
     });
     const { rerender } = render(SeriesPage, {
-      props: { data: { seriesId: series.id, series, error: null } }
+      props: { data: { seriesId: series.id, series, initialEpisode: null, error: null } }
     });
     const other = {
       ...series,
@@ -157,7 +159,9 @@ describe('Series playback wiring', () => {
       title: 'Grid Series Two',
       videos: [{ id: 'tt0000003:1:1', season: 1, episode: 1, name: 'Other Pilot' }]
     };
-    await rerender({ data: { seriesId: other.id, series: other, error: null } });
+    await rerender({
+      data: { seriesId: other.id, series: other, initialEpisode: null, error: null }
+    });
 
     await fireEvent.click(await screen.findByText(/Other Pilot/));
     const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
