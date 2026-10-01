@@ -174,7 +174,7 @@
   });
 
   async function playMovie() {
-    if (combinedTorrents.length === 0) {
+    if (!movie || combinedTorrents.length === 0) {
       error = 'Nenhum stream disponível para este título.';
       errorSource = 'load';
       return;
@@ -194,15 +194,13 @@
       mediaId: movieId,
       fileIdx,
       originalLanguage: movie?.language,
-      progress: movie
-        ? {
-            meta: {
-              type: 'movie',
-              title: translatedTitle || movie.title,
-              poster: movie.medium_cover_image
-            }
-          }
-        : undefined
+      progress: {
+        meta: {
+          type: 'movie',
+          title: translatedTitle || movie.title,
+          poster: movie.medium_cover_image
+        }
+      }
     });
     // The route moved to another title while the stream was being prepared.
     if (movieId !== requestedId) return;
