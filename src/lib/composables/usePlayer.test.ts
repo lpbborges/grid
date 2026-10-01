@@ -4,6 +4,7 @@ import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import PlayerHarness from './__fixtures__/PlayerHarness.svelte';
 import { progressStore } from '$lib/stores/progress.svelte';
+import type { NextPlayback } from './usePlayer.svelte';
 
 vi.mock('$lib/engine/platform', () => ({
   playbackMode: vi.fn().mockReturnValue('native')
@@ -35,6 +36,7 @@ vi.mock('$lib/composables/useStreamPlayer.svelte', () => ({
 describe('usePlayer', () => {
   beforeEach(() => {
     localStorage.clear();
+    progressStore.progress = {};
   });
 
   afterEach(() => {
@@ -49,6 +51,7 @@ describe('usePlayer', () => {
       props: {
         mode: options.mode || 'native',
         onwatched: options.onwatched,
+        onfinished: options.onfinished,
         onMount: (p: any) => {
           playerRef = p;
           backendRef = p.backend;
@@ -122,6 +125,134 @@ describe('usePlayer', () => {
     backend.emitEnded();
 
     expect(streamPlayer.stop).toHaveBeenCalled();
+  });
+
+  it('closes the player when a file finishes and nobody handles the end', async () => {
+    const { player, backend, streamPlayer } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:abc', { mediaId: 'tt1' });
+
+    backend.emitFinished();
+
+    expect(streamPlayer.stop).toHaveBeenCalled();
+  });
+
+  it('hands the end of the file to onfinished instead of closing', async () => {
+    const onfinished = vi.fn();
+    const { player, backend, streamPlayer } = await mountPlayer({ mode: 'native', onfinished });
+    await player.play('magnet:?xt=urn:btih:abc', { mediaId: 'tt1' });
+
+    backend.emitFinished();
+
+    expect(onfinished).toHaveBeenCalledTimes(1);
+    expect(streamPlayer.stop).not.toHaveBeenCalled();
+  });
+
+  it('releases the finished stream before preparing the next one', async () => {
+    const { player, backend, streamPlayer } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+    const load = vi.fn().mockResolvedValue({
+      magnet: 'magnet:?xt=urn:btih:two',
+      options: { mediaId: 'tt1', season: 1, episode: 2 }
+    });
+
+    expect(await player.advance(load)).toBe(true);
+
+    const released = Math.max(
+      backend.stop.mock.invocationCallOrder[0],
+      streamPlayer.stop.mock.invocationCallOrder[0]
+    );
+    expect(released).toBeLessThan(load.mock.invocationCallOrder[0]);
+    expect(streamPlayer.play).toHaveBeenLastCalledWith(
+      'magnet:?xt=urn:btih:two',
+      expect.objectContaining({ season: 1, episode: 2 })
+    );
+  });
+
+  it('stays playing while it advances to the next episode', async () => {
+    const { player } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+    let resolveLoad!: (value: null) => void;
+    const advancing = player.advance(() => new Promise((r) => (resolveLoad = r)));
+
+    await vi.waitFor(() => expect(resolveLoad).toBeDefined());
+    expect(player.advancing).toBe(true);
+    expect(player.isPlaying).toBe(true);
+
+    resolveLoad(null);
+    await advancing;
+    expect(player.advancing).toBe(false);
+    expect(player.isPlaying).toBe(false);
+  });
+
+  it('marks the current episode finished when advancing before 95%', async () => {
+    const onwatched = vi.fn();
+    const { player, backend } = await mountPlayer({ mode: 'native', onwatched });
+    await player.play('magnet:?xt=urn:btih:one', {
+      mediaId: 'tt1',
+      season: 1,
+      episode: 2,
+      progress: {
+        meta: { type: 'series', title: 'Series', poster: 's.jpg' },
+        next: { season: 1, episode: 3 }
+      }
+    });
+    backend.duration = 100;
+    backend.currentTime = 80;
+    await tick();
+
+    await player.advance(async () => null);
+
+    expect(onwatched).toHaveBeenCalledTimes(1);
+    expect(progressStore.get('tt1', 1, 2)).toBeUndefined();
+    expect(progressStore.get('tt1', 1, 3)?.upNext).toBe(true);
+  });
+
+  it('cancels the advance when the player closes meanwhile', async () => {
+    const { player, streamPlayer } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+    let resolveLoad!: (value: NextPlayback) => void;
+    const advancing = player.advance(() => new Promise((r) => (resolveLoad = r)));
+    await vi.waitFor(() => expect(resolveLoad).toBeDefined());
+
+    await player.stop();
+    resolveLoad({ magnet: 'magnet:?xt=urn:btih:two', options: { mediaId: 'tt1' } });
+
+    expect(await advancing).toBe(false);
+    expect(streamPlayer.play).not.toHaveBeenCalledWith(
+      'magnet:?xt=urn:btih:two',
+      expect.anything()
+    );
+    expect(player.isPlaying).toBe(false);
+  });
+
+  it('surfaces the error when the next episode cannot be found', async () => {
+    const { player } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+
+    const ok = await player.advance(async () => ({
+      error: 'Nenhuma fonte encontrada para este episódio.'
+    }));
+
+    expect(ok).toBe(false);
+    expect(player.error).toBe('Nenhuma fonte encontrada para este episódio.');
+    expect(player.advancing).toBe(false);
+  });
+
+  it('ignores the backend closing itself during an advance', async () => {
+    const { player, backend, streamPlayer } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+    backend.stop.mockImplementation(() => backend.emitEnded());
+
+    await player.advance(async () => ({
+      magnet: 'magnet:?xt=urn:btih:two',
+      options: { mediaId: 'tt1', season: 1, episode: 2 }
+    }));
+
+    expect(streamPlayer.play).toHaveBeenLastCalledWith(
+      'magnet:?xt=urn:btih:two',
+      expect.anything()
+    );
+    expect(streamPlayer.stop).toHaveBeenCalledTimes(1);
   });
 
   it('does not mark the title watched when playback ends before 95%', async () => {

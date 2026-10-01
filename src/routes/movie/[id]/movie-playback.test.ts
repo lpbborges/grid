@@ -217,6 +217,18 @@ describe('Movie playback wiring', () => {
     expect(await screen.findByRole('button', { name: /reproduzir/i })).toBeInTheDocument();
   });
 
+  it('closes the player and releases the stream when the movie ends', async () => {
+    await openAndPlay();
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await waitFor(() => expect(video.getAttribute('src')).toBeTruthy());
+
+    await fireEvent.ended(video);
+
+    await waitFor(() => expect(rqbitRequest('POST', `/torrents/${HASH}/forget`)).toBeDefined());
+    expect(screen.queryByTestId('video-player-container')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /reproduzir/i })).toBeInTheDocument();
+  });
+
   // Closing the player writes the cache entry before forgetting the torrent.
   // Playing again re-adds the same info hash, so that late forget must not
   // remove the torrent the new stream waits on (Windows CI, run 35036299512).

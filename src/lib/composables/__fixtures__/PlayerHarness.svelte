@@ -1,8 +1,9 @@
 <script lang="ts">
   import { usePlayer } from '../usePlayer.svelte';
 
-  let { onMount, onwatched } = $props<{
+  let { onMount, onwatched, onfinished } = $props<{
     onwatched?: () => void;
+    onfinished?: () => void;
     mode: string;
     onMount: (
       player: ReturnType<typeof usePlayer>,
@@ -13,7 +14,12 @@
   // We need the streamPlayer instance mock to verify stop calls
   import { useStreamPlayer } from '../useStreamPlayer.svelte';
   const streamPlayer = useStreamPlayer();
-  const player = usePlayer(() => null, { onwatched: () => onwatched?.() });
+  const player = usePlayer(() => null, {
+    onwatched: () => onwatched?.(),
+    get onfinished() {
+      return onfinished;
+    }
+  });
 
   $effect(() => {
     onMount(player, streamPlayer);

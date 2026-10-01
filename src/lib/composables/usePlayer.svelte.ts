@@ -12,9 +12,22 @@ export function createPlayerBackend(getVideoElement: () => HTMLVideoElement | nu
   return playbackMode() === 'native' ? useMpvBackend() : useDomBackend(getVideoElement);
 }
 
+export type PlayerPlayOptions = PlayOptions & {
+  originalLanguage?: string;
+  progress?: ProgressContext;
+};
+
+export interface NextPlayback {
+  magnet: string;
+  options: PlayerPlayOptions;
+}
+
+/** `null` means the advance was cancelled; `error` is a pt-BR message to show. */
+export type NextPlaybackResult = NextPlayback | { error: string } | null;
+
 export function usePlayer(
   getVideoElement: () => HTMLVideoElement | null,
-  options: { onwatched?: () => void } = {}
+  options: { onwatched?: () => void; onfinished?: () => void } = {}
 ) {
   const streamPlayer = useStreamPlayer();
   const backend = createPlayerBackend(getVideoElement);
@@ -24,6 +37,9 @@ export function usePlayer(
   let currentProgress: ProgressContext | undefined;
   let watchedTriggered = false;
   let downloadPercent = $state(0);
+  let advancing = $state(false);
+  let advanceGeneration = 0;
+  let lastDuration = 0;
 
   $effect(() => {
     if (!streamPlayer.isPlaying || !streamPlayer.infoHash) return;
@@ -54,12 +70,10 @@ export function usePlayer(
     };
   });
 
-  async function play(
-    magnet: string,
-    playOptions: PlayOptions & { originalLanguage?: string; progress?: ProgressContext }
-  ) {
+  async function play(magnet: string, playOptions: PlayerPlayOptions) {
     error = '';
     watchedTriggered = false;
+    lastDuration = 0;
     downloadPercent = 0;
     const ok = await streamPlayer.play(magnet, playOptions);
     // A play cancelled by closing the player fails without an error.
@@ -84,7 +98,11 @@ export function usePlayer(
       ...request,
       // Fires on close and on errors too, so only the 95% check marks watched.
       onended: () => {
-        stop();
+        if (!advancing) void stop();
+      },
+      onfinished: () => {
+        if (options.onfinished) options.onfinished();
+        else void stop();
       }
     });
     if (!started) {
@@ -96,21 +114,65 @@ export function usePlayer(
     return true;
   }
 
+  async function release() {
+    await Promise.all([backend.stop(), streamPlayer.stop()]);
+  }
+
   // The single progress writer. Both backends used to keep their own.
+
   async function stop() {
-    const p1 = backend.stop();
-    const p2 = streamPlayer.stop();
-    await Promise.all([p1, p2]);
+    advanceGeneration++;
+    advancing = false;
+    await release();
+  }
+
+  function markWatched() {
+    if (watchedTriggered) return;
+    watchedTriggered = true;
+    options.onwatched?.();
+  }
+
+  function finishCurrent() {
+    const request = currentRequest;
+    if (!request || lastDuration <= 0) return;
+    progressStore.update(
+      request.mediaId,
+      request.season,
+      request.episode,
+      lastDuration,
+      lastDuration,
+      currentProgress
+    );
+    markWatched();
+  }
+
+  /** Finishes the current file and plays what `load` resolves, without closing the player. */
+  async function advance(load: () => Promise<NextPlaybackResult>): Promise<boolean> {
+    const generation = ++advanceGeneration;
+    advancing = true;
+    error = '';
+    try {
+      finishCurrent();
+      currentRequest = undefined;
+      await release();
+      const next = await load();
+      if (generation !== advanceGeneration || !next) return false;
+      if ('error' in next) {
+        error = next.error;
+        return false;
+      }
+      return await play(next.magnet, next.options);
+    } finally {
+      if (generation === advanceGeneration) advancing = false;
+    }
   }
 
   $effect(() => {
     const request = currentRequest;
     if (!request || backend.duration <= 0) return;
-    if (!watchedTriggered && backend.currentTime / backend.duration > 0.95) {
-      watchedTriggered = true;
-      options.onwatched?.();
-    }
+    if (backend.currentTime / backend.duration > 0.95) markWatched();
     const { currentTime, duration } = backend;
+    lastDuration = duration;
     untrack(() =>
       progressStore.update(
         request.mediaId,
@@ -125,7 +187,10 @@ export function usePlayer(
 
   return {
     get isPlaying() {
-      return streamPlayer.isPlaying;
+      return streamPlayer.isPlaying || advancing;
+    },
+    get advancing() {
+      return advancing;
     },
     get engineStatus() {
       return streamPlayer.engineStatus;
@@ -140,6 +205,7 @@ export function usePlayer(
       return backend;
     },
     play,
-    stop
+    stop,
+    advance
   };
 }

@@ -28,13 +28,18 @@ export function videoState(): Promise<VideoState | null> {
   });
 }
 
-export async function waitForPlaybackPast(seconds: number, timeout = 90000): Promise<VideoState> {
+// WebKitGTK can stay at HAVE_CURRENT_DATA (2) while it plays on after a seek.
+export async function waitForPlaybackPast(
+  seconds: number,
+  timeout = 90000,
+  minReadyState = 3
+): Promise<VideoState> {
   let last: VideoState | null = null;
   await browser.waitUntil(
     async () => {
       last = await videoState();
       if (last?.errorCode) throw new Error(`Video element reported MediaError ${last.errorCode}`);
-      return !!last && last.readyState >= 3 && last.currentTime > seconds;
+      return !!last && last.readyState >= minReadyState && last.currentTime > seconds;
     },
     {
       timeout,
@@ -44,6 +49,12 @@ export async function waitForPlaybackPast(seconds: number, timeout = 90000): Pro
   );
   if (!last) throw new Error('Video element disappeared');
   return last;
+}
+
+export async function pauseVideo(): Promise<void> {
+  await browser.execute(() => {
+    document.querySelector<HTMLVideoElement>('[data-testid="video-element"]')?.pause();
+  });
 }
 
 export async function seekTo(seconds: number): Promise<void> {

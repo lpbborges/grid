@@ -5,6 +5,7 @@ import {
   closePlayer,
   mockState,
   openTitle,
+  pauseVideo,
   seekTo,
   videoState,
   waitForPlaybackPast
@@ -38,7 +39,9 @@ for (const movie of [MKV_MOVIE, MP4_MOVIE]) {
 
       await seekTo(middle);
 
-      await waitForPlaybackPast(middle + 1.5);
+      await waitForPlaybackPast(middle + 1.5, 90000, 2);
+      // The player closes when the movie ends; the next tests need it open.
+      await pauseVideo();
     });
 
     it('attaches the subtitle bundled with the video', async () => {
