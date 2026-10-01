@@ -132,6 +132,7 @@ async function getTitle(imdbId: string, customFetch?: typeof fetch) {
   return series ?? movie;
 }
 
+const IMDB_ID = /^tt\d+$/;
 const titleSnapshots = new Map<string, Promise<ProgressMeta | null>>();
 
 export function clearTitleSnapshotCache() {
@@ -177,6 +178,9 @@ export function getTitleSnapshot(
   if (!snapshot) {
     snapshot = fetchTitleSnapshot(id, type, customFetch);
     titleSnapshots.set(id, snapshot);
+    snapshot.then((found) => {
+      if (!found) titleSnapshots.delete(id);
+    });
   }
   return snapshot;
 }
@@ -185,7 +189,7 @@ export async function resolveMissingSnapshots(
   entries: ProgressEntry[],
   customFetch?: typeof fetch
 ): Promise<Record<string, ProgressMeta | null>> {
-  const missing = entries.filter((entry) => !entry.meta);
+  const missing = entries.filter((entry) => !entry.meta && IMDB_ID.test(entry.id));
   const snapshots = await Promise.all(
     missing.map((entry) =>
       getTitleSnapshot(entry.id, entry.season !== undefined ? 'series' : undefined, customFetch)

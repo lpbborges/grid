@@ -538,6 +538,32 @@ describe('continue watching metadata', () => {
     expect((await getTitleSnapshot('tt1'))?.title).toBe('Movie');
   });
 
+  it('looks a title up again after a failed lookup', async () => {
+    routeFetch({});
+    expect(await getTitleSnapshot('tt1')).toBeNull();
+
+    routeFetch({ '/meta/movie/tt1.json': { meta: { name: 'Movie', poster: 'm.jpg' } } });
+
+    expect(await getTitleSnapshot('tt1')).toEqual({
+      type: 'movie',
+      title: 'Movie',
+      poster: 'm.jpg'
+    });
+  });
+
+  it('never looks up an id that is not an IMDb id', async () => {
+    routeFetch({ '/meta/movie/tt1.json': { meta: { name: 'Movie', poster: 'm.jpg' } } });
+
+    const result = await resolveMissingSnapshots([
+      { id: '../catalog/movie/top', time: 1, duration: 2, updatedAt: 3 },
+      { id: 'tt1', time: 1, duration: 2, updatedAt: 2 }
+    ]);
+
+    expect(result).toEqual({ tt1: { type: 'movie', title: 'Movie', poster: 'm.jpg' } });
+    const urls = (globalThis.fetch as any).mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(urls.every((u: string) => u.includes('tt1'))).toBe(true);
+  });
+
   it('maps a network error to null instead of rejecting', async () => {
     (globalThis.fetch as any).mockRejectedValue(new TypeError('Failed to fetch'));
 
