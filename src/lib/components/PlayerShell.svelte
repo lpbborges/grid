@@ -166,7 +166,7 @@
   aria-label="Reprodutor de Vídeo"
   class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden {transparent
     ? ''
-    : 'bg-backdrop'}"
+    : 'bg-backdrop'} {!controlsVisible ? 'cursor-none' : ''}"
   data-testid="video-player-container"
   data-native-player={transparent ? '' : undefined}
   onmousemove={handleMouseMove}
