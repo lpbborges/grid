@@ -68,7 +68,7 @@
   --animate-neon-on: neon-turn-on 2s ease-in forwards;
 
   /* Undo toast countdown (UndoToast.svelte) */
-  --animate-toast-countdown: toast-countdown 5s linear forwards;
+  --animate-toast-countdown: toast-countdown linear forwards;
 
   @keyframes toast-countdown {
     from {

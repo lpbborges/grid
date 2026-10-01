@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
 import { getTorrentStats } from '$lib/engine/torrent';
 import { playbackMode } from '$lib/engine/platform';
@@ -109,13 +110,16 @@ export function usePlayer(
       watchedTriggered = true;
       options.onwatched?.();
     }
-    progressStore.update(
-      request.mediaId,
-      request.season,
-      request.episode,
-      backend.currentTime,
-      backend.duration,
-      currentProgress
+    const { currentTime, duration } = backend;
+    untrack(() =>
+      progressStore.update(
+        request.mediaId,
+        request.season,
+        request.episode,
+        currentTime,
+        duration,
+        currentProgress
+      )
     );
   });
 

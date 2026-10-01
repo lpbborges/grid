@@ -9,14 +9,12 @@
     message,
     actionLabel,
     onaction,
-    ondismiss,
-    durationMs = UNDO_TOAST_DURATION_MS
+    ondismiss
   }: {
     message: string;
     actionLabel: string;
     onaction: () => void;
     ondismiss: (hadFocus: boolean) => void;
-    durationMs?: number;
   } = $props();
 
   const messageId = $props.id();
@@ -27,7 +25,7 @@
     actionButton?.focus();
     const timer = setTimeout(
       () => untrack(() => ondismiss(toast?.contains(document.activeElement) ?? false)),
-      untrack(() => durationMs)
+      UNDO_TOAST_DURATION_MS
     );
     return () => clearTimeout(timer);
   });
@@ -57,6 +55,6 @@
   <div
     aria-hidden="true"
     class="bg-green/60 animate-toast-countdown absolute bottom-0 left-0 h-0.5 w-full origin-left motion-reduce:hidden"
-    style="animation-duration: {durationMs}ms"
+    style="animation-duration: {UNDO_TOAST_DURATION_MS}ms"
   ></div>
 </div>

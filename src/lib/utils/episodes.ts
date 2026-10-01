@@ -1,7 +1,32 @@
 import type { Episode, EpisodeRef } from '$lib/types';
 
+const EPISODE_KEY = /^(.+)-S(\d+)E(\d+)$/;
+
+/** The progress and watched key of a title or one of its episodes. */
+export function progressKey(id: string | number, season?: number, episode?: number): string {
+  return season !== undefined && episode !== undefined ? `${id}-S${season}E${episode}` : String(id);
+}
+
+export function parseProgressKey(key: string): { id: string; season?: number; episode?: number } {
+  const match = EPISODE_KEY.exec(key);
+  if (!match) return { id: key };
+  return { id: match[1], season: Number(match[2]), episode: Number(match[3]) };
+}
+
 export function compareEpisodes(a: EpisodeRef, b: EpisodeRef): number {
   return a.season - b.season || a.episode - b.episode;
+}
+
+export function sameEpisode(a: EpisodeRef, b: EpisodeRef): boolean {
+  return compareEpisodes(a, b) === 0;
+}
+
+export function episodeLabel({ season, episode }: EpisodeRef): string {
+  return `T${season}:E${episode}`;
+}
+
+export function episodeQuery({ season, episode }: EpisodeRef): string {
+  return `?s=${season}&e=${episode}`;
 }
 
 /** The first aired episode after `current`, or null when there is none. */

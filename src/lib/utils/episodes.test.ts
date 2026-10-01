@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { compareEpisodes, nextEpisode, parseEpisodeParams } from './episodes';
+import {
+  compareEpisodes,
+  episodeLabel,
+  episodeQuery,
+  nextEpisode,
+  parseEpisodeParams,
+  parseProgressKey,
+  progressKey
+} from './episodes';
 
 const ep = (season: number, episode: number, firstAired?: string) => ({
   id: `tt1:${season}:${episode}`,
@@ -61,4 +69,23 @@ describe('parseEpisodeParams', () => {
       expect(parseEpisodeParams(new URLSearchParams(query))).toBeNull();
     }
   );
+});
+
+describe('progress keys', () => {
+  it('round-trips a title key and an episode key', () => {
+    expect(progressKey('tt1')).toBe('tt1');
+    expect(progressKey('tt1', 2, 5)).toBe('tt1-S2E5');
+    expect(parseProgressKey('tt1')).toEqual({ id: 'tt1' });
+    expect(parseProgressKey('tt1-S2E5')).toEqual({ id: 'tt1', season: 2, episode: 5 });
+  });
+});
+
+describe('episode label and query', () => {
+  it('labels an episode in pt-BR short form and builds its link query', () => {
+    expect(episodeLabel({ season: 2, episode: 5 })).toBe('T2:E5');
+    expect(episodeQuery({ season: 2, episode: 5 })).toBe('?s=2&e=5');
+    expect(
+      parseEpisodeParams(new URLSearchParams(episodeQuery({ season: 2, episode: 5 })))
+    ).toEqual({ season: 2, episode: 5 });
+  });
 });

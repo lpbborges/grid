@@ -1,39 +1,28 @@
+import { episodeLabel, episodeQuery } from '$lib/utils/episodes';
 import type { CardMedia, MediaType, ProgressEntry } from '$lib/types';
 
-export interface ContinueWatchingItem extends CardMedia {
-  id: string;
-  type: MediaType;
-  season?: number;
-  episode?: number;
-  time: number;
-  duration: number;
-}
-
-export function episodeLabel(season: number, episode: number): string {
-  return `T${season}:E${episode}`;
-}
-
-export function continueWatchingHref(item: ContinueWatchingItem): string {
-  if (item.type === 'series' && item.season !== undefined && item.episode !== undefined) {
-    return `/series/${item.id}?s=${item.season}&e=${item.episode}`;
-  }
-  return `/${item.type}/${item.id}`;
-}
+export type ContinueWatchingItem = CardMedia &
+  Pick<ProgressEntry, 'id' | 'time' | 'duration'> & {
+    type: MediaType;
+    href: string;
+    episodeLabel?: string;
+  };
 
 export function toContinueWatchingItems(entries: ProgressEntry[]): ContinueWatchingItem[] {
-  return entries.flatMap((entry) => {
-    const meta = entry.meta;
+  return entries.flatMap(({ id, season, episode, time, duration, meta }) => {
     if (!meta) return [];
+    const ref = season !== undefined && episode !== undefined ? { season, episode } : null;
+    const type = ref ? 'series' : meta.type;
     return [
       {
-        id: entry.id,
-        type: entry.season !== undefined ? 'series' : meta.type,
+        id,
+        type,
         title: meta.title,
         medium_cover_image: meta.poster,
-        season: entry.season,
-        episode: entry.episode,
-        time: entry.time,
-        duration: entry.duration
+        time,
+        duration,
+        href: ref ? `/series/${id}${episodeQuery(ref)}` : `/${type}/${id}`,
+        episodeLabel: ref ? episodeLabel(ref) : undefined
       }
     ];
   });

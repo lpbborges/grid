@@ -3,12 +3,9 @@
   import MediaRow from './MediaRow.svelte';
   import MediaCard from './MediaCard.svelte';
   import UndoToast from './UndoToast.svelte';
-  import { progressStore, type ProgressData } from '$lib/stores/progress.svelte';
-  import {
-    continueWatchingHref,
-    episodeLabel,
-    type ContinueWatchingItem
-  } from '$lib/utils/continueWatching';
+  import { progressStore } from '$lib/stores/progress.svelte';
+  import type { ProgressData } from '$lib/types';
+  import type { ContinueWatchingItem } from '$lib/utils/continueWatching';
 
   let { items }: { items: ContinueWatchingItem[] } = $props();
 
@@ -20,8 +17,8 @@
   } | null>(null);
 
   function cardLink(id: string): HTMLElement | null {
-    const cards = root?.querySelectorAll<HTMLElement>('[data-testid="continue-watching-item"]');
-    const card = [...(cards ?? [])].find((el) => el.dataset.id === id);
+    const cards = root?.querySelectorAll<HTMLElement>('[data-id]') ?? [];
+    const card = [...cards].find((el) => el.dataset.id === id);
     return card?.querySelector<HTMLElement>(':scope > a') ?? null;
   }
 
@@ -57,16 +54,12 @@
     {#snippet card(item)}
       <div
         class="group/cw relative shrink-0 [&:has(>button:hover)>a]:-translate-y-2"
-        data-testid="continue-watching-item"
         data-id={item.id}
       >
         <MediaCard
           media={item}
-          type={item.type}
-          href={continueWatchingHref(item)}
-          episodeLabel={item.season !== undefined && item.episode !== undefined
-            ? episodeLabel(item.season, item.episode)
-            : undefined}
+          href={item.href}
+          episodeLabel={item.episodeLabel}
           upNext={item.time === 0}
           progress={item}
         />

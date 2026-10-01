@@ -19,9 +19,8 @@
     upNext?: boolean;
     progress?: { time: number; duration: number };
   } = $props();
-  let storedProgress = $derived(progressStore.latestFor(media.id));
   let shownProgress = $derived(
-    progress ?? (watchedStore.watchedIds.includes(String(media.id)) ? undefined : storedProgress)
+    progress ?? (watchedStore.has(media.id) ? undefined : progressStore.latestFor(media.id))
   );
   let progressPercent = $derived(
     shownProgress ? Math.min(100, (shownProgress.time / shownProgress.duration) * 100) : 0
@@ -34,7 +33,7 @@
     media.id
   )
     ? 'hover:shadow-[0_0_20px_rgba(249,115,22,0.4)]'
-    : watchedStore.watchedIds.includes(String(media.id))
+    : watchedStore.has(media.id)
       ? 'hover:shadow-[0_0_20px_rgba(54,211,83,0.4)]'
       : 'hover:shadow-[0_0_20px_rgba(107,33,168,0.4)]'}"
   data-testid="media-card"
@@ -79,7 +78,7 @@
           />
         </svg>
       </div>
-    {:else if watchedStore.watchedIds.includes(String(media.id))}
+    {:else if watchedStore.has(media.id)}
       <div
         class="text-green pointer-events-none absolute top-2.5 right-2.5 z-20 [filter:drop-shadow(0_0_8px_rgba(54,211,83,0.9))] transition-transform duration-300 will-change-transform group-hover:scale-110"
         title="Assistido"

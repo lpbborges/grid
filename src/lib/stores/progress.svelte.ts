@@ -1,28 +1,18 @@
 import { browser } from '$app/environment';
-import { untrack } from 'svelte';
 import { watchedStore } from './watched.svelte';
 import { readStoredJson, writeStored } from './storage';
 import { isRecord } from '$lib/utils/isRecord';
-import { compareEpisodes } from '$lib/utils/episodes';
-import type { EpisodeRef, ProgressContext, ProgressEntry, ProgressMeta } from '$lib/types';
-
-export type ProgressData = {
-  time: number;
-  duration: number;
-  updatedAt: number;
-  meta?: ProgressMeta;
-};
+import { compareEpisodes, parseProgressKey, progressKey } from '$lib/utils/episodes';
+import type {
+  EpisodeRef,
+  ProgressContext,
+  ProgressData,
+  ProgressEntry,
+  ProgressMeta
+} from '$lib/types';
 
 export const PROGRESS_PERSIST_INTERVAL_MS = 5000;
 export const CONTINUE_WATCHING_LIMIT = 20;
-
-const EPISODE_KEY = /^(.+)-S(\d+)E(\d+)$/;
-
-function parseProgressKey(key: string): { id: string; season?: number; episode?: number } {
-  const match = EPISODE_KEY.exec(key);
-  if (!match) return { id: key };
-  return { id: match[1], season: Number(match[2]), episode: Number(match[3]) };
-}
 
 function isProgressMeta(value: unknown): value is ProgressMeta {
   if (!isRecord(value)) return false;
@@ -38,53 +28,55 @@ function copyMeta(meta: ProgressMeta): ProgressMeta {
   return { type: meta.type, title: meta.title, poster: meta.poster };
 }
 
-function isProgressData(value: unknown): value is ProgressData {
-  if (typeof value !== 'object' || value === null) return false;
-  const { time, duration, updatedAt } = value as Record<string, unknown>;
-  return (
-    typeof time === 'number' &&
-    Number.isFinite(time) &&
-    time >= 0 &&
-    typeof duration === 'number' &&
-    Number.isFinite(duration) &&
-    duration > 0 &&
-    typeof updatedAt === 'number' &&
-    Number.isFinite(updatedAt)
-  );
+function toProgressData(value: unknown): ProgressData | null {
+  if (!isRecord(value)) return null;
+  const { time, duration, updatedAt, meta } = value;
+  if (
+    typeof time !== 'number' ||
+    !Number.isFinite(time) ||
+    time < 0 ||
+    typeof duration !== 'number' ||
+    !Number.isFinite(duration) ||
+    duration <= 0 ||
+    typeof updatedAt !== 'number' ||
+    !Number.isFinite(updatedAt)
+  ) {
+    return null;
+  }
+  return { time, duration, updatedAt, ...(isProgressMeta(meta) && { meta: copyMeta(meta) }) };
 }
 
 function readStoredProgress(): Record<string, ProgressData> {
   const parsed = readStoredJson('grid-progress');
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+  if (!isRecord(parsed)) return {};
+  // Object.fromEntries keeps a `__proto__` key as plain data and returns an
+  // ordinary object, which $state can proxy.
   return Object.fromEntries(
-    Object.entries(parsed).flatMap(([key, entry]) => {
-      if (!isProgressData(entry)) return [];
-      const { meta } = entry as { meta?: unknown };
-      const data: ProgressData = {
-        time: entry.time,
-        duration: entry.duration,
-        updatedAt: entry.updatedAt,
-        ...(isProgressMeta(meta) && { meta: copyMeta(meta) })
-      };
-      return [[key, data]];
+    Object.entries(parsed).flatMap(([key, value]) => {
+      const data = toProgressData(value);
+      return data ? [[key, data]] : [];
     })
   );
 }
 
 class ProgressStore {
   progress = $state<Record<string, ProgressData>>({});
-  entries = $derived.by(() => {
+  #latestById = $derived.by(() => {
     const latest = Object.create(null) as Record<string, ProgressEntry>;
     for (const [key, data] of Object.entries(this.progress)) {
       const parsed = parseProgressKey(key);
       const current = latest[parsed.id];
-      if (!current || data.updatedAt > current.updatedAt)
+      if (!current || data.updatedAt > current.updatedAt) {
         latest[parsed.id] = { ...parsed, ...data };
+      }
     }
-    return Object.values(latest)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, CONTINUE_WATCHING_LIMIT);
+    return latest;
   });
+  entries = $derived(
+    Object.values(this.#latestById)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, CONTINUE_WATCHING_LIMIT)
+  );
   #persistTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
@@ -105,46 +97,30 @@ class ProgressStore {
     this.#persistTimer = setTimeout(() => this.persistNow(), PROGRESS_PERSIST_INTERVAL_MS);
   }
 
-  private getKey(id: string | number, season?: number, episode?: number): string {
-    if (season !== undefined && episode !== undefined) {
-      return `${id}-S${season}E${episode}`;
+  private *keysOf(id: string) {
+    for (const [key, data] of Object.entries(this.progress)) {
+      const parsed = parseProgressKey(key);
+      if (parsed.id === id) yield { key, data, ...parsed };
     }
-    return String(id);
   }
 
   get(id: string | number, season?: number, episode?: number): ProgressData | undefined {
-    return this.progress[this.getKey(id, season, episode)];
+    return this.progress[progressKey(id, season, episode)];
   }
 
-  latestFor(id: string | number): ProgressData | undefined {
-    const baseKey = String(id);
-    const episodePrefix = `${baseKey}-S`;
-    let latest: ProgressData | undefined;
-    for (const [key, entry] of Object.entries(this.progress)) {
-      if (key !== baseKey && !key.startsWith(episodePrefix)) continue;
-      if (!latest || entry.updatedAt > latest.updatedAt) latest = entry;
-    }
-    return latest;
+  latestFor(id: string | number): ProgressEntry | undefined {
+    return this.#latestById[String(id)];
   }
 
   latestEpisodeFor(id: string | number): EpisodeRef | null {
-    const target = String(id);
-    let latest: (EpisodeRef & { updatedAt: number }) | null = null;
-    for (const [key, data] of Object.entries(this.progress)) {
-      const { id: keyId, season, episode } = parseProgressKey(key);
-      if (keyId !== target || season === undefined || episode === undefined) continue;
-      if (!latest || data.updatedAt > latest.updatedAt) {
-        latest = { season, episode, updatedAt: data.updatedAt };
-      }
-    }
-    return latest && { season: latest.season, episode: latest.episode };
+    const latest = this.latestFor(id);
+    if (latest?.season === undefined || latest.episode === undefined) return null;
+    return { season: latest.season, episode: latest.episode };
   }
 
   remove(id: string | number): Record<string, ProgressData> {
-    const target = String(id);
     const removed: Record<string, ProgressData> = {};
-    for (const [key, data] of Object.entries(this.progress)) {
-      if (parseProgressKey(key).id !== target) continue;
+    for (const { key, data } of this.keysOf(String(id))) {
       removed[key] = data;
       delete this.progress[key];
     }
@@ -176,20 +152,9 @@ class ProgressStore {
     duration: number,
     context?: ProgressContext
   ) {
-    untrack(() => this.write(id, season, episode, time, duration, context));
-  }
-
-  private write(
-    id: string | number,
-    season: number | undefined,
-    episode: number | undefined,
-    time: number,
-    duration: number,
-    context: ProgressContext | undefined
-  ) {
     if (duration <= 0 || time < 0) return;
 
-    const key = this.getKey(id, season, episode);
+    const key = progressKey(id, season, episode);
 
     if (time / duration >= 0.95) {
       if (key in this.progress) {
@@ -213,17 +178,16 @@ class ProgressStore {
     duration: number,
     context: ProgressContext | undefined
   ) {
-    for (const key of Object.keys(this.progress)) {
-      const parsed = parseProgressKey(key);
-      if (parsed.id !== id || parsed.season === undefined || parsed.episode === undefined) continue;
-      if (compareEpisodes({ season: parsed.season, episode: parsed.episode }, finished) < 0) {
+    for (const { key, season, episode } of this.keysOf(id)) {
+      if (season === undefined || episode === undefined) continue;
+      if (compareEpisodes({ season, episode }, finished) < 0) {
         delete this.progress[key];
-        watchedStore.add(id, parsed.season, parsed.episode);
+        watchedStore.add(id, season, episode);
       }
     }
     const next = context?.next;
     if (!next) return;
-    const nextKey = this.getKey(id, next.season, next.episode);
+    const nextKey = progressKey(id, next.season, next.episode);
     const existing = this.progress[nextKey];
     this.progress[nextKey] = existing
       ? { ...existing, updatedAt: Date.now() }

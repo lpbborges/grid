@@ -1,4 +1,5 @@
 import { readStoredIds, writeStored } from './storage';
+import { progressKey } from '$lib/utils/episodes';
 
 class WatchedStore {
   watchedIds = $state<string[]>([]);
@@ -11,19 +12,12 @@ class WatchedStore {
     writeStored('grid-watched', JSON.stringify(this.watchedIds));
   }
 
-  private getKey(id: string | number, season?: number, episode?: number): string {
-    if (season !== undefined && episode !== undefined) {
-      return `${id}-S${season}E${episode}`;
-    }
-    return String(id);
-  }
-
   has(id: string | number, season?: number, episode?: number): boolean {
-    return this.watchedIds.includes(this.getKey(id, season, episode));
+    return this.watchedIds.includes(progressKey(id, season, episode));
   }
 
   add(id: string | number, season?: number, episode?: number) {
-    const key = this.getKey(id, season, episode);
+    const key = progressKey(id, season, episode);
     if (!this.watchedIds.includes(key)) {
       this.watchedIds.push(key);
       this.save();
@@ -31,7 +25,7 @@ class WatchedStore {
   }
 
   remove(id: string | number, season?: number, episode?: number) {
-    const key = this.getKey(id, season, episode);
+    const key = progressKey(id, season, episode);
     this.watchedIds = this.watchedIds.filter((k) => k !== key);
     this.save();
   }

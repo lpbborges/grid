@@ -185,7 +185,7 @@
     const fileIdx = selectedTorrent.rawStream?.fileIdx;
     const magnet = buildMagnet(
       selectedTorrent.hash,
-      movie?.title || '',
+      movie.title,
       selectedTorrent.rawStream?.sources
     );
 
@@ -193,7 +193,7 @@
     const ok = await player.play(magnet, {
       mediaId: movieId,
       fileIdx,
-      originalLanguage: movie?.language,
+      originalLanguage: movie.language,
       progress: {
         meta: {
           type: 'movie',
@@ -281,7 +281,7 @@
           torrents={combinedTorrents}
           bind:selectedTorrentHash
           onPlay={playMovie}
-          originalLanguage={movie?.language}
+          originalLanguage={movie.language}
         />
       {/if}
     </div>

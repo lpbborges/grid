@@ -23,8 +23,7 @@
   let lastAttemptedEpisode = $state<Episode | null>(null);
   let playedSeriesId = $state<string | null>(null);
   let focusEpisode = $derived<EpisodeRef | null>(
-    (playedSeriesId === seriesId && progressStore.latestEpisodeFor(seriesId)) ||
-      (data.initialEpisode ?? null)
+    (playedSeriesId === seriesId && progressStore.latestEpisodeFor(seriesId)) || data.initialEpisode
   );
 
   const player = usePlayer(() => videoElement, {
@@ -152,7 +151,7 @@
         season: episode.season,
         episode: episode.episode,
         fileIdx: bestStream.fileIdx,
-        originalLanguage: series?.language,
+        originalLanguage: series.language,
         progress: {
           meta: {
             type: 'series',
@@ -276,7 +275,7 @@
           {translatedEpisodes}
           bind:selectedSeason
           onPlayEpisode={playEpisode}
-          originalLanguage={series?.language}
+          originalLanguage={series.language}
           {focusEpisode}
         />
       {/if}

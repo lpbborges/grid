@@ -1,13 +1,11 @@
 import type { PageLoad } from './$types';
 import { getSeriesDetails } from '$lib/api/cinemeta';
-import { parseEpisodeParams } from '$lib/utils/episodes';
+import { parseEpisodeParams, sameEpisode } from '$lib/utils/episodes';
 import { progressStore } from '$lib/stores/progress.svelte';
 import type { Episode, EpisodeRef } from '$lib/types';
 
 function listed(videos: Episode[], ref: EpisodeRef | null): EpisodeRef | null {
-  return ref && videos.some((v) => v.season === ref.season && v.episode === ref.episode)
-    ? ref
-    : null;
+  return ref && videos.some((v) => sameEpisode(v, ref)) ? ref : null;
 }
 
 export const load: PageLoad = async ({ fetch, params, url }) => {

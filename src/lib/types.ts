@@ -68,15 +68,19 @@ export interface ProgressContext {
   next?: EpisodeRef | null;
 }
 
-/** One title's most recent progress, as listed in Continuar assistindo. */
-export interface ProgressEntry {
-  id: string;
-  season?: number;
-  episode?: number;
+/** Saved playback position of a title or episode. */
+export interface ProgressData {
   time: number;
   duration: number;
   updatedAt: number;
   meta?: ProgressMeta;
+}
+
+/** One title's most recent progress, as listed in Continuar assistindo. */
+export interface ProgressEntry extends ProgressData {
+  id: string;
+  season?: number;
+  episode?: number;
 }
 
 /** The fields MediaCard needs from any title. */

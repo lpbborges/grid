@@ -3,6 +3,7 @@
   import PreferenceSelectors from './PreferenceSelectors.svelte';
   import QualitySelector from './QualitySelector.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
+  import { progressKey, sameEpisode } from '$lib/utils/episodes';
   import type { Episode, EpisodeRef } from '$lib/types';
 
   let {
@@ -42,7 +43,7 @@
   $effect(() => {
     if (!focusEpisode || !listElement || selectedSeason !== focusEpisode.season) return;
     if (!filteredEpisodes.length) return;
-    const target = `${seriesId}:${focusEpisode.season}:${focusEpisode.episode}`;
+    const target = progressKey(seriesId, focusEpisode.season, focusEpisode.episode);
     if (scrolledTo === target) return;
     const row = listElement.querySelector<HTMLElement>(`[data-episode="${focusEpisode.episode}"]`);
     if (!row) return;
@@ -97,8 +98,7 @@
         {@const isUnreleased = episode.firstAired
           ? new Date(episode.firstAired) > new Date()
           : false}
-        {@const isFocused =
-          focusEpisode?.season === episode.season && focusEpisode?.episode === episode.episode}
+        {@const isFocused = !!focusEpisode && sameEpisode(focusEpisode, episode)}
         <div
           data-episode={episode.episode}
           aria-current={isFocused ? 'true' : undefined}
@@ -174,8 +174,10 @@
             </div>
           </button>
           <button
-            class="border-primary/50 text-primary ml-2 rounded-sm border p-2 transition-all duration-300 {watchedStore.watchedIds.includes(
-              seriesId + '-S' + episode.season + 'E' + episode.episode
+            class="border-primary/50 text-primary ml-2 rounded-sm border p-2 transition-all duration-300 {watchedStore.has(
+              seriesId,
+              episode.season,
+              episode.episode
             )
               ? 'bg-green text-dark border-green shadow-[0_0_10px_rgba(54,211,83,0.8)]'
               : ''} {isUnreleased

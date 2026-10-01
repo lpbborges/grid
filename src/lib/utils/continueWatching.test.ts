@@ -1,36 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { continueWatchingHref, episodeLabel, toContinueWatchingItems } from './continueWatching';
+import { toContinueWatchingItems } from './continueWatching';
 
 const meta = { type: 'series' as const, title: 'Series', poster: 's.jpg' };
 
 describe('continue watching items', () => {
-  it('labels an episode in pt-BR short form', () => {
-    expect(episodeLabel(2, 5)).toBe('T2:E5');
-  });
-
-  it('links a series to the episode and a movie to its page', () => {
-    expect(
-      continueWatchingHref({
-        id: 'tt2',
-        type: 'series',
-        season: 2,
-        episode: 5,
-        title: 'S',
-        medium_cover_image: '',
-        time: 1,
-        duration: 2
-      })
-    ).toBe('/series/tt2?s=2&e=5');
-    expect(
-      continueWatchingHref({
+  it('links a series to its episode with a label and a movie to its page', () => {
+    const [series, movie] = toContinueWatchingItems([
+      { id: 'tt2', season: 2, episode: 5, time: 1, duration: 2, updatedAt: 2, meta },
+      {
         id: 'tt1',
-        type: 'movie',
-        title: 'M',
-        medium_cover_image: '',
         time: 1,
-        duration: 2
-      })
-    ).toBe('/movie/tt1');
+        duration: 2,
+        updatedAt: 1,
+        meta: { type: 'movie', title: 'M', poster: '' }
+      }
+    ]);
+
+    expect([series.href, series.episodeLabel]).toEqual(['/series/tt2?s=2&e=5', 'T2:E5']);
+    expect([movie.href, movie.episodeLabel]).toEqual(['/movie/tt1', undefined]);
   });
 
   it('maps entries with a snapshot and skips those without one', () => {
