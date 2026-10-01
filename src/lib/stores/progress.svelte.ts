@@ -56,7 +56,7 @@ function isProgressData(value: unknown): value is ProgressData {
 function readStoredProgress(): Record<string, ProgressData> {
   const parsed = readStoredJson('grid-progress');
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
-  const progress: Record<string, ProgressData> = {};
+  const progress = Object.create(null) as Record<string, ProgressData>;
   for (const [key, entry] of Object.entries(parsed)) {
     if (isProgressData(entry)) {
       const { meta } = entry as { meta?: unknown };
@@ -74,7 +74,7 @@ function readStoredProgress(): Record<string, ProgressData> {
 class ProgressStore {
   progress = $state<Record<string, ProgressData>>({});
   entries = $derived.by(() => {
-    const latest: Record<string, ProgressEntry> = {};
+    const latest = Object.create(null) as Record<string, ProgressEntry>;
     for (const [key, data] of Object.entries(this.progress)) {
       const parsed = parseProgressKey(key);
       const current = latest[parsed.id];

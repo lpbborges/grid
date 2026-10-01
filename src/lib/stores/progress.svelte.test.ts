@@ -218,6 +218,17 @@ describe('progressStore entries', () => {
     expect(progressStore.entries[0].id).toBe('tt24');
   });
 
+  it('keeps an entry stored under a __proto__ key as plain data', async () => {
+    localStorage.setItem(
+      'grid-progress',
+      '{"__proto__": {"time": 10, "duration": 100, "updatedAt": 2}, "tt1": {"time": 10, "duration": 100, "updatedAt": 1}}'
+    );
+
+    const { progressStore } = await loadStore();
+
+    expect(progressStore.entries.map((entry) => entry.id)).toEqual(['__proto__', 'tt1']);
+  });
+
   it('is empty when there is no progress', async () => {
     const { progressStore } = await loadStore();
 
