@@ -383,6 +383,40 @@ describe('useMpvBackend', () => {
     expect(windowApi.unminimize).not.toHaveBeenCalled();
   });
 
+  it('reports the end of the file as finished, not as a close', async () => {
+    const onended = vi.fn();
+    const onfinished = vi.fn();
+    const { player } = await start({ onended, onfinished });
+
+    handlers['native-player-ended']({ payload: undefined });
+    await vi.waitFor(() => expect(onfinished).toHaveBeenCalledTimes(1));
+
+    expect(onended).not.toHaveBeenCalled();
+    expect(player.isRunning).toBe(false);
+  });
+
+  it('still reports an mpv failure as a close when the caller listens for the end', async () => {
+    const onended = vi.fn();
+    const onfinished = vi.fn();
+    await start({ onended, onfinished });
+
+    handlers['native-player-error']({ payload: 'loading failed' });
+    await vi.waitFor(() => expect(onended).toHaveBeenCalled());
+
+    expect(onfinished).not.toHaveBeenCalled();
+  });
+
+  it('does not report a stop as finished', async () => {
+    const onended = vi.fn();
+    const onfinished = vi.fn();
+    const { player } = await start({ onended, onfinished });
+
+    await player.stop();
+
+    expect(onended).toHaveBeenCalled();
+    expect(onfinished).not.toHaveBeenCalled();
+  });
+
   it('reports a pt-BR error when mpv fails', async () => {
     const onended = vi.fn();
     const { player } = await start({ onended });

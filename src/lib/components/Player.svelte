@@ -49,6 +49,7 @@
         oncanplay={dom.handlePlaying}
         onseeked={dom.handlePlaying}
         onerror={dom.handleError}
+        onended={dom.handleEnded}
         ondurationchange={dom.handleTimeUpdate}
         ontimeupdate={dom.handleTimeUpdate}
         onvolumechange={dom.handleVolumeChange}

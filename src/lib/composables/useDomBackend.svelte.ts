@@ -48,7 +48,14 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
     const el = getVideoElement();
     if (el) el.pause();
     request = undefined;
+    hasStarted = false;
+    currentTime = 0;
+    duration = 0;
     subtitleSelection.disposeTrackListListener();
+  }
+
+  function handleEnded() {
+    request?.onfinished?.();
   }
 
   function handleLoadedMetadata() {
@@ -234,6 +241,7 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
     handlePlaying,
     handleWaiting,
     handleError,
+    handleEnded,
     handleVolumeChange,
     handlePauseChange,
     handleTrackError

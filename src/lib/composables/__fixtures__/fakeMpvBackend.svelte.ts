@@ -35,10 +35,11 @@ export function createFakeMpvBackend() {
     failedSubtitleIndexes: [],
     subtitleError: '',
     start: vi.fn().mockImplementation(function (
-      this: { onended: (() => void) | undefined },
-      request: { onended?: () => void }
+      this: { onended: (() => void) | undefined; onfinished: (() => void) | undefined },
+      request: { onended?: () => void; onfinished?: () => void }
     ) {
       if (request.onended) this.onended = request.onended;
+      if (request.onfinished) this.onfinished = request.onfinished;
       return Promise.resolve(true);
     }),
     stop: vi.fn(),
@@ -52,6 +53,10 @@ export function createFakeMpvBackend() {
     onended: undefined as (() => void) | undefined,
     emitEnded() {
       if (this.onended) this.onended();
+    },
+    onfinished: undefined as (() => void) | undefined,
+    emitFinished() {
+      if (this.onfinished) this.onfinished();
     }
   };
 }

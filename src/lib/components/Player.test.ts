@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import Player from './Player.svelte';
 import { playbackMode } from '$lib/engine/platform';
 
@@ -81,6 +81,16 @@ describe('Player', () => {
 
     expect(screen.getByTestId('video-element')).toBeInTheDocument();
     expect(document.body.classList.contains('native-player-active')).toBe(false);
+  });
+
+  it('tells the DOM backend when the video ends', async () => {
+    vi.mocked(playbackMode).mockReturnValue('embedded');
+    const handleEnded = vi.fn();
+    render(Player, { props: { backend: domBackendWith({ handleEnded }) } });
+
+    await fireEvent.ended(screen.getByTestId('video-element'));
+
+    expect(handleEnded).toHaveBeenCalledTimes(1);
   });
 
   it('renders an empty hole and adds the body class only once mpv paints', async () => {

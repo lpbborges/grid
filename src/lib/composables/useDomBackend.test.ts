@@ -77,6 +77,45 @@ describe('useDomBackend', () => {
     expect(backend.buffering).toBe(true);
   });
 
+  it('reports a natural end through onfinished', async () => {
+    const backend = await mountBackend();
+    const onfinished = vi.fn();
+    await backend.start(request({ onfinished }));
+
+    backend.handleEnded();
+
+    expect(onfinished).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not report an end after it was stopped', async () => {
+    const backend = await mountBackend();
+    const onfinished = vi.fn();
+    await backend.start(request({ onfinished }));
+    await backend.stop();
+
+    backend.handleEnded();
+
+    expect(onfinished).not.toHaveBeenCalled();
+  });
+
+  it('resets its clock and first-frame latch on stop', async () => {
+    const backend = await mountBackend();
+    await backend.start(request());
+    const video = screen.getByTestId('video-element');
+    Object.defineProperty(video, 'duration', { value: 3600, configurable: true });
+    Object.defineProperty(video, 'currentTime', { value: 300, configurable: true });
+    await fireEvent.playing(video);
+    await fireEvent.timeUpdate(video);
+    expect(backend.hasStarted).toBe(true);
+    expect(backend.currentTime).toBe(300);
+
+    await backend.stop();
+
+    expect(backend.hasStarted).toBe(false);
+    expect(backend.currentTime).toBe(0);
+    expect(backend.duration).toBe(0);
+  });
+
   it('describes a decode failure through describeMediaError', async () => {
     const backend = await mountBackend();
     await backend.start(request());

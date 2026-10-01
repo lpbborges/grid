@@ -143,7 +143,10 @@ export interface PlaybackRequest {
   episode?: number;
   startSeconds: number;
   originalLanguage?: string;
+  /** mpv only: closed for any reason, including errors. */
   onended?: () => void;
+  /** The file played to its end. Never called on close or error. */
+  onfinished?: () => void;
 }
 
 /**
