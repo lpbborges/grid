@@ -11,7 +11,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
-  import type { Episode } from '$lib/types';
+  import type { Episode, EpisodeRef } from '$lib/types';
   import { nextEpisode } from '$lib/utils/episodes';
 
   let { data } = $props();
@@ -20,6 +20,7 @@
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
+  let focusEpisode = $derived<EpisodeRef | null>(data.initialEpisode ?? null);
 
   const player = usePlayer(() => videoElement, {
     onwatched: () => {
@@ -97,6 +98,7 @@
     if (typeof window === 'undefined' || !series) return;
 
     lastAttemptedEpisode = episode;
+    focusEpisode = { season: episode.season, episode: episode.episode };
     const requestedId = seriesId;
 
     error = '';
@@ -270,7 +272,7 @@
           bind:selectedSeason
           onPlayEpisode={playEpisode}
           originalLanguage={series?.language}
-          focusEpisode={data.initialEpisode ?? null}
+          {focusEpisode}
         />
       {/if}
     </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import SeriesPage from './+page.svelte';
 
 const {
@@ -19,6 +19,11 @@ const {
 vi.mock('$lib/engine/orchestrator', () => ({
   prepareStream: prepareStreamMock,
   finalizeStream: finalizeStreamMock
+}));
+
+vi.mock('$lib/engine/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/engine/platform')>()),
+  playbackMode: () => 'embedded'
 }));
 
 vi.mock('$lib/api/translate', () => ({
@@ -186,5 +191,42 @@ describe('Series page integration flow', () => {
     });
 
     expect(await screen.findByDisplayValue('Temporada 1')).toBeInTheDocument();
+  });
+
+  it('highlights the last played episode after the player closes', async () => {
+    HTMLElement.prototype.scrollTo = vi.fn();
+    getSeriesStreamsMock.mockResolvedValue([{ title: '1080p', infoHash: 'def', fileIdx: 0 }]);
+    prepareStreamMock.mockResolvedValue({
+      videoSrc: 'http://localhost:3000/stream',
+      subtitles: [],
+      engineStatus: { status: 'downloading', progress: 0, downloadSpeed: 0, seeds: 1, peers: 1 }
+    });
+    const twoEpisodes = {
+      ...series,
+      videos: [
+        { id: 'e1', season: 1, episode: 1, name: 'Pilot' },
+        { id: 'e2', season: 1, episode: 2, name: 'Second' }
+      ]
+    };
+    render(SeriesPage, {
+      props: {
+        data: {
+          seriesId: 'tt1',
+          series: twoEpisodes,
+          initialEpisode: { season: 1, episode: 1 },
+          error: null
+        }
+      }
+    });
+
+    await fireEvent.click(await screen.findByText(/Second/));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Fechar' }));
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-episode="2"]')?.getAttribute('aria-current')).toBe(
+        'true'
+      )
+    );
+    expect(document.querySelector('[data-episode="1"]')?.hasAttribute('aria-current')).toBe(false);
   });
 });
