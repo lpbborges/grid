@@ -43,7 +43,7 @@
   class="border-primary/50 border-l-green bg-surface/95 text-main fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 overflow-hidden rounded-sm border border-l-4 py-3 pr-3 pl-4 shadow-[0_10px_30px_rgba(0,0,0,0.9)] backdrop-blur-sm"
 >
   <span id={messageId} class="font-cyber text-sm tracking-wider uppercase">{message}</span>
-  <span aria-hidden="true" class="text-primary">·</span>
+  <span aria-hidden="true" class="text-primary/80 text-base">·</span>
   <button
     bind:this={actionButton}
     type="button"

@@ -24,6 +24,15 @@ describe('UndoToast', () => {
     expect(onaction).toHaveBeenCalledTimes(1);
   });
 
+  it('shows a visible separator between the message and the action', () => {
+    renderToast();
+
+    const separator = screen.getByText('·');
+    expect(separator.getAttribute('aria-hidden')).toBe('true');
+    expect(separator.className).toContain('text-primary/80');
+    expect(separator.className).toContain('text-base');
+  });
+
   it('focuses the action, described by the message', () => {
     renderToast();
 
