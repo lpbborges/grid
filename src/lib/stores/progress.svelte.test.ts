@@ -330,3 +330,136 @@ describe('progressStore latestEpisodeFor', () => {
     expect(progressStore.latestEpisodeFor('tt1')).toEqual({ season: 1, episode: 4 });
   });
 });
+
+describe('progressStore finished episodes', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('moves the title to the next episode when an episode finishes', async () => {
+    const { progressStore } = await loadStore();
+    vi.setSystemTime(1000);
+    progressStore.update('tt1', 1, 2, 10, 100, {
+      meta: seriesMeta,
+      next: { season: 1, episode: 3 }
+    });
+    vi.setSystemTime(2000);
+    progressStore.update('tt1', 1, 2, 96, 100, {
+      meta: seriesMeta,
+      next: { season: 1, episode: 3 }
+    });
+
+    expect(progressStore.get('tt1', 1, 2)).toBeUndefined();
+    expect(progressStore.entries).toEqual([
+      {
+        id: 'tt1',
+        season: 1,
+        episode: 3,
+        time: 0,
+        duration: 100,
+        updatedAt: 2000,
+        meta: seriesMeta
+      }
+    ]);
+    expect(storedProgress()['tt1-S1E3'].time).toBe(0);
+  });
+
+  it('drops the title when the last episode finishes', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.update('tt1', 1, 2, 10, 100, { meta: seriesMeta, next: null });
+    progressStore.update('tt1', 1, 2, 96, 100, { meta: seriesMeta, next: null });
+
+    expect(progressStore.entries).toEqual([]);
+  });
+
+  it('never falls back to an older, partly watched episode', async () => {
+    const { progressStore } = await loadStore();
+    vi.setSystemTime(1000);
+    progressStore.update('tt1', 1, 1, 30, 100, { meta: seriesMeta });
+    vi.setSystemTime(2000);
+    progressStore.update('tt1', 1, 2, 10, 100, { meta: seriesMeta, next: null });
+    progressStore.update('tt1', 1, 2, 96, 100, { meta: seriesMeta, next: null });
+
+    expect(progressStore.entries).toEqual([]);
+    expect(progressStore.get('tt1', 1, 1)).toBeUndefined();
+  });
+
+  it('marks earlier partly watched episodes as watched when a later one finishes', async () => {
+    const { progressStore } = await loadStore();
+    const { watchedStore } = await import('./watched.svelte');
+    watchedStore.watchedIds = [];
+    progressStore.update('tt1', 1, 1, 30, 100, { meta: seriesMeta });
+    progressStore.update('tt1', 2, 1, 30, 100, { meta: seriesMeta });
+    progressStore.update('tt1', 1, 2, 10, 100, { meta: seriesMeta, next: null });
+    progressStore.update('tt1', 1, 2, 96, 100, { meta: seriesMeta, next: null });
+
+    expect(watchedStore.has('tt1', 1, 1)).toBe(true);
+    expect(watchedStore.has('tt1', 1, 2)).toBe(true);
+    expect(watchedStore.has('tt1', 2, 1)).toBe(false);
+    expect(progressStore.get('tt1', 2, 1)?.time).toBe(30);
+    expect(JSON.parse(localStorage.getItem('grid-watched')!)).toEqual(
+      expect.arrayContaining(['tt1-S1E1', 'tt1-S1E2'])
+    );
+  });
+
+  it('keeps the resume position of a next episode that was already started', async () => {
+    const { progressStore } = await loadStore();
+    vi.setSystemTime(1000);
+    progressStore.update('tt1', 1, 3, 40, 100, { meta: seriesMeta });
+    vi.setSystemTime(2000);
+    progressStore.update('tt1', 1, 2, 10, 100, {
+      meta: seriesMeta,
+      next: { season: 1, episode: 3 }
+    });
+    vi.setSystemTime(3000);
+    progressStore.update('tt1', 1, 2, 96, 100, {
+      meta: seriesMeta,
+      next: { season: 1, episode: 3 }
+    });
+
+    expect(progressStore.entries[0]).toMatchObject({
+      season: 1,
+      episode: 3,
+      time: 40,
+      updatedAt: 3000
+    });
+  });
+
+  it('advances only once while the finished episode keeps playing', async () => {
+    const { progressStore } = await loadStore();
+    const ctx = { meta: seriesMeta, next: { season: 1, episode: 3 } };
+    vi.setSystemTime(1000);
+    progressStore.update('tt1', 1, 2, 10, 100, ctx);
+    vi.setSystemTime(2000);
+    progressStore.update('tt1', 1, 2, 96, 100, ctx);
+    vi.setSystemTime(3000);
+    progressStore.update('tt1', 1, 2, 97, 100, ctx);
+
+    expect(progressStore.entries[0].updatedAt).toBe(2000);
+  });
+
+  it('keeps the newer entry when the user rewatches the finished episode', async () => {
+    const { progressStore } = await loadStore();
+    const ctx = { meta: seriesMeta, next: { season: 1, episode: 3 } };
+    vi.setSystemTime(1000);
+    progressStore.update('tt1', 1, 2, 10, 100, ctx);
+    vi.setSystemTime(2000);
+    progressStore.update('tt1', 1, 2, 96, 100, ctx);
+    vi.setSystemTime(3000);
+    progressStore.update('tt1', 1, 2, 20, 100, ctx);
+
+    expect(progressStore.entries[0]).toMatchObject({ season: 1, episode: 2, time: 20 });
+  });
+
+  it('drops a finished movie from the list', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.update('tt9', undefined, undefined, 10, 100, { meta: movieMeta });
+    progressStore.update('tt9', undefined, undefined, 96, 100, { meta: movieMeta });
+
+    expect(progressStore.entries).toEqual([]);
+  });
+});

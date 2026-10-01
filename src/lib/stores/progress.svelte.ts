@@ -3,6 +3,7 @@ import { untrack } from 'svelte';
 import { watchedStore } from './watched.svelte';
 import { readStoredJson, writeStored } from './storage';
 import { isRecord } from '$lib/utils/isRecord';
+import { compareEpisodes } from '$lib/utils/episodes';
 import type { EpisodeRef, ProgressContext, ProgressEntry, ProgressMeta } from '$lib/types';
 
 export type ProgressData = {
@@ -193,6 +194,9 @@ class ProgressStore {
     if (time / duration >= 0.95) {
       if (key in this.progress) {
         delete this.progress[key];
+        if (season !== undefined && episode !== undefined) {
+          this.advancePast(String(id), { season, episode }, duration, context);
+        }
         this.persistNow();
       }
       watchedStore.add(id, season, episode);
@@ -201,6 +205,29 @@ class ProgressStore {
       this.progress[key] = { time, duration, updatedAt: Date.now(), ...(meta && { meta }) };
       this.schedulePersist();
     }
+  }
+
+  private advancePast(
+    id: string,
+    finished: EpisodeRef,
+    duration: number,
+    context: ProgressContext | undefined
+  ) {
+    for (const key of Object.keys(this.progress)) {
+      const parsed = parseProgressKey(key);
+      if (parsed.id !== id || parsed.season === undefined || parsed.episode === undefined) continue;
+      if (compareEpisodes({ season: parsed.season, episode: parsed.episode }, finished) < 0) {
+        delete this.progress[key];
+        watchedStore.add(id, parsed.season, parsed.episode);
+      }
+    }
+    const next = context?.next;
+    if (!next) return;
+    const nextKey = this.getKey(id, next.season, next.episode);
+    const existing = this.progress[nextKey];
+    this.progress[nextKey] = existing
+      ? { ...existing, updatedAt: Date.now() }
+      : { time: 0, duration, updatedAt: Date.now(), meta: context.meta };
   }
 }
 
