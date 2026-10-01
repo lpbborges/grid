@@ -117,3 +117,216 @@ describe('progressStore persistence', () => {
     expect(watchedStore.has('tt1')).toBe(false);
   });
 });
+
+const movieMeta = { type: 'movie' as const, title: 'Movie', poster: 'm.jpg' };
+const seriesMeta = { type: 'series' as const, title: 'Series', poster: 's.jpg' };
+
+describe('progressStore snapshot', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('stores the snapshot passed to update and persists it', async () => {
+    const { progressStore, PROGRESS_PERSIST_INTERVAL_MS } = await loadStore();
+
+    progressStore.update('tt1', undefined, undefined, 10, 100, { meta: movieMeta });
+    vi.advanceTimersByTime(PROGRESS_PERSIST_INTERVAL_MS);
+
+    expect(progressStore.get('tt1')?.meta).toEqual(movieMeta);
+    expect(storedProgress().tt1.meta).toEqual(movieMeta);
+  });
+
+  it('keeps the stored snapshot when a later update has none', async () => {
+    const { progressStore } = await loadStore();
+
+    progressStore.update('tt1', undefined, undefined, 10, 100, { meta: movieMeta });
+    progressStore.update('tt1', undefined, undefined, 20, 100);
+
+    expect(progressStore.get('tt1')?.meta).toEqual(movieMeta);
+  });
+
+  it('loads entries saved before snapshots existed unchanged', async () => {
+    const legacy = { time: 10, duration: 100, updatedAt: 1 };
+    localStorage.setItem('grid-progress', JSON.stringify({ tt1: legacy, 'tt2-S1E3': legacy }));
+
+    const { progressStore } = await loadStore();
+
+    expect(progressStore.progress).toEqual({ tt1: legacy, 'tt2-S1E3': legacy });
+  });
+
+  it('reloads a stored snapshot', async () => {
+    localStorage.setItem(
+      'grid-progress',
+      JSON.stringify({ tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta } })
+    );
+
+    const { progressStore } = await loadStore();
+
+    expect(progressStore.get('tt1')?.meta).toEqual(movieMeta);
+  });
+
+  it('keeps an entry but drops a malformed snapshot', async () => {
+    localStorage.setItem(
+      'grid-progress',
+      JSON.stringify({
+        tt1: { time: 10, duration: 100, updatedAt: 1, meta: { type: 'tv', title: 3 } }
+      })
+    );
+
+    const { progressStore } = await loadStore();
+
+    expect(progressStore.progress).toEqual({ tt1: { time: 10, duration: 100, updatedAt: 1 } });
+  });
+});
+
+describe('progressStore entries', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('lists one entry per title, most recently updated first', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.progress = {
+      tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta },
+      'tt2-S1E1': { time: 10, duration: 100, updatedAt: 2 },
+      'tt2-S1E2': { time: 30, duration: 100, updatedAt: 3, meta: seriesMeta }
+    };
+
+    expect(progressStore.entries).toEqual([
+      { id: 'tt2', season: 1, episode: 2, time: 30, duration: 100, updatedAt: 3, meta: seriesMeta },
+      { id: 'tt1', time: 10, duration: 100, updatedAt: 1, meta: movieMeta }
+    ]);
+  });
+
+  it('caps the list at CONTINUE_WATCHING_LIMIT titles', async () => {
+    const { progressStore } = await loadStore();
+    const { CONTINUE_WATCHING_LIMIT } = await import('./progress.svelte');
+    progressStore.progress = Object.fromEntries(
+      Array.from({ length: 25 }, (_, i) => [`tt${i}`, { time: 1, duration: 100, updatedAt: i }])
+    );
+
+    expect(CONTINUE_WATCHING_LIMIT).toBe(20);
+    expect(progressStore.entries).toHaveLength(20);
+    expect(progressStore.entries[0].id).toBe('tt24');
+  });
+
+  it('is empty when there is no progress', async () => {
+    const { progressStore } = await loadStore();
+
+    expect(progressStore.entries).toEqual([]);
+  });
+});
+
+describe('progressStore remove and restore', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('removes the title and every episode key, and persists immediately', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.progress = {
+      tt1: { time: 1, duration: 100, updatedAt: 1 },
+      'tt1-S1E1': { time: 1, duration: 100, updatedAt: 2 },
+      'tt1-S2E5': { time: 1, duration: 100, updatedAt: 3 },
+      tt12: { time: 1, duration: 100, updatedAt: 4 },
+      'tt12-S1E1': { time: 1, duration: 100, updatedAt: 5 }
+    };
+
+    const removed = progressStore.remove('tt1');
+
+    expect(Object.keys(removed).sort()).toEqual(['tt1', 'tt1-S1E1', 'tt1-S2E5']);
+    expect(Object.keys(progressStore.progress).sort()).toEqual(['tt12', 'tt12-S1E1']);
+    expect(Object.keys(storedProgress()).sort()).toEqual(['tt12', 'tt12-S1E1']);
+  });
+
+  it('restores removed entries and persists immediately', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.progress = {
+      'tt1-S1E1': { time: 5, duration: 100, updatedAt: 2, meta: seriesMeta }
+    };
+
+    const removed = progressStore.remove('tt1');
+    progressStore.restore(removed);
+
+    expect(progressStore.get('tt1', 1, 1)?.time).toBe(5);
+    expect(storedProgress()['tt1-S1E1'].meta).toEqual(seriesMeta);
+  });
+});
+
+describe('progressStore attachMeta', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('persists fetched snapshots on every key of the title that lacks one', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.progress = {
+      'tt2-S1E1': { time: 1, duration: 100, updatedAt: 1 },
+      'tt2-S1E2': { time: 1, duration: 100, updatedAt: 2 },
+      tt3: { time: 1, duration: 100, updatedAt: 3 }
+    };
+
+    progressStore.attachMeta({ tt2: seriesMeta, tt3: null });
+
+    expect(storedProgress()['tt2-S1E1'].meta).toEqual(seriesMeta);
+    expect(storedProgress()['tt2-S1E2'].meta).toEqual(seriesMeta);
+    expect(storedProgress().tt3.meta).toBeUndefined();
+  });
+
+  it('never overwrites a snapshot the player already stored', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.progress = { tt1: { time: 1, duration: 100, updatedAt: 1, meta: movieMeta } };
+
+    progressStore.attachMeta({ tt1: { type: 'movie', title: 'Other', poster: 'o.jpg' } });
+
+    expect(progressStore.get('tt1')?.meta).toEqual(movieMeta);
+  });
+
+  it('ignores invalid snapshots and titles removed meanwhile', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.progress = { tt1: { time: 1, duration: 100, updatedAt: 1 } };
+
+    progressStore.attachMeta({
+      tt1: { type: 'tv', title: '', poster: 1 } as never,
+      tt9: movieMeta
+    });
+
+    expect(progressStore.progress).toEqual({ tt1: { time: 1, duration: 100, updatedAt: 1 } });
+  });
+});
+
+describe('progressStore latestEpisodeFor', () => {
+  it('returns null when the series has no progress', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.progress = { tt9: { time: 1, duration: 100, updatedAt: 1 } };
+
+    expect(progressStore.latestEpisodeFor('tt1')).toBeNull();
+  });
+
+  it('returns the most recently updated episode, not the highest one', async () => {
+    const { progressStore } = await loadStore();
+    progressStore.progress = {
+      'tt1-S3E2': { time: 1, duration: 100, updatedAt: 1 },
+      'tt1-S1E4': { time: 1, duration: 100, updatedAt: 2 },
+      'tt12-S5E1': { time: 1, duration: 100, updatedAt: 3 }
+    };
+
+    expect(progressStore.latestEpisodeFor('tt1')).toEqual({ season: 1, episode: 4 });
+  });
+});
