@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import SeriesPage from './+page.svelte';
 import { EngineStartError } from '$lib/engine/torrent';
@@ -111,6 +111,10 @@ describe('Series page error handling', () => {
   });
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('Series page integration flow', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -157,9 +161,8 @@ describe('Series page integration flow', () => {
   });
 
   it('preselects the season and episode from the deep link', async () => {
-    const scrollTo = vi.fn();
-    HTMLElement.prototype.scrollTo = scrollTo;
-    Element.prototype.scrollIntoView = vi.fn();
+    const scrollTo = vi.spyOn(HTMLElement.prototype, 'scrollTo');
+    const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
     const deepSeries = {
       ...series,
       videos: [
@@ -184,7 +187,7 @@ describe('Series page integration flow', () => {
     expect(row.getAttribute('aria-current')).toBe('true');
     expect(scrollTo).toHaveBeenCalledTimes(1);
     expect(scrollTo.mock.contexts[0]).toBe(row.parentElement);
-    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it('selects the first season when there is no episode to open on', async () => {
@@ -209,7 +212,6 @@ describe('Series page integration flow', () => {
 
   async function renderTwoEpisodes() {
     progressStore.remove('tt1');
-    HTMLElement.prototype.scrollTo = vi.fn();
     getSeriesStreamsMock.mockResolvedValue([{ title: '1080p', infoHash: 'def', fileIdx: 0 }]);
     prepareStreamMock.mockResolvedValue({
       videoSrc: 'http://localhost:3000/stream',

@@ -1,5 +1,5 @@
 import { render, fireEvent } from '@testing-library/svelte';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import EpisodeList from './EpisodeList.svelte';
 import '@testing-library/jest-dom';
 
@@ -75,12 +75,16 @@ describe('EpisodeList component', () => {
       { id: '2', season: 1, episode: 2, name: 'Ep 2' },
       { id: '3', season: 2, episode: 1, name: 'Ep 3' }
     ];
-    let scrollTo = vi.fn();
+    let scrollTo: MockInstance<HTMLElement['scrollTo']>;
+    let scrollIntoView: MockInstance<HTMLElement['scrollIntoView']>;
 
     beforeEach(() => {
-      scrollTo = vi.fn();
-      HTMLElement.prototype.scrollTo = scrollTo;
-      Element.prototype.scrollIntoView = vi.fn();
+      scrollTo = vi.spyOn(HTMLElement.prototype, 'scrollTo');
+      scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     function renderFocused(focusEpisode: { season: number; episode: number } | null) {
@@ -116,7 +120,7 @@ describe('EpisodeList component', () => {
       const row = container.querySelector('[data-episode="2"]')!;
       expect(scrollTo).toHaveBeenCalledTimes(1);
       expect(scrollTo.mock.contexts[0]).toBe(row.parentElement);
-      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+      expect(scrollIntoView).not.toHaveBeenCalled();
     });
 
     it('scrolls again when another series opens on the same episode', async () => {

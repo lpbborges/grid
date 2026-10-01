@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
-if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollTo) {
-  HTMLElement.prototype.scrollTo = () => {};
+// jsdom has no element scrolling; give spies something to wrap.
+if (typeof HTMLElement !== 'undefined') {
+  HTMLElement.prototype.scrollTo ??= () => {};
+  HTMLElement.prototype.scrollIntoView ??= () => {};
 }

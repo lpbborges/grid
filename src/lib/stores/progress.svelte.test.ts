@@ -10,17 +10,17 @@ function storedProgress() {
   return JSON.parse(localStorage.getItem('grid-progress') ?? 'null');
 }
 
+beforeEach(() => {
+  localStorage.clear();
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
 describe('progressStore persistence', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
-
   it('drops stored entries that are not valid progress', async () => {
     const valid = { time: 10, duration: 100, updatedAt: 1 };
     localStorage.setItem(
@@ -122,14 +122,6 @@ const movieMeta = { type: 'movie' as const, title: 'Movie', poster: 'm.jpg' };
 const seriesMeta = { type: 'series' as const, title: 'Series', poster: 's.jpg' };
 
 describe('progressStore snapshot', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('stores the snapshot passed to update and persists it', async () => {
     const { progressStore, PROGRESS_PERSIST_INTERVAL_MS } = await loadStore();
 
@@ -184,14 +176,6 @@ describe('progressStore snapshot', () => {
 });
 
 describe('progressStore entries', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('lists one entry per title, most recently updated first', async () => {
     const { progressStore } = await loadStore();
     progressStore.progress = {
@@ -237,14 +221,6 @@ describe('progressStore entries', () => {
 });
 
 describe('progressStore remove and restore', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('removes the title and every episode key, and persists immediately', async () => {
     const { progressStore } = await loadStore();
     progressStore.progress = {
@@ -277,14 +253,6 @@ describe('progressStore remove and restore', () => {
 });
 
 describe('progressStore attachMeta', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('persists fetched snapshots on every key of the title that lacks one', async () => {
     const { progressStore } = await loadStore();
     progressStore.progress = {
@@ -343,14 +311,6 @@ describe('progressStore latestEpisodeFor', () => {
 });
 
 describe('progressStore finished episodes', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('moves the title to the next episode when an episode finishes', async () => {
     const { progressStore } = await loadStore();
     vi.setSystemTime(1000);
