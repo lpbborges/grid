@@ -1,5 +1,5 @@
 import { render, fireEvent } from '@testing-library/svelte';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import EpisodeList from './EpisodeList.svelte';
 import '@testing-library/jest-dom';
 
@@ -67,5 +67,89 @@ describe('EpisodeList component', () => {
     });
 
     expect(getByText('Original (Inglês)')).toBeInTheDocument();
+  });
+
+  describe('focused episode', () => {
+    const episodes = [
+      { id: '1', season: 1, episode: 1, name: 'Ep 1' },
+      { id: '2', season: 1, episode: 2, name: 'Ep 2' },
+      { id: '3', season: 2, episode: 1, name: 'Ep 3' }
+    ];
+    let scrollTo: MockInstance<HTMLElement['scrollTo']>;
+    let scrollIntoView: MockInstance<HTMLElement['scrollIntoView']>;
+
+    beforeEach(() => {
+      scrollTo = vi.spyOn(HTMLElement.prototype, 'scrollTo');
+      scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function renderFocused(focusEpisode: { season: number; episode: number } | null) {
+      return render(EpisodeList, {
+        props: {
+          seriesId: 'series-123',
+          episodes,
+          translatedEpisodes: {},
+          selectedSeason: 1,
+          onPlayEpisode: vi.fn(),
+          focusEpisode
+        }
+      });
+    }
+
+    it('highlights only the focused episode and labels it', () => {
+      const { container } = renderFocused({ season: 1, episode: 2 });
+
+      const focused = container.querySelector('[data-episode="2"]')!;
+      expect(focused.getAttribute('aria-current')).toBe('true');
+      expect(container.querySelector('[data-episode="1"]')!.hasAttribute('aria-current')).toBe(
+        false
+      );
+      expect(focused.querySelector('button')!.textContent).toContain('Continuar');
+      expect(container.querySelector('[data-episode="1"]')!.textContent).not.toContain('Continuar');
+    });
+
+    it('scrolls the focused episode into view once, inside the list only', async () => {
+      const { container, rerender } = renderFocused({ season: 1, episode: 2 });
+
+      await rerender({ translatedEpisodes: { '1': 'Translated' } });
+
+      const row = container.querySelector('[data-episode="2"]')!;
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollTo.mock.contexts[0]).toBe(row.parentElement);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    });
+
+    it('scrolls again when another series opens on the same episode', async () => {
+      const { rerender } = renderFocused({ season: 1, episode: 2 });
+
+      await rerender({
+        seriesId: 'series-456',
+        episodes: episodes.map((episode) => ({ ...episode, id: `other-${episode.id}` })),
+        focusEpisode: { season: 1, episode: 2 }
+      });
+
+      expect(scrollTo).toHaveBeenCalledTimes(2);
+    });
+
+    it('scrolls to the focused episode again when its season is shown again', async () => {
+      const { container } = renderFocused({ season: 1, episode: 2 });
+      const seasons = container.querySelector('select')!;
+
+      await fireEvent.change(seasons, { target: { value: '2' } });
+      await fireEvent.change(seasons, { target: { value: '1' } });
+
+      expect(scrollTo).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not scroll without a focused episode in the selected season', () => {
+      renderFocused({ season: 2, episode: 1 });
+      renderFocused(null);
+
+      expect(scrollTo).not.toHaveBeenCalled();
+    });
   });
 });

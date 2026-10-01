@@ -1,8 +1,18 @@
 import { logger } from '$lib/logger';
-import type { CinemetaMeta, MediaType, Movie, SearchResult, Series } from '../types';
+import type {
+  CinemetaMeta,
+  MediaType,
+  Movie,
+  ProgressEntry,
+  ProgressMeta,
+  SearchResult,
+  Series
+} from '../types';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { endpoints } from './endpoints';
 import { searchWikidataImdbIds } from './wikidata';
+import { translateTitle } from './translate';
+import { isImdbId } from '$lib/utils/imdb';
 
 function mapCinemetaMeta(m: CinemetaMeta): Movie {
   return {
@@ -121,6 +131,54 @@ async function getTitle(imdbId: string, customFetch?: typeof fetch) {
     getSearchResult('movie', imdbId, customFetch)
   ]);
   return series ?? movie;
+}
+
+const titleSnapshots = new Map<string, Promise<ProgressMeta | null>>();
+
+async function fetchTitleSnapshot(
+  id: string,
+  type: MediaType | undefined,
+  customFetch?: typeof fetch
+): Promise<ProgressMeta | null> {
+  const result = type
+    ? await getSearchResult(type, id, customFetch)
+    : await getTitle(id, customFetch);
+  if (!result) return null;
+  return {
+    type: result.type,
+    title: await translateTitle(result.title),
+    poster: result.medium_cover_image ?? ''
+  };
+}
+
+/** Cinemeta's name and poster for a title whose progress predates snapshots. */
+function getTitleSnapshot(
+  id: string,
+  type?: MediaType,
+  customFetch?: typeof fetch
+): Promise<ProgressMeta | null> {
+  let snapshot = titleSnapshots.get(id);
+  if (!snapshot) {
+    snapshot = fetchTitleSnapshot(id, type, customFetch);
+    titleSnapshots.set(id, snapshot);
+    snapshot.then((found) => {
+      if (!found) titleSnapshots.delete(id);
+    });
+  }
+  return snapshot;
+}
+
+export async function resolveMissingSnapshots(
+  entries: ProgressEntry[],
+  customFetch?: typeof fetch
+): Promise<Record<string, ProgressMeta | null>> {
+  const missing = entries.filter((entry) => !entry.meta && isImdbId(entry.id));
+  const snapshots = await Promise.all(
+    missing.map((entry) =>
+      getTitleSnapshot(entry.id, entry.season !== undefined ? 'series' : undefined, customFetch)
+    )
+  );
+  return Object.fromEntries(missing.map((entry, i) => [entry.id, snapshots[i]]));
 }
 
 // Cinemeta only matches English titles, so Wikidata resolves Brazilian and
@@ -329,7 +387,7 @@ export async function getSeriesDetails(
     })),
     director: meta.director || [],
     language: mapCountryToLanguage(meta.country),
-    videos: meta.videos || [],
+    videos: (meta.videos || []).filter((video) => video.season > 0),
     torrents: []
   };
 

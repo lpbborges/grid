@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act } from '@testing-library/svelte';
+import { render, screen, act, fireEvent } from '@testing-library/svelte';
 import HomePage from './+page.svelte';
 import type { MediaType, Movie, SearchResult } from '$lib/types';
 import { appReady, searchQuery } from '$lib/stores.svelte';
+import { progressStore } from '$lib/stores/progress.svelte';
+import { tick } from 'svelte';
 
 const { searchCatalogMock } = vi.hoisted(() => ({
   searchCatalogMock: vi.fn()
@@ -70,6 +72,7 @@ describe('Home page search', () => {
     vi.useFakeTimers();
     searchQuery.value = '';
     appReady.value = false;
+    progressStore.progress = {};
     searchReports = [];
     searchCatalogMock.mockImplementation((_query: string, onUpdate: SearchReport) => {
       searchReports.push(onUpdate);
@@ -229,7 +232,10 @@ describe('Home page search', () => {
     const seriesDeferred = deferred<Movie[]>();
 
     render(HomePage, {
-      data: { popularMovies: moviesDeferred.promise, popularSeries: seriesDeferred.promise }
+      data: {
+        popularMovies: moviesDeferred.promise,
+        popularSeries: seriesDeferred.promise
+      }
     });
 
     expect(screen.getByText('Carregando...')).toBeTruthy();
@@ -267,7 +273,10 @@ describe('Home page search', () => {
   it('marks the app ready once the popular catalog arrives', async () => {
     const movies = deferred<Movie[]>();
     render(HomePage, {
-      data: { popularMovies: movies.promise, popularSeries: Promise.resolve([]) }
+      data: {
+        popularMovies: movies.promise,
+        popularSeries: Promise.resolve([])
+      }
     });
     await act(async () => {});
     expect(appReady.value).toBe(false);
@@ -287,5 +296,146 @@ describe('Home page search', () => {
     await act(async () => {});
 
     expect(appReady.value).toBe(true);
+  });
+});
+
+describe('Home page continue watching', () => {
+  const seriesMeta = { type: 'series' as const, title: 'Resumed Series', poster: 's.jpg' };
+  const movieMeta = { type: 'movie' as const, title: 'Resumed Movie', poster: 'm.jpg' };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    searchQuery.value = '';
+    progressStore.progress = {};
+  });
+
+  it('hides the row when there is no progress', async () => {
+    render(HomePage, { data: popularDataWith([makeMovie('tt1', 'Popular')], []) });
+    await act(async () => {});
+
+    expect(screen.queryByText('Continuar assistindo')).toBeNull();
+  });
+
+  it('lists titles newest first, linking series to the episode to resume', async () => {
+    progressStore.progress = {
+      tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta },
+      'tt2-S2E5': { time: 10, duration: 100, updatedAt: 2, meta: seriesMeta }
+    };
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    expect(screen.getByText('T2:E5')).toBeTruthy();
+    expect(screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'))).toEqual([
+      '/series/tt2?s=2&e=5',
+      '/movie/tt1'
+    ]);
+  });
+
+  it('marks a title advanced to its next episode as up next', async () => {
+    progressStore.progress = {
+      'tt2-S3E1': { time: 0, duration: 100, updatedAt: 2, meta: seriesMeta, upNext: true }
+    };
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    expect(screen.getByTestId('media-card-episode').textContent).toContain('Próximo');
+  });
+
+  it('does not mark an episode closed at the very start as up next', async () => {
+    progressStore.progress = {
+      'tt2-S3E1': { time: 0, duration: 100, updatedAt: 2, meta: seriesMeta }
+    };
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    expect(screen.getByTestId('media-card-episode').textContent).not.toContain('Próximo');
+  });
+
+  it('skips only the title whose metadata failed and keeps the popular rows', async () => {
+    progressStore.progress = {
+      tt1: { time: 10, duration: 100, updatedAt: 2, meta: movieMeta },
+      tt9: { time: 10, duration: 100, updatedAt: 1 }
+    };
+    render(HomePage, { data: popularDataWith([makeMovie('tt5', 'Popular Movie')], []) });
+    await act(async () => {});
+
+    expect(screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'))).toEqual([
+      '/movie/tt1',
+      '/movie/tt5'
+    ]);
+  });
+
+  it('adds a legacy title once its snapshot arrives', async () => {
+    progressStore.progress = { tt1: { time: 10, duration: 100, updatedAt: 1 } };
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+    expect(screen.queryByText('Continuar assistindo')).toBeNull();
+
+    await act(() => progressStore.attachMeta({ tt1: movieMeta }));
+
+    expect(screen.getAllByText('Resumed Movie')[0]).toBeTruthy();
+  });
+
+  it('shows the row while the popular titles are still loading', async () => {
+    progressStore.progress = { tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta } };
+    render(HomePage, {
+      data: {
+        popularMovies: new Promise<Movie[]>(() => {}),
+        popularSeries: new Promise<Movie[]>(() => {})
+      }
+    });
+    await act(async () => {});
+
+    expect(screen.getByText('Continuar assistindo')).toBeTruthy();
+    expect(screen.getByText('Carregando...')).toBeTruthy();
+  });
+
+  it('shows the row when the popular titles fail to load', async () => {
+    progressStore.progress = { tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta } };
+    render(HomePage, {
+      data: {
+        popularMovies: Promise.reject(new Error('down')),
+        popularSeries: Promise.reject(new Error('down'))
+      }
+    });
+    await act(async () => {});
+
+    expect(screen.getByText('Continuar assistindo')).toBeTruthy();
+    expect(screen.getByText('Erro ao carregar dados')).toBeTruthy();
+  });
+
+  it('hides the row while searching', async () => {
+    progressStore.progress = { tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta } };
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+    await act(() => {
+      searchQuery.value = 'x';
+    });
+
+    expect(screen.queryByText('Continuar assistindo')).toBeNull();
+  });
+
+  it('restores a removed title when the user undoes', async () => {
+    progressStore.progress = { tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta } };
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remover de Continuar assistindo' }));
+    expect(screen.queryByText('Continuar assistindo')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Desfazer' }));
+
+    expect(screen.getByText('Continuar assistindo')).toBeTruthy();
+  });
+
+  it('focuses the first popular card once the emptied row’s toast closes', async () => {
+    progressStore.progress = { tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta } };
+    render(HomePage, { data: popularDataWith([makeMovie('tt5', 'Popular Movie')], []) });
+    await act(async () => {});
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remover de Continuar assistindo' }));
+    await fireEvent.keyDown(screen.getByRole('button', { name: 'Desfazer' }), { key: 'Escape' });
+    await tick();
+
+    expect(document.activeElement?.getAttribute('href')).toBe('/movie/tt5');
   });
 });

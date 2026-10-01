@@ -8,6 +8,7 @@ import {
   type PlaybackBoundaryOptions
 } from '$lib/engine/__fixtures__/playbackBoundary';
 import { settingsStore } from '$lib/stores/settings.svelte';
+import { progressStore } from '$lib/stores/progress.svelte';
 import { clearExternalSubtitleCache } from '$lib/api/subtitles';
 import { defaultTrackers } from '$lib/api/endpoints';
 import { ADD_ATTEMPT_TIMEOUTS_MS } from '$lib/engine/torrent';
@@ -66,12 +67,31 @@ describe('Movie playback wiring', () => {
     localStorage.clear();
     settingsStore.cacheLimitBytes = DEFAULT_CACHE_LIMIT;
     clearExternalSubtitleCache();
+    progressStore.progress = {};
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     settingsStore.cacheLimitBytes = DEFAULT_CACHE_LIMIT;
+  });
+
+  it('saves the movie snapshot with its progress', async () => {
+    await openAndPlay();
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await waitFor(() => expect(video.getAttribute('src')).toBeTruthy());
+
+    Object.defineProperty(video, 'duration', { configurable: true, value: 100 });
+    Object.defineProperty(video, 'currentTime', { configurable: true, value: 40 });
+    await fireEvent.timeUpdate(video);
+
+    await waitFor(() =>
+      expect(progressStore.get(movie.id)?.meta).toEqual({
+        type: 'movie',
+        title: 'Grid Fixture',
+        poster: POSTER
+      })
+    );
   });
 
   it('plays the selected file through the stream proxy without reaching the network', async () => {

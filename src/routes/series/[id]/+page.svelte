@@ -10,8 +10,10 @@
 
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
+  import { progressStore } from '$lib/stores/progress.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
   import type { Episode } from '$lib/types';
+  import { focusedEpisode, nextEpisode } from '$lib/utils/episodes';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
@@ -19,6 +21,15 @@
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
+  let focusEpisode = $derived(
+    series
+      ? focusedEpisode(
+          series.videos,
+          progressStore.latestEpisodeFor(seriesId),
+          data.requestedEpisode
+        )
+      : null
+  );
 
   const player = usePlayer(() => videoElement, {
     onwatched: () => {
@@ -55,7 +66,7 @@
   let hasMountedTorrentEffect = false;
   $effect(() => {
     if (seriesId) {
-      selectedSeason = null;
+      selectedSeason = untrack(() => focusEpisode?.season) ?? null;
       translatedEpisodes = {};
       if (hasMountedTorrentEffect) {
         untrack(() => player.stop());
@@ -144,7 +155,15 @@
         season: episode.season,
         episode: episode.episode,
         fileIdx: bestStream.fileIdx,
-        originalLanguage: series?.language
+        originalLanguage: series.language,
+        progress: {
+          meta: {
+            type: 'series',
+            title: translatedTitle || series.title,
+            poster: series.medium_cover_image
+          },
+          next: nextEpisode(series.videos, episode)
+        }
       });
 
       // The route moved to another series while the stream was being prepared.
@@ -260,7 +279,8 @@
           {translatedEpisodes}
           bind:selectedSeason
           onPlayEpisode={playEpisode}
-          originalLanguage={series?.language}
+          originalLanguage={series.language}
+          {focusEpisode}
         />
       {/if}
     </div>

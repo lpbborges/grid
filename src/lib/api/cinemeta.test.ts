@@ -7,8 +7,17 @@ import {
   searchMovies,
   searchSeries,
   searchCatalog,
-  searchLocalizedCatalog
+  searchLocalizedCatalog,
+  resolveMissingSnapshots
 } from './cinemeta';
+
+const { translateTitleMock } = vi.hoisted(() => ({
+  translateTitleMock: vi.fn()
+}));
+
+vi.mock('./translate', () => ({
+  translateTitle: translateTitleMock
+}));
 
 const mockMovie = {
   id: 1,
@@ -202,6 +211,25 @@ describe('yts api', () => {
     );
     expect(details.title).toBe('Test Series Detail');
     expect(details.id).toBe('tt987');
+  });
+
+  it('leaves out the specials season', async () => {
+    routeFetch({
+      'meta/series/tt987.json': {
+        meta: {
+          name: 'Series',
+          poster: 'p.jpg',
+          videos: [
+            { id: 'tt987:0:1', season: 0, episode: 1, name: 'Special' },
+            { id: 'tt987:1:1', season: 1, episode: 1, name: 'Pilot' }
+          ]
+        }
+      }
+    });
+
+    const details = await getSeriesDetails('tt987');
+
+    expect(details.videos.map((v) => v.name)).toEqual(['Pilot']);
   });
 
   it('throws an error when fetch fails in series details', async () => {
@@ -428,5 +456,121 @@ describe('yts api', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
     vi.unstubAllEnvs();
+  });
+});
+
+describe('continue watching metadata', () => {
+  const entry = (id: string, episode?: number) => ({
+    id,
+    ...(episode !== undefined && { season: 1, episode }),
+    time: 1,
+    duration: 2,
+    updatedAt: 1
+  });
+
+  async function resolve(entries: ReturnType<typeof entry>[]) {
+    vi.resetModules();
+    const cinemeta = await import('./cinemeta');
+    return cinemeta.resolveMissingSnapshots(entries);
+  }
+
+  function fetchedUrls(): string[] {
+    return (globalThis.fetch as any).mock.calls.map((c: unknown[]) => String(c[0]));
+  }
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+    translateTitleMock.mockReset();
+    translateTitleMock.mockImplementation(async (title: string) => title);
+  });
+
+  it('looks an episode key up as a series', async () => {
+    routeFetch({ '/meta/series/tt2.json': { meta: { name: 'Series', poster: 's.jpg' } } });
+
+    expect(await resolve([entry('tt2', 1)])).toEqual({
+      tt2: { type: 'series', title: 'Series', poster: 's.jpg' }
+    });
+    expect(fetchedUrls().every((u) => u.includes('/meta/series/'))).toBe(true);
+  });
+
+  it('resolves a bare key that is only a series as a series', async () => {
+    routeFetch({ '/meta/series/tt3.json': { meta: { name: 'Only Series', poster: 'x.jpg' } } });
+
+    expect(await resolve([entry('tt3')])).toEqual({
+      tt3: { type: 'series', title: 'Only Series', poster: 'x.jpg' }
+    });
+  });
+
+  it('resolves a bare movie key as a movie', async () => {
+    routeFetch({ '/meta/movie/tt1.json': { meta: { name: 'Movie', poster: 'm.jpg' } } });
+
+    expect(await resolve([entry('tt1')])).toEqual({
+      tt1: { type: 'movie', title: 'Movie', poster: 'm.jpg' }
+    });
+  });
+
+  it('fetches each id once', async () => {
+    routeFetch({ '/meta/series/tt2.json': { meta: { name: 'Series', poster: 's.jpg' } } });
+    vi.resetModules();
+    const { resolveMissingSnapshots } = await import('./cinemeta');
+
+    await resolveMissingSnapshots([entry('tt2', 1)]);
+    await resolveMissingSnapshots([entry('tt2', 1)]);
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves only entries without a snapshot, and a failure maps to null', async () => {
+    routeFetch({ '/meta/movie/tt1.json': { meta: { name: 'Movie', poster: 'm.jpg' } } });
+
+    const result = await resolveMissingSnapshots([
+      entry('tt1'),
+      entry('tt9', 1),
+      { ...entry('tt5'), meta: { type: 'movie', title: 'Known', poster: 'k.jpg' } }
+    ]);
+
+    expect(result).toEqual({
+      tt1: { type: 'movie', title: 'Movie', poster: 'm.jpg' },
+      tt9: null
+    });
+    expect(fetchedUrls().some((u) => u.includes('tt5'))).toBe(false);
+  });
+
+  it('stores the title in the user language', async () => {
+    translateTitleMock.mockResolvedValue('Um Sonho de Liberdade');
+    routeFetch({
+      '/meta/movie/tt1.json': { meta: { name: 'The Shawshank Redemption', poster: 'm.jpg' } }
+    });
+
+    expect((await resolve([entry('tt1')])).tt1?.title).toBe('Um Sonho de Liberdade');
+    expect(translateTitleMock).toHaveBeenCalledWith('The Shawshank Redemption');
+  });
+
+  it('looks a title up again after a failed lookup', async () => {
+    routeFetch({});
+    vi.resetModules();
+    const { resolveMissingSnapshots } = await import('./cinemeta');
+    expect(await resolveMissingSnapshots([entry('tt1', 1)])).toEqual({ tt1: null });
+
+    routeFetch({ '/meta/series/tt1.json': { meta: { name: 'Series', poster: 's.jpg' } } });
+
+    expect(await resolveMissingSnapshots([entry('tt1', 1)])).toEqual({
+      tt1: { type: 'series', title: 'Series', poster: 's.jpg' }
+    });
+  });
+
+  it('never looks up an id that is not an IMDb id', async () => {
+    routeFetch({ '/meta/movie/tt1.json': { meta: { name: 'Movie', poster: 'm.jpg' } } });
+
+    const result = await resolve([entry('../catalog/movie/top'), entry('tt1')]);
+
+    expect(result).toEqual({ tt1: { type: 'movie', title: 'Movie', poster: 'm.jpg' } });
+    expect(fetchedUrls().every((u) => u.includes('tt1'))).toBe(true);
+  });
+
+  it('maps a network error to null instead of rejecting', async () => {
+    (globalThis.fetch as any).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(resolve([entry('tt1')])).resolves.toEqual({ tt1: null });
   });
 });

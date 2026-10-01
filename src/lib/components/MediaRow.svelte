@@ -1,18 +1,21 @@
-<script lang="ts">
+<script lang="ts" generics="T extends CardMedia">
+  import type { Snippet } from 'svelte';
   import MediaCard from '$lib/components/MediaCard.svelte';
   import SectionHeading from '$lib/components/SectionHeading.svelte';
-  import type { Movie } from '$lib/types';
+  import type { CardMedia, MediaType } from '$lib/types';
 
   let {
     heading,
     items,
-    type,
-    containerClass = 'mb-8'
+    type = 'movie',
+    containerClass = 'mb-8',
+    card
   }: {
     heading: string;
-    items: Movie[];
-    type: 'movie' | 'series';
+    items: T[];
+    type?: MediaType;
     containerClass?: string;
+    card?: Snippet<[T]>;
   } = $props();
 
   let scrollContainer = $state<HTMLDivElement>();
@@ -61,7 +64,11 @@
       class="scrollbar-hide -mt-4 -mb-12 flex gap-5 overflow-x-auto scroll-smooth px-4 pt-8 pb-24"
     >
       {#each items as item (item.id)}
-        <MediaCard media={item} {type} />
+        {#if card}
+          {@render card(item)}
+        {:else}
+          <MediaCard media={item} {type} />
+        {/if}
       {/each}
     </div>
 

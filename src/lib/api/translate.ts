@@ -81,6 +81,12 @@ export function getUserLanguage(): string {
   return 'en';
 }
 
+/** A title in the user language, or unchanged when that is English. */
+export async function translateTitle(title: string): Promise<string> {
+  const lang = getUserLanguage();
+  return lang === 'en' ? title : translateText(title, lang);
+}
+
 export async function translateMediaInfo(title: string, synopsis: string) {
   const targetLang = getUserLanguage();
   if (targetLang === 'en') {

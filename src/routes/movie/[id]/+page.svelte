@@ -174,7 +174,7 @@
   });
 
   async function playMovie() {
-    if (combinedTorrents.length === 0) {
+    if (!movie || combinedTorrents.length === 0) {
       error = 'Nenhum stream disponível para este título.';
       errorSource = 'load';
       return;
@@ -185,7 +185,7 @@
     const fileIdx = selectedTorrent.rawStream?.fileIdx;
     const magnet = buildMagnet(
       selectedTorrent.hash,
-      movie?.title || '',
+      movie.title,
       selectedTorrent.rawStream?.sources
     );
 
@@ -193,7 +193,14 @@
     const ok = await player.play(magnet, {
       mediaId: movieId,
       fileIdx,
-      originalLanguage: movie?.language
+      originalLanguage: movie.language,
+      progress: {
+        meta: {
+          type: 'movie',
+          title: translatedTitle || movie.title,
+          poster: movie.medium_cover_image
+        }
+      }
     });
     // The route moved to another title while the stream was being prepared.
     if (movieId !== requestedId) return;
@@ -274,7 +281,7 @@
           torrents={combinedTorrents}
           bind:selectedTorrentHash
           onPlay={playMovie}
-          originalLanguage={movie?.language}
+          originalLanguage={movie.language}
         />
       {/if}
     </div>

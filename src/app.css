@@ -67,6 +67,18 @@
   --animate-logo-glitch: logo-glitch 1.1s steps(1, end) infinite;
   --animate-neon-on: neon-turn-on 2s ease-in forwards;
 
+  /* Undo toast countdown (UndoToast.svelte) */
+  --animate-toast-countdown: toast-countdown linear forwards;
+
+  @keyframes toast-countdown {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+
   @keyframes neon-turn-on {
     0% {
       color: var(--color-purple-950);

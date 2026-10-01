@@ -51,6 +51,43 @@ export interface Series extends Movie {
   videos: Episode[];
 }
 
+export interface ProgressMeta {
+  type: MediaType;
+  title: string;
+  poster: string;
+}
+
+export interface EpisodeRef {
+  season: number;
+  episode: number;
+}
+
+/** What the page playing a title tells the progress store about it. */
+export interface ProgressContext {
+  meta: ProgressMeta;
+  next?: EpisodeRef | null;
+}
+
+/** Saved playback position of a title or episode. */
+export interface ProgressData {
+  time: number;
+  duration: number;
+  updatedAt: number;
+  meta?: ProgressMeta;
+  /** Set on the next episode when the previous one finishes, until it is played. */
+  upNext?: true;
+}
+
+/** One title's most recent progress, as listed in Continuar assistindo. */
+export interface ProgressEntry extends ProgressData {
+  id: string;
+  season?: number;
+  episode?: number;
+}
+
+/** The fields MediaCard needs from any title. */
+export type CardMedia = Pick<Movie, 'id' | 'title' | 'medium_cover_image'>;
+
 /** A Cinemeta `meta` object, as returned by its catalog and meta endpoints. */
 export interface CinemetaMeta {
   id?: string;

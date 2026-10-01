@@ -1,9 +1,9 @@
 import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { endpoints } from './endpoints';
+import { isImdbId } from '$lib/utils/imdb';
 
 const WIKIDATA_TIMEOUT_MS = 6000;
-const IMDB_TITLE_ID = /^tt\d+$/;
 
 const IMDB_ID = 'P345';
 const SEASON = 'P4908';
@@ -23,9 +23,7 @@ function claimValues(entity: WikidataEntity, property: string): unknown[] {
 // Episodes carry their season, and their IMDb ids would open as movies.
 function titleImdbId(entity: WikidataEntity): string | undefined {
   if (claimValues(entity, SEASON).length > 0) return undefined;
-  return claimValues(entity, IMDB_ID).find(
-    (value): value is string => typeof value === 'string' && IMDB_TITLE_ID.test(value)
-  );
+  return claimValues(entity, IMDB_ID).find(isImdbId);
 }
 
 async function getJson(params: Record<string, string>, customFetch?: typeof fetch) {
