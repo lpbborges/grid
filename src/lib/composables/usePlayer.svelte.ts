@@ -101,6 +101,7 @@ export function usePlayer(
         if (!advancing) void stop();
       },
       onfinished: () => {
+        if (advancing) return;
         if (options.onfinished) options.onfinished();
         else void stop();
       }
@@ -155,6 +156,7 @@ export function usePlayer(
       finishCurrent();
       currentRequest = undefined;
       await release();
+      if (generation !== advanceGeneration) return false;
       const next = await load();
       if (generation !== advanceGeneration || !next) return false;
       if ('error' in next) {

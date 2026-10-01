@@ -255,6 +255,36 @@ describe('usePlayer', () => {
     expect(streamPlayer.stop).toHaveBeenCalledTimes(1);
   });
 
+  it('ignores the backend finishing its file during an advance', async () => {
+    const onfinished = vi.fn();
+    const { player, backend, streamPlayer } = await mountPlayer({ mode: 'native', onfinished });
+    await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+    backend.stop.mockImplementation(() => backend.emitFinished());
+
+    await player.advance(async () => ({
+      magnet: 'magnet:?xt=urn:btih:two',
+      options: { mediaId: 'tt1', season: 1, episode: 2 }
+    }));
+
+    expect(onfinished).not.toHaveBeenCalled();
+    expect(streamPlayer.play).toHaveBeenLastCalledWith(
+      'magnet:?xt=urn:btih:two',
+      expect.anything()
+    );
+  });
+
+  it('skips looking up the next file when the player closes during the release', async () => {
+    const { player, backend } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+    backend.stop.mockImplementationOnce(() => {
+      void player.stop();
+    });
+    const load = vi.fn();
+
+    expect(await player.advance(load)).toBe(false);
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it('does not mark the title watched when playback ends before 95%', async () => {
     const onwatched = vi.fn();
     const { player, backend } = await mountPlayer({ mode: 'native', onwatched });
