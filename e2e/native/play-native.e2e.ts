@@ -1,6 +1,6 @@
 import { $, browser, expect } from '@wdio/globals';
-import { MKV_MOVIE } from '../support/catalog.ts';
-import { openTitle } from '../specs/helpers.ts';
+import { FIXTURE_SERIES, MKV_MOVIE } from '../support/catalog.ts';
+import { backToCatalog, openTitle, storedJson } from '../specs/helpers.ts';
 
 // Native playback: libmpv runs inside Grid (Linux and Windows) and draws under
 // the webview, where WebDriver cannot see. The E2E build runs it with no video
@@ -97,5 +97,36 @@ describe('Native playback', () => {
         timeoutMsg: 'mpv never reported a playback position'
       }
     );
+  });
+
+  it('starts the next episode when mpv reaches the end of one', async () => {
+    // The fixture movie is ~10 s long and its player closes when it ends.
+    await $('[data-testid="video-player-container"]').waitForExist({
+      reverse: true,
+      timeout: 90000
+    });
+    await backToCatalog();
+    await openTitle('series', FIXTURE_SERIES.id);
+    const pilot = await $('button*=Fixture Pilot');
+    await pilot.waitForClickable({ timeout: 30000 });
+    await pilot.click();
+
+    await $('[data-testid="up-next-card"]').waitForDisplayed({ timeout: 90000 });
+    await expectNoPlayerError();
+
+    await browser.waitUntil(
+      async () => {
+        const watched = (await storedJson<string[]>('grid-watched')) ?? [];
+        const progress =
+          (await storedJson<Record<string, { time: number; upNext?: true }>>('grid-progress')) ??
+          {};
+        const next = progress[`${FIXTURE_SERIES.id}-S1E2`];
+        return (
+          watched.includes(`${FIXTURE_SERIES.id}-S1E1`) && !!next && next.time > 0 && !next.upNext
+        );
+      },
+      { timeout: 90000, interval: 500, timeoutMsg: 'mpv never moved on to the next episode' }
+    );
+    await expectNoPlayerError();
   });
 });

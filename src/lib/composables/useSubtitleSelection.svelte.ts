@@ -37,6 +37,7 @@ export interface UseSubtitleSelectionOptions {
   // that lives in the parent component.
   getControlsVisible: () => boolean;
   getAudioMenuOpen: () => boolean;
+  getCardVisible: () => boolean;
 }
 
 /**
@@ -47,7 +48,8 @@ export interface UseSubtitleSelectionOptions {
  * cue line positioning, and per-track load-failure tracking.
  */
 export function useSubtitleSelection(options: UseSubtitleSelectionOptions) {
-  const { getVideoElement, getSubtitles, getControlsVisible, getAudioMenuOpen } = options;
+  const { getVideoElement, getSubtitles, getControlsVisible, getAudioMenuOpen, getCardVisible } =
+    options;
 
   let showMenu = $state(false);
   let activeIndex = $state(-1);
@@ -81,7 +83,7 @@ export function useSubtitleSelection(options: UseSubtitleSelectionOptions) {
     // existing controlsVisible adjustment.
     const menuOpen = showMenu || getAudioMenuOpen();
     const controlsVisible = getControlsVisible();
-    const targetLine = menuOpen ? 70 : controlsVisible ? 80 : 88;
+    const targetLine = getCardVisible() ? 45 : menuOpen ? 70 : controlsVisible ? 80 : 88;
     for (const textTrack of videoElement.textTracks) {
       if (textTrack.mode !== 'showing' || !textTrack.cues) continue;
       for (let i = 0; i < textTrack.cues.length; i++) {

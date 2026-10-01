@@ -1,8 +1,10 @@
 <script lang="ts">
   import { playerState } from '$lib/stores.svelte';
   import PlayerControls from './PlayerControls.svelte';
+  import NextEpisodeCard from './NextEpisodeCard.svelte';
+  import { UP_NEXT_COUNTDOWN_SECONDS } from '$lib/utils/upNext';
   import { groupByLanguage } from '$lib/composables/useSubtitleSelection.svelte';
-  import type { PlayerBackend } from '$lib/types';
+  import type { PlayerBackend, UpNextCard } from '$lib/types';
   import type { SubtitleTrack } from '$lib/api/subtitles';
   import type { Snippet } from 'svelte';
 
@@ -12,7 +14,9 @@
     downloadPercent = 0,
     transparent = false,
     surface,
-    onclose
+    onclose,
+    upNext = null,
+    loadingLabel = ''
   } = $props<{
     backend: PlayerBackend;
     engineStatus?: string;
@@ -20,6 +24,9 @@
     transparent?: boolean;
     surface: Snippet;
     onclose?: () => void;
+    upNext?: UpNextCard | null;
+    /** Names what is being prepared under the loading status. */
+    loadingLabel?: string;
   }>();
 
   let showControls = $state(true);
@@ -33,6 +40,13 @@
     showControls || backend.paused || showSubtitleMenu || showAudioMenu
   );
   const menusOpen = $derived(showSubtitleMenu || showAudioMenu);
+  const showCard = $derived(!!upNext && backend.hasStarted && !backend.buffering && !backend.error);
+  // Never reads secondsLeft, so it is announced once rather than every second.
+  const upNextAnnouncement = $derived(
+    showCard && upNext
+      ? `Próximo episódio, ${upNext.title}, em ${UP_NEXT_COUNTDOWN_SECONDS} segundos`
+      : ''
+  );
 
   const torrentSubsGrouped = $derived(
     groupByLanguage(backend.subtitles.filter((s: SubtitleTrack) => s.group === 'Embedded'))
@@ -42,7 +56,7 @@
   );
 
   $effect(() => {
-    backend.syncOverlayLayout(controlsVisible, menusOpen);
+    backend.syncOverlayLayout(controlsVisible, menusOpen, showCard);
   });
 
   $effect(() => {
@@ -130,7 +144,10 @@
         scheduleHideControls();
         break;
       case 'Escape':
-        if (document.fullscreenElement) {
+        if (showCard && upNext) {
+          e.preventDefault();
+          upNext.oncancel();
+        } else if (document.fullscreenElement) {
           e.preventDefault();
           backend.toggleFullscreen();
         } else if (onclose) {
@@ -221,6 +238,14 @@
           {backend.error || engineStatus || 'Carregando...'}
         </div>
       {/if}
+      {#if !backend.error && !backend.hasStarted && loadingLabel}
+        <p
+          class="text-muted mb-2 max-w-md truncate text-base font-semibold"
+          data-testid="loading-label"
+        >
+          {loadingLabel}
+        </p>
+      {/if}
       {#if !backend.error && downloadPercent > 0}
         <div class="text-main font-mono text-sm">
           {downloadPercent.toFixed(2)}%
@@ -228,6 +253,11 @@
       {/if}
     </div>
   {/if}
+
+  {#if showCard && upNext}
+    <NextEpisodeCard {...upNext} paused={backend.paused} />
+  {/if}
+  <p class="sr-only" aria-live="polite" data-testid="up-next-announcement">{upNextAnnouncement}</p>
 
   <PlayerControls
     currentTime={backend.currentTime}

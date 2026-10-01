@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import PlayerShell from './PlayerShell.svelte';
 import type { PlayerBackend } from '$lib/types';
@@ -39,7 +39,162 @@ const emptySurface = createRawSnippet(() => {
   };
 });
 
+function upNextCard(overrides = {}) {
+  return {
+    title: 'T1:E2 · Segundo',
+    secondsLeft: 10,
+    onplay: vi.fn(),
+    oncancel: vi.fn(),
+    ...overrides
+  };
+}
+
 describe('PlayerShell', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows the next episode card over the picture', () => {
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: true }),
+        surface: emptySurface,
+        upNext: upNextCard()
+      }
+    });
+
+    const container = screen.getByTestId('video-player-container');
+    expect(within(container).getByTestId('up-next-card')).toBeInTheDocument();
+    expect(screen.getByTestId('up-next-card').parentElement).toBe(container);
+  });
+
+  it('keeps the next episode card while the controls are hidden', async () => {
+    vi.useFakeTimers();
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: true }),
+        surface: emptySurface,
+        upNext: upNextCard()
+      }
+    });
+
+    await fireEvent.mouseMove(screen.getByTestId('video-player-container'));
+    vi.advanceTimersByTime(3000);
+    await Promise.resolve();
+
+    expect(playerState.showControls).toBe(false);
+    expect(screen.getByTestId('up-next-card')).toBeInTheDocument();
+  });
+
+  it('does not show the card over the loading or error overlay', async () => {
+    const props = { surface: emptySurface, upNext: upNextCard() };
+    const { rerender } = render(PlayerShell, {
+      props: { ...props, backend: fakeBackend({ hasStarted: false }) }
+    });
+    expect(screen.queryByTestId('up-next-card')).not.toBeInTheDocument();
+
+    await rerender({
+      ...props,
+      backend: fakeBackend({ hasStarted: true, error: 'Não foi possível reproduzir este vídeo.' })
+    });
+    expect(screen.queryByTestId('up-next-card')).not.toBeInTheDocument();
+  });
+
+  it('cancels the card with Escape instead of closing the player', async () => {
+    const upNext = upNextCard();
+    const onclose = vi.fn();
+    render(PlayerShell, {
+      props: { backend: fakeBackend({ hasStarted: true }), surface: emptySurface, upNext, onclose }
+    });
+
+    await fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(upNext.oncancel).toHaveBeenCalledTimes(1);
+    expect(onclose).not.toHaveBeenCalled();
+  });
+
+  it('closes the player with Escape while the card is not on screen yet', async () => {
+    const upNext = upNextCard();
+    const onclose = vi.fn();
+    render(PlayerShell, {
+      props: { backend: fakeBackend({ hasStarted: false }), surface: emptySurface, upNext, onclose }
+    });
+
+    await fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(upNext.oncancel).not.toHaveBeenCalled();
+    expect(onclose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not move focus onto the card', () => {
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: true }),
+        surface: emptySurface,
+        upNext: upNextCard()
+      }
+    });
+
+    expect(screen.getByTestId('up-next-card').contains(document.activeElement)).toBe(false);
+  });
+
+  it('announces the next episode once, not every second', async () => {
+    const props = { backend: fakeBackend({ hasStarted: true }), surface: emptySurface };
+    const { rerender } = render(PlayerShell, { props: { ...props, upNext: null } });
+    const announcement = screen.getByTestId('up-next-announcement');
+    expect(announcement).toHaveAttribute('aria-live', 'polite');
+    expect(announcement.textContent).toBe('');
+
+    await rerender({ ...props, upNext: upNextCard({ secondsLeft: 10 }) });
+    const first = announcement.textContent;
+    expect(first).toBe('Próximo episódio, T1:E2 · Segundo, em 10 segundos');
+
+    await rerender({ ...props, upNext: upNextCard({ secondsLeft: 9 }) });
+    expect(screen.getByTestId('up-next-announcement')).toBe(announcement);
+    expect(announcement.textContent).toBe(first);
+  });
+
+  it('shows the countdown as paused while the video is paused', () => {
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: true, paused: true }),
+        surface: emptySurface,
+        upNext: upNextCard()
+      }
+    });
+
+    expect(within(screen.getByTestId('up-next-card')).getByText('Pausado')).toBeInTheDocument();
+  });
+
+  it('lifts the subtitles above the card while it is up', async () => {
+    const backend = fakeBackend({ hasStarted: true });
+    const props = { backend, surface: emptySurface };
+    const { rerender } = render(PlayerShell, { props: { ...props, upNext: null } });
+    expect(backend.syncOverlayLayout).toHaveBeenLastCalledWith(true, false, false);
+
+    await rerender({ ...props, upNext: upNextCard() });
+    expect(backend.syncOverlayLayout).toHaveBeenLastCalledWith(true, false, true);
+  });
+
+  it('names what it is preparing under the loading status', async () => {
+    const props = { surface: emptySurface, loadingLabel: 'T1:E2 · Segundo' };
+    const { rerender } = render(PlayerShell, {
+      props: { ...props, backend: fakeBackend({ hasStarted: false }) }
+    });
+    expect(screen.getByTestId('loading-label')).toHaveTextContent('T1:E2 · Segundo');
+
+    await rerender({ ...props, backend: fakeBackend({ hasStarted: true }) });
+    expect(screen.queryByTestId('loading-label')).not.toBeInTheDocument();
+  });
+
+  it('shows no loading label when the page names nothing', () => {
+    render(PlayerShell, {
+      props: { backend: fakeBackend({ hasStarted: false }), surface: emptySurface }
+    });
+
+    expect(screen.queryByTestId('loading-label')).not.toBeInTheDocument();
+  });
+
   it('shows the opaque loading overlay with the engine status until a frame paints', () => {
     render(PlayerShell, {
       props: {
@@ -101,7 +256,7 @@ describe('PlayerShell', () => {
 
     await fireEvent.click(screen.getByLabelText('Menu de Legendas'));
 
-    expect(backend.syncOverlayLayout).toHaveBeenCalledWith(true, true);
+    expect(backend.syncOverlayLayout).toHaveBeenCalledWith(true, true, false);
   });
   it('renders close button when onclose is provided', async () => {
     const onclose = vi.fn();

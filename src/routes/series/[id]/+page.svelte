@@ -2,18 +2,22 @@
   import { untrack } from 'svelte';
   import { logger } from '$lib/logger';
   import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
-  import { buildMagnet, getSeriesStreams, parseSeedCount } from '$lib/api/torrentio';
   import Player from '$lib/components/Player.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
-  import { usePlayer } from '$lib/composables/usePlayer.svelte';
+  import {
+    usePlayer,
+    type NextPlaybackResult,
+    type PlayerPlayOptions
+  } from '$lib/composables/usePlayer.svelte';
+  import { useUpNext } from '$lib/composables/useUpNext.svelte';
+  import { findEpisodeStream } from '$lib/engine/episodeStream';
 
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
-  import { rankStreamOptions } from '$lib/engine/ranking';
-  import type { Episode } from '$lib/types';
-  import { focusedEpisode, nextEpisode } from '$lib/utils/episodes';
+  import type { Episode, EpisodeRef, Series, UpNextCard } from '$lib/types';
+  import { episodeLabel, focusedEpisode, nextEpisode, sameEpisode } from '$lib/utils/episodes';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
@@ -21,6 +25,7 @@
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
+  let advancingTo = $state<Episode | null>(null);
   let focusEpisode = $derived(
     series
       ? focusedEpisode(
@@ -36,9 +41,58 @@
       if (lastAttemptedEpisode) {
         watchedStore.add(seriesId, lastAttemptedEpisode.season, lastAttemptedEpisode.episode);
       }
+    },
+    onfinished: () => {
+      if (upNext.armed()) upNext.playNow();
+      else void player.stop();
     }
   });
   const backend = player.backend;
+
+  const upNextEpisode = $derived(
+    series && lastAttemptedEpisode ? nextEpisode(series.videos, lastAttemptedEpisode) : null
+  );
+
+  const upNext = useUpNext(
+    {
+      get key() {
+        return player.isPlaying && lastAttemptedEpisode ? episodeLabel(lastAttemptedEpisode) : '';
+      },
+      get currentTime() {
+        return backend.currentTime;
+      },
+      get duration() {
+        return backend.duration;
+      },
+      get paused() {
+        return backend.paused || backend.buffering;
+      },
+      get hasNext() {
+        return upNextEpisode !== null;
+      }
+    },
+    () => {
+      if (upNextEpisode) void advanceTo(upNextEpisode);
+    }
+  );
+
+  function episodeTitle(ref: EpisodeRef): string {
+    const episode = series?.videos.find((v) => sameEpisode(v, ref));
+    const name = (episode && (translatedEpisodes[episode.id] || episode.name)) || '';
+    return name ? `${episodeLabel(ref)} · ${name}` : episodeLabel(ref);
+  }
+
+  const preparingEpisode = $derived(advancingTo ?? lastAttemptedEpisode);
+
+  const upNextCard = $derived.by((): UpNextCard | null => {
+    if (!upNext.visible || !upNextEpisode) return null;
+    return {
+      title: episodeTitle(upNextEpisode),
+      secondsLeft: upNext.secondsLeft,
+      onplay: upNext.playNow,
+      oncancel: upNext.cancel
+    };
+  });
   // Windows plays through mpv embedded in this window; else mounts <video>.
   let videoElement = $state<HTMLVideoElement | null>(null);
 
@@ -103,8 +157,31 @@
     }
   });
 
+  function episodePlayOptions(
+    shown: Series,
+    episode: EpisodeRef,
+    fileIdx: number | undefined
+  ): PlayerPlayOptions {
+    return {
+      mediaId: seriesId,
+      season: episode.season,
+      episode: episode.episode,
+      fileIdx,
+      originalLanguage: shown.language,
+      progress: {
+        meta: {
+          type: 'series',
+          title: translatedTitle || shown.title,
+          poster: shown.medium_cover_image
+        },
+        next: nextEpisode(shown.videos, episode)
+      }
+    };
+  }
+
   async function playEpisode(episode: Episode) {
     if (typeof window === 'undefined' || !series) return;
+    const shown = series;
 
     lastAttemptedEpisode = episode;
     const requestedId = seriesId;
@@ -112,69 +189,51 @@
     error = '';
     errorSource = null;
 
-    try {
-      const streams = await getSeriesStreams(seriesId, episode.season, episode.episode);
-      // The route moved to another series while the sources were loading.
-      if (seriesId !== requestedId) return;
+    const found = await findEpisodeStream({ id: seriesId, title: shown.title }, episode, {
+      quality: settingsStore.quality,
+      audio: settingsStore.audio
+    });
+    // The route moved to another series while the sources were loading.
+    if (seriesId !== requestedId) return;
+    if ('error' in found) {
+      error = found.error;
+      errorSource = 'play';
+      return;
+    }
 
-      if (!streams || streams.length === 0) {
-        error = 'Nenhuma fonte encontrada para este episódio.';
-        errorSource = 'play';
-        return;
-      }
+    const ok = await player.play(found.magnet, episodePlayOptions(shown, episode, found.fileIdx));
 
-      const rankableStreams = streams.filter((s) => s.infoHash);
+    // The route moved to another series while the stream was being prepared.
+    if (seriesId !== requestedId) return;
+    if (!ok && player.error) {
+      error = player.error;
+      errorSource = 'play';
+    }
+  }
 
-      const sorted = rankStreamOptions(
-        rankableStreams,
-        (s) => {
-          const text = ((s.title || '') + ' ' + (s.name || '')).toLowerCase();
-          const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
-          const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
-          return { quality, text, seeds: parseSeedCount(s.title) };
-        },
-        { quality: settingsStore.quality, audioPreference: settingsStore.audio }
-      );
-
-      const bestStream = sorted[0];
-
-      if (!bestStream || !bestStream.infoHash) {
-        error = 'Fonte incompatível para este episódio.';
-        errorSource = 'play';
-        return;
-      }
-
-      const magnet = buildMagnet(
-        bestStream.infoHash,
-        `${series.title} S${episode.season}E${episode.episode}`,
-        bestStream.sources
-      );
-
-      const ok = await player.play(magnet, {
-        mediaId: seriesId,
-        season: episode.season,
-        episode: episode.episode,
-        fileIdx: bestStream.fileIdx,
-        originalLanguage: series.language,
-        progress: {
-          meta: {
-            type: 'series',
-            title: translatedTitle || series.title,
-            poster: series.medium_cover_image
-          },
-          next: nextEpisode(series.videos, episode)
-        }
+  async function advanceTo(ref: EpisodeRef) {
+    const episode = series?.videos.find((v) => sameEpisode(v, ref));
+    if (!series || !episode) return;
+    const shown = series;
+    const requestedId = seriesId;
+    error = '';
+    errorSource = null;
+    advancingTo = episode;
+    const ok = await player.advance(async (): Promise<NextPlaybackResult> => {
+      // Set only after the release, so the finished file's clock never counts as the next one's.
+      lastAttemptedEpisode = episode;
+      const found = await findEpisodeStream({ id: requestedId, title: shown.title }, episode, {
+        quality: settingsStore.quality,
+        audio: settingsStore.audio
       });
-
-      // The route moved to another series while the stream was being prepared.
-      if (seriesId !== requestedId) return;
-      if (!ok && player.error) {
-        error = player.error;
-        errorSource = 'play';
-      }
-    } catch (e) {
-      logger.error('Erro ao buscar fontes do episódio:', e);
-      error = 'Não foi possível iniciar a reprodução. Tente novamente.';
+      if (seriesId !== requestedId) return null;
+      if ('error' in found) return found;
+      return { magnet: found.magnet, options: episodePlayOptions(shown, episode, found.fileIdx) };
+    });
+    advancingTo = null;
+    if (seriesId !== requestedId) return;
+    if (!ok && player.error) {
+      error = player.error;
       errorSource = 'play';
     }
   }
@@ -253,6 +312,8 @@
           bind:videoElement
           engineStatus={player.engineStatus}
           downloadPercent={player.downloadPercent}
+          upNext={upNextCard}
+          loadingLabel={preparingEpisode ? episodeTitle(preparingEpisode) : ''}
           onclose={() => {
             player.stop();
           }}

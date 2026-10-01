@@ -1,20 +1,24 @@
 <script lang="ts">
   import PlayerShell from './PlayerShell.svelte';
   import { isDomBackend } from '$lib/composables/useDomBackend.svelte';
-  import type { PlayerBackend } from '$lib/types';
+  import type { PlayerBackend, UpNextCard } from '$lib/types';
 
   let {
     backend,
     videoElement = $bindable(null),
     engineStatus = '',
     downloadPercent = 0,
-    onclose
+    onclose,
+    upNext = null,
+    loadingLabel = ''
   } = $props<{
     backend: PlayerBackend;
     videoElement?: HTMLVideoElement | null;
     engineStatus?: string;
     downloadPercent?: number;
     onclose?: () => void;
+    upNext?: UpNextCard | null;
+    loadingLabel?: string;
   }>();
 
   const dom = $derived(isDomBackend(backend) ? backend : undefined);
@@ -38,9 +42,7 @@
         bind:this={videoElement}
         src={dom.src}
         autoplay
-        class="h-full w-full cursor-pointer object-contain {dom.hasStarted
-          ? 'opacity-100'
-          : 'opacity-0'}"
+        class="h-full w-full object-contain {dom.hasStarted ? 'opacity-100' : 'opacity-0'}"
         data-testid="video-element"
         onclick={dom.togglePlay}
         onloadedmetadata={dom.handleLoadedMetadata}
@@ -49,6 +51,7 @@
         oncanplay={dom.handlePlaying}
         onseeked={dom.handlePlaying}
         onerror={dom.handleError}
+        onended={dom.handleEnded}
         ondurationchange={dom.handleTimeUpdate}
         ontimeupdate={dom.handleTimeUpdate}
         onvolumechange={dom.handleVolumeChange}
@@ -71,4 +74,13 @@
   {/if}
 {/snippet}
 
-<PlayerShell {backend} {engineStatus} {downloadPercent} transparent={!dom} {surface} {onclose} />
+<PlayerShell
+  {backend}
+  {engineStatus}
+  {downloadPercent}
+  transparent={!dom}
+  {surface}
+  {onclose}
+  {upNext}
+  {loadingLabel}
+/>

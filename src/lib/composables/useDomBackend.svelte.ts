@@ -23,13 +23,15 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
 
   let controlsVisible = true;
   let menusOpen = false;
+  let cardVisible = false;
 
   const audioSelection = useAudioTrackSelection();
   const subtitleSelection = useSubtitleSelection({
     getVideoElement,
     getSubtitles: () => request?.subtitles ?? [],
     getControlsVisible: () => controlsVisible,
-    getAudioMenuOpen: () => menusOpen
+    getAudioMenuOpen: () => menusOpen,
+    getCardVisible: () => cardVisible
   });
 
   async function start(next: PlaybackRequest): Promise<boolean> {
@@ -48,7 +50,14 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
     const el = getVideoElement();
     if (el) el.pause();
     request = undefined;
+    hasStarted = false;
+    currentTime = 0;
+    duration = 0;
     subtitleSelection.disposeTrackListListener();
+  }
+
+  function handleEnded() {
+    request?.onfinished?.();
   }
 
   function handleLoadedMetadata() {
@@ -223,9 +232,14 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
     },
     selectAudio: (index: number) => audioSelection.selectAudioTrack(getVideoElement(), index),
     selectSubtitle: (index: number) => subtitleSelection.selectTrack(index),
-    syncOverlayLayout: (nextControlsVisible: boolean, nextMenusOpen: boolean) => {
+    syncOverlayLayout: (
+      nextControlsVisible: boolean,
+      nextMenusOpen: boolean,
+      nextCardVisible: boolean
+    ) => {
       controlsVisible = nextControlsVisible;
       menusOpen = nextMenusOpen;
+      cardVisible = nextCardVisible;
       subtitleSelection.applyCueLayout();
     },
 
@@ -234,6 +248,7 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
     handlePlaying,
     handleWaiting,
     handleError,
+    handleEnded,
     handleVolumeChange,
     handlePauseChange,
     handleTrackError

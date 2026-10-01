@@ -143,7 +143,10 @@ export interface PlaybackRequest {
   episode?: number;
   startSeconds: number;
   originalLanguage?: string;
+  /** mpv only: closed for any reason, including errors. */
   onended?: () => void;
+  /** The file played to its end. Never called on close or error. */
+  onfinished?: () => void;
 }
 
 /**
@@ -184,9 +187,15 @@ export interface PlayerBackend {
   selectSubtitle(index: number): void | Promise<void>;
   /** DOM: element fullscreen. mpv: the Tauri window's. */
   toggleFullscreen(): void | Promise<void>;
-  /**
-   * The shell owns menu visibility, and the DOM backend has to lift subtitle
-   * cues above an open menu. Empty for mpv, which renders its own cues.
-   */
-  syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean): void;
+  /** Lifts the subtitles above whatever the shell draws over the bottom of the picture. */
+  syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean, cardVisible: boolean): void;
+}
+
+/** What the player's next episode card shows and does. */
+export interface UpNextCard {
+  /** e.g. "T1:E2 · Segundo" */
+  title: string;
+  secondsLeft: number;
+  onplay: () => void;
+  oncancel: () => void;
 }

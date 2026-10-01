@@ -44,6 +44,8 @@ export interface NativePlayOptions {
   subtitles?: SubtitleTrack[];
   /** Called when mpv exits, for any reason, so the page can clean up. */
   onended?: () => void;
+  /** Called instead of `onended` when the file played to its end. */
+  onfinished?: () => void;
 }
 
 /**
@@ -225,7 +227,7 @@ export function useMpvBackend() {
   let subtitlePosition = 80;
 
   let unlisteners: UnlistenFn[] = [];
-  let current: (PlaybackRequest & { onended?: () => void }) | undefined;
+  let current: PlaybackRequest | undefined;
 
   async function detach() {
     const pending = unlisteners;
@@ -239,7 +241,7 @@ export function useMpvBackend() {
     }
   }
 
-  async function finish() {
+  async function finish(finished = false) {
     if (!isRunning) return;
     isRunning = false;
     await detach();
@@ -249,9 +251,10 @@ export function useMpvBackend() {
     tracks = [];
     hasVideo = false;
     durationState = 0;
-    const ended = current?.onended;
+    const request = current;
     current = undefined;
-    ended?.();
+    const callback = finished && request?.onfinished ? request.onfinished : request?.onended;
+    callback?.();
   }
 
   /**
@@ -266,7 +269,7 @@ export function useMpvBackend() {
     tracks = tracks.map((t) => (t.type === kind ? { ...t, selected: t.id === id } : t));
   }
 
-  async function start(options: PlaybackRequest & { onended?: () => void }): Promise<boolean> {
+  async function start(options: PlaybackRequest): Promise<boolean> {
     error = '';
     current = options;
     currentTime = 0;
@@ -306,7 +309,7 @@ export function useMpvBackend() {
           durationState = event.payload;
         }),
         listen('native-player-ended', () => {
-          void finish();
+          void finish(true);
         }),
         listen<string>('native-player-error', (event) => {
           logger.error('Player nativo falhou', event.payload);
@@ -365,8 +368,8 @@ export function useMpvBackend() {
     }
   }
 
-  function syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean) {
-    const next = menusOpen ? 70 : controlsVisible ? 80 : 100;
+  function syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean, cardVisible: boolean) {
+    const next = cardVisible ? 55 : menusOpen ? 70 : controlsVisible ? 80 : 100;
     if (next === subtitlePosition) return;
     subtitlePosition = next;
     if (!isRunning) return;
