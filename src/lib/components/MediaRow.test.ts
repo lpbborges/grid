@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import MediaRow from './MediaRow.svelte';
+import MediaRowCardHarness from './__fixtures__/MediaRowCardHarness.svelte';
 import type { Movie } from '../types';
 
 function makeMovie(id: string, title: string): Movie {
@@ -80,5 +81,15 @@ describe('MediaRow component', () => {
     });
 
     expect(container.querySelector('.relative')?.className).not.toContain('mb-8');
+  });
+
+  it('renders each item with the given card snippet', () => {
+    render(MediaRowCardHarness, { items: [makeMovie('tt1', 'Alpha'), makeMovie('tt2', 'Beta')] });
+
+    expect(screen.getAllByTestId('custom-card').map((el) => el.textContent)).toEqual([
+      'Alpha',
+      'Beta'
+    ]);
+    expect(screen.queryByTestId('media-card')).toBeNull();
   });
 });

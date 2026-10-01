@@ -1,15 +1,35 @@
 <script lang="ts">
-  import type { MediaType, Movie } from '../types';
+  import type { CardMedia, MediaType } from '../types';
   import { favoritesStore } from '$lib/stores/favorites.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
 
-  let { media, type = 'movie' } = $props<{ media: Movie; type?: MediaType }>();
-  let latestProgress = $derived(progressStore.latestFor(media.id));
+  let {
+    media,
+    type = 'movie',
+    href,
+    episodeLabel,
+    upNext = false,
+    progress
+  }: {
+    media: CardMedia;
+    type?: MediaType;
+    href?: string;
+    episodeLabel?: string;
+    upNext?: boolean;
+    progress?: { time: number; duration: number };
+  } = $props();
+  let storedProgress = $derived(progressStore.latestFor(media.id));
+  let shownProgress = $derived(
+    progress ?? (watchedStore.watchedIds.includes(String(media.id)) ? undefined : storedProgress)
+  );
+  let progressPercent = $derived(
+    shownProgress ? Math.min(100, (shownProgress.time / shownProgress.duration) * 100) : 0
+  );
 </script>
 
 <a
-  href="/{type}/{media.id}"
+  href={href ?? `/${type}/${media.id}`}
   class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 will-change-transform hover:-translate-y-2 focus-visible:ring-2 focus-visible:outline-none {favoritesStore.has(
     media.id
   )
@@ -80,11 +100,32 @@
         </svg>
       </div>
     {/if}
-    {#if !watchedStore.watchedIds.includes(String(media.id)) && latestProgress}
+    {#if episodeLabel}
+      <span
+        data-testid="media-card-episode"
+        class="{upNext
+          ? 'border-green bg-green text-dark'
+          : 'border-primary/60 bg-dark/85 text-main'} pointer-events-none absolute bottom-3 left-2 z-20 flex items-center gap-1.5 rounded-sm border px-1.5 py-0.5 font-mono text-xs font-bold tracking-wider backdrop-blur-sm"
+      >
+        {#if upNext}
+          <span class="font-cyber text-[10px] tracking-widest uppercase">Próximo</span>
+        {/if}
+        {episodeLabel}
+      </span>
+    {/if}
+    {#if shownProgress}
+      {#if progress}
+        <div
+          aria-hidden="true"
+          data-testid="media-card-progress-track"
+          class="bg-main/20 pointer-events-none absolute bottom-0 left-0 z-20 h-1 w-full"
+        ></div>
+        <span class="sr-only">{Math.round(progressPercent)}% assistido</span>
+      {/if}
       <div
         class="bg-green absolute bottom-0 left-0 z-20 h-1 shadow-[0_0_8px_rgba(54,211,83,0.8)] will-change-transform"
         data-testid="media-card-progress"
-        style="width: {(latestProgress.time / latestProgress.duration) * 100}%"
+        style="width: {progressPercent}%"
       ></div>
     {/if}
   </div>
