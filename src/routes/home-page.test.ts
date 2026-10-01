@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act } from '@testing-library/svelte';
+import { render, screen, act, fireEvent } from '@testing-library/svelte';
 import HomePage from './+page.svelte';
 import type { MediaType, Movie, SearchResult } from '$lib/types';
 import { appReady, searchQuery } from '$lib/stores.svelte';
 import { progressStore } from '$lib/stores/progress.svelte';
+import { tick } from 'svelte';
 
 const { searchCatalogMock } = vi.hoisted(() => ({
   searchCatalogMock: vi.fn()
@@ -409,5 +410,29 @@ describe('Home page continue watching', () => {
     });
 
     expect(screen.queryByText('Continuar assistindo')).toBeNull();
+  });
+
+  it('restores a removed title when the user undoes', async () => {
+    progressStore.progress = { tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta } };
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remover de Continuar assistindo' }));
+    expect(screen.queryByText('Continuar assistindo')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Desfazer' }));
+
+    expect(screen.getByText('Continuar assistindo')).toBeTruthy();
+  });
+
+  it('focuses the first popular card once the emptied row’s toast closes', async () => {
+    progressStore.progress = { tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta } };
+    render(HomePage, { data: popularDataWith([makeMovie('tt5', 'Popular Movie')], []) });
+    await act(async () => {});
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remover de Continuar assistindo' }));
+    await fireEvent.keyDown(screen.getByRole('button', { name: 'Desfazer' }), { key: 'Escape' });
+    await tick();
+
+    expect(document.activeElement?.getAttribute('href')).toBe('/movie/tt5');
   });
 });

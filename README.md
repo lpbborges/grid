@@ -4,7 +4,7 @@ Grid is a native desktop application built with Tauri, SvelteKit, TypeScript, an
 
 ## Features
 
-Grid integrates with Cinemeta and YTS for catalog browsing and live search, which also finds titles by their Brazilian or original name through Wikidata. It translates titles and synopses into the system language. Streaming runs through an `rqbit` sidecar via Torrentio, with downloaded videos kept in a 3 GB local cache. The app tracks watch progress and applies global preferences for audio, subtitles, and quality to pick the best source automatically. The player uses a `<video>` element on macOS and an in-process libmpv instance on Linux and Windows, supporting multi-track audio and on-the-fly subtitle conversion.
+Grid integrates with Cinemeta and YTS for catalog browsing and live search, which also finds titles by their Brazilian or original name through Wikidata. It translates titles and synopses into the system language. Streaming runs through an `rqbit` sidecar via Torrentio, with downloaded videos kept in a 3 GB local cache. The app tracks watch progress, and a "Continuar assistindo" row on the home screen picks up where you left off. Series open on the next episode to watch, and a series page opens on the season you watched most recently. Global preferences for audio, subtitles, and quality pick the best source automatically. The player uses a `<video>` element on macOS and an in-process libmpv instance on Linux and Windows, supporting multi-track audio and on-the-fly subtitle conversion.
 
 ## Prerequisites
 
