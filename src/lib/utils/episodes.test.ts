@@ -3,6 +3,7 @@ import {
   compareEpisodes,
   episodeLabel,
   episodeQuery,
+  focusedEpisode,
   nextEpisode,
   parseEpisodeParams,
   parseProgressKey,
@@ -87,5 +88,24 @@ describe('episode label and query', () => {
     expect(
       parseEpisodeParams(new URLSearchParams(episodeQuery({ season: 2, episode: 5 })))
     ).toEqual({ season: 2, episode: 5 });
+  });
+});
+
+describe('focusedEpisode', () => {
+  const videos = [ep(1, 1), ep(1, 4), ep(2, 5), ep(3, 2)];
+  const ref = (season: number, episode: number) => ({ season, episode });
+
+  it('prefers the latest progress over the requested episode', () => {
+    expect(focusedEpisode(videos, ref(1, 4), ref(3, 2))).toEqual(ref(1, 4));
+  });
+
+  it('falls back to the requested episode without usable progress', () => {
+    expect(focusedEpisode(videos, null, ref(2, 5))).toEqual(ref(2, 5));
+    expect(focusedEpisode(videos, ref(7, 1), ref(2, 5))).toEqual(ref(2, 5));
+  });
+
+  it('ignores episodes the series does not list', () => {
+    expect(focusedEpisode(videos, ref(7, 1), ref(9, 9))).toBeNull();
+    expect(focusedEpisode(videos, null, null)).toBeNull();
   });
 });

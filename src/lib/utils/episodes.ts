@@ -29,6 +29,19 @@ export function episodeQuery({ season, episode }: EpisodeRef): string {
   return `?s=${season}&e=${episode}`;
 }
 
+function listed(videos: Episode[], ref: EpisodeRef | null): EpisodeRef | null {
+  return ref && videos.some((video) => sameEpisode(video, ref)) ? ref : null;
+}
+
+/** The series' latest progress, else the requested episode, when the series lists it. */
+export function focusedEpisode(
+  videos: Episode[],
+  latest: EpisodeRef | null,
+  requested: EpisodeRef | null
+): EpisodeRef | null {
+  return listed(videos, latest) ?? listed(videos, requested);
+}
+
 /** The first aired episode after `current`, or null when there is none. */
 export function nextEpisode(
   episodes: Episode[],

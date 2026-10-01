@@ -64,7 +64,7 @@ async function playEpisode(name: RegExp, overrides: Partial<PlaybackBoundaryOpti
     ...overrides
   });
   render(SeriesPage, {
-    props: { data: { seriesId: series.id, series, initialEpisode: null, error: null } }
+    props: { data: { seriesId: series.id, series, requestedEpisode: null, error: null } }
   });
   await fireEvent.click(await screen.findByText(name));
 }
@@ -151,7 +151,7 @@ describe('Series playback wiring', () => {
       ]
     });
     const { rerender } = render(SeriesPage, {
-      props: { data: { seriesId: series.id, series, initialEpisode: null, error: null } }
+      props: { data: { seriesId: series.id, series, requestedEpisode: null, error: null } }
     });
     const other = {
       ...series,
@@ -160,7 +160,7 @@ describe('Series playback wiring', () => {
       videos: [{ id: 'tt0000003:1:1', season: 1, episode: 1, name: 'Other Pilot' }]
     };
     await rerender({
-      data: { seriesId: other.id, series: other, initialEpisode: null, error: null }
+      data: { seriesId: other.id, series: other, requestedEpisode: null, error: null }
     });
 
     await fireEvent.click(await screen.findByText(/Other Pilot/));

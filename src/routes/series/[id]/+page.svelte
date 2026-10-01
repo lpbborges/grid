@@ -12,8 +12,8 @@
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
-  import type { Episode, EpisodeRef } from '$lib/types';
-  import { nextEpisode } from '$lib/utils/episodes';
+  import type { Episode } from '$lib/types';
+  import { focusedEpisode, nextEpisode } from '$lib/utils/episodes';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
@@ -21,9 +21,14 @@
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
-  let playedSeriesId = $state<string | null>(null);
-  let focusEpisode = $derived<EpisodeRef | null>(
-    (playedSeriesId === seriesId && progressStore.latestEpisodeFor(seriesId)) || data.initialEpisode
+  let focusEpisode = $derived(
+    series
+      ? focusedEpisode(
+          series.videos,
+          progressStore.latestEpisodeFor(seriesId),
+          data.requestedEpisode
+        )
+      : null
   );
 
   const player = usePlayer(() => videoElement, {
@@ -61,7 +66,7 @@
   let hasMountedTorrentEffect = false;
   $effect(() => {
     if (seriesId) {
-      selectedSeason = untrack(() => data.initialEpisode?.season) ?? null;
+      selectedSeason = untrack(() => focusEpisode?.season) ?? null;
       translatedEpisodes = {};
       if (hasMountedTorrentEffect) {
         untrack(() => player.stop());
@@ -102,7 +107,6 @@
     if (typeof window === 'undefined' || !series) return;
 
     lastAttemptedEpisode = episode;
-    playedSeriesId = seriesId;
     const requestedId = seriesId;
 
     error = '';

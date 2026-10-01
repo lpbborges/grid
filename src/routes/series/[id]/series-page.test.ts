@@ -65,7 +65,7 @@ describe('Series page error handling', () => {
     const rawMessage = 'TypeError: Failed to fetch at yts.ts:42';
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series: null, initialEpisode: null, error: rawMessage } }
+      props: { data: { seriesId: 'tt1', series: null, requestedEpisode: null, error: rawMessage } }
     });
 
     expect(screen.queryByText(rawMessage, { exact: false })).not.toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('Series page error handling', () => {
 
   it('shows a retry button when the load fails', () => {
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series: null, initialEpisode: null, error: 'boom' } }
+      props: { data: { seriesId: 'tt1', series: null, requestedEpisode: null, error: 'boom' } }
     });
 
     expect(screen.getByRole('button', { name: /tentar novamente/i })).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('Series page error handling', () => {
     const rawMessage = 'network down';
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series: null, initialEpisode: null, error: rawMessage } }
+      props: { data: { seriesId: 'tt1', series: null, requestedEpisode: null, error: rawMessage } }
     });
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(expect.anything(), rawMessage);
@@ -96,7 +96,7 @@ describe('Series page error handling', () => {
     getSeriesStreamsMock.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:1234'));
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series, initialEpisode: null, error: null } }
+      props: { data: { seriesId: 'tt1', series, requestedEpisode: null, error: null } }
     });
 
     const episodeButton = screen.getByText(/Pilot/i);
@@ -117,6 +117,7 @@ afterEach(() => {
 
 describe('Series page integration flow', () => {
   beforeEach(() => {
+    progressStore.remove('tt1');
     vi.resetAllMocks();
     finalizeStreamMock.mockResolvedValue(undefined);
     translateMediaInfoMock.mockResolvedValue({ title: series.title, synopsis: series.summary });
@@ -140,7 +141,7 @@ describe('Series page integration flow', () => {
     });
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series, initialEpisode: null, error: null } }
+      props: { data: { seriesId: 'tt1', series, requestedEpisode: null, error: null } }
     });
 
     const episodeButton = screen.getByText(/Pilot/i);
@@ -176,7 +177,7 @@ describe('Series page integration flow', () => {
         data: {
           seriesId: 'tt1',
           series: deepSeries,
-          initialEpisode: { season: 2, episode: 5 },
+          requestedEpisode: { season: 2, episode: 5 },
           error: null
         }
       }
@@ -190,9 +191,32 @@ describe('Series page integration flow', () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
+  it('opens on the latest progress rather than the episode in the link', async () => {
+    progressStore.update('tt1', 1, 1, 30, 100);
+    render(SeriesPage, {
+      props: {
+        data: {
+          seriesId: 'tt1',
+          series: {
+            ...series,
+            videos: [
+              { id: 'e1', season: 1, episode: 1, name: 'Pilot' },
+              { id: 'e25', season: 2, episode: 5, name: 'Fifth' }
+            ]
+          },
+          requestedEpisode: { season: 2, episode: 5 },
+          error: null
+        }
+      }
+    });
+
+    expect(await screen.findByDisplayValue('Temporada 1')).toBeInTheDocument();
+    expect(document.querySelector('[aria-current="true"]')?.getAttribute('data-episode')).toBe('1');
+  });
+
   it('selects the first season when there is no episode to open on', async () => {
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series, initialEpisode: null, error: null } }
+      props: { data: { seriesId: 'tt1', series, requestedEpisode: null, error: null } }
     });
 
     expect(await screen.findByDisplayValue('Temporada 1')).toBeInTheDocument();
@@ -202,7 +226,7 @@ describe('Series page integration flow', () => {
     getSeriesStreamsMock.mockResolvedValue([{ title: '1080p', infoHash: 'def', fileIdx: 0 }]);
     prepareStreamMock.mockRejectedValue(new EngineStartError('spawn failed'));
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series, initialEpisode: null, error: null } }
+      props: { data: { seriesId: 'tt1', series, requestedEpisode: null, error: null } }
     });
 
     await fireEvent.click(screen.getByText(/Pilot/i));
@@ -229,7 +253,7 @@ describe('Series page integration flow', () => {
               { id: 'e2', season: 1, episode: 2, name: 'Second' }
             ]
           },
-          initialEpisode: { season: 1, episode: 1 },
+          requestedEpisode: { season: 1, episode: 1 },
           error: null
         }
       }
