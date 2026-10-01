@@ -11,7 +11,8 @@ import type {
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { endpoints } from './endpoints';
 import { searchWikidataImdbIds } from './wikidata';
-import { getUserLanguage, translateText } from './translate';
+import { translateTitle } from './translate';
+import { isImdbId } from '$lib/utils/imdb';
 
 function mapCinemetaMeta(m: CinemetaMeta): Movie {
   return {
@@ -132,44 +133,26 @@ async function getTitle(imdbId: string, customFetch?: typeof fetch) {
   return series ?? movie;
 }
 
-const IMDB_ID = /^tt\d+$/;
 const titleSnapshots = new Map<string, Promise<ProgressMeta | null>>();
-
-export function clearTitleSnapshotCache() {
-  titleSnapshots.clear();
-}
-
-async function localizedTitle(title: string): Promise<string> {
-  const lang = getUserLanguage();
-  if (lang === 'en') return title;
-  try {
-    return (await translateText(title, lang)) || title;
-  } catch (error) {
-    logger.warn(`Keeping the untranslated title for ${title}`, error);
-    return title;
-  }
-}
 
 async function fetchTitleSnapshot(
   id: string,
   type: MediaType | undefined,
   customFetch?: typeof fetch
 ): Promise<ProgressMeta | null> {
-  for (const candidate of type ? [type] : (['movie', 'series'] as const)) {
-    const result = await getSearchResult(candidate, id, customFetch);
-    if (result) {
-      return {
-        type: candidate,
-        title: await localizedTitle(result.title),
-        poster: result.medium_cover_image ?? ''
-      };
-    }
-  }
-  return null;
+  const result = type
+    ? await getSearchResult(type, id, customFetch)
+    : await getTitle(id, customFetch);
+  if (!result) return null;
+  return {
+    type: result.type,
+    title: await translateTitle(result.title),
+    poster: result.medium_cover_image ?? ''
+  };
 }
 
 /** Cinemeta's name and poster for a title whose progress predates snapshots. */
-export function getTitleSnapshot(
+function getTitleSnapshot(
   id: string,
   type?: MediaType,
   customFetch?: typeof fetch
@@ -189,7 +172,7 @@ export async function resolveMissingSnapshots(
   entries: ProgressEntry[],
   customFetch?: typeof fetch
 ): Promise<Record<string, ProgressMeta | null>> {
-  const missing = entries.filter((entry) => !entry.meta && IMDB_ID.test(entry.id));
+  const missing = entries.filter((entry) => !entry.meta && isImdbId(entry.id));
   const snapshots = await Promise.all(
     missing.map((entry) =>
       getTitleSnapshot(entry.id, entry.season !== undefined ? 'series' : undefined, customFetch)

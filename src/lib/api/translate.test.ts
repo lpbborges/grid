@@ -241,6 +241,18 @@ describe('translation helpers', () => {
     expect(res.synopsis).toBe('Synopsis');
   });
 
+  it('translateTitle translates into the user language', async () => {
+    const { translateTitle } = await freshTranslateModule();
+    expect(await translateTitle('Title')).toBe('Traduzido');
+  });
+
+  it('translateTitle keeps the title when the language is english', async () => {
+    const { translateTitle } = await freshTranslateModule();
+    vi.stubGlobal('window', { navigator: { language: 'en-US' } });
+    expect(await translateTitle('Title')).toBe('Title');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it('translateEpisodesList translates list of episodes', async () => {
     const { translateEpisodesList } = await freshTranslateModule();
     const res = await translateEpisodesList([{ id: '1', name: 'Episode 1' }]);
