@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import SeriesPage from './+page.svelte';
+import { EngineStartError } from '$lib/engine/torrent';
 
 const {
   prepareStreamMock,
@@ -191,6 +192,18 @@ describe('Series page integration flow', () => {
     });
 
     expect(await screen.findByDisplayValue('Temporada 1')).toBeInTheDocument();
+  });
+
+  it('shows the player error when the stream cannot start', async () => {
+    getSeriesStreamsMock.mockResolvedValue([{ title: '1080p', infoHash: 'def', fileIdx: 0 }]);
+    prepareStreamMock.mockRejectedValue(new EngineStartError('spawn failed'));
+    render(SeriesPage, {
+      props: { data: { seriesId: 'tt1', series, initialEpisode: null, error: null } }
+    });
+
+    await fireEvent.click(screen.getByText(/Pilot/i));
+
+    expect(await screen.findByText(/feche e abra o aplicativo novamente/i)).toBeInTheDocument();
   });
 
   it('highlights the last played episode after the player closes', async () => {
