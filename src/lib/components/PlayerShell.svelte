@@ -40,7 +40,7 @@
     showControls || backend.paused || showSubtitleMenu || showAudioMenu
   );
   const menusOpen = $derived(showSubtitleMenu || showAudioMenu);
-  const showCard = $derived(!!upNext && backend.hasStarted && !backend.error);
+  const showCard = $derived(!!upNext && backend.hasStarted && !backend.buffering && !backend.error);
   // Never reads secondsLeft, so it is announced once rather than every second.
   const upNextAnnouncement = $derived(
     showCard && upNext

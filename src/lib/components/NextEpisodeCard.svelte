@@ -21,7 +21,7 @@
   role="group"
   aria-labelledby={headingId}
   data-testid="up-next-card"
-  class="border-primary/50 border-l-green bg-surface/95 text-main animate-up-next-in absolute right-6 bottom-28 flex w-[22rem] max-w-[calc(100%-3rem)] flex-col overflow-hidden rounded-sm border border-l-4 px-4 pt-3 pb-4 shadow-[0_10px_30px_rgba(0,0,0,0.9)] backdrop-blur-sm motion-reduce:animate-none"
+  class="border-primary/50 border-l-green bg-surface/95 text-main animate-up-next-in absolute right-6 bottom-28 flex w-[22rem] max-w-[calc(100%-3rem)] cursor-default flex-col overflow-hidden rounded-sm border border-l-4 px-4 pt-3 pb-4 shadow-[0_10px_30px_rgba(0,0,0,0.9)] backdrop-blur-sm motion-reduce:animate-none"
 >
   <div class="flex items-center justify-between gap-2">
     <p id={headingId} class="font-cyber text-xs tracking-wider uppercase">
@@ -31,7 +31,7 @@
     </p>
     {#if paused}
       <span
-        class="border-muted/50 text-muted rounded-sm border px-1.5 py-px font-mono text-[10px] font-bold tracking-widest uppercase"
+        class="border-muted/50 text-muted rounded-sm border px-1.5 py-px font-mono text-[10px] leading-none font-bold tracking-widest uppercase"
         >Pausado</span
       >
     {/if}

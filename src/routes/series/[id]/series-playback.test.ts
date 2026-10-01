@@ -310,6 +310,23 @@ describe('Series playback wiring', () => {
     await nextVideo(video);
   });
 
+  it('hides the card and holds the countdown while the stream buffers', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    await reachCredits(video);
+    await screen.findByTestId('up-next-card');
+    await fireEvent.waiting(video);
+    await vi.advanceTimersByTimeAsync(15_000);
+    vi.useRealTimers();
+
+    expect(screen.queryByTestId('up-next-card')).not.toBeInTheDocument();
+    expect(torrentioRequests(1, 2)).toBe(0);
+    await fireEvent.playing(video);
+    expect(await screen.findByTestId('up-next-card')).toBeInTheDocument();
+  });
+
   it('keeps the same player open while it moves to the next episode', async () => {
     await playEpisode(/Pilot/);
     const video = await startedVideo();

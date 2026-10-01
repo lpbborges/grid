@@ -65,7 +65,7 @@
         return backend.duration;
       },
       get paused() {
-        return backend.paused;
+        return backend.paused || backend.buffering;
       },
       get hasNext() {
         return upNextEpisode !== null;
