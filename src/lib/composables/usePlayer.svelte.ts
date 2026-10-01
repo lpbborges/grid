@@ -4,7 +4,7 @@ import { playbackMode } from '$lib/engine/platform';
 import { useDomBackend } from '$lib/composables/useDomBackend.svelte';
 import { useMpvBackend } from '$lib/composables/useMpvBackend.svelte';
 import { progressStore } from '$lib/stores/progress.svelte';
-import type { PlaybackRequest, PlayerBackend } from '$lib/types';
+import type { PlaybackRequest, PlayerBackend, ProgressContext } from '$lib/types';
 import type { PlayOptions } from '$lib/composables/useStreamPlayer.svelte';
 
 export function createPlayerBackend(getVideoElement: () => HTMLVideoElement | null): PlayerBackend {
@@ -20,6 +20,7 @@ export function usePlayer(
 
   let error = $state('');
   let currentRequest = $state<PlaybackRequest | undefined>(undefined);
+  let currentProgress: ProgressContext | undefined;
   let watchedTriggered = false;
   let downloadPercent = $state(0);
 
@@ -52,7 +53,10 @@ export function usePlayer(
     };
   });
 
-  async function play(magnet: string, playOptions: PlayOptions & { originalLanguage?: string }) {
+  async function play(
+    magnet: string,
+    playOptions: PlayOptions & { originalLanguage?: string; progress?: ProgressContext }
+  ) {
     error = '';
     watchedTriggered = false;
     downloadPercent = 0;
@@ -73,6 +77,7 @@ export function usePlayer(
           ?.time || 0,
       originalLanguage: playOptions.originalLanguage
     };
+    currentProgress = playOptions.progress;
     currentRequest = request;
     const started = await backend.start({
       ...request,
@@ -109,7 +114,8 @@ export function usePlayer(
       request.season,
       request.episode,
       backend.currentTime,
-      backend.duration
+      backend.duration,
+      currentProgress
     );
   });
 

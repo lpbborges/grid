@@ -12,6 +12,7 @@
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { rankStreamOptions } from '$lib/engine/ranking';
   import type { Episode } from '$lib/types';
+  import { nextEpisode } from '$lib/utils/episodes';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
@@ -144,7 +145,15 @@
         season: episode.season,
         episode: episode.episode,
         fileIdx: bestStream.fileIdx,
-        originalLanguage: series?.language
+        originalLanguage: series?.language,
+        progress: {
+          meta: {
+            type: 'series',
+            title: translatedTitle || series.title,
+            poster: series.medium_cover_image
+          },
+          next: nextEpisode(series.videos, episode)
+        }
       });
 
       // The route moved to another series while the stream was being prepared.

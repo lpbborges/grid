@@ -91,7 +91,28 @@ describe('usePlayer', () => {
     await tick();
 
     expect(update).toHaveBeenCalledTimes(1);
-    expect(update).toHaveBeenCalledWith('tt1', 1, 2, 42, 3600);
+    expect(update).toHaveBeenCalledWith('tt1', 1, 2, 42, 3600, undefined);
+  });
+
+  it('passes the page snapshot to the progress store on every tick', async () => {
+    const update = vi.spyOn(progressStore, 'update');
+    const progress = {
+      meta: { type: 'series' as const, title: 'Series', poster: 's.jpg' },
+      next: { season: 1, episode: 3 }
+    };
+    const { player, backend } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:abc', {
+      mediaId: 'tt1',
+      season: 1,
+      episode: 2,
+      progress
+    });
+
+    backend.currentTime = 42;
+    backend.duration = 3600;
+    await tick();
+
+    expect(update).toHaveBeenCalledWith('tt1', 1, 2, 42, 3600, progress);
   });
 
   it('releases the torrent when the backend ends on its own', async () => {

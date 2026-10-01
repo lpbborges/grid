@@ -9,6 +9,7 @@ import {
 } from '$lib/engine/__fixtures__/playbackBoundary';
 import { clearExternalSubtitleCache } from '$lib/api/subtitles';
 import { watchedStore } from '$lib/stores/watched.svelte';
+import { progressStore } from '$lib/stores/progress.svelte';
 
 // This suite drives the <video> path, which Linux no longer plays through by
 // default; pin it rather than depend on the test runner's user agent.
@@ -18,6 +19,14 @@ vi.mock('$lib/engine/platform', async (importOriginal) => ({
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
+
+vi.mock('$lib/api/translate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/api/translate')>()),
+  translateMediaInfo: vi.fn(async (_title: string, synopsis: string) => ({
+    title: 'Série da Grade',
+    synopsis
+  }))
+}));
 
 const HASH = '4c1d2b0e8f3a6d5c7b9e1f2a3b4c5d6e7f8a9b0c';
 const POSTER = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
@@ -67,6 +76,7 @@ describe('Series playback wiring', () => {
     localStorage.clear();
     clearExternalSubtitleCache();
     watchedStore.watchedIds = [];
+    progressStore.progress = {};
   });
 
   afterEach(() => {
@@ -88,6 +98,35 @@ describe('Series playback wiring', () => {
     );
     expect(JSON.parse(update?.body ?? '{}')).toEqual({ only_files: [0] });
     expect(boundary.unhandledRequests).toEqual([]);
+  });
+
+  it('saves the series snapshot and moves on to the next episode when one finishes', async () => {
+    await playEpisode(/Pilot/);
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await waitFor(() => expect(video.getAttribute('src')).toBeTruthy());
+
+    Object.defineProperty(video, 'duration', { configurable: true, value: 100 });
+    Object.defineProperty(video, 'currentTime', { configurable: true, value: 40 });
+    await fireEvent.timeUpdate(video);
+    await waitFor(() =>
+      expect(progressStore.get(series.id, 1, 1)?.meta).toEqual({
+        type: 'series',
+        title: 'Série da Grade',
+        poster: POSTER
+      })
+    );
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, value: 96 });
+    await fireEvent.timeUpdate(video);
+
+    await waitFor(() =>
+      expect(progressStore.entries[0]).toMatchObject({
+        id: series.id,
+        season: 1,
+        episode: 2,
+        time: 0
+      })
+    );
   });
 
   it('falls back to the largest video when the stream has no file index', async () => {

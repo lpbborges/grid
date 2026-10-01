@@ -193,7 +193,16 @@
     const ok = await player.play(magnet, {
       mediaId: movieId,
       fileIdx,
-      originalLanguage: movie?.language
+      originalLanguage: movie?.language,
+      progress: movie
+        ? {
+            meta: {
+              type: 'movie',
+              title: translatedTitle || movie.title,
+              poster: movie.medium_cover_image
+            }
+          }
+        : undefined
     });
     // The route moved to another title while the stream was being prepared.
     if (movieId !== requestedId) return;
