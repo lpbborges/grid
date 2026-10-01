@@ -5,6 +5,9 @@
   import type { Movie, SearchResult } from '$lib/types';
   import { appReady, searchQuery } from '$lib/stores.svelte';
   import { searchCatalog } from '$lib/api/cinemeta';
+  import ContinueWatchingRow from '$lib/components/ContinueWatchingRow.svelte';
+  import { progressStore } from '$lib/stores/progress.svelte';
+  import { toContinueWatchingItems } from '$lib/utils/continueWatching';
 
   let { data } = $props();
 
@@ -17,6 +20,7 @@
   let popularError = $state(false);
 
   let hasSearchQuery = $derived(searchQuery.value.trim().length > 0);
+  let continueWatchingItems = $derived(toContinueWatchingItems(progressStore.entries));
 
   let searchVersion = 0;
 
@@ -94,17 +98,20 @@
   {:else}
     <MediaGrid heading="Resultados" items={searchResults} />
   {/if}
-{:else if popularLoading}
-  {@render loadingIndicator('Carregando...')}
-{:else if !popularMovies.length && !popularSeries.length}
-  <div class="flex h-full min-h-[400px] items-center justify-center">
-    <EmptyState
-      message={popularError ? 'Erro ao carregar dados' : 'Nenhum título disponível no momento'}
-    />
-  </div>
 {:else}
-  <div>
-    <MediaRow heading="Filmes Populares" items={popularMovies} type="movie" />
-    <MediaRow heading="Séries Populares" items={popularSeries} type="series" containerClass="" />
-  </div>
+  <ContinueWatchingRow items={continueWatchingItems} />
+  {#if popularLoading}
+    {@render loadingIndicator('Carregando...')}
+  {:else if !popularMovies.length && !popularSeries.length}
+    <div class="flex h-full min-h-[400px] items-center justify-center">
+      <EmptyState
+        message={popularError ? 'Erro ao carregar dados' : 'Nenhum título disponível no momento'}
+      />
+    </div>
+  {:else}
+    <div>
+      <MediaRow heading="Filmes Populares" items={popularMovies} type="movie" />
+      <MediaRow heading="Séries Populares" items={popularSeries} type="series" containerClass="" />
+    </div>
+  {/if}
 {/if}
