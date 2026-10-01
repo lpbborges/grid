@@ -7,8 +7,21 @@ import {
   searchMovies,
   searchSeries,
   searchCatalog,
-  searchLocalizedCatalog
+  searchLocalizedCatalog,
+  getTitleSnapshot,
+  resolveMissingSnapshots,
+  clearTitleSnapshotCache
 } from './cinemeta';
+
+const { translateTextMock, getUserLanguageMock } = vi.hoisted(() => ({
+  translateTextMock: vi.fn(),
+  getUserLanguageMock: vi.fn()
+}));
+
+vi.mock('./translate', () => ({
+  translateText: translateTextMock,
+  getUserLanguage: getUserLanguageMock
+}));
 
 const mockMovie = {
   id: 1,
@@ -428,5 +441,108 @@ describe('yts api', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
     vi.unstubAllEnvs();
+  });
+});
+
+describe('continue watching metadata', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+    clearTitleSnapshotCache();
+    translateTextMock.mockReset();
+    getUserLanguageMock.mockReturnValue('en');
+  });
+
+  it('fetches a series snapshot for an episode key', async () => {
+    routeFetch({ '/meta/series/tt2.json': { meta: { name: 'Series', poster: 's.jpg' } } });
+
+    expect(await getTitleSnapshot('tt2', 'series')).toEqual({
+      type: 'series',
+      title: 'Series',
+      poster: 's.jpg'
+    });
+  });
+
+  it('tries a bare key as a movie, then as a series', async () => {
+    routeFetch({ '/meta/series/tt3.json': { meta: { name: 'Only Series', poster: 'x.jpg' } } });
+
+    expect(await getTitleSnapshot('tt3')).toEqual({
+      type: 'series',
+      title: 'Only Series',
+      poster: 'x.jpg'
+    });
+    const urls = (globalThis.fetch as any).mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(urls.findIndex((u: string) => u.includes('/meta/movie/'))).toBeLessThan(
+      urls.findIndex((u: string) => u.includes('/meta/series/'))
+    );
+  });
+
+  it('fetches each id once', async () => {
+    routeFetch({ '/meta/movie/tt1.json': { meta: { name: 'Movie', poster: 'm.jpg' } } });
+
+    await getTitleSnapshot('tt1');
+    await getTitleSnapshot('tt1');
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves only entries without a snapshot, and a failure maps to null', async () => {
+    routeFetch({ '/meta/movie/tt1.json': { meta: { name: 'Movie', poster: 'm.jpg' } } });
+
+    const result = await resolveMissingSnapshots([
+      { id: 'tt1', time: 1, duration: 2, updatedAt: 3 },
+      { id: 'tt9', season: 1, episode: 1, time: 1, duration: 2, updatedAt: 2 },
+      {
+        id: 'tt5',
+        time: 1,
+        duration: 2,
+        updatedAt: 1,
+        meta: { type: 'movie', title: 'Known', poster: 'k.jpg' }
+      }
+    ]);
+
+    expect(result).toEqual({
+      tt1: { type: 'movie', title: 'Movie', poster: 'm.jpg' },
+      tt9: null
+    });
+    const urls = (globalThis.fetch as any).mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(urls.some((u: string) => u.includes('tt5'))).toBe(false);
+  });
+
+  it('translates the title into the user language', async () => {
+    getUserLanguageMock.mockReturnValue('pt');
+    translateTextMock.mockResolvedValue('Um Sonho de Liberdade');
+    routeFetch({
+      '/meta/movie/tt1.json': { meta: { name: 'The Shawshank Redemption', poster: 'm.jpg' } }
+    });
+
+    expect(await getTitleSnapshot('tt1')).toEqual({
+      type: 'movie',
+      title: 'Um Sonho de Liberdade',
+      poster: 'm.jpg'
+    });
+    expect(translateTextMock).toHaveBeenCalledWith('The Shawshank Redemption', 'pt');
+  });
+
+  it('keeps the Cinemeta title when the system language is English', async () => {
+    routeFetch({ '/meta/movie/tt1.json': { meta: { name: 'Movie', poster: 'm.jpg' } } });
+
+    expect((await getTitleSnapshot('tt1'))?.title).toBe('Movie');
+    expect(translateTextMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Cinemeta title when translation fails', async () => {
+    getUserLanguageMock.mockReturnValue('pt');
+    translateTextMock.mockRejectedValue(new Error('offline'));
+    routeFetch({ '/meta/movie/tt1.json': { meta: { name: 'Movie', poster: 'm.jpg' } } });
+
+    expect((await getTitleSnapshot('tt1'))?.title).toBe('Movie');
+  });
+
+  it('maps a network error to null instead of rejecting', async () => {
+    (globalThis.fetch as any).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(
+      resolveMissingSnapshots([{ id: 'tt1', time: 1, duration: 2, updatedAt: 3 }])
+    ).resolves.toEqual({ tt1: null });
   });
 });
