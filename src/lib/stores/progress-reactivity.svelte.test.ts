@@ -24,11 +24,11 @@ it('updates entries watched by an effect when progress was loaded from localStor
 
   progressStore.attachMeta({ tt1: { type: 'movie', title: 'Movie', poster: 'm.jpg' } });
   flushSync();
-  expect(titles).toEqual(['Movie', undefined]);
+  expect(titles).toEqual(['Movie']);
 
-  progressStore.remove('tt2');
+  progressStore.remove('tt1');
   flushSync();
   stop();
 
-  expect(titles).toEqual(['Movie']);
+  expect(titles).toEqual([]);
 });

@@ -78,11 +78,15 @@ class ProgressStore {
     }
     return latest;
   });
+  /** Titles for Continuar assistindo, newest first. */
   entries = $derived(
     Object.values(this.#latestById)
+      .filter((entry) => entry.meta)
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, CONTINUE_WATCHING_LIMIT)
   );
+  /** Titles saved before progress kept a title and poster. */
+  untitled = $derived(Object.values(this.#latestById).filter((entry) => !entry.meta));
   #persistTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {

@@ -62,8 +62,7 @@ function deferred<T>() {
 function popularDataWith(movies: Movie[], series: Movie[]) {
   return {
     popularMovies: Promise.resolve(movies),
-    popularSeries: Promise.resolve(series),
-    continueWatchingSnapshots: Promise.resolve()
+    popularSeries: Promise.resolve(series)
   };
 }
 
@@ -235,8 +234,7 @@ describe('Home page search', () => {
     render(HomePage, {
       data: {
         popularMovies: moviesDeferred.promise,
-        popularSeries: seriesDeferred.promise,
-        continueWatchingSnapshots: Promise.resolve()
+        popularSeries: seriesDeferred.promise
       }
     });
 
@@ -264,8 +262,7 @@ describe('Home page search', () => {
     render(HomePage, {
       data: {
         popularMovies: Promise.reject(new Error('network down')),
-        popularSeries: Promise.reject(new Error('network down')),
-        continueWatchingSnapshots: Promise.resolve()
+        popularSeries: Promise.reject(new Error('network down'))
       }
     });
     await act(async () => {});
@@ -278,8 +275,7 @@ describe('Home page search', () => {
     render(HomePage, {
       data: {
         popularMovies: movies.promise,
-        popularSeries: Promise.resolve([]),
-        continueWatchingSnapshots: Promise.resolve()
+        popularSeries: Promise.resolve([])
       }
     });
     await act(async () => {});
@@ -294,8 +290,7 @@ describe('Home page search', () => {
     render(HomePage, {
       data: {
         popularMovies: Promise.reject(new Error('network down')),
-        popularSeries: Promise.reject(new Error('network down')),
-        continueWatchingSnapshots: Promise.resolve()
+        popularSeries: Promise.reject(new Error('network down'))
       }
     });
     await act(async () => {});
@@ -386,8 +381,7 @@ describe('Home page continue watching', () => {
     render(HomePage, {
       data: {
         popularMovies: new Promise<Movie[]>(() => {}),
-        popularSeries: new Promise<Movie[]>(() => {}),
-        continueWatchingSnapshots: Promise.resolve()
+        popularSeries: new Promise<Movie[]>(() => {})
       }
     });
     await act(async () => {});
@@ -401,8 +395,7 @@ describe('Home page continue watching', () => {
     render(HomePage, {
       data: {
         popularMovies: Promise.reject(new Error('down')),
-        popularSeries: Promise.reject(new Error('down')),
-        continueWatchingSnapshots: Promise.resolve()
+        popularSeries: Promise.reject(new Error('down'))
       }
     });
     await act(async () => {});

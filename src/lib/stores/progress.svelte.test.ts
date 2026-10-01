@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 async function loadStore() {
   vi.resetModules();
-  const { progressStore, PROGRESS_PERSIST_INTERVAL_MS } = await import('./progress.svelte');
-  return { progressStore, PROGRESS_PERSIST_INTERVAL_MS };
+  const { progressStore, PROGRESS_PERSIST_INTERVAL_MS, CONTINUE_WATCHING_LIMIT } =
+    await import('./progress.svelte');
+  return { progressStore, PROGRESS_PERSIST_INTERVAL_MS, CONTINUE_WATCHING_LIMIT };
 }
 
 function storedProgress() {
@@ -194,7 +195,10 @@ describe('progressStore entries', () => {
     const { progressStore } = await loadStore();
     const { CONTINUE_WATCHING_LIMIT } = await import('./progress.svelte');
     progressStore.progress = Object.fromEntries(
-      Array.from({ length: 25 }, (_, i) => [`tt${i}`, { time: 1, duration: 100, updatedAt: i }])
+      Array.from({ length: 25 }, (_, i) => [
+        `tt${i}`,
+        { time: 1, duration: 100, updatedAt: i, meta: movieMeta }
+      ])
     );
 
     expect(CONTINUE_WATCHING_LIMIT).toBe(20);
@@ -210,7 +214,22 @@ describe('progressStore entries', () => {
 
     const { progressStore } = await loadStore();
 
-    expect(progressStore.entries.map((entry) => entry.id)).toEqual(['__proto__', 'tt1']);
+    expect(progressStore.untitled.map((entry) => entry.id)).toEqual(['__proto__', 'tt1']);
+  });
+
+  it('counts only titles with a snapshot toward the limit', async () => {
+    const { progressStore, CONTINUE_WATCHING_LIMIT } = await loadStore();
+    progressStore.progress = Object.fromEntries([
+      ['tt-untitled', { time: 10, duration: 100, updatedAt: 999 }],
+      ...Array.from({ length: CONTINUE_WATCHING_LIMIT }, (_, i) => [
+        `tt${i}`,
+        { time: 10, duration: 100, updatedAt: i, meta: movieMeta }
+      ])
+    ]);
+
+    expect(progressStore.entries).toHaveLength(CONTINUE_WATCHING_LIMIT);
+    expect(progressStore.entries.every((entry) => entry.meta)).toBe(true);
+    expect(progressStore.untitled.map((entry) => entry.id)).toEqual(['tt-untitled']);
   });
 
   it('is empty when there is no progress', async () => {
