@@ -56,19 +56,19 @@ function isProgressData(value: unknown): value is ProgressData {
 function readStoredProgress(): Record<string, ProgressData> {
   const parsed = readStoredJson('grid-progress');
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
-  const progress = Object.create(null) as Record<string, ProgressData>;
-  for (const [key, entry] of Object.entries(parsed)) {
-    if (isProgressData(entry)) {
+  return Object.fromEntries(
+    Object.entries(parsed).flatMap(([key, entry]) => {
+      if (!isProgressData(entry)) return [];
       const { meta } = entry as { meta?: unknown };
-      progress[key] = {
+      const data: ProgressData = {
         time: entry.time,
         duration: entry.duration,
         updatedAt: entry.updatedAt,
         ...(isProgressMeta(meta) && { meta: copyMeta(meta) })
       };
-    }
-  }
-  return progress;
+      return [[key, data]];
+    })
+  );
 }
 
 class ProgressStore {
