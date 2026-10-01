@@ -19,9 +19,7 @@
     upNext?: boolean;
     progress?: { time: number; duration: number };
   } = $props();
-  let shownProgress = $derived(
-    progress ?? (watchedStore.has(media.id) ? undefined : progressStore.latestFor(media.id))
-  );
+  let shownProgress = $derived(progress ?? progressStore.latestFor(media.id));
   let progressPercent = $derived(
     shownProgress ? Math.min(100, (shownProgress.time / shownProgress.duration) * 100) : 0
   );

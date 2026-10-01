@@ -28,6 +28,16 @@ describe('MediaCard component', () => {
     expect(getByTestId('media-card-progress').getAttribute('style')).toContain('width: 25%');
   });
 
+  it('shows the progress bar for a title marked watched and played again', async () => {
+    const { watchedStore } = await import('$lib/stores/watched.svelte');
+    watchedStore.add(123);
+    progressStore.update(123, undefined, undefined, 30, 100);
+    const { getByTestId } = render(MediaCard, { media: mockMovie, type: 'movie' });
+
+    expect(getByTestId('media-card-progress').getAttribute('style')).toContain('width: 30%');
+    watchedStore.remove(123);
+  });
+
   it('shows the progress bar for the most recently watched episode of a series', () => {
     progressStore.progress = {
       '123-S1E1': { time: 10, duration: 100, updatedAt: 1 },
