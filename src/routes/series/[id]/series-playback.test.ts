@@ -73,6 +73,40 @@ function requestedUrls(): string[] {
   return vi.mocked(globalThis.fetch).mock.calls.map((call) => String(call[0]));
 }
 
+function torrentioRequests(season: number, episode: number): number {
+  return requestedUrls().filter((url) =>
+    url.endsWith(`/stream/series/tt0000002:${season}:${episode}.json`)
+  ).length;
+}
+
+async function startedVideo(): Promise<HTMLElement> {
+  const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+  await waitFor(() => expect(video.getAttribute('src')).toBeTruthy());
+  Object.defineProperty(video, 'paused', { configurable: true, value: false });
+  await fireEvent.play(video);
+  await fireEvent.playing(video);
+  return video;
+}
+
+async function reachCredits(video: HTMLElement, at = 2690, duration = 2700) {
+  Object.defineProperty(video, 'duration', { configurable: true, value: duration });
+  Object.defineProperty(video, 'currentTime', { configurable: true, value: at });
+  await fireEvent.timeUpdate(video);
+}
+
+async function nextVideo(previous: HTMLElement): Promise<HTMLElement> {
+  let video!: HTMLElement;
+  await waitFor(
+    () => {
+      video = screen.getByTestId('video-element');
+      expect(video).not.toBe(previous);
+      expect(video.getAttribute('src')).toBeTruthy();
+    },
+    { timeout: 5000 }
+  );
+  return video;
+}
+
 describe('Series playback wiring', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -223,5 +257,205 @@ describe('Series playback wiring', () => {
 
     await waitFor(() => expect(watchedStore.has(series.id, 1, 1)).toBe(true));
     expect(watchedStore.has(series.id)).toBe(false);
+  });
+
+  it('shows the next episode card in the last 30 seconds', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+
+    await reachCredits(video, 2600);
+    expect(screen.queryByTestId('up-next-card')).not.toBeInTheDocument();
+
+    await reachCredits(video, 2675);
+    const card = await screen.findByTestId('up-next-card');
+    expect(card).toHaveTextContent('Próximo episódio em 10s');
+    expect(card).toHaveTextContent('T1:E2 · Second');
+  });
+
+  it('starts the next episode when the video ends', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+
+    await reachCredits(video);
+    await fireEvent.ended(video);
+
+    await waitFor(() => expect(torrentioRequests(1, 2)).toBe(1), { timeout: 5000 });
+    await nextVideo(video);
+  });
+
+  it('starts the next episode from Assistir agora', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+
+    await reachCredits(video);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Assistir agora' }));
+
+    await waitFor(() => expect(torrentioRequests(1, 2)).toBe(1), { timeout: 5000 });
+    await nextVideo(video);
+  });
+
+  it('starts the next episode when the countdown runs out', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    await reachCredits(video);
+    await screen.findByTestId('up-next-card');
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(torrentioRequests(1, 2)).toBe(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+    vi.useRealTimers();
+
+    await waitFor(() => expect(torrentioRequests(1, 2)).toBe(1), { timeout: 5000 });
+    await nextVideo(video);
+  });
+
+  it('keeps the same player open while it moves to the next episode', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+    const container = screen.getByTestId('video-player-container');
+
+    await reachCredits(video);
+    await fireEvent.ended(video);
+
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('video-player-container')).toBe(container);
+        expect(screen.queryByText(/Pilot/)).toBeNull();
+        const next = screen.queryByTestId('video-element');
+        expect(next).not.toBeNull();
+        expect(next).not.toBe(video);
+        expect(next?.getAttribute('src')).toBeTruthy();
+      },
+      { timeout: 5000, interval: 5 }
+    );
+    expect(screen.getByTestId('video-player-container')).toBe(container);
+  });
+
+  it('forgets the finished stream before adding the next one', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+
+    await reachCredits(video);
+    await fireEvent.ended(video);
+    await nextVideo(video);
+
+    const requests = boundary.rqbit.requests;
+    const adds = requests
+      .map((r, index) => (r.method === 'POST' && r.path === '/torrents' ? index : -1))
+      .filter((index) => index !== -1);
+    expect(adds).toHaveLength(2);
+    const forget = requests.findIndex(
+      (r, index) => index > adds[0] && r.method === 'POST' && r.path === `/torrents/${HASH}/forget`
+    );
+    expect(forget).toBeGreaterThan(adds[0]);
+    expect(forget).toBeLessThan(adds[1]);
+    expect(boundary.unhandledRequests).toEqual([]);
+  });
+
+  it('marks the finished episode watched and starts the next from the beginning', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+
+    await reachCredits(video);
+    await fireEvent.ended(video);
+    const next = await nextVideo(video);
+
+    expect(watchedStore.has(series.id, 1, 1)).toBe(true);
+    expect(watchedStore.has(series.id, 1, 2)).toBe(false);
+    expect(progressStore.get(series.id, 1, 2)?.time ?? 0).toBe(0);
+    Object.defineProperty(next, 'duration', { configurable: true, value: 2700 });
+    await fireEvent.loadedMetadata(next);
+    expect((next as HTMLVideoElement).currentTime).toBe(0);
+    expect(screen.queryByTestId('up-next-card')).not.toBeInTheDocument();
+  });
+
+  it('keeps the episode playing after Cancelar and does not ask again', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+
+    await reachCredits(video);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByTestId('up-next-card')).not.toBeInTheDocument();
+
+    await reachCredits(video, 2600);
+    await reachCredits(video, 2690);
+
+    expect(screen.queryByTestId('up-next-card')).not.toBeInTheDocument();
+    expect(screen.getByTestId('video-element')).toBe(video);
+    expect(torrentioRequests(1, 2)).toBe(0);
+  });
+
+  it('closes the player when a cancelled episode ends', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+
+    await reachCredits(video);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Cancelar' }));
+    await fireEvent.ended(video);
+
+    await waitFor(() => expect(screen.queryByTestId('video-player-container')).toBeNull());
+    expect(torrentioRequests(1, 2)).toBe(0);
+  });
+
+  it('closes the player when the episode ends far from the credits', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+
+    await reachCredits(video, 600);
+    await fireEvent.ended(video);
+
+    await waitFor(() => expect(screen.queryByTestId('video-player-container')).toBeNull());
+    expect(torrentioRequests(1, 2)).toBe(0);
+    expect(watchedStore.has(series.id, 1, 1)).toBe(false);
+  });
+
+  it('shows no card on the last episode and closes at its end', async () => {
+    await playEpisode(/Second/);
+    const video = await startedVideo();
+
+    await reachCredits(video);
+    expect(screen.queryByTestId('up-next-card')).not.toBeInTheDocument();
+    await fireEvent.ended(video);
+
+    await waitFor(() => expect(screen.queryByTestId('video-player-container')).toBeNull());
+    expect(torrentioRequests(1, 3)).toBe(0);
+  });
+
+  it('names the next episode while it is being prepared', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+
+    await reachCredits(video);
+    await fireEvent.ended(video);
+
+    const label = await screen.findByTestId('loading-label');
+    expect(label).toHaveTextContent('T1:E2 · Second');
+    await waitFor(() => expect(torrentioRequests(1, 2)).toBe(1));
+  });
+
+  it('offers a retry for the next episode when it has no source', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+    const real = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+        String(input).endsWith(':1:2.json')
+          ? Promise.resolve(new Response(JSON.stringify({ streams: [] }), { status: 200 }))
+          : real(input, init)
+      )
+    );
+
+    await reachCredits(video);
+    await fireEvent.ended(video);
+
+    expect(
+      await screen.findByText(/nenhuma fonte encontrada para este episódio/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('video-player-container')).toBeNull();
+
+    await fireEvent.click(screen.getByRole('button', { name: /tentar novamente/i }));
+    await waitFor(() => expect(torrentioRequests(1, 2)).toBe(2));
   });
 });

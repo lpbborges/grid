@@ -5,14 +5,19 @@
   import Player from '$lib/components/Player.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
-  import { usePlayer, type PlayerPlayOptions } from '$lib/composables/usePlayer.svelte';
+  import {
+    usePlayer,
+    type NextPlaybackResult,
+    type PlayerPlayOptions
+  } from '$lib/composables/usePlayer.svelte';
+  import { useUpNext } from '$lib/composables/useUpNext.svelte';
   import { findEpisodeStream } from '$lib/engine/episodeStream';
 
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
-  import type { Episode, EpisodeRef, Series } from '$lib/types';
-  import { focusedEpisode, nextEpisode } from '$lib/utils/episodes';
+  import type { Episode, EpisodeRef, Series, UpNextCard } from '$lib/types';
+  import { episodeLabel, focusedEpisode, nextEpisode, sameEpisode } from '$lib/utils/episodes';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
@@ -20,6 +25,7 @@
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
+  let advancingTo = $state<Episode | null>(null);
   let focusEpisode = $derived(
     series
       ? focusedEpisode(
@@ -35,9 +41,58 @@
       if (lastAttemptedEpisode) {
         watchedStore.add(seriesId, lastAttemptedEpisode.season, lastAttemptedEpisode.episode);
       }
+    },
+    onfinished: () => {
+      if (upNext.armed()) upNext.playNow();
+      else void player.stop();
     }
   });
   const backend = player.backend;
+
+  const upNextEpisode = $derived(
+    series && lastAttemptedEpisode ? nextEpisode(series.videos, lastAttemptedEpisode) : null
+  );
+
+  const upNext = useUpNext(
+    {
+      get key() {
+        return player.isPlaying && lastAttemptedEpisode ? episodeLabel(lastAttemptedEpisode) : '';
+      },
+      get currentTime() {
+        return backend.currentTime;
+      },
+      get duration() {
+        return backend.duration;
+      },
+      get paused() {
+        return backend.paused;
+      },
+      get hasNext() {
+        return upNextEpisode !== null;
+      }
+    },
+    () => {
+      if (upNextEpisode) void advanceTo(upNextEpisode);
+    }
+  );
+
+  function episodeTitle(ref: EpisodeRef): string {
+    const episode = series?.videos.find((v) => sameEpisode(v, ref));
+    const name = (episode && (translatedEpisodes[episode.id] || episode.name)) || '';
+    return name ? `${episodeLabel(ref)} · ${name}` : episodeLabel(ref);
+  }
+
+  const preparingEpisode = $derived(advancingTo ?? lastAttemptedEpisode);
+
+  const upNextCard = $derived.by((): UpNextCard | null => {
+    if (!upNext.visible || !upNextEpisode) return null;
+    return {
+      title: episodeTitle(upNextEpisode),
+      secondsLeft: upNext.secondsLeft,
+      onplay: upNext.playNow,
+      oncancel: upNext.cancel
+    };
+  });
   // Windows plays through mpv embedded in this window; else mounts <video>.
   let videoElement = $state<HTMLVideoElement | null>(null);
 
@@ -156,6 +211,33 @@
     }
   }
 
+  async function advanceTo(ref: EpisodeRef) {
+    const episode = series?.videos.find((v) => sameEpisode(v, ref));
+    if (!series || !episode) return;
+    const shown = series;
+    const requestedId = seriesId;
+    error = '';
+    errorSource = null;
+    advancingTo = episode;
+    const ok = await player.advance(async (): Promise<NextPlaybackResult> => {
+      // Set only after the release, so the finished file's clock never counts as the next one's.
+      lastAttemptedEpisode = episode;
+      const found = await findEpisodeStream({ id: requestedId, title: shown.title }, episode, {
+        quality: settingsStore.quality,
+        audio: settingsStore.audio
+      });
+      if (seriesId !== requestedId) return null;
+      if ('error' in found) return found;
+      return { magnet: found.magnet, options: episodePlayOptions(shown, episode, found.fileIdx) };
+    });
+    advancingTo = null;
+    if (seriesId !== requestedId) return;
+    if (!ok && player.error) {
+      error = player.error;
+      errorSource = 'play';
+    }
+  }
+
   function retry() {
     if (errorSource === 'load') {
       window.location.reload();
@@ -230,6 +312,8 @@
           bind:videoElement
           engineStatus={player.engineStatus}
           downloadPercent={player.downloadPercent}
+          upNext={upNextCard}
+          loadingLabel={preparingEpisode ? episodeTitle(preparingEpisode) : ''}
           onclose={() => {
             player.stop();
           }}
