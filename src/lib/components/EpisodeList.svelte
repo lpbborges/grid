@@ -3,7 +3,7 @@
   import PreferenceSelectors from './PreferenceSelectors.svelte';
   import QualitySelector from './QualitySelector.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
-  import { progressKey, sameEpisode } from '$lib/utils/episodes';
+  import { sameEpisode } from '$lib/utils/episodes';
   import type { Episode, EpisodeRef } from '$lib/types';
 
   let {
@@ -37,20 +37,12 @@
     }
   });
 
-  let listElement = $state<HTMLDivElement>();
-  let scrolledTo = '';
-
-  $effect(() => {
-    if (!focusEpisode || !listElement || selectedSeason !== focusEpisode.season) return;
-    if (!filteredEpisodes.length) return;
-    const target = progressKey(seriesId, focusEpisode.season, focusEpisode.episode);
-    if (scrolledTo === target) return;
-    const row = listElement.querySelector<HTMLElement>(`[data-episode="${focusEpisode.episode}"]`);
-    if (!row) return;
-    scrolledTo = target;
-    const offset = row.getBoundingClientRect().top - listElement.getBoundingClientRect().top;
-    listElement.scrollTo({ top: Math.max(0, listElement.scrollTop + offset - 12) });
-  });
+  function scrollIntoList(row: HTMLElement) {
+    const list = row.parentElement;
+    if (!list) return;
+    const offset = row.getBoundingClientRect().top - list.getBoundingClientRect().top;
+    list.scrollTo({ top: Math.max(0, list.scrollTop + offset - 12) });
+  }
 </script>
 
 {#if episodes && episodes.length > 0}
@@ -91,16 +83,16 @@
     </div>
 
     <div
-      bind:this={listElement}
       class="scrollbar-thumb-primary/50 flex max-h-[600px] scrollbar-thin flex-col gap-3 overflow-y-auto pr-2"
     >
-      {#each filteredEpisodes as episode}
+      {#each filteredEpisodes as episode (episode.id)}
         {@const isUnreleased = episode.firstAired
           ? new Date(episode.firstAired) > new Date()
           : false}
         {@const isFocused = !!focusEpisode && sameEpisode(focusEpisode, episode)}
         <div
           data-episode={episode.episode}
+          {@attach isFocused ? scrollIntoList : undefined}
           aria-current={isFocused ? 'true' : undefined}
           class="group relative flex items-center justify-between rounded-sm border p-3 transition-all duration-300 {isFocused
             ? 'border-green bg-surface/80 shadow-[0_0_15px_rgba(54,211,83,0.25)]'

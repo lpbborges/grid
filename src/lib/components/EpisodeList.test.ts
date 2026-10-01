@@ -126,7 +126,21 @@ describe('EpisodeList component', () => {
     it('scrolls again when another series opens on the same episode', async () => {
       const { rerender } = renderFocused({ season: 1, episode: 2 });
 
-      await rerender({ seriesId: 'series-456', focusEpisode: { season: 1, episode: 2 } });
+      await rerender({
+        seriesId: 'series-456',
+        episodes: episodes.map((episode) => ({ ...episode, id: `other-${episode.id}` })),
+        focusEpisode: { season: 1, episode: 2 }
+      });
+
+      expect(scrollTo).toHaveBeenCalledTimes(2);
+    });
+
+    it('scrolls to the focused episode again when its season is shown again', async () => {
+      const { container } = renderFocused({ season: 1, episode: 2 });
+      const seasons = container.querySelector('select')!;
+
+      await fireEvent.change(seasons, { target: { value: '2' } });
+      await fireEvent.change(seasons, { target: { value: '1' } });
 
       expect(scrollTo).toHaveBeenCalledTimes(2);
     });
