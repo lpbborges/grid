@@ -289,6 +289,63 @@ describe('PlayerShell', () => {
     expect(onclose).toHaveBeenCalled();
   });
 
+  it('shows what is playing right after the close button', () => {
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend(),
+        surface: emptySurface,
+        onclose: vi.fn(),
+        title: 'Breaking Bad',
+        episodeLabel: 'T1:E1'
+      }
+    });
+
+    const title = screen.getByTestId('player-title');
+    expect(title).toHaveTextContent('Breaking Bad T1:E1');
+    expect(within(title).getByText('T1:E1').className).toContain('text-muted');
+    expect(title.className).toContain('truncate');
+    expect(screen.getByLabelText('Fechar').nextElementSibling).toBe(title);
+  });
+
+  it('shows a movie title alone', () => {
+    render(PlayerShell, {
+      props: { backend: fakeBackend(), surface: emptySurface, title: 'Matrix' }
+    });
+
+    expect(screen.getByTestId('player-title')).toHaveTextContent(/^Matrix$/);
+  });
+
+  it('follows the episode without remounting', async () => {
+    const props = { backend: fakeBackend(), surface: emptySurface, title: 'Show' };
+    const { rerender } = render(PlayerShell, { props: { ...props, episodeLabel: 'T1:E1' } });
+    const title = screen.getByTestId('player-title');
+
+    await rerender({ ...props, episodeLabel: 'T1:E2' });
+
+    expect(screen.getByTestId('player-title')).toBe(title);
+    expect(title).toHaveTextContent('Show T1:E2');
+  });
+
+  it('shows no title when the page names none', () => {
+    render(PlayerShell, { props: { backend: fakeBackend(), surface: emptySurface } });
+
+    expect(screen.queryByTestId('player-title')).not.toBeInTheDocument();
+  });
+
+  it('hides the title with the controls', async () => {
+    vi.useFakeTimers();
+    render(PlayerShell, {
+      props: { backend: fakeBackend(), surface: emptySurface, onclose: vi.fn(), title: 'Matrix' }
+    });
+    const title = screen.getByTestId('player-title');
+    expect(title.parentElement?.className).toContain('opacity-100');
+
+    await fireEvent.mouseMove(screen.getByTestId('video-player-container'));
+    await vi.advanceTimersByTimeAsync(3100);
+
+    expect(title.parentElement?.className).toContain('opacity-0');
+  });
+
   it('toggles fullscreen', async () => {
     const backend = fakeBackend();
     render(PlayerShell, { props: { backend, surface: emptySurface } });

@@ -125,6 +125,14 @@ describe('Movie playback wiring', () => {
     expect(boundary.unhandledRequests).toEqual([]);
   });
 
+  it('shows the movie title over the player', async () => {
+    await openAndPlay();
+
+    expect(await screen.findByTestId('player-title', {}, { timeout: 5000 })).toHaveTextContent(
+      /^Grid Fixture$/
+    );
+  });
+
   it('adds the magnet again and plays when the first add stalls', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await openAndPlay({ stallAdds: 1 });

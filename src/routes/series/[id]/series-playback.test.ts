@@ -462,6 +462,19 @@ describe('Series playback wiring', () => {
     expect(torrentioRequests(1, 3)).toBe(0);
   });
 
+  it('shows the series and episode over the player, and moves to the next episode', async () => {
+    await playEpisode(/Pilot/);
+    const video = await startedVideo();
+    const title = await screen.findByTestId('player-title');
+    expect(title).toHaveTextContent(/^(Grid Series|Série da Grade) T1:E1$/);
+
+    await reachCredits(video);
+    await fireEvent.ended(video);
+
+    await waitFor(() => expect(title).toHaveTextContent(/T1:E2$/), { timeout: 5000 });
+    expect(screen.getByTestId('player-title')).toBe(title);
+  });
+
   it('names the next episode while it is being prepared', async () => {
     await playEpisode(/Pilot/);
     const video = await startedVideo();

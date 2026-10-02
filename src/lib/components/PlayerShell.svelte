@@ -22,7 +22,9 @@
     surface,
     onclose,
     upNext = null,
-    loadingLabel = ''
+    loadingLabel = '',
+    title = '',
+    episodeLabel = ''
   } = $props<{
     backend: PlayerBackend;
     loadingStage?: LoadingStage | null;
@@ -33,6 +35,8 @@
     upNext?: UpNextCard | null;
     /** Names what is being prepared under the loading status. */
     loadingLabel?: string;
+    title?: string;
+    episodeLabel?: string;
   }>();
 
   let showControls = $state(true);
@@ -402,6 +406,8 @@
     ontoggleaudiomenu={() => (showAudioMenu = !showAudioMenu)}
     ontogglegroup={toggleGroup}
     {onclose}
+    {title}
+    {episodeLabel}
     onfullscreen={() => backend.toggleFullscreen()}
   />
 </div>

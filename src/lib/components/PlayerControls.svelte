@@ -46,6 +46,8 @@
     ontoggleaudiomenu,
     ontogglegroup,
     onclose,
+    title = '',
+    episodeLabel = '',
     onfullscreen
   } = $props<{
     currentTime: number;
@@ -74,6 +76,10 @@
     ontoggleaudiomenu?: () => void;
     ontogglegroup?: (groupKey: string, label: string) => void;
     onclose?: () => void;
+    /** What is playing; shown right after the close button. */
+    title?: string;
+    /** Season and episode of a series, shown smaller after the title. */
+    episodeLabel?: string;
     onfullscreen?: () => void;
   }>();
 
@@ -87,29 +93,45 @@
   }
 </script>
 
-{#if onclose}
-  <button
-    onclick={onclose}
-    class="hover:text-primary text-main absolute top-10 left-6 z-50 p-2 transition-all duration-300 {visible
+{#if onclose || title}
+  <div
+    class="pointer-events-none absolute top-10 right-6 left-6 z-50 flex items-center transition-opacity duration-300 {visible
       ? 'opacity-100'
       : 'opacity-0'}"
-    aria-label="Fechar"
   >
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="26"
-      height="26"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="[filter:drop-shadow(0_1px_2px_rgba(0,0,0,0.8))]"
-    >
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  </button>
+    {#if onclose}
+      <button
+        onclick={onclose}
+        class="hover:text-primary text-main pointer-events-auto shrink-0 p-2 transition-colors duration-300"
+        aria-label="Fechar"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="26"
+          height="26"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="[filter:drop-shadow(0_1px_2px_rgba(0,0,0,0.8))]"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+      </button>
+    {/if}
+    {#if title}
+      <p
+        data-testid="player-title"
+        class="text-main min-w-0 truncate text-xl font-bold [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]"
+      >
+        {title}{#if episodeLabel}<span class="text-muted text-sm font-semibold"
+            >{` ${episodeLabel}`}</span
+          >{/if}
+      </p>
+    {/if}
+  </div>
 {/if}
 
 <!-- Custom Controls Bar -->
