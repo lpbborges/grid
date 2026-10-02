@@ -370,6 +370,26 @@ describe('Series playback wiring', () => {
     expect(boundary.unhandledRequests).toEqual([]);
   });
 
+  it('starts an episode over from the beginning when asked', async () => {
+    progressStore.update(series.id, 1, 1, 750, 2700);
+    boundary = installPlaybackBoundary({
+      files,
+      streams: [
+        { name: 'Torrentio\n1080p', title: 'Season pack\n👤 30', infoHash: HASH, fileIdx: 0 }
+      ]
+    });
+    render(SeriesPage, {
+      props: { data: { seriesId: series.id, series, requestedEpisode: null, error: null } }
+    });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Começar do início' }));
+    const video = (await startedVideo()) as HTMLVideoElement;
+    Object.defineProperty(video, 'duration', { configurable: true, value: 2700 });
+    await fireEvent.loadedMetadata(video);
+
+    expect(video.currentTime).toBe(0);
+  });
+
   it('marks the finished episode watched and starts the next from the beginning', async () => {
     await playEpisode(/Pilot/);
     const video = await startedVideo();

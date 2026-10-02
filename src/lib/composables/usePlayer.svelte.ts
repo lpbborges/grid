@@ -14,6 +14,8 @@ export function createPlayerBackend(getVideoElement: () => HTMLVideoElement | nu
 
 export type PlayerPlayOptions = PlayOptions & {
   originalLanguage?: string;
+  /** Ignores the saved position and plays from 0:00. */
+  startOver?: boolean;
   progress?: ProgressContext;
 };
 
@@ -87,9 +89,10 @@ export function usePlayer(
       mediaId: playOptions.mediaId ?? '',
       season: playOptions.season,
       episode: playOptions.episode,
-      startSeconds:
-        progressStore.get(playOptions.mediaId ?? '', playOptions.season, playOptions.episode)
-          ?.time || 0,
+      startSeconds: playOptions.startOver
+        ? 0
+        : progressStore.get(playOptions.mediaId ?? '', playOptions.season, playOptions.episode)
+            ?.time || 0,
       originalLanguage: playOptions.originalLanguage
     };
     currentProgress = playOptions.progress;

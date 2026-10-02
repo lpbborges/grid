@@ -2,6 +2,7 @@
   import EmptyState from './EmptyState.svelte';
   import PreferenceSelectors from './PreferenceSelectors.svelte';
   import QualitySelector from './QualitySelector.svelte';
+  import { formatTime } from '$lib/utils/formatTime';
 
   // Mirrors the subset of `Torrent` (see $lib/types) that this component
   // actually reads. A full `Torrent[]` (e.g. movie.torrents) is assignable
@@ -17,12 +18,15 @@
     // eslint-disable-next-line no-useless-assignment
     selectedTorrentHash = $bindable(),
     onPlay,
-    originalLanguage
+    originalLanguage,
+    resumeSeconds = null
   } = $props<{
     torrents: TorrentOption[];
     selectedTorrentHash: string;
-    onPlay: () => void;
+    onPlay: (startOver: boolean) => void;
     originalLanguage?: string;
+    /** Saved position worth resuming from, see `resumeSeconds` in utils. */
+    resumeSeconds?: number | null;
   }>();
 </script>
 
@@ -40,7 +44,7 @@
     </div>
 
     <button
-      onclick={onPlay}
+      onclick={() => onPlay(false)}
       class="group bg-primary/20 hover:bg-primary text-main border-primary font-cyber relative flex w-full items-center justify-center gap-2 border py-4 text-lg tracking-widest uppercase transition-all duration-300 hover:shadow-[0_0_20px_rgba(107,33,168,0.8)]"
     >
       <!-- Cyberpunk border effect -->
@@ -59,7 +63,15 @@
         fill="currentColor"
         stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
       >
-      Reproduzir
+      {resumeSeconds === null ? 'Reproduzir' : `Continuar de ${formatTime(resumeSeconds)}`}
     </button>
+    {#if resumeSeconds !== null}
+      <button
+        onclick={() => onPlay(true)}
+        class="border-primary/50 text-main hover:border-green hover:text-green focus-visible:ring-green w-full cursor-pointer rounded-sm border py-2 font-mono text-sm tracking-wider uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      >
+        Começar do início
+      </button>
+    {/if}
   </div>
 {/if}

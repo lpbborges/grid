@@ -29,6 +29,21 @@ describe('PlayerSelection component', () => {
     expect(onPlay).toHaveBeenCalled();
   });
 
+  it('offers to continue or start over when there is saved progress', async () => {
+    const onPlay = vi.fn();
+    const torrents = [{ hash: 'abc', quality: '1080p', type: 'web' }];
+    const { getByRole, queryByRole } = render(PlayerSelection, {
+      props: { torrents, selectedTorrentHash: 'abc', onPlay, resumeSeconds: 2530 }
+    });
+
+    expect(queryByRole('button', { name: /reproduzir/i })).not.toBeInTheDocument();
+    await fireEvent.click(getByRole('button', { name: 'Continuar de 42:10' }));
+    expect(onPlay).toHaveBeenLastCalledWith(false);
+
+    await fireEvent.click(getByRole('button', { name: 'Começar do início' }));
+    expect(onPlay).toHaveBeenLastCalledWith(true);
+  });
+
   it('shows an empty state when there are no torrents', () => {
     const { getByText } = render(PlayerSelection, {
       props: { torrents: [], selectedTorrentHash: '', onPlay: vi.fn() }

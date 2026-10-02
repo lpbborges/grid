@@ -94,6 +94,27 @@ describe('Movie playback wiring', () => {
     );
   });
 
+  it.each([
+    ['Continuar de 42:10', 2530],
+    ['Começar do início', 0]
+  ])('starts the movie with %s at %is', async (button, startAt) => {
+    progressStore.update(movie.id, undefined, undefined, 2530, 6000);
+    boundary = installPlaybackBoundary(baseOptions);
+    render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+
+    await fireEvent.click(await screen.findByRole('button', { name: button }));
+    const video = (await screen.findByTestId(
+      'video-element',
+      {},
+      { timeout: 5000 }
+    )) as HTMLVideoElement;
+    await waitFor(() => expect(video.getAttribute('src')).toBeTruthy());
+    Object.defineProperty(video, 'duration', { configurable: true, value: 6000 });
+    await fireEvent.loadedMetadata(video);
+
+    expect(video.currentTime).toBe(startAt);
+  });
+
   it('plays the selected file through the stream proxy without reaching the network', async () => {
     await openAndPlay();
 

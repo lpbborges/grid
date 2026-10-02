@@ -73,6 +73,15 @@ describe('usePlayer', () => {
     );
   });
 
+  it('starts from the beginning when asked to, despite saved progress', async () => {
+    progressStore.update('tt1', undefined, undefined, 90, 3600);
+    const { player, backend } = await mountPlayer();
+
+    await player.play('magnet:?xt=urn:btih:abc', { mediaId: 'tt1', startOver: true });
+
+    expect(backend.start).toHaveBeenCalledWith(expect.objectContaining({ startSeconds: 0 }));
+  });
+
   it('stops the stream and surfaces the error when the backend refuses to start', async () => {
     const { player, backend, streamPlayer } = await mountPlayer({ mode: 'native' });
     backend.start.mockResolvedValue(false);

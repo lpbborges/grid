@@ -25,6 +25,7 @@
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
+  let lastStartOver = false;
   let advancingTo = $state<Episode | null>(null);
   let focusEpisode = $derived(
     series
@@ -179,11 +180,12 @@
     };
   }
 
-  async function playEpisode(episode: Episode) {
+  async function playEpisode(episode: Episode, startOver = false) {
     if (typeof window === 'undefined' || !series) return;
     const shown = series;
 
     lastAttemptedEpisode = episode;
+    lastStartOver = startOver;
     const requestedId = seriesId;
 
     error = '';
@@ -201,7 +203,10 @@
       return;
     }
 
-    const ok = await player.play(found.magnet, episodePlayOptions(shown, episode, found.fileIdx));
+    const ok = await player.play(found.magnet, {
+      ...episodePlayOptions(shown, episode, found.fileIdx),
+      startOver
+    });
 
     // The route moved to another series while the stream was being prepared.
     if (seriesId !== requestedId) return;
@@ -222,6 +227,7 @@
     const ok = await player.advance(async (): Promise<NextPlaybackResult> => {
       // Set only after the release, so the finished file's clock never counts as the next one's.
       lastAttemptedEpisode = episode;
+      lastStartOver = false;
       const found = await findEpisodeStream({ id: requestedId, title: shown.title }, episode, {
         quality: settingsStore.quality,
         audio: settingsStore.audio
@@ -242,7 +248,7 @@
     if (errorSource === 'load') {
       window.location.reload();
     } else if (lastAttemptedEpisode) {
-      playEpisode(lastAttemptedEpisode);
+      playEpisode(lastAttemptedEpisode, lastStartOver);
     }
   }
 </script>
