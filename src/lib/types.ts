@@ -19,6 +19,8 @@ export interface Movie {
   id: string | number;
   title: string;
   year: number;
+  /** ISO release date from Cinemeta, when it has one. */
+  releaseDate?: string;
   rating: number;
   medium_cover_image: string;
   large_cover_image: string;
@@ -100,6 +102,7 @@ export interface CinemetaMeta {
   name: string;
   year?: string;
   releaseInfo?: string;
+  released?: string;
   imdbRating?: string;
   poster: string;
   background?: string;

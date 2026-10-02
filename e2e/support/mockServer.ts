@@ -24,6 +24,7 @@ function movieMeta(movie: CatalogMovie) {
     type: 'movie',
     name: movie.title,
     year: '2026',
+    released: '2026-01-01T00:00:00.000Z',
     imdbRating: '7.0',
     poster: POSTER,
     description: `${movie.title} synopsis`
@@ -37,6 +38,7 @@ function seriesMeta(series: CatalogSeries) {
     type: 'series',
     name: series.title,
     year: '2026',
+    released: '2026-01-01T00:00:00.000Z',
     imdbRating: '7.0',
     poster: POSTER,
     description: `${series.title} synopsis`,
