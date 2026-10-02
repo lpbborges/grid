@@ -719,6 +719,20 @@ describe('getCatalog', () => {
     );
   });
 
+  it.each([
+    [{ genre: 'Action' }, 24, 'genre=Action&skip=24'],
+    [{}, 48, 'skip=48'],
+    [{ genre: 'Sci-Fi' }, 0, 'genre=Sci-Fi']
+  ])('asks for %j skipping %i titles with %s', async (extra, skip, path) => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas: [] })));
+
+    await getCatalog({ type: 'movie', catalog: 'top', ...extra }, 24, undefined, skip);
+
+    expect(String(vi.mocked(globalThis.fetch).mock.calls[0][0])).toBe(
+      `https://v3-cinemeta.strem.io/catalog/movie/top/${path}.json`
+    );
+  });
+
   it('keeps the release date of a title', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       new Response(

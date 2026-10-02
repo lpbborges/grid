@@ -63,12 +63,15 @@ export interface CatalogQuery {
 export async function getCatalog(
   { type, catalog, genre }: CatalogQuery,
   limit = 24,
-  customFetch?: typeof fetch
+  customFetch?: typeof fetch,
+  skip = 0
 ): Promise<Movie[]> {
   try {
-    const extra = genre ? `/genre=${encodeURIComponent(genre)}` : '';
+    const extra = [genre && `genre=${encodeURIComponent(genre)}`, skip > 0 && `skip=${skip}`]
+      .filter(Boolean)
+      .join('&');
     const res = await fetchWithTimeout(
-      `${endpoints.cinemeta}/catalog/${type}/${catalog}${extra}.json`,
+      `${endpoints.cinemeta}/catalog/${type}/${catalog}${extra && `/${extra}`}.json`,
       { fetch: customFetch }
     );
     if (!res.ok) {
