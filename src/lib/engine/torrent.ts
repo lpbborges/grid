@@ -13,7 +13,7 @@ let ENGINE_URL = 'http://127.0.0.1:3030';
 let STREAM_URL = ENGINE_URL;
 
 export function isValidInfoHash(value: string): boolean {
-  return /^[a-f0-9]{40}$/i.test(value) || /^[a-f0-9]{64}$/i.test(value);
+  return /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(value);
 }
 
 export function isValidFileIdx(value: number): boolean {
@@ -48,6 +48,8 @@ function isHttpUrl(url: string | undefined): url is string {
   return !!url?.startsWith('http');
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<void> {
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -58,7 +60,7 @@ export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<voi
     } catch {
       // Ignored, wait and retry
     }
-    await new Promise((r) => setTimeout(r, delayMs));
+    await sleep(delayMs);
   }
   throw new Error('Torrent engine failed to become ready in time');
 }
@@ -104,7 +106,7 @@ export async function waitForTorrentLive(
     if (status?.state === 'error') {
       throw new Error(`Torrent entered an error state: ${status.error ?? 'unknown error'}`);
     }
-    await new Promise((r) => setTimeout(r, delayMs));
+    await sleep(delayMs);
   }
   throw new Error('Torrent failed to become ready in time');
 }
@@ -124,29 +126,25 @@ export async function getLoadedTorrentInfoHashes(): Promise<string[]> {
   }
 }
 
-export async function forgetTorrent(infoHash: string): Promise<void> {
+async function postTorrentAction(infoHash: string, action: 'forget' | 'delete'): Promise<void> {
   if (!isValidInfoHash(infoHash)) {
-    logger.warn(`Refusing to forget an invalid info hash: ${infoHash}`);
+    logger.warn(`Refusing to ${action} an invalid info hash: ${infoHash}`);
     return;
   }
   try {
-    await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/forget`, { method: 'POST' }, 8000);
+    await fetchWithTimeout(
+      `${ENGINE_URL}/torrents/${infoHash}/${action}`,
+      { method: 'POST' },
+      8000
+    );
   } catch (error) {
-    logger.warn('Failed to forget torrent:', error);
+    logger.warn(`Failed to ${action} torrent:`, error);
   }
 }
 
-export async function deleteTorrent(infoHash: string): Promise<void> {
-  if (!isValidInfoHash(infoHash)) {
-    logger.warn(`Refusing to delete an invalid info hash: ${infoHash}`);
-    return;
-  }
-  try {
-    await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/delete`, { method: 'POST' }, 8000);
-  } catch (error) {
-    logger.warn('Failed to delete torrent:', error);
-  }
-}
+export const forgetTorrent = (infoHash: string) => postTorrentAction(infoHash, 'forget');
+
+export const deleteTorrent = (infoHash: string) => postTorrentAction(infoHash, 'delete');
 
 // rqbit tries each source only once while resolving a magnet, so a source that
 // accepts the connection and never answers hangs the add forever. A new add
