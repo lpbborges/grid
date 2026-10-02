@@ -31,4 +31,11 @@ describe('MediaGrid component', () => {
       '/series/tt2'
     ]);
   });
+
+  it('renders without a heading when none is given', () => {
+    render(MediaGrid, { items: [makeResult('tt1', 'Alpha', 'movie')] });
+
+    expect(screen.queryByRole('heading')).toBeNull();
+    expect(screen.getAllByTestId('media-card')).toHaveLength(1);
+  });
 });
