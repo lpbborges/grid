@@ -34,13 +34,15 @@ describe('My Grid page', () => {
     expect(screen.queryByText('Continuar assistindo')).toBeNull();
   });
 
-  it('shows Continuar assistindo above the lists when something is in progress', () => {
+  it('does not show Continuar assistindo, which lives on the home page', () => {
     progressStore.progress = { tt2: { time: 60, duration: 600, updatedAt: 1, meta } };
 
     render(MyGridPage);
 
+    expect(screen.queryByText('Continuar assistindo')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Remover de Continuar/ })).toBeNull();
     const headings = screen.getAllByRole('heading').map((h) => h.textContent?.trim());
-    expect(headings.slice(1, 3)).toEqual(['Continuar assistindo', 'Favoritos']);
+    expect(headings.slice(0, 2)).toEqual(['Meu Grid', 'Favoritos']);
   });
 
   it('shows Assistir depois as soon as it gets a title', async () => {

@@ -1,15 +1,11 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import CatalogPage from '$lib/components/CatalogPage.svelte';
-  import ContinueWatchingRow from '$lib/components/ContinueWatchingRow.svelte';
   import ListNameForm from '$lib/components/ListNameForm.svelte';
   import ListSection from '$lib/components/ListSection.svelte';
   import UndoToast from '$lib/components/UndoToast.svelte';
   import { listsStore, type RemovedList } from '$lib/stores/lists.svelte';
-  import { progressStore } from '$lib/stores/progress.svelte';
-  import { toContinueWatchingItems } from '$lib/utils/continueWatching';
 
-  let continueWatchingItems = $derived(toContinueWatchingItems(progressStore.entries));
   let shownLists = $derived(
     listsStore.recent.filter((list) => list.system !== 'watch-later' || list.items.length > 0)
   );
@@ -42,8 +38,6 @@
 </script>
 
 <CatalogPage title="Meu Grid">
-  <ContinueWatchingRow items={continueWatchingItems} />
-
   {#each shownLists as list (list.id)}
     <ListSection {list} ondelete={(removed) => (lastDeleted = removed)} />
   {/each}
