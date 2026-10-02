@@ -269,6 +269,12 @@ fn upsert_cache_entry_blocking(
     app_data_dir: &Path,
     entry: cache::CacheEntry,
 ) -> Result<(), String> {
+    if !subtitles::is_valid_info_hash(&entry.info_hash) {
+        return Err("Invalid info hash".to_string());
+    }
+    if !cache::is_relative_path_inside(&entry.file_name) {
+        return Err("Invalid cache file name".to_string());
+    }
     cache::update_manifest(&cache::manifest_path(app_data_dir), |manifest| {
         cache::upsert_entry(manifest, entry)
     })
@@ -1312,6 +1318,33 @@ mod tests {
         let mut stored: Vec<String> = manifest.entries.into_iter().map(|e| e.info_hash).collect();
         stored.sort();
         assert_eq!(stored, hashes);
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+    }
+
+    #[test]
+    fn upsert_refuses_an_entry_that_is_not_a_well_formed_download() {
+        let app_data_dir = fresh_app_data_dir("upsert-invalid");
+        let hash = "c".repeat(40);
+        let bad_hash = cache::CacheEntry {
+            info_hash: "not-a-hash".to_string(),
+            ..cached_movie(&hash)
+        };
+        let traversal = cache::CacheEntry {
+            file_name: "../outside.mkv".to_string(),
+            ..cached_movie(&hash)
+        };
+        let absolute = cache::CacheEntry {
+            file_name: "/etc/passwd".to_string(),
+            ..cached_movie(&hash)
+        };
+
+        for entry in [bad_hash, traversal, absolute] {
+            assert!(upsert_cache_entry_blocking(&app_data_dir, entry).is_err());
+        }
+
+        let manifest = cache::read_manifest(&cache::manifest_path(&app_data_dir));
+        assert!(manifest.entries.is_empty());
+        upsert_cache_entry_blocking(&app_data_dir, cached_movie(&hash)).unwrap();
         let _ = std::fs::remove_dir_all(&app_data_dir);
     }
 

@@ -156,6 +156,12 @@ pub fn remove_entry_files(downloads_dir: &Path, entry: &CacheEntry) {
     }
 }
 
+/// A non-empty relative path that never leaves the folder it is joined to.
+pub fn is_relative_path_inside(name: &str) -> bool {
+    let mut components = Path::new(name).components().peekable();
+    components.peek().is_some() && components.all(|c| matches!(c, std::path::Component::Normal(_)))
+}
+
 pub fn remove_path_best_effort(path: &Path) {
     if path.is_dir() {
         let _ = std::fs::remove_dir_all(path);
