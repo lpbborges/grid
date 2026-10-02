@@ -1,10 +1,12 @@
 import { logger } from '$lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
-import { getLanguageName, preferredLanguageRank } from '../api/subtitles';
+import { getLanguageName, preferredLanguageRank, type SubtitleTrack } from '../api/subtitles';
 import { FetchTimeoutError, fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { hasExtension } from '../utils/fileExtension';
 import { isRecord } from '../utils/isRecord';
+import { fulfilledValues } from '../utils/settled';
+import { vttObjectUrl } from '../utils/vttUrl';
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm'];
 const SUBTITLE_EXTENSIONS = ['.srt', '.vtt'];
@@ -335,9 +337,7 @@ export async function getTorrentSubtitles(
   infoHash: string,
   files: { name: string; length: number }[],
   preference?: string
-): Promise<
-  { id: string; url: string; lang: string; label: string; group: 'Embedded' | 'Extra' }[]
-> {
+): Promise<SubtitleTrack[]> {
   const candidates: {
     idx: number;
     lang: string;
@@ -362,12 +362,10 @@ export async function getTorrentSubtitles(
         infoHash,
         fileIdx: idx
       });
-      const blob = new Blob([vtt], { type: 'text/vtt' });
-      const url = URL.createObjectURL(blob);
 
       return {
         id: `torrent-${idx}`,
-        url,
+        url: vttObjectUrl(vtt),
         lang,
         label: lang === 'Unknown' ? 'Desconhecido' : langName || lang,
         group: 'Embedded' as const
@@ -375,25 +373,7 @@ export async function getTorrentSubtitles(
     })
   );
 
-  return results
-    .filter(
-      (
-        result
-      ): result is PromiseFulfilledResult<{
-        id: string;
-        url: string;
-        lang: string;
-        label: string;
-        group: 'Embedded';
-      }> => {
-        if (result.status === 'rejected') {
-          logger.warn('Failed to fetch a torrent subtitle:', result.reason);
-          return false;
-        }
-        return true;
-      }
-    )
-    .map((result) => result.value);
+  return fulfilledValues(results, 'Failed to fetch a torrent subtitle:');
 }
 
 export interface TorrentStats {
