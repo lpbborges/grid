@@ -258,12 +258,15 @@ export async function searchCatalog(
   query: string,
   onUpdate: (results: SearchResult[], done: boolean) => void,
   limit = 12,
-  customFetch?: typeof fetch
+  customFetch?: typeof fetch,
+  { type }: { type?: MediaType } = {}
 ): Promise<SearchResult[]> {
+  const wantsMovies = !type || type === 'movie';
+  const wantsSeries = !type || type === 'series';
   let localized: SearchResult[] = [];
   let movies: SearchResult[] = [];
   let series: SearchResult[] = [];
-  let pending = 3;
+  let pending = 1 + Number(wantsMovies) + Number(wantsSeries);
   let results: SearchResult[] = [];
 
   const answered = () => {
@@ -271,26 +274,28 @@ export async function searchCatalog(
     results = combineSearchResults(localized, movies, series);
     onUpdate(results, pending === 0);
   };
-  const withType = (type: MediaType) => (items: Movie[]) =>
-    items.map((item): SearchResult => ({ ...item, type }));
+  const withType = (itemType: MediaType) => (items: Movie[]) =>
+    items.map((item): SearchResult => ({ ...item, type: itemType }));
 
   await Promise.all([
     searchLocalizedCatalog(query, customFetch).then((found) => {
-      localized = found;
+      localized = type ? found.filter((item) => item.type === type) : found;
       answered();
     }),
-    searchMovies(query, limit, customFetch)
-      .then(withType('movie'))
-      .then((found) => {
-        movies = found;
-        answered();
-      }),
-    searchSeries(query, limit, customFetch)
-      .then(withType('series'))
-      .then((found) => {
-        series = found;
-        answered();
-      })
+    wantsMovies &&
+      searchMovies(query, limit, customFetch)
+        .then(withType('movie'))
+        .then((found) => {
+          movies = found;
+          answered();
+        }),
+    wantsSeries &&
+      searchSeries(query, limit, customFetch)
+        .then(withType('series'))
+        .then((found) => {
+          series = found;
+          answered();
+        })
   ]);
   return results;
 }

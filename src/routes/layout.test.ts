@@ -3,13 +3,25 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRawSnippet } from 'svelte';
 import { playerState, searchQuery } from '$lib/stores.svelte';
 
-const { pageState, gotoMock } = vi.hoisted(() => ({
+const { pageState, gotoMock, navigation } = vi.hoisted(() => ({
   pageState: { url: new URL('http://localhost/') },
-  gotoMock: vi.fn()
+  gotoMock: vi.fn(),
+  navigation: { after: (() => {}) as (nav: unknown) => void }
 }));
 
 vi.mock('$app/state', () => ({ page: pageState }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', () => ({
+  goto: gotoMock,
+  afterNavigate: (callback: (nav: unknown) => void) => {
+    navigation.after = callback;
+  }
+}));
+
+const navigate = (from: string, to: string) =>
+  navigation.after({
+    from: { url: new URL(`http://localhost${from}`) },
+    to: { url: new URL(`http://localhost${to}`) }
+  });
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({
     isMaximized: vi.fn().mockResolvedValue(false),
@@ -68,6 +80,56 @@ describe('Layout', () => {
 
     expect(searchQuery.value).toBe('matrix');
     expect(gotoMock).toHaveBeenCalledWith('/');
+  });
+
+  it.each(['/movies', '/series'])('searches in place on %s', async (path) => {
+    pageState.url = new URL(`http://localhost${path}`);
+    render(Layout, { children });
+
+    await fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'matrix' } });
+
+    expect(searchQuery.value).toBe('matrix');
+    expect(gotoMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['/movie/tt1', '/settings', '/new', '/my-grid'])(
+    'still takes a search typed on %s to the home screen',
+    async (path) => {
+      pageState.url = new URL(`http://localhost${path}`);
+      render(Layout, { children });
+
+      await fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'matrix' } });
+
+      expect(gotoMock).toHaveBeenCalledWith('/');
+    }
+  );
+
+  it('clears the search when the page changes', () => {
+    searchQuery.value = 'matrix';
+    render(Layout, { children });
+
+    navigate('/movies', '/series');
+
+    expect(searchQuery.value).toBe('');
+  });
+
+  it('keeps the search when only the genre changes', () => {
+    searchQuery.value = 'matrix';
+    render(Layout, { children });
+
+    navigate('/movies', '/movies?genre=Action');
+
+    expect(searchQuery.value).toBe('matrix');
+  });
+
+  it('keeps the search that sent the user to the results on the home screen', async () => {
+    pageState.url = new URL('http://localhost/settings');
+    render(Layout, { children });
+    await fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'matrix' } });
+
+    navigate('/settings', '/');
+
+    expect(searchQuery.value).toBe('matrix');
   });
 
   it('stays on the home screen while searching there', async () => {

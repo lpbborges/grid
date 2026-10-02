@@ -1,21 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/svelte';
 
-const { pageState, gotoMock, getCatalogMock } = vi.hoisted(() => ({
+const { pageState, gotoMock, getCatalogMock, searchCatalogMock } = vi.hoisted(() => ({
   pageState: { url: new URL('http://localhost/movies') },
   gotoMock: vi.fn(),
-  getCatalogMock: vi.fn()
+  getCatalogMock: vi.fn(),
+  searchCatalogMock: vi.fn()
 }));
 
 vi.mock('$app/state', () => ({ page: pageState }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/api/cinemeta', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$lib/api/cinemeta')>()),
-  getCatalog: getCatalogMock
+  getCatalog: getCatalogMock,
+  searchCatalog: searchCatalogMock
 }));
 
 import GenreCatalogPage from './GenreCatalogPage.svelte';
 import { movieRows, seriesRows } from '$lib/utils/catalogRows';
+import { searchQuery } from '$lib/stores.svelte';
 
 const movie = {
   id: 'tt1',
@@ -32,6 +35,8 @@ const movie = {
 describe('GenreCatalogPage', () => {
   beforeEach(() => {
     gotoMock.mockReset();
+    searchQuery.value = '';
+    searchCatalogMock.mockReset();
     getCatalogMock.mockReset();
     getCatalogMock.mockResolvedValue([movie]);
     pageState.url = new URL('http://localhost/movies');
@@ -89,5 +94,76 @@ describe('GenreCatalogPage', () => {
     await fireEvent.click(screen.getByRole('menuitemradio', { name: 'Todos os gêneros' }));
 
     expect(gotoMock).toHaveBeenCalledWith('/movies', { keepFocus: true, noScroll: true });
+  });
+
+  describe('while searching', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      searchCatalogMock.mockImplementation(
+        async (_q: string, onUpdate: (r: unknown[], d: boolean) => void) => {
+          onUpdate([{ ...movie, id: 'tt7', title: 'Matrix', type: 'movie' }], true);
+        }
+      );
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function search(query: string) {
+      await act(() => {
+        searchQuery.value = query;
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+    }
+
+    it('swaps the page for results of its own type, without navigating', async () => {
+      render(GenreCatalogPage, { type: 'movie', genre: 'Action', rows: movieRows() });
+
+      await search('matrix');
+
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Resultados para "matrix"' })
+      ).toBeInTheDocument();
+      expect(screen.getByText('Em filmes')).toBeInTheDocument();
+      expect(screen.getAllByText('Matrix').length).toBeGreaterThan(0);
+      expect(searchCatalogMock).toHaveBeenCalledWith(
+        'matrix',
+        expect.any(Function),
+        undefined,
+        undefined,
+        { type: 'movie' }
+      );
+      expect(screen.queryByRole('button', { name: 'Gêneros' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Ação' })).toBeNull();
+      expect(gotoMock).not.toHaveBeenCalled();
+    });
+
+    it('searches series on the series page', async () => {
+      render(GenreCatalogPage, { type: 'series', genre: null, rows: seriesRows() });
+
+      await search('lost');
+
+      expect(screen.getByText('Em séries')).toBeInTheDocument();
+      expect(searchCatalogMock).toHaveBeenCalledWith(
+        'lost',
+        expect.any(Function),
+        undefined,
+        undefined,
+        { type: 'series' }
+      );
+    });
+
+    it('brings the genre view back when the search is cleared', async () => {
+      render(GenreCatalogPage, { type: 'movie', genre: 'Action', rows: movieRows() });
+      await search('matrix');
+
+      await search('');
+
+      expect(screen.getByRole('heading', { level: 1, name: 'Filmes de Ação' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'Ação' }).length).toBeGreaterThan(0);
+    });
   });
 });

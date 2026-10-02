@@ -491,6 +491,48 @@ describe('yts api', () => {
     expect(results.map((r) => r.title)).toEqual(['Filme', 'Série']);
   });
 
+  it('searchCatalog with a type asks Cinemeta for that type only and keeps its Wikidata matches', async () => {
+    routeFetch({
+      'catalog/movie/top/search=': { metas: [{ id: 'tt1', name: 'Filme', year: '2020' }] },
+      'catalog/series/top/search=': { metas: [{ id: 'tt2', name: 'Série', year: '2020' }] },
+      wbsearchentities: { search: [{ id: 'Q1' }, { id: 'Q2' }] },
+      wbgetentities: {
+        entities: {
+          Q1: { claims: claims({ P345: 'tt3' }) },
+          Q2: { claims: claims({ P345: 'tt4' }) }
+        }
+      },
+      'meta/series/tt3.json': {},
+      'meta/movie/tt3.json': { meta: { id: 'tt3', name: 'Local filme', year: '2020' } },
+      'meta/series/tt4.json': { meta: { id: 'tt4', name: 'Local série', year: '2020' } },
+      'meta/movie/tt4.json': { meta: { id: 'tt4', name: 'Local série', year: '2020' } }
+    });
+    const reports: boolean[] = [];
+
+    const results = await searchCatalog('x', (_, done) => reports.push(done), 12, undefined, {
+      type: 'series'
+    });
+
+    expect(results.map((r) => [r.title, r.type])).toEqual([
+      ['Local série', 'series'],
+      ['Série', 'series']
+    ]);
+    const urls = (globalThis.fetch as any).mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(urls.some((u: string) => u.includes('catalog/movie/'))).toBe(false);
+    expect(reports).toEqual([false, true]);
+  });
+
+  it('searchCatalog with the movie type never returns a series', async () => {
+    routeFetch({
+      'catalog/movie/top/search=': { metas: [{ id: 'tt1', name: 'Filme', year: '2020' }] },
+      wbsearchentities: { search: [] }
+    });
+
+    const results = await searchCatalog('x', () => {}, 12, undefined, { type: 'movie' });
+
+    expect(results.map((r) => r.type)).toEqual(['movie']);
+  });
+
   it('searchLocalizedCatalog skips Wikidata matches that Cinemeta does not know', async () => {
     routeFetch({
       wbsearchentities: { search: [{ id: 'Q1' }] },

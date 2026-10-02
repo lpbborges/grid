@@ -5,15 +5,28 @@
   import SplashScreen from '$lib/components/SplashScreen.svelte';
   import DisclaimerModal from '$lib/components/DisclaimerModal.svelte';
   import Titlebar from '$lib/components/Titlebar.svelte';
-  import { goto } from '$app/navigation';
+  import { afterNavigate, goto } from '$app/navigation';
   import { playerState, searchQuery } from '$lib/stores.svelte';
+  import { searchScope } from '$lib/utils/searchScope';
   let { children } = $props();
 
   let searchInput = $state<HTMLInputElement>();
 
+  let searchOwnsNavigation = false;
+
   function showResults() {
-    if (page.url.pathname !== '/') void goto('/');
+    const { pathname } = page.url;
+    if (searchScope(pathname) || pathname === '/') return;
+    searchOwnsNavigation = true;
+    void goto('/');
   }
+
+  afterNavigate(({ from, to }) => {
+    const ownNavigation = searchOwnsNavigation;
+    searchOwnsNavigation = false;
+    if (ownNavigation || from?.url.pathname === to?.url.pathname) return;
+    searchQuery.value = '';
+  });
 
   function focusSearchShortcut(e: KeyboardEvent) {
     if (!searchInput || playerState.isPlaying) return;
