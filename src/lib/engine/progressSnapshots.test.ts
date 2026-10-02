@@ -14,8 +14,9 @@ const movieMeta = { type: 'movie' as const, title: 'Filme', poster: 'm.jpg' };
 async function load() {
   vi.resetModules();
   const { progressStore } = await import('$lib/stores/progress.svelte');
+  const { favoritesStore } = await import('$lib/stores/favorites.svelte');
   const { backfillProgressSnapshots } = await import('./progressSnapshots');
-  return { progressStore, backfillProgressSnapshots };
+  return { progressStore, favoritesStore, backfillProgressSnapshots };
 }
 
 describe('backfillProgressSnapshots', () => {
@@ -51,5 +52,24 @@ describe('backfillProgressSnapshots', () => {
     await backfillProgressSnapshots();
 
     expect(resolveMissingSnapshotsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('looks up favorites saved without a snapshot once, even when also in progress', async () => {
+    localStorage.setItem(
+      'grid-progress',
+      JSON.stringify({ 'tt1-S1E2': { time: 1, duration: 100, updatedAt: 1 } })
+    );
+    localStorage.setItem('grid-favorites', JSON.stringify(['tt1', 'tt2']));
+    resolveMissingSnapshotsMock.mockResolvedValue({ tt1: movieMeta, tt2: movieMeta });
+    const { progressStore, favoritesStore, backfillProgressSnapshots } = await load();
+
+    await backfillProgressSnapshots();
+
+    expect(resolveMissingSnapshotsMock.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ id: 'tt1', season: 1 }),
+      { id: 'tt2' }
+    ]);
+    expect(progressStore.get('tt1', 1, 2)?.meta).toEqual(movieMeta);
+    expect(favoritesStore.titled.map((entry) => entry.id)).toEqual(['tt2', 'tt1']);
   });
 });

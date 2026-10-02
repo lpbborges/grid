@@ -1,10 +1,12 @@
 <script lang="ts">
   import { favoritesStore } from '$lib/stores/favorites.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
-  import type { CastMember } from '$lib/types';
+  import type { CastMember, MediaType } from '$lib/types';
 
-  let { id, title, year, director, rating, synopsis, cast } = $props<{
+  let { id, type, poster, title, year, director, rating, synopsis, cast } = $props<{
     id: string | number;
+    type: MediaType;
+    poster: string;
     title: string;
     year: number;
     director?: string[];
@@ -160,7 +162,7 @@
 
   <!-- Favorites toggle button -->
   <button
-    onclick={() => favoritesStore.toggle(id)}
+    onclick={() => favoritesStore.toggle(id, { type, title, poster })}
     title={favoritesStore.has(id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
     aria-label={favoritesStore.has(id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
     class="group focus-visible:ring-orange relative flex h-11 w-11 items-center justify-center rounded-sm border transition-all duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:outline-none active:scale-95 {favoritesStore.has(
