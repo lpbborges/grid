@@ -1,8 +1,9 @@
 import { browser } from '$app/environment';
 import { writeStored } from './storage';
 import { isAudioPreference, type AudioPreference } from '$lib/types';
+import { BYTES_PER_GB } from '$lib/utils/formatBytes';
 
-export const MAX_CACHE_LIMIT_BYTES = 50 * 1024 * 1024 * 1024;
+export const MAX_CACHE_LIMIT_BYTES = 50 * BYTES_PER_GB;
 
 function normalizeCacheLimit(value: number): number | null {
   if (!Number.isFinite(value) || value <= 0) return null;
@@ -13,7 +14,7 @@ class SettingsStore {
   #audio = $state<AudioPreference>('pt');
   #subtitle = $state('pt');
   #quality = $state('1080p');
-  #cacheLimitBytes = $state(3 * 1024 * 1024 * 1024);
+  #cacheLimitBytes = $state(3 * BYTES_PER_GB);
   #acceptedDisclaimer = $state(false);
 
   constructor() {

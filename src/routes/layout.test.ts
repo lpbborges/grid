@@ -32,4 +32,12 @@ describe('Layout', () => {
 
     expect(searchQuery.value).toBe('');
   });
+
+  it('links to the settings from the header', () => {
+    render(Layout, { children });
+
+    expect(screen.getByRole('link', { name: 'Configurações' }).getAttribute('href')).toBe(
+      '/settings'
+    );
+  });
 });
