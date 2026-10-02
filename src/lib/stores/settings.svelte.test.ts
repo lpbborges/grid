@@ -76,3 +76,36 @@ describe('settingsStore persistence', () => {
     setItem.mockRestore();
   });
 });
+
+describe('settingsStore.hoverPreview', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('is on by default', async () => {
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    expect(settingsStore.hoverPreview).toBe(true);
+  });
+
+  it('loads a stored off value', async () => {
+    localStorage.setItem('grid-hover-preview', 'false');
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    expect(settingsStore.hoverPreview).toBe(false);
+  });
+
+  it('ignores a stored value that is not a boolean', async () => {
+    localStorage.setItem('grid-hover-preview', 'maybe');
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    expect(settingsStore.hoverPreview).toBe(true);
+  });
+
+  it('persists the new value when set', async () => {
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    settingsStore.hoverPreview = false;
+    expect(localStorage.getItem('grid-hover-preview')).toBe('false');
+  });
+});
