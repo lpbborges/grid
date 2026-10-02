@@ -5,15 +5,38 @@
   import SplashScreen from '$lib/components/SplashScreen.svelte';
   import DisclaimerModal from '$lib/components/DisclaimerModal.svelte';
   import Titlebar from '$lib/components/Titlebar.svelte';
-  import { searchQuery } from '$lib/stores.svelte';
+  import { goto } from '$app/navigation';
+  import { playerState, searchQuery } from '$lib/stores.svelte';
   let { children } = $props();
+
+  let searchInput = $state<HTMLInputElement>();
+
+  function showResults() {
+    if (page.url.pathname !== '/') void goto('/');
+  }
+
+  function focusSearchShortcut(e: KeyboardEvent) {
+    if (!searchInput || playerState.isPlaying) return;
+    const ctrlK = e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey) && !e.altKey;
+    const slash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey;
+    if (!ctrlK && !slash) return;
+    if (
+      e.target instanceof Element &&
+      e.target.closest('input, textarea, select, [contenteditable]')
+    )
+      return;
+    e.preventDefault();
+    searchInput.focus();
+  }
 </script>
+
+<svelte:window onkeydown={focusSearchShortcut} />
 
 <div class="text-main bg-dark flex h-screen flex-col overflow-hidden">
   <SplashScreen />
   <DisclaimerModal />
   <Titlebar />
-  {#if !page.url.pathname.startsWith('/movie') && !page.url.pathname.startsWith('/series')}
+  {#if !playerState.isPlaying}
     <!-- Top navigation bar -->
     <header class="bg-dark/80 flex items-center justify-between p-4 backdrop-blur">
       <!-- Left: Logo -->
@@ -32,13 +55,17 @@
 
       <!-- Center: Search -->
       <div class="flex flex-1 justify-center">
-        <div class="relative h-[38px] w-[300px]">
+        <div class="relative h-[38px] w-[360px]">
           <div class="absolute top-0 left-1/2 flex -translate-x-1/2 items-center">
             <input
-              type="text"
+              bind:this={searchInput}
+              type="search"
+              aria-label="Pesquisar"
+              title="Pesquisar (Ctrl+K ou /)"
               placeholder="PROCURAR..."
               bind:value={searchQuery.value}
-              class="border-primary/50 text-main focus:border-green bg-surface/50 placeholder-muted font-cyber focus:bg-surface w-[300px] rounded border py-2 pr-10 pl-4 text-sm tracking-wider transition-all duration-300 outline-none focus:w-[450px] focus:shadow-[0_0_15px_rgba(54,211,83,0.3)]"
+              oninput={showResults}
+              class="border-primary/50 text-main focus:border-green bg-surface/50 placeholder-muted font-cyber focus:bg-surface w-[360px] rounded border py-2 pr-10 pl-4 text-sm tracking-wider transition-all duration-300 outline-none focus:w-[480px] focus:shadow-[0_0_15px_rgba(54,211,83,0.3)] [&::-webkit-search-cancel-button]:appearance-none"
             />
             {#if searchQuery.value}
               <button
