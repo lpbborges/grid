@@ -5,7 +5,12 @@ import { settingsStore } from '$lib/stores/settings.svelte';
 import { BYTES_PER_GB } from '$lib/utils/formatBytes';
 import { version } from '../../../package.json';
 
-const { getCacheUsageBytesMock } = vi.hoisted(() => ({ getCacheUsageBytesMock: vi.fn() }));
+const { getCacheUsageBytesMock, clearDownloadedVideosMock } = vi.hoisted(() => ({
+  getCacheUsageBytesMock: vi.fn(),
+  clearDownloadedVideosMock: vi.fn()
+}));
+
+vi.mock('$lib/engine/orchestrator', () => ({ clearDownloadedVideos: clearDownloadedVideosMock }));
 
 vi.mock('$lib/engine/cache', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$lib/engine/cache')>()),
@@ -14,6 +19,8 @@ vi.mock('$lib/engine/cache', async (importOriginal) => ({
 
 describe('Settings page', () => {
   beforeEach(() => {
+    vi.resetAllMocks();
+    getCacheUsageBytesMock.mockResolvedValue(0);
     localStorage.clear();
     settingsStore.quality = '1080p';
     settingsStore.subtitle = 'pt';
@@ -52,6 +59,46 @@ describe('Settings page', () => {
     render(SettingsPage, { data: { cacheUsageBytes: null } });
 
     expect(screen.getByText('Uso indisponível')).toBeTruthy();
+  });
+
+  it('clears the downloaded videos after the user confirms', async () => {
+    clearDownloadedVideosMock.mockResolvedValue(undefined);
+    render(SettingsPage, { data: { cacheUsageBytes: 2.14 * BYTES_PER_GB } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Limpar vídeos baixados (2,1 GB)' }));
+    expect(clearDownloadedVideosMock).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Apagar' }));
+
+    expect(clearDownloadedVideosMock).toHaveBeenCalledOnce();
+    expect(await screen.findByText('0 GB em uso')).toBeTruthy();
+  });
+
+  it('keeps the videos when the user cancels', async () => {
+    render(SettingsPage, { data: { cacheUsageBytes: BYTES_PER_GB } });
+
+    await fireEvent.click(screen.getByRole('button', { name: /Limpar vídeos baixados/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+    expect(clearDownloadedVideosMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Limpar vídeos baixados/ })).toBeTruthy();
+  });
+
+  it('says when clearing failed', async () => {
+    clearDownloadedVideosMock.mockRejectedValue(new Error('disk'));
+    render(SettingsPage, { data: { cacheUsageBytes: BYTES_PER_GB } });
+
+    await fireEvent.click(screen.getByRole('button', { name: /Limpar vídeos baixados/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Apagar' }));
+
+    expect(await screen.findByText('Não foi possível apagar os vídeos.')).toBeTruthy();
+  });
+
+  it('has nothing to clear when no video is stored', () => {
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+
+    expect(
+      (screen.getByRole('button', { name: /Limpar vídeos baixados/ }) as HTMLButtonElement).disabled
+    ).toBe(true);
   });
 
   it('shows the app version', () => {

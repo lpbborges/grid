@@ -46,6 +46,17 @@ describe('cache manifest client', () => {
     expect(await getCacheUsageBytes()).toBe(150);
   });
 
+  it('clearCache asks the backend to keep only the given stream', async () => {
+    const { clearCache } = await import('./cache');
+    (invoke as any).mockResolvedValue(undefined);
+
+    await clearCache('abc');
+    await clearCache();
+
+    expect(invoke).toHaveBeenCalledWith('clear_cache', { excludeInfoHash: 'abc' });
+    expect(invoke).toHaveBeenCalledWith('clear_cache', { excludeInfoHash: null });
+  });
+
   it('upsertCacheEntry invokes upsert_cache_entry with the entry', async () => {
     const { upsertCacheEntry } = await import('./cache');
     const entry = {
