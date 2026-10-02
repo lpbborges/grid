@@ -15,8 +15,8 @@ describe('ListSection', () => {
   beforeEach(() => {
     localStorage.clear();
     listsStore.lists = [
-      { id: 'favorites', name: 'Favoritos', system: 'favorites', items: [] },
-      { id: 'watch-later', name: 'Assistir depois', system: 'watch-later', items: [] }
+      { id: 'favorites', name: 'Favoritos', system: 'favorites', updatedAt: 0, items: [] },
+      { id: 'watch-later', name: 'Assistir depois', system: 'watch-later', updatedAt: 0, items: [] }
     ];
   });
 
@@ -48,18 +48,77 @@ describe('ListSection', () => {
     expect(listsStore.has('watch-later', 'tt1')).toBe(true);
   });
 
-  it('offers no rename or delete for a default list', () => {
+  const openOptions = (name: string) =>
+    fireEvent.click(screen.getByRole('button', { name: `Opções de ${name}` }));
+
+  it('has no rename or delete buttons in the heading, only an options button', () => {
+    const id = customList();
+    render(ListSection, { list: listsStore.get(id)!, ondelete: vi.fn() });
+
+    expect(screen.getByRole('button', { name: 'Opções de Cinema' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(screen.queryByRole('button', { name: /Renomear|Excluir/ })).toBeNull();
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('offers no options for a default list', () => {
     render(ListSection, { list: listsStore.lists[1], ondelete: vi.fn() });
 
-    expect(screen.queryByRole('button', { name: /Renomear/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Excluir/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Opções/ })).toBeNull();
+  });
+
+  it('opens a dropdown with rename and delete, focusing the first option', async () => {
+    const id = customList();
+    render(ListSection, { list: listsStore.get(id)!, ondelete: vi.fn() });
+
+    await openOptions('Cinema');
+
+    expect(screen.getByRole('button', { name: 'Opções de Cinema' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent?.trim())).toEqual([
+      'Renomear',
+      'Excluir'
+    ]);
+    expect(screen.getByRole('menuitem', { name: 'Renomear' })).toHaveFocus();
+  });
+
+  it('moves between the options with the arrow keys', async () => {
+    const id = customList();
+    render(ListSection, { list: listsStore.get(id)!, ondelete: vi.fn() });
+    await openOptions('Cinema');
+
+    await fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' });
+    expect(screen.getByRole('menuitem', { name: 'Excluir' })).toHaveFocus();
+
+    await fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowUp' });
+    expect(screen.getByRole('menuitem', { name: 'Renomear' })).toHaveFocus();
+  });
+
+  it('closes with Escape, giving the focus back, and when the user clicks elsewhere', async () => {
+    const id = customList();
+    render(ListSection, { list: listsStore.get(id)!, ondelete: vi.fn() });
+
+    await openOptions('Cinema');
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Opções de Cinema' })).toHaveFocus();
+
+    await openOptions('Cinema');
+    await fireEvent.click(document.body);
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 
   it('renames a list of the user', async () => {
     const id = customList();
     render(ListSection, { list: listsStore.get(id)!, ondelete: vi.fn() });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Renomear Cinema' }));
+    await openOptions('Cinema');
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Renomear' }));
+    expect(screen.queryByRole('menu')).toBeNull();
     const input = screen.getByRole('textbox', { name: 'Novo nome da lista' });
     expect(input).toHaveValue('Cinema');
     await fireEvent.input(input, { target: { value: ' Maratona ' } });
@@ -73,7 +132,8 @@ describe('ListSection', () => {
     const id = customList();
     render(ListSection, { list: listsStore.get(id)!, ondelete: vi.fn() });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Renomear Cinema' }));
+    await openOptions('Cinema');
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Renomear' }));
     await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'favoritos' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
 
@@ -85,7 +145,8 @@ describe('ListSection', () => {
     const id = customList();
     render(ListSection, { list: listsStore.get(id)!, ondelete: vi.fn() });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Renomear Cinema' }));
+    await openOptions('Cinema');
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Renomear' }));
     await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
 
     expect(screen.queryByRole('textbox')).toBeNull();
@@ -97,7 +158,8 @@ describe('ListSection', () => {
     const ondelete = vi.fn();
     render(ListSection, { list: listsStore.get(id)!, ondelete });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Excluir Cinema' }));
+    await openOptions('Cinema');
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Excluir' }));
 
     expect(ondelete).toHaveBeenCalledWith(
       expect.objectContaining({ list: expect.objectContaining({ id }) })

@@ -19,6 +19,8 @@ export interface TitleList {
   id: string;
   name: string;
   system?: SystemListKind;
+  /** When a title was last added or removed, or the list was created or renamed; 0 when unknown. */
+  updatedAt: number;
   /** In the order they were added, oldest first. */
   items: ListItem[];
 }
@@ -44,6 +46,9 @@ function parseMeta(value: unknown): { meta?: ProgressMeta } {
   return isProgressMeta(value) ? { meta: copyMeta(value) } : {};
 }
 
+const parseTime = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0;
+
 function parseItems(value: unknown): ListItem[] {
   if (!Array.isArray(value)) return [];
   const items: ListItem[] = [];
@@ -61,7 +66,13 @@ function parseLists(stored: unknown): TitleList[] {
   const parsed = Array.isArray(stored) ? stored.filter(isRecord) : [];
   const lists: TitleList[] = SYSTEM_LISTS.map(({ id, name }) => {
     const saved = parsed.find((list) => list.system === id);
-    return { id, name, system: id, items: parseItems(saved?.items) };
+    return {
+      id,
+      name,
+      system: id,
+      updatedAt: parseTime(saved?.updatedAt),
+      items: parseItems(saved?.items)
+    };
   });
   for (const list of parsed) {
     if (list.system !== undefined || typeof list.id !== 'string') continue;
@@ -70,7 +81,7 @@ function parseLists(stored: unknown): TitleList[] {
     const name = list.name.trim();
     const taken = lists.some((other) => other.id === id || sameName(other.name, name));
     if (!name || name.length > MAX_LIST_NAME_LENGTH || taken) continue;
-    lists.push({ id, name, items: parseItems(list.items) });
+    lists.push({ id, name, updatedAt: parseTime(list.updatedAt), items: parseItems(list.items) });
   }
   return lists;
 }
@@ -118,7 +129,9 @@ class ListsStore {
   }
 
   private update(listId: string, change: (list: TitleList) => TitleList) {
-    this.lists = this.lists.map((list) => (list.id === listId ? change(list) : list));
+    this.lists = this.lists.map((list) =>
+      list.id === listId ? { ...change(list), updatedAt: Date.now() } : list
+    );
     this.persist();
   }
 
@@ -136,9 +149,14 @@ class ListsStore {
     return this.lists.find((list) => list.id === listId);
   }
 
-  /** Lists holding at least one title that can be drawn as a card. */
+  /** The lists, the one changed last first; lists changed together keep their stored order. */
+  get recent(): TitleList[] {
+    return [...this.lists].sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  /** Lists holding at least one title that can be drawn as a card, most recently changed first. */
   get withTitles(): TitleList[] {
-    return this.lists.filter((list) => list.items.some((item) => item.meta));
+    return this.recent.filter((list) => list.items.some((item) => item.meta));
   }
 
   /** Titles of a list that have a snapshot, newest first. */
@@ -164,7 +182,12 @@ class ListsStore {
   create(rawName: string): ListResult {
     const checked = this.checkName(rawName);
     if ('error' in checked) return { ok: false, error: checked.error };
-    const list: TitleList = { id: newListId(), name: checked.name, items: [] };
+    const list: TitleList = {
+      id: newListId(),
+      name: checked.name,
+      updatedAt: Date.now(),
+      items: []
+    };
     this.lists = [...this.lists, list];
     this.persist();
     return { ok: true, list };
@@ -176,9 +199,8 @@ class ListsStore {
       return { ok: false, error: 'Esta lista não pode ser renomeada.' };
     const checked = this.checkName(rawName, listId);
     if ('error' in checked) return { ok: false, error: checked.error };
-    const list = { ...current, name: checked.name };
-    this.update(listId, () => list);
-    return { ok: true, list };
+    this.update(listId, (list) => ({ ...list, name: checked.name }));
+    return { ok: true, list: this.get(listId) ?? current };
   }
 
   /** Deletes a list of the user's own; the result goes to {@link restore} to undo it. */
