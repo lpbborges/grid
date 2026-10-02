@@ -292,7 +292,27 @@ describe('AppHeader', () => {
       expect(searchQuery.value).toBe('matrix');
     });
 
+    it.each([
+      ['superseded', () => Promise.resolve()],
+      ['failed', () => Promise.reject(new Error('offline'))]
+    ])(
+      'does not skip the next page change when the results navigation was %s',
+      async (_, outcome) => {
+        gotoMock.mockImplementation(outcome);
+        renderAt('/settings');
+        await openSearch();
+        await fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'matrix' } });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        navigate('/settings', '/movies');
+
+        expect(searchQuery.value).toBe('');
+      }
+    );
+
     it('keeps the search that sent the user to the results on the home screen', async () => {
+      gotoMock.mockReturnValue(new Promise(() => {}));
       renderAt('/settings');
       await openSearch();
       await fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'matrix' } });

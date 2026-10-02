@@ -3,6 +3,7 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import GridLogo from '$lib/components/GridLogo.svelte';
+  import { logger } from '$lib/logger';
   import { searchQuery } from '$lib/stores.svelte';
   import { activeSection, type Section } from '$lib/utils/activeSection';
   import { searchScope } from '$lib/utils/searchScope';
@@ -39,19 +40,23 @@
     return 'Buscar filmes e séries';
   });
 
-  let searchOwnsNavigation = false;
+  let resultsNavigations = 0;
 
-  function showResults() {
+  async function showResults() {
     const { pathname } = page.url;
     if (searchScope(pathname) || pathname === '/') return;
-    searchOwnsNavigation = true;
-    void goto('/');
+    resultsNavigations++;
+    try {
+      await goto('/');
+    } catch (error) {
+      logger.warn('Failed to open the search results', error);
+    } finally {
+      resultsNavigations--;
+    }
   }
 
   afterNavigate(({ from, to }) => {
-    const ownNavigation = searchOwnsNavigation;
-    searchOwnsNavigation = false;
-    if (ownNavigation || !from?.url || from.url.pathname === to?.url?.pathname) return;
+    if (resultsNavigations > 0 || !from?.url || from.url.pathname === to?.url?.pathname) return;
     searchQuery.value = '';
   });
 
