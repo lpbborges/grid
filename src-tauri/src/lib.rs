@@ -1538,6 +1538,18 @@ mod tests {
     }
 
     #[test]
+    fn csp_does_not_repeat_hosts_the_strem_wildcard_covers() {
+        let sources = csp_directive_sources("connect-src");
+
+        assert!(sources.contains(&"https://*.strem.io".to_string()));
+        let repeated: Vec<_> = sources
+            .iter()
+            .filter(|source| source.ends_with(".strem.io") && !source.contains('*'))
+            .collect();
+        assert!(repeated.is_empty(), "{repeated:?}");
+    }
+
+    #[test]
     fn csp_allows_wikidata_for_localized_title_search() {
         assert!(
             csp_directive_sources("connect-src").contains(&"https://www.wikidata.org".to_string())
