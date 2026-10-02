@@ -5,9 +5,11 @@ const LIVE_TITLE = { id: 'tt0063350', query: 'Night of the Living Dead' };
 
 describe('Live services smoke test', () => {
   it('finds a public-domain title through search and starts playing it', async () => {
-    const search = await $('input[placeholder="PROCURAR..."]');
-    await search.waitForDisplayed({ timeout: 30000 });
+    const openSearch = await $('button[aria-label="Pesquisar"]');
+    await openSearch.waitForDisplayed({ timeout: 30000 });
     await acceptDisclaimer();
+    await openSearch.click();
+    const search = await $('input[type="search"]');
     await search.setValue(LIVE_TITLE.query);
 
     const card = await $(`a[href="/movie/${LIVE_TITLE.id}"]`);

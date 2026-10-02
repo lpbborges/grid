@@ -3,13 +3,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRawSnippet } from 'svelte';
 import { playerState, searchQuery } from '$lib/stores.svelte';
 
-const { pageState, gotoMock } = vi.hoisted(() => ({
+const { pageState, gotoMock, navigation } = vi.hoisted(() => ({
   pageState: { url: new URL('http://localhost/') },
-  gotoMock: vi.fn()
+  gotoMock: vi.fn(),
+  navigation: { callbacks: [] as ((nav: unknown) => void)[] }
 }));
 
 vi.mock('$app/state', () => ({ page: pageState }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', () => ({
+  goto: gotoMock,
+  afterNavigate: (callback: (nav: unknown) => void) => {
+    navigation.callbacks.push(callback);
+  }
+}));
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({
     isMaximized: vi.fn().mockResolvedValue(false),
@@ -21,99 +27,133 @@ import Layout from './+layout.svelte';
 
 const children = createRawSnippet(() => ({ render: () => '<div></div>' }));
 
+const navigate = (from: string, to: string) =>
+  navigation.callbacks.forEach((callback) =>
+    callback({
+      from: { url: new URL(`http://localhost${from}`) },
+      to: { url: new URL(`http://localhost${to}`) }
+    })
+  );
+
+function scrollTo(main: HTMLElement, top: number) {
+  Object.defineProperty(main, 'scrollTop', { value: top, writable: true, configurable: true });
+  return fireEvent.scroll(main);
+}
+
 describe('Layout', () => {
   beforeEach(() => {
     searchQuery.value = '';
     playerState.isPlaying = false;
     pageState.url = new URL('http://localhost/');
     gotoMock.mockReset();
+    navigation.callbacks = [];
   });
 
-  it('clears the search when the logo is clicked', async () => {
-    searchQuery.value = 'matrix';
+  it('shows the header with its navigation', () => {
     render(Layout, { children });
 
-    await fireEvent.click(screen.getByRole('link', { name: 'Início' }));
-
-    expect(searchQuery.value).toBe('');
-  });
-
-  it('links to the settings from the header', () => {
-    render(Layout, { children });
-
-    expect(screen.getByRole('link', { name: 'Configurações' }).getAttribute('href')).toBe(
+    expect(screen.getByRole('navigation', { name: 'Principal' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Configurações' })).toHaveAttribute(
+      'href',
       '/settings'
     );
   });
 
-  it('offers the search on a title page too', () => {
-    pageState.url = new URL('http://localhost/movie/tt1');
-    render(Layout, { children });
+  it('hides the whole header while something is playing', () => {
+    playerState.isPlaying = true;
+    const { container } = render(Layout, { children });
 
-    expect(screen.getByRole('searchbox', { name: 'Pesquisar' })).toBeTruthy();
+    expect(container.querySelector('header')).toBeNull();
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Configurações' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pesquisar' })).toBeNull();
+    expect(screen.queryByRole('searchbox')).toBeNull();
   });
 
-  it('hides the header while something is playing', () => {
+  it('brings the header back when playback ends', async () => {
+    playerState.isPlaying = true;
+    const { container } = render(Layout, { children });
+
+    playerState.isPlaying = false;
+    await Promise.resolve();
+
+    expect(container.querySelector('header')).not.toBeNull();
+  });
+
+  it('does not react to the search shortcut while playing', async () => {
     playerState.isPlaying = true;
     render(Layout, { children });
+
+    await fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
 
     expect(screen.queryByRole('searchbox')).toBeNull();
   });
 
-  it('takes a search typed on a title page to the results on the home screen', async () => {
-    pageState.url = new URL('http://localhost/series/tt2');
-    render(Layout, { children });
+  it('keeps the opaque dark root that the window transparency rule relies on', () => {
+    const { container } = render(Layout, { children });
 
-    await fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'matrix' } });
-
-    expect(searchQuery.value).toBe('matrix');
-    expect(gotoMock).toHaveBeenCalledWith('/');
+    expect(container.firstElementChild?.classList).toContain('bg-dark');
   });
 
-  it('stays on the home screen while searching there', async () => {
-    render(Layout, { children });
+  it('lets the page show through the header at the top and turns it solid after scrolling', async () => {
+    const { container } = render(Layout, { children });
+    const header = container.querySelector('header')!;
+    const main = container.querySelector('main')!;
 
-    await fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'matrix' } });
+    expect(header.classList).not.toContain('bg-dark');
 
-    expect(gotoMock).not.toHaveBeenCalled();
+    await scrollTo(main, 20);
+    expect(header.classList).toContain('bg-dark');
+
+    await scrollTo(main, 0);
+    expect(header.classList).not.toContain('bg-dark');
   });
 
-  it.each([
-    ['Ctrl+K', { key: 'k', ctrlKey: true }],
-    ['/', { key: '/' }]
-  ])('focuses the search with %s', async (_name, init) => {
-    render(Layout, { children });
+  it('stays transparent for a scroll of a few pixels', async () => {
+    const { container } = render(Layout, { children });
+    await scrollTo(container.querySelector('main')!, 8);
 
-    await fireEvent.keyDown(window, init);
-
-    expect(document.activeElement).toBe(screen.getByRole('searchbox'));
-  });
-
-  it('leaves / alone while typing elsewhere', async () => {
-    render(Layout, { children });
-    const other = document.createElement('input');
-    document.body.appendChild(other);
-    other.focus();
-
-    await fireEvent.keyDown(other, { key: '/' });
-
-    expect(document.activeElement).toBe(other);
-    other.remove();
+    expect(container.querySelector('header')?.classList).not.toContain('bg-dark');
   });
 
   it('keeps the header above the backdrop that title pages fix behind them', () => {
     pageState.url = new URL('http://localhost/movie/tt1');
     const { container } = render(Layout, { children });
+    const header = container.querySelector('header');
 
-    expect(container.querySelector('header')?.classList).toContain('z-20');
-    expect(container.querySelector('header')?.classList).toContain('relative');
+    expect(header?.classList).toContain('z-20');
+    expect(header?.classList).toContain('sticky');
   });
 
-  it('lets the title page backdrop show through the header instead of a dark band', () => {
-    pageState.url = new URL('http://localhost/series/tt2');
+  it('starts every page at the top', async () => {
     const { container } = render(Layout, { children });
-    const classes = [...(container.querySelector('header')?.classList ?? [])];
+    const main = container.querySelector('main')!;
+    await scrollTo(main, 300);
 
-    expect(classes.filter((c) => c.startsWith('bg-') || c.startsWith('backdrop-'))).toEqual([]);
+    navigate('/movies', '/series');
+
+    expect(main.scrollTop).toBe(0);
+    await Promise.resolve();
+    expect(container.querySelector('header')?.classList).not.toContain('bg-dark');
+  });
+
+  it('copes with the first navigation, which has no page it came from', () => {
+    render(Layout, { children });
+
+    expect(() =>
+      navigation.callbacks.forEach((callback) =>
+        callback({ from: { url: null }, to: { url: new URL('http://localhost/') } })
+      )
+    ).not.toThrow();
+  });
+
+  it('keeps the scroll position when only the genre changes', async () => {
+    const { container } = render(Layout, { children });
+    const main = container.querySelector('main')!;
+    await scrollTo(main, 300);
+
+    navigate('/movies', '/movies?genre=Action');
+
+    expect(main.scrollTop).toBe(300);
   });
 });

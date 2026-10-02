@@ -270,30 +270,6 @@
   }
 </script>
 
-{#if !player.isPlaying}
-  <div class="relative z-20 mb-8">
-    <a
-      href="/"
-      class="border-primary/50 bg-surface/50 hover:border-green hover:text-green text-main group hover:shadow-green/20 flex w-fit items-center gap-2 rounded-sm border px-4 py-2 text-sm font-bold tracking-wider uppercase shadow-sm backdrop-blur-sm transition-all hover:shadow-md"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        class="text-primary group-hover:text-green transition-colors"
-        ><path d="m15 18-6-6 6-6" /></svg
-      >
-      Voltar
-    </a>
-  </div>
-{/if}
-
 {#if error}
   <ErrorNotice {error} onaction={handleErrorAction} />
 {:else if series}

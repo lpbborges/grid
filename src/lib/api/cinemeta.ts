@@ -14,6 +14,7 @@ import { searchWikidataImdbIds } from './wikidata';
 import { translateTitle } from './translate';
 import { isImdbId } from '$lib/utils/imdb';
 import { isRecord } from '$lib/utils/isRecord';
+import { isReleased } from '$lib/utils/released';
 
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
@@ -41,6 +42,7 @@ function mapCinemetaMeta(m: CinemetaMeta): Movie {
     id: m.imdb_id || m.id || '',
     title: m.name,
     year: parseInt(m.year || m.releaseInfo || '') || 0,
+    ...(typeof m.released === 'string' && m.released && { releaseDate: m.released }),
     rating: parseFloat(m.imdbRating || '') || 0,
     medium_cover_image: m.poster,
     large_cover_image: m.poster,
@@ -58,15 +60,26 @@ export interface CatalogQuery {
   genre?: string;
 }
 
-export async function getCatalog(
+export interface CatalogPage {
+  titles: Movie[];
+  /** How many of Cinemeta's entries were read to fill `titles`: the next page starts after them. */
+  consumed: number;
+  /** Cinemeta had no entries at this offset: the catalog is over. */
+  ended: boolean;
+}
+
+export async function getCatalogPage(
   { type, catalog, genre }: CatalogQuery,
   limit = 24,
-  customFetch?: typeof fetch
-): Promise<Movie[]> {
+  customFetch?: typeof fetch,
+  skip = 0
+): Promise<CatalogPage> {
   try {
-    const extra = genre ? `/genre=${encodeURIComponent(genre)}` : '';
+    const extra = [genre && `genre=${encodeURIComponent(genre)}`, skip > 0 && `skip=${skip}`]
+      .filter(Boolean)
+      .join('&');
     const res = await fetchWithTimeout(
-      `${endpoints.cinemeta}/catalog/${type}/${catalog}${extra}.json`,
+      `${endpoints.cinemeta}/catalog/${type}/${catalog}${extra && `/${extra}`}.json`,
       { fetch: customFetch }
     );
     if (!res.ok) {
@@ -76,11 +89,28 @@ export async function getCatalog(
     }
     const data: unknown = await res.json();
     const metas = isRecord(data) && Array.isArray(data.metas) ? (data.metas as CinemetaMeta[]) : [];
-    return metas.slice(0, limit).map(mapCinemetaMeta);
+    const titles: Movie[] = [];
+    let consumed = 0;
+    for (const meta of metas) {
+      if (titles.length >= limit) break;
+      consumed++;
+      const title = mapCinemetaMeta(meta);
+      if (isReleased(title)) titles.push(title);
+    }
+    return { titles, consumed, ended: metas.length === 0 };
   } catch (error) {
     logger.error(error);
     throw error;
   }
+}
+
+export async function getCatalog(
+  query: CatalogQuery,
+  limit = 24,
+  customFetch?: typeof fetch,
+  skip = 0
+): Promise<Movie[]> {
+  return (await getCatalogPage(query, limit, customFetch, skip)).titles;
 }
 
 export function getPopularMovies(limit = 24, customFetch?: typeof fetch): Promise<Movie[]> {
@@ -108,7 +138,10 @@ async function searchCinemeta(
     const data = await res.json();
     const metas = data.metas || [];
 
-    return metas.slice(0, limit).map(mapCinemetaMeta);
+    return metas
+      .map(mapCinemetaMeta)
+      .filter((item: Movie) => isReleased(item))
+      .slice(0, limit);
   } catch (error) {
     logger.error(error);
     return [];
@@ -215,7 +248,7 @@ export async function searchLocalizedCatalog(
 ): Promise<SearchResult[]> {
   const imdbIds = await searchWikidataImdbIds(query, 8, customFetch);
   const titles = await Promise.all(imdbIds.map((imdbId) => getTitle(imdbId, customFetch)));
-  return titles.filter((title): title is SearchResult => title !== null);
+  return titles.filter((title): title is SearchResult => title !== null && isReleased(title));
 }
 
 // Localized matches first, then Cinemeta's movies and series alternating,
@@ -247,12 +280,15 @@ export async function searchCatalog(
   query: string,
   onUpdate: (results: SearchResult[], done: boolean) => void,
   limit = 12,
-  customFetch?: typeof fetch
+  customFetch?: typeof fetch,
+  { type }: { type?: MediaType } = {}
 ): Promise<SearchResult[]> {
+  const wantsMovies = !type || type === 'movie';
+  const wantsSeries = !type || type === 'series';
   let localized: SearchResult[] = [];
   let movies: SearchResult[] = [];
   let series: SearchResult[] = [];
-  let pending = 3;
+  let pending = 1 + Number(wantsMovies) + Number(wantsSeries);
   let results: SearchResult[] = [];
 
   const answered = () => {
@@ -260,26 +296,28 @@ export async function searchCatalog(
     results = combineSearchResults(localized, movies, series);
     onUpdate(results, pending === 0);
   };
-  const withType = (type: MediaType) => (items: Movie[]) =>
-    items.map((item): SearchResult => ({ ...item, type }));
+  const withType = (itemType: MediaType) => (items: Movie[]) =>
+    items.map((item): SearchResult => ({ ...item, type: itemType }));
 
   await Promise.all([
     searchLocalizedCatalog(query, customFetch).then((found) => {
-      localized = found;
+      localized = type ? found.filter((item) => item.type === type) : found;
       answered();
     }),
-    searchMovies(query, limit, customFetch)
-      .then(withType('movie'))
-      .then((found) => {
-        movies = found;
-        answered();
-      }),
-    searchSeries(query, limit, customFetch)
-      .then(withType('series'))
-      .then((found) => {
-        series = found;
-        answered();
-      })
+    wantsMovies &&
+      searchMovies(query, limit, customFetch)
+        .then(withType('movie'))
+        .then((found) => {
+          movies = found;
+          answered();
+        }),
+    wantsSeries &&
+      searchSeries(query, limit, customFetch)
+        .then(withType('series'))
+        .then((found) => {
+          series = found;
+          answered();
+        })
   ]);
   return results;
 }

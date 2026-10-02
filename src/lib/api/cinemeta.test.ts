@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   getCatalog,
+  getCatalogPage,
   getPopularMovies,
   getMovieDetails,
   getPopularSeries,
@@ -385,12 +386,14 @@ describe('yts api', () => {
     routeFetch({
       'catalog/movie/top/search=result.json': {
         metas: [
-          { id: 'tt1', name: 'Movie One' },
-          { id: 'tt2', name: 'Movie Two' },
-          { id: 'tt3', name: 'Movie Three' }
+          { id: 'tt1', name: 'Movie One', year: '2020' },
+          { id: 'tt2', name: 'Movie Two', year: '2020' },
+          { id: 'tt3', name: 'Movie Three', year: '2020' }
         ]
       },
-      'catalog/series/top/search=result.json': { metas: [{ id: 'tt4', name: 'Series One' }] },
+      'catalog/series/top/search=result.json': {
+        metas: [{ id: 'tt4', name: 'Series One', year: '2020' }]
+      },
       wbsearchentities: { search: [] }
     });
 
@@ -410,16 +413,17 @@ describe('yts api', () => {
       const json = (body: unknown) => ({ ok: true, json: async () => body });
       if (url.includes('catalog/movie/top/search=')) {
         await moviesAnswered;
-        return json({ metas: [{ id: 'tt1', name: 'Slow Movie' }] });
+        return json({ metas: [{ id: 'tt1', name: 'Slow Movie', year: '2020' }] });
       }
       if (url.includes('catalog/series/top/search=')) {
-        return json({ metas: [{ id: 'tt2', name: 'Series' }] });
+        return json({ metas: [{ id: 'tt2', name: 'Series', year: '2020' }] });
       }
       if (url.includes('wbsearchentities')) return json({ search: [{ id: 'Q1' }] });
       if (url.includes('wbgetentities')) {
         return json({ entities: { Q1: { claims: claims({ P345: 'tt3' }) } } });
       }
-      if (url.includes('meta/movie/tt3.json')) return json({ meta: { id: 'tt3', name: 'Local' } });
+      if (url.includes('meta/movie/tt3.json'))
+        return json({ meta: { id: 'tt3', name: 'Local', year: '2020' } });
       return json({});
     });
 
@@ -448,9 +452,11 @@ describe('yts api', () => {
         }
       },
       'meta/series/tt1375666.json': {},
-      'meta/movie/tt1375666.json': { meta: { id: 'tt1375666', name: 'Inception' } },
-      'meta/series/tt0096697.json': { meta: { id: 'tt0096697', name: 'The Simpsons' } },
-      'meta/movie/tt0096697.json': { meta: { id: 'tt0096697', name: 'The Simpsons' } }
+      'meta/movie/tt1375666.json': { meta: { id: 'tt1375666', name: 'Inception', year: '2020' } },
+      'meta/series/tt0096697.json': {
+        meta: { id: 'tt0096697', name: 'The Simpsons', year: '2020' }
+      },
+      'meta/movie/tt0096697.json': { meta: { id: 'tt0096697', name: 'The Simpsons', year: '2020' } }
     });
 
     const results = await searchLocalizedCatalog('A Origem');
@@ -458,6 +464,74 @@ describe('yts api', () => {
       ['Inception', 'movie'],
       ['The Simpsons', 'series']
     ]);
+  });
+
+  it('searches hide titles that are not out yet, whichever source found them', async () => {
+    const future = '2999-01-01T00:00:00.000Z';
+    routeFetch({
+      'catalog/movie/top/search=': {
+        metas: [
+          { id: 'tt1', name: 'Filme futuro', released: future },
+          { id: 'tt2', name: 'Filme', year: '2020' }
+        ]
+      },
+      'catalog/series/top/search=': {
+        metas: [
+          { id: 'tt3', name: 'Série futura', released: future },
+          { id: 'tt4', name: 'Série', year: '2020' }
+        ]
+      },
+      wbsearchentities: { search: [{ id: 'Q1' }] },
+      wbgetentities: { entities: { Q1: { claims: claims({ P345: 'tt5' }) } } },
+      'meta/series/tt5.json': {},
+      'meta/movie/tt5.json': { meta: { id: 'tt5', name: 'Local futuro', released: future } }
+    });
+
+    const results = await searchCatalog('x', () => {});
+
+    expect(results.map((r) => r.title)).toEqual(['Filme', 'Série']);
+  });
+
+  it('searchCatalog with a type asks Cinemeta for that type only and keeps its Wikidata matches', async () => {
+    routeFetch({
+      'catalog/movie/top/search=': { metas: [{ id: 'tt1', name: 'Filme', year: '2020' }] },
+      'catalog/series/top/search=': { metas: [{ id: 'tt2', name: 'Série', year: '2020' }] },
+      wbsearchentities: { search: [{ id: 'Q1' }, { id: 'Q2' }] },
+      wbgetentities: {
+        entities: {
+          Q1: { claims: claims({ P345: 'tt3' }) },
+          Q2: { claims: claims({ P345: 'tt4' }) }
+        }
+      },
+      'meta/series/tt3.json': {},
+      'meta/movie/tt3.json': { meta: { id: 'tt3', name: 'Local filme', year: '2020' } },
+      'meta/series/tt4.json': { meta: { id: 'tt4', name: 'Local série', year: '2020' } },
+      'meta/movie/tt4.json': { meta: { id: 'tt4', name: 'Local série', year: '2020' } }
+    });
+    const reports: boolean[] = [];
+
+    const results = await searchCatalog('x', (_, done) => reports.push(done), 12, undefined, {
+      type: 'series'
+    });
+
+    expect(results.map((r) => [r.title, r.type])).toEqual([
+      ['Local série', 'series'],
+      ['Série', 'series']
+    ]);
+    const urls = (globalThis.fetch as any).mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(urls.some((u: string) => u.includes('catalog/movie/'))).toBe(false);
+    expect(reports).toEqual([false, true]);
+  });
+
+  it('searchCatalog with the movie type never returns a series', async () => {
+    routeFetch({
+      'catalog/movie/top/search=': { metas: [{ id: 'tt1', name: 'Filme', year: '2020' }] },
+      wbsearchentities: { search: [] }
+    });
+
+    const results = await searchCatalog('x', () => {}, 12, undefined, { type: 'movie' });
+
+    expect(results.map((r) => r.type)).toEqual(['movie']);
   });
 
   it('searchLocalizedCatalog skips Wikidata matches that Cinemeta does not know', async () => {
@@ -481,15 +555,15 @@ describe('yts api', () => {
     routeFetch({
       'catalog/movie/top/search=': {
         metas: [
-          { id: 'tt1', name: 'Catalog Movie' },
-          { id: 'tt1375666', name: 'Inception' }
+          { id: 'tt1', name: 'Catalog Movie', year: '2020' },
+          { id: 'tt1375666', name: 'Inception', year: '2020' }
         ]
       },
       'catalog/series/top/search=': { metas: [] },
       wbsearchentities: { search: [{ id: 'Q25188' }] },
       wbgetentities: { entities: { Q25188: { claims: claims({ P345: 'tt1375666' }) } } },
       'meta/series/tt1375666.json': {},
-      'meta/movie/tt1375666.json': { meta: { id: 'tt1375666', name: 'Inception' } }
+      'meta/movie/tt1375666.json': { meta: { id: 'tt1375666', name: 'Inception', year: '2020' } }
     });
 
     const results = await searchCatalog('A Origem', () => {});
@@ -565,6 +639,18 @@ describe('continue watching metadata', () => {
 
     expect(await resolve([entry('tt1')])).toEqual({
       tt1: { type: 'movie', title: 'Movie', poster: 'm.jpg' }
+    });
+  });
+
+  it('still resolves a title that is not out yet', async () => {
+    routeFetch({
+      '/meta/movie/tt9.json': {
+        meta: { name: 'Futuro', poster: 'p.jpg', released: '2999-01-01T00:00:00.000Z' }
+      }
+    });
+
+    expect(await resolve([entry('tt9')])).toEqual({
+      tt9: { type: 'movie', title: 'Futuro', poster: 'p.jpg' }
     });
   });
 
@@ -644,8 +730,15 @@ describe('getCatalog', () => {
       new Response(
         JSON.stringify({
           metas: [
-            { id: 'tt1', imdb_id: 'tt1', name: 'Um', poster: 'a.jpg', type: 'movie' },
-            { id: 'tt2', imdb_id: 'tt2', name: 'Dois', poster: 'b.jpg', type: 'movie' }
+            { id: 'tt1', imdb_id: 'tt1', name: 'Um', year: '2020', poster: 'a.jpg', type: 'movie' },
+            {
+              id: 'tt2',
+              imdb_id: 'tt2',
+              name: 'Dois',
+              year: '2020',
+              poster: 'b.jpg',
+              type: 'movie'
+            }
           ]
         })
       )
@@ -669,9 +762,95 @@ describe('getCatalog', () => {
     );
   });
 
+  it.each([
+    [{ genre: 'Action' }, 24, 'genre=Action&skip=24'],
+    [{}, 48, 'skip=48'],
+    [{ genre: 'Sci-Fi' }, 0, 'genre=Sci-Fi']
+  ])('asks for %j skipping %i titles with %s', async (extra, skip, path) => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas: [] })));
+
+    await getCatalog({ type: 'movie', catalog: 'top', ...extra }, 24, undefined, skip);
+
+    expect(String(vi.mocked(globalThis.fetch).mock.calls[0][0])).toBe(
+      `https://v3-cinemeta.strem.io/catalog/movie/top/${path}.json`
+    );
+  });
+
+  it('keeps the release date of a title', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          metas: [{ id: 'tt1', name: 'Um', released: '2020-05-01T00:00:00.000Z', poster: 'a.jpg' }]
+        })
+      )
+    );
+
+    const [movie] = await getCatalog({ type: 'movie', catalog: 'top' });
+
+    expect(movie.releaseDate).toBe('2020-05-01T00:00:00.000Z');
+  });
+
+  it('drops titles that are not out yet before capping the result', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          metas: [
+            { id: 'tt1', name: 'Futuro', released: '2999-01-01T00:00:00.000Z', poster: 'a.jpg' },
+            { id: 'tt2', name: 'Sem data', year: '2999', poster: 'b.jpg' },
+            { id: 'tt3', name: 'Um', released: '2020-01-01T00:00:00.000Z', poster: 'c.jpg' },
+            { id: 'tt4', name: 'Dois', year: '2019', poster: 'd.jpg' }
+          ]
+        })
+      )
+    );
+
+    const movies = await getCatalog({ type: 'movie', catalog: 'top' }, 2);
+
+    expect(movies.map((m) => m.title)).toEqual(['Um', 'Dois']);
+  });
+
   it('treats an unexpected answer as an empty catalog', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas: 'x' })));
 
     expect(await getCatalog({ type: 'movie', catalog: 'year', genre: '2026' })).toEqual([]);
+  });
+});
+
+describe('getCatalogPage', () => {
+  beforeEach(() => {
+    vi.spyOn(globalThis, 'fetch');
+  });
+
+  const answer = (metas: unknown[]) =>
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas })));
+
+  it('counts the entries it read, so the next page starts after them', async () => {
+    answer([
+      { id: 'tt1', name: 'Futuro', released: '2999-01-01T00:00:00.000Z', poster: 'a.jpg' },
+      { id: 'tt2', name: 'Um', released: '2020-01-01T00:00:00.000Z', poster: 'b.jpg' },
+      { id: 'tt3', name: 'Dois', released: '2020-01-01T00:00:00.000Z', poster: 'c.jpg' }
+    ]);
+
+    const page = await getCatalogPage({ type: 'movie', catalog: 'top' }, 1);
+
+    expect(page.titles.map((m) => m.title)).toEqual(['Um']);
+    expect(page.consumed).toBe(2);
+    expect(page.ended).toBe(false);
+  });
+
+  it('is not over when every entry was unreleased', async () => {
+    answer([{ id: 'tt1', name: 'Futuro', released: '2999-01-01T00:00:00.000Z', poster: 'a.jpg' }]);
+
+    const page = await getCatalogPage({ type: 'movie', catalog: 'top' });
+
+    expect(page).toMatchObject({ titles: [], consumed: 1, ended: false });
+  });
+
+  it('is over when Cinemeta has no entries', async () => {
+    answer([]);
+
+    const page = await getCatalogPage({ type: 'movie', catalog: 'top' });
+
+    expect(page).toMatchObject({ titles: [], consumed: 0, ended: true });
   });
 });
