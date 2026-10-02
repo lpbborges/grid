@@ -14,6 +14,7 @@ import { searchWikidataImdbIds } from './wikidata';
 import { translateTitle } from './translate';
 import { isImdbId } from '$lib/utils/imdb';
 import { isRecord } from '$lib/utils/isRecord';
+import { correctedPoster } from '$lib/utils/posterOverrides';
 import { isAvailable } from '$lib/utils/released';
 
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
@@ -38,14 +39,16 @@ function cinemetaExtras(
 }
 
 function mapCinemetaMeta(m: CinemetaMeta): Movie {
+  const id = m.imdb_id || m.id || '';
+  const poster = correctedPoster(id, m.poster);
   return {
-    id: m.imdb_id || m.id || '',
+    id,
     title: m.name,
     year: parseInt(m.year || m.releaseInfo || '') || 0,
     ...(typeof m.released === 'string' && m.released && { releaseDate: m.released }),
     rating: parseFloat(m.imdbRating || '') || 0,
-    medium_cover_image: m.poster,
-    large_cover_image: m.poster,
+    medium_cover_image: poster,
+    large_cover_image: poster,
     background_image_original: m.background,
     summary: m.description || '',
     description_full: m.description || '',
@@ -435,13 +438,15 @@ export async function getSeriesDetails(
   }
 
   const meta: CinemetaMeta = data.meta;
+  const id = meta.imdb_id || meta.id || seriesId;
+  const poster = correctedPoster(id, meta.poster);
   const series = {
-    id: meta.imdb_id || meta.id || seriesId,
+    id,
     title: meta.name,
     year: parseInt(meta.year || '') || 0,
     rating: parseFloat(meta.imdbRating || '') || 0,
-    medium_cover_image: meta.poster,
-    large_cover_image: meta.poster,
+    medium_cover_image: poster,
+    large_cover_image: poster,
     background_image_original: meta.background,
     summary: meta.description || '',
     description_full: meta.description || '',

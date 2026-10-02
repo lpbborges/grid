@@ -263,6 +263,26 @@ describe('yts api', () => {
     });
   });
 
+  it('corrects the poster of a title metahub gets wrong, in details and in catalogs', async () => {
+    const metahub = 'https://images.metahub.space/poster/small/tt0185906/img';
+    routeFetch({
+      'meta/series/tt0185906.json': {
+        meta: { imdb_id: 'tt0185906', name: 'Band of Brothers', poster: metahub }
+      },
+      'series/top.json': {
+        metas: [
+          { imdb_id: 'tt0185906', name: 'Band of Brothers', releaseInfo: '2001', poster: metahub }
+        ]
+      }
+    });
+
+    const details = await getSeriesDetails('tt0185906');
+    const [card] = await getPopularSeries();
+
+    expect(details.large_cover_image).toContain('media-amazon.com');
+    expect(card.medium_cover_image).toContain('media-amazon.com');
+  });
+
   it('keeps films still in cinemas out of the catalogs but not series', async () => {
     const recent = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const metas = [
