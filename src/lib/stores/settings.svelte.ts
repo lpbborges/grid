@@ -1,7 +1,14 @@
 import { browser } from '$app/environment';
-import { writeStored } from './storage';
+import { readStored, writeStored } from './storage';
 import { isAudioPreference, type AudioPreference } from '$lib/types';
 import { BYTES_PER_GB } from '$lib/utils/formatBytes';
+
+export const SUBTITLE_PREFERENCES = ['none', 'pt', 'en', 'es'] as const;
+export const QUALITY_PREFERENCES = ['4k', '1080p', '720p', '480p'] as const;
+
+function isOneOf<T extends string>(options: readonly T[], value: string | null): value is T {
+  return value !== null && (options as readonly string[]).includes(value);
+}
 
 export const MAX_CACHE_LIMIT_BYTES = 50 * BYTES_PER_GB;
 
@@ -20,24 +27,23 @@ class SettingsStore {
 
   constructor() {
     if (browser) {
-      const storedAudio = localStorage.getItem('grid-audio');
+      const storedAudio = readStored('grid-audio');
       if (storedAudio && isAudioPreference(storedAudio)) this.#audio = storedAudio;
 
-      const storedSub = localStorage.getItem('grid-subtitle');
-      if (storedSub) this.#subtitle = storedSub;
+      const storedSub = readStored('grid-subtitle');
+      if (isOneOf(SUBTITLE_PREFERENCES, storedSub)) this.#subtitle = storedSub;
 
-      const storedQuality = localStorage.getItem('grid-quality');
-      if (storedQuality) this.#quality = storedQuality;
+      const storedQuality = readStored('grid-quality');
+      if (isOneOf(QUALITY_PREFERENCES, storedQuality)) this.#quality = storedQuality;
 
-      const storedDisclaimer = localStorage.getItem('grid-accepted-disclaimer');
-      if (storedDisclaimer === 'true') this.#acceptedDisclaimer = true;
+      if (readStored('grid-accepted-disclaimer') === 'true') this.#acceptedDisclaimer = true;
 
-      const storedHoverPreview = localStorage.getItem('grid-hover-preview');
+      const storedHoverPreview = readStored('grid-hover-preview');
       if (storedHoverPreview === 'true' || storedHoverPreview === 'false') {
         this.#hoverPreview = storedHoverPreview === 'true';
       }
 
-      const storedCacheLimit = localStorage.getItem('grid-cache-limit-bytes');
+      const storedCacheLimit = readStored('grid-cache-limit-bytes');
       const parsedCacheLimit = normalizeCacheLimit(
         storedCacheLimit ? Number(storedCacheLimit) : NaN
       );

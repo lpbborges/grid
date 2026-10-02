@@ -1,6 +1,17 @@
 import { browser } from '$app/environment';
 import { logger } from '$lib/logger';
 
+/** The raw string stored under `key`, or `null` when missing or storage is unavailable. */
+export function readStored(key: string): string | null {
+  if (!browser) return null;
+  try {
+    return localStorage.getItem(key);
+  } catch (error) {
+    logger.warn(`Ignoring unreadable stored value for ${key}`, error);
+    return null;
+  }
+}
+
 /** The parsed value stored under `key`, or `undefined` when missing or corrupt. */
 export function readStoredJson(key: string): unknown {
   if (!browser) return undefined;
