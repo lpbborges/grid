@@ -310,3 +310,163 @@ describe('PlayerShell', () => {
     await fireEvent.focusOut(container);
   });
 });
+
+describe('PlayerShell keyboard shortcuts', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function renderShell(overrides: Partial<PlayerBackend> = {}) {
+    const backend = fakeBackend({ hasStarted: true, currentTime: 50, ...overrides });
+    render(PlayerShell, { props: { backend, surface: emptySurface } });
+    return backend;
+  }
+
+  async function press(key: string, init: KeyboardEventInit = {}) {
+    await fireEvent.keyDown(window, { key, ...init });
+  }
+
+  it.each([
+    ['ArrowRight', 60],
+    ['l', 60],
+    ['L', 60],
+    ['ArrowLeft', 40],
+    ['j', 40]
+  ])('%s seeks 10 seconds', async (key, target) => {
+    const backend = renderShell();
+
+    await press(key);
+
+    expect(backend.seek).toHaveBeenCalledWith(target);
+  });
+
+  it('never seeks past either end', async () => {
+    const backend = renderShell({ currentTime: 95 });
+    await press('ArrowRight');
+    expect(backend.seek).toHaveBeenCalledWith(100);
+
+    const early = renderShell({ currentTime: 3 });
+    await press('j');
+    expect(early.seek).toHaveBeenCalledWith(0);
+  });
+
+  it('shows how far it seeked', async () => {
+    renderShell();
+
+    await press('ArrowRight');
+    expect(screen.getByTestId('player-feedback').textContent).toBe('+10s');
+
+    await press('ArrowLeft');
+    expect(screen.getByTestId('player-feedback').textContent).toBe('-10s');
+  });
+
+  it('hides the feedback after a moment', async () => {
+    vi.useFakeTimers();
+    renderShell();
+
+    await press('ArrowRight');
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(screen.queryByTestId('player-feedback')).toBeNull();
+  });
+
+  it('toggles fullscreen with F', async () => {
+    const backend = renderShell();
+
+    await press('f');
+
+    expect(backend.toggleFullscreen).toHaveBeenCalledOnce();
+  });
+
+  it('changes the volume by 5% with the up and down arrows', async () => {
+    const backend = renderShell({ volume: 0.6 });
+
+    await press('ArrowUp');
+    expect(backend.setVolume).toHaveBeenLastCalledWith(0.65);
+    expect(screen.getByTestId('player-feedback').textContent).toBe('Volume 65%');
+
+    await press('ArrowDown');
+    expect(backend.setVolume).toHaveBeenLastCalledWith(0.55);
+  });
+
+  it('keeps the volume between 0 and 100%', async () => {
+    const loud = renderShell({ volume: 1 });
+    await press('ArrowUp');
+    expect(loud.setVolume).toHaveBeenLastCalledWith(1);
+
+    const quiet = renderShell({ volume: 0.02 });
+    await press('ArrowDown');
+    expect(quiet.setVolume).toHaveBeenLastCalledWith(0);
+  });
+
+  it('mutes with M and restores the previous volume', async () => {
+    const backend = fakeBackend({ hasStarted: true, volume: 0.4 });
+    render(PlayerShell, { props: { backend, surface: emptySurface } });
+
+    await press('m');
+    expect(backend.setVolume).toHaveBeenLastCalledWith(0);
+    expect(screen.getByTestId('player-feedback').textContent).toBe('Mudo');
+
+    Object.assign(backend, { volume: 0 });
+    await press('M');
+    expect(backend.setVolume).toHaveBeenLastCalledWith(0.4);
+  });
+
+  it('restores the previous volume from the mute button too', async () => {
+    const backend = fakeBackend({ hasStarted: true, volume: 0.4 });
+    render(PlayerShell, { props: { backend, surface: emptySurface } });
+
+    await press('m');
+    Object.assign(backend, { volume: 0 });
+    await fireEvent.click(screen.getByLabelText('Ativar/desativar mudo'));
+
+    expect(backend.setVolume).toHaveBeenLastCalledWith(0.4);
+  });
+
+  it('cycles the subtitles with C, ending with them off', async () => {
+    const subtitles = [
+      { id: '1', lang: 'por', label: 'Portuguese', url: '', group: 'Embedded' as const },
+      { id: '2', lang: 'eng', label: 'English', url: '', group: 'Extra' as const }
+    ];
+    const backend = renderShell({ subtitles, activeSubtitleIndex: 1 });
+
+    await press('c');
+
+    expect(backend.selectSubtitle).toHaveBeenCalledWith(-1);
+    expect(screen.getByTestId('player-feedback').textContent).toBe('Legendas desativadas');
+  });
+
+  it('turns the first subtitle on with C', async () => {
+    const backend = renderShell({ activeSubtitleIndex: -1 });
+
+    await press('c');
+
+    expect(backend.selectSubtitle).toHaveBeenCalledWith(0);
+    expect(screen.getByTestId('player-feedback').textContent).toBe('Legenda: Portuguese');
+  });
+
+  it('ignores shortcuts while typing', async () => {
+    const backend = renderShell();
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    await press('f');
+    await press('m');
+
+    expect(backend.toggleFullscreen).not.toHaveBeenCalled();
+    expect(backend.setVolume).not.toHaveBeenCalled();
+    input.remove();
+  });
+
+  it('leaves shortcuts with Ctrl, Alt or Meta to the system', async () => {
+    const backend = renderShell();
+
+    await press('f', { ctrlKey: true });
+    await press('l', { metaKey: true });
+    await press('ArrowLeft', { altKey: true });
+
+    expect(backend.toggleFullscreen).not.toHaveBeenCalled();
+    expect(backend.seek).not.toHaveBeenCalled();
+  });
+});
