@@ -22,6 +22,11 @@ export async function getCacheManifest(): Promise<CacheEntry[]> {
   return invoke<CacheEntry[]>('get_cache_manifest');
 }
 
+export async function getCacheUsageBytes(): Promise<number> {
+  const entries = await getCacheManifest();
+  return entries.reduce((sum, entry) => sum + entry.downloadedBytes, 0);
+}
+
 export async function upsertCacheEntry(entry: CacheEntry): Promise<void> {
   await invoke('upsert_cache_entry', { entry });
 }

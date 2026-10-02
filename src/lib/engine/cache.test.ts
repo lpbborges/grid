@@ -39,6 +39,13 @@ describe('cache manifest client', () => {
     expect(result).toEqual([{ infoHash: 'abc' }]);
   });
 
+  it('getCacheUsageBytes adds up what every cached video has on disk', async () => {
+    const { getCacheUsageBytes } = await import('./cache');
+    (invoke as any).mockResolvedValueOnce([{ downloadedBytes: 100 }, { downloadedBytes: 50 }]);
+
+    expect(await getCacheUsageBytes()).toBe(150);
+  });
+
   it('upsertCacheEntry invokes upsert_cache_entry with the entry', async () => {
     const { upsertCacheEntry } = await import('./cache');
     const entry = {
