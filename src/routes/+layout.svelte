@@ -38,7 +38,7 @@
   <Titlebar />
   {#if !playerState.isPlaying}
     <!-- Top navigation bar -->
-    <header class="bg-dark/80 relative z-20 flex items-center justify-between p-4 backdrop-blur">
+    <header class="relative z-20 flex items-center justify-between p-4">
       <!-- Left: Logo -->
       <div class="flex w-1/4 items-center">
         <a

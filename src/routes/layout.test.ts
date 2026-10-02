@@ -108,4 +108,12 @@ describe('Layout', () => {
     expect(container.querySelector('header')?.classList).toContain('z-20');
     expect(container.querySelector('header')?.classList).toContain('relative');
   });
+
+  it('lets the title page backdrop show through the header instead of a dark band', () => {
+    pageState.url = new URL('http://localhost/series/tt2');
+    const { container } = render(Layout, { children });
+    const classes = [...(container.querySelector('header')?.classList ?? [])];
+
+    expect(classes.filter((c) => c.startsWith('bg-') || c.startsWith('backdrop-'))).toEqual([]);
+  });
 });
