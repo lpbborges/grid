@@ -241,6 +241,6 @@ describe('Movie native playback wiring', () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     // fakeRqbit returns stats with 100% file_progress
-    await screen.findByText('100.00%');
+    await screen.findByText('100%');
   });
 });

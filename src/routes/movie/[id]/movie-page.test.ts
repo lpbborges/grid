@@ -138,7 +138,7 @@ describe('Movie page integration flow', () => {
 
     expect(prepareStreamMock).toHaveBeenCalledWith({
       magnet: expect.stringMatching(/^magnet:\?xt=urn:btih:abc&dn=Some%20Movie(&|$)/),
-      onStatus: expect.any(Function),
+      onStage: expect.any(Function),
       mediaId: 'tt1',
       season: undefined,
       episode: undefined,
@@ -194,7 +194,7 @@ describe('Movie page integration flow', () => {
 
     expect(prepareStreamMock).toHaveBeenCalledWith({
       magnet: expect.stringMatching(/^magnet:\?xt=urn:btih:xyz&dn=Another%20Movie(&|$)/),
-      onStatus: expect.any(Function),
+      onStage: expect.any(Function),
       mediaId: 'tt2',
       season: undefined,
       episode: undefined,
@@ -258,7 +258,7 @@ describe('Movie page integration flow', () => {
     expect(prepareStreamMock.mock.calls[0][0].magnet).not.toContain(staleHash);
     expect(prepareStreamMock).toHaveBeenCalledWith({
       magnet: expect.stringMatching(/^magnet:\?xt=urn:btih:xyz&dn=Another%20Movie(&|$)/),
-      onStatus: expect.any(Function),
+      onStage: expect.any(Function),
       mediaId: 'tt2',
       season: undefined,
       episode: undefined,
@@ -325,7 +325,7 @@ describe('Movie page dubbed-audio heuristic (reselectBestTorrent)', () => {
 
     expect(prepareStreamMock).toHaveBeenCalledWith({
       magnet: expect.stringContaining('ptstreamhash0000000000000000000000000000'),
-      onStatus: expect.any(Function),
+      onStage: expect.any(Function),
       mediaId: 'tt1',
       season: undefined,
       episode: undefined,
