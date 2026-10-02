@@ -14,6 +14,7 @@ function baseProps(overrides = {}) {
     onplaypause: vi.fn(),
     onseek: vi.fn(),
     onvolume: vi.fn(),
+    onmute: vi.fn(),
     onselectaudio: vi.fn(),
     onselectsubtitle: vi.fn(),
     ...overrides
@@ -58,11 +59,18 @@ describe('PlayerControls', () => {
     const onvolume = vi.fn();
     render(PlayerControls, baseProps({ volume: 1, onvolume }));
 
+    await fireEvent.input(screen.getByLabelText('Volume'), { target: { value: '0.5' } });
+
+    expect(onvolume).toHaveBeenCalledWith(0.5);
+  });
+
+  it('asks the shell to toggle mute', async () => {
+    const onmute = vi.fn();
+    render(PlayerControls, baseProps({ onmute }));
+
     await fireEvent.click(screen.getByLabelText('Ativar/desativar mudo'));
 
-    // Muting reports 0, not mpv's 0-100 percent: converting is the native
-    // host's job, so this stays the scale the <video> element uses.
-    expect(onvolume).toHaveBeenCalledWith(0);
+    expect(onmute).toHaveBeenCalledOnce();
   });
 
   it('renders the elapsed and total time', () => {
