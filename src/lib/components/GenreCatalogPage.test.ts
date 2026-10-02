@@ -1,18 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/svelte';
 
-const { pageState, gotoMock, getCatalogMock, searchCatalogMock } = vi.hoisted(() => ({
-  pageState: { url: new URL('http://localhost/movies') },
-  gotoMock: vi.fn(),
-  getCatalogMock: vi.fn(),
-  searchCatalogMock: vi.fn()
-}));
+const { pageState, gotoMock, getCatalogMock, getCatalogPageMock, searchCatalogMock } = vi.hoisted(
+  () => ({
+    pageState: { url: new URL('http://localhost/movies') },
+    gotoMock: vi.fn(),
+    getCatalogMock: vi.fn(),
+    getCatalogPageMock: vi.fn(),
+    searchCatalogMock: vi.fn()
+  })
+);
 
 vi.mock('$app/state', () => ({ page: pageState }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/api/cinemeta', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$lib/api/cinemeta')>()),
   getCatalog: getCatalogMock,
+  getCatalogPage: getCatalogPageMock,
   searchCatalog: searchCatalogMock
 }));
 
@@ -39,6 +43,8 @@ describe('GenreCatalogPage', () => {
     searchCatalogMock.mockReset();
     getCatalogMock.mockReset();
     getCatalogMock.mockResolvedValue([movie]);
+    getCatalogPageMock.mockReset();
+    getCatalogPageMock.mockResolvedValue({ titles: [movie], consumed: 1, ended: false });
     pageState.url = new URL('http://localhost/movies');
   });
 
@@ -60,7 +66,7 @@ describe('GenreCatalogPage', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Filmes de Ação' })).toBeInTheDocument();
     await waitFor(() =>
-      expect(getCatalogMock).toHaveBeenCalledWith(
+      expect(getCatalogPageMock).toHaveBeenCalledWith(
         { type: 'movie', catalog: 'top', genre: 'Action' },
         24,
         undefined,

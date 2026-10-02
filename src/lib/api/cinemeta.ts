@@ -60,12 +60,20 @@ export interface CatalogQuery {
   genre?: string;
 }
 
-export async function getCatalog(
+export interface CatalogPage {
+  titles: Movie[];
+  /** How many of Cinemeta's entries were read to fill `titles`: the next page starts after them. */
+  consumed: number;
+  /** Cinemeta had no entries at this offset: the catalog is over. */
+  ended: boolean;
+}
+
+export async function getCatalogPage(
   { type, catalog, genre }: CatalogQuery,
   limit = 24,
   customFetch?: typeof fetch,
   skip = 0
-): Promise<Movie[]> {
+): Promise<CatalogPage> {
   try {
     const extra = [genre && `genre=${encodeURIComponent(genre)}`, skip > 0 && `skip=${skip}`]
       .filter(Boolean)
@@ -81,14 +89,28 @@ export async function getCatalog(
     }
     const data: unknown = await res.json();
     const metas = isRecord(data) && Array.isArray(data.metas) ? (data.metas as CinemetaMeta[]) : [];
-    return metas
-      .map(mapCinemetaMeta)
-      .filter((item) => isReleased(item))
-      .slice(0, limit);
+    const titles: Movie[] = [];
+    let consumed = 0;
+    for (const meta of metas) {
+      if (titles.length >= limit) break;
+      consumed++;
+      const title = mapCinemetaMeta(meta);
+      if (isReleased(title)) titles.push(title);
+    }
+    return { titles, consumed, ended: metas.length === 0 };
   } catch (error) {
     logger.error(error);
     throw error;
   }
+}
+
+export async function getCatalog(
+  query: CatalogQuery,
+  limit = 24,
+  customFetch?: typeof fetch,
+  skip = 0
+): Promise<Movie[]> {
+  return (await getCatalogPage(query, limit, customFetch, skip)).titles;
 }
 
 export function getPopularMovies(limit = 24, customFetch?: typeof fetch): Promise<Movie[]> {

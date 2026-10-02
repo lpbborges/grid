@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   getCatalog,
+  getCatalogPage,
   getPopularMovies,
   getMovieDetails,
   getPopularSeries,
@@ -812,5 +813,44 @@ describe('getCatalog', () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas: 'x' })));
 
     expect(await getCatalog({ type: 'movie', catalog: 'year', genre: '2026' })).toEqual([]);
+  });
+});
+
+describe('getCatalogPage', () => {
+  beforeEach(() => {
+    vi.spyOn(globalThis, 'fetch');
+  });
+
+  const answer = (metas: unknown[]) =>
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas })));
+
+  it('counts the entries it read, so the next page starts after them', async () => {
+    answer([
+      { id: 'tt1', name: 'Futuro', released: '2999-01-01T00:00:00.000Z', poster: 'a.jpg' },
+      { id: 'tt2', name: 'Um', released: '2020-01-01T00:00:00.000Z', poster: 'b.jpg' },
+      { id: 'tt3', name: 'Dois', released: '2020-01-01T00:00:00.000Z', poster: 'c.jpg' }
+    ]);
+
+    const page = await getCatalogPage({ type: 'movie', catalog: 'top' }, 1);
+
+    expect(page.titles.map((m) => m.title)).toEqual(['Um']);
+    expect(page.consumed).toBe(2);
+    expect(page.ended).toBe(false);
+  });
+
+  it('is not over when every entry was unreleased', async () => {
+    answer([{ id: 'tt1', name: 'Futuro', released: '2999-01-01T00:00:00.000Z', poster: 'a.jpg' }]);
+
+    const page = await getCatalogPage({ type: 'movie', catalog: 'top' });
+
+    expect(page).toMatchObject({ titles: [], consumed: 1, ended: false });
+  });
+
+  it('is over when Cinemeta has no entries', async () => {
+    answer([]);
+
+    const page = await getCatalogPage({ type: 'movie', catalog: 'top' });
+
+    expect(page).toMatchObject({ titles: [], consumed: 0, ended: true });
   });
 });

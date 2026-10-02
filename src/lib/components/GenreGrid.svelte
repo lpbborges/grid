@@ -2,7 +2,7 @@
   import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import MediaGrid from '$lib/components/MediaGrid.svelte';
-  import { getCatalog } from '$lib/api/cinemeta';
+  import { getCatalogPage } from '$lib/api/cinemeta';
   import { logger } from '$lib/logger';
   import type { MediaType, SearchResult } from '$lib/types';
 
@@ -20,15 +20,25 @@
   let skip = 0;
 
   async function loadPage(forVersion: number) {
-    const page = await getCatalog({ type, catalog: 'top', genre }, PAGE_SIZE, undefined, skip);
-    if (forVersion !== version) return;
-    const known = new Set(items.map((item) => item.id));
-    const fresh = page
-      .filter((title) => !known.has(title.id))
-      .map((title): SearchResult => ({ ...title, type }));
+    let fresh: SearchResult[] = [];
+    let ended = false;
+    while (fresh.length === 0 && !ended) {
+      const page = await getCatalogPage(
+        { type, catalog: 'top', genre },
+        PAGE_SIZE,
+        undefined,
+        skip
+      );
+      if (forVersion !== version) return;
+      const known = new Set(items.map((item) => item.id));
+      skip += page.consumed;
+      ended = page.ended;
+      fresh = page.titles
+        .filter((title) => !known.has(title.id))
+        .map((title): SearchResult => ({ ...title, type }));
+    }
     items = [...items, ...fresh];
-    skip += PAGE_SIZE;
-    exhausted = fresh.length === 0;
+    exhausted = ended;
   }
 
   $effect(() => {
