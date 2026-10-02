@@ -313,13 +313,98 @@ describe('Movie playback wiring', () => {
     expect(screen.queryByTestId('video-element')).not.toBeInTheDocument();
   });
 
-  it('offers a retry when the engine rejects the stream', async () => {
+  it('offers another source when the engine rejects the stream', async () => {
     await openAndPlay({ failAdd: true });
 
     expect(
       await screen.findByText(/não foi possível iniciar a reprodução/i, {}, { timeout: 5000 })
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /tentar novamente/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tentar outra fonte' })).toBeInTheDocument();
     expect(screen.queryByTestId('video-element')).not.toBeInTheDocument();
+  });
+});
+
+describe('Movie playback errors', () => {
+  const OTHER_HASH = 'a'.repeat(40);
+  const twoSources: Partial<PlaybackBoundaryOptions> = {
+    streams: [
+      ...baseOptions.streams,
+      { name: 'Torrentio\n720p', title: `${VIDEO}\n👤 3`, infoHash: OTHER_HASH, fileIdx: 1 }
+    ]
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    settingsStore.cacheLimitBytes = DEFAULT_CACHE_LIMIT;
+    progressStore.progress = {};
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function addedHashes() {
+    return boundary.rqbit.requests
+      .filter((r) => r.method === 'POST' && r.path === '/torrents')
+      .map((r) => r.body.match(/btih:([a-f0-9]{40})/i)?.[1]);
+  }
+
+  it('plays the next ranked source when the first one fails', async () => {
+    await openAndPlay({ ...twoSources, failAddFor: [HASH] });
+
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Tentar outra fonte' }, { timeout: 5000 })
+    );
+
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await waitFor(() =>
+      expect(video.getAttribute('src')).toBe(`${PROXY_ORIGIN}/torrents/${OTHER_HASH}/stream/1`)
+    );
+    expect(addedHashes()).toEqual([HASH, OTHER_HASH]);
+  });
+
+  it('lets the user go back once every source failed', async () => {
+    await openAndPlay({ ...twoSources, failAddFor: [HASH, OTHER_HASH] });
+
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Tentar outra fonte' }, { timeout: 5000 })
+    );
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Tentar outra fonte' }, { timeout: 5000 })
+    );
+
+    expect(
+      await screen.findByText('Não encontramos outra fonte que funcione para este filme.')
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    expect(screen.getByRole('button', { name: /reproduzir/i })).toBeInTheDocument();
+  });
+
+  it('starts the engine again when the user retries after it failed to start', async () => {
+    await openAndPlay({ engineStartError: 'spawn failed' });
+
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Tentar novamente' }, { timeout: 5000 })
+    );
+
+    await waitFor(() =>
+      expect(boundary.invokeCalls.filter((c) => c.command === 'start_torrent_engine')).toHaveLength(
+        2
+      )
+    );
+  });
+
+  it('looks the sources up again when they could not be reached', async () => {
+    boundary = installPlaybackBoundary({ ...baseOptions, failStreams: true });
+    render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+
+    const retry = await screen.findByRole('button', { name: 'Tentar novamente' });
+    expect(
+      screen.getByText('Não foi possível buscar este filme. Verifique sua conexão.')
+    ).toBeInTheDocument();
+    boundary = installPlaybackBoundary(baseOptions);
+    await fireEvent.click(retry);
+
+    expect(await screen.findByRole('button', { name: /reproduzir/i })).toBeInTheDocument();
   });
 });

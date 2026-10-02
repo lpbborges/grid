@@ -86,7 +86,7 @@ describe('Movie page error handling', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('shows a friendly message and a retry button when playback fails, without leaking the raw exception', async () => {
+  it('shows a friendly message and offers another source when playback fails, without leaking the raw exception', async () => {
     prepareStreamMock.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:1234'));
 
     render(MoviePage, {
@@ -100,7 +100,7 @@ describe('Movie page error handling', () => {
 
     expect(screen.queryByText(/ECONNREFUSED/i)).not.toBeInTheDocument();
     expect(screen.getByText(/não foi possível iniciar a reprodução/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /tentar novamente/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tentar outra fonte' })).toBeInTheDocument();
   });
 });
 

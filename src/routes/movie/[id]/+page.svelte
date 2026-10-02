@@ -1,11 +1,13 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { logger } from '$lib/logger';
   import { translateMediaInfo } from '$lib/api/translate';
   import { buildMagnet, getMovieStreams, parseSeedCount } from '$lib/api/torrentio';
   import Player from '$lib/components/Player.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
+  import ErrorNotice from '$lib/components/ErrorNotice.svelte';
   import { usePlayer } from '$lib/composables/usePlayer.svelte';
 
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -13,13 +15,18 @@
   import { progressStore } from '$lib/stores/progress.svelte';
   import { resumeSeconds } from '$lib/utils/resume';
   import { rankStreamOptions } from '$lib/engine/ranking';
+  import type { Movie } from '$lib/types';
+  import type { ErrorAction, PageError } from '$lib/utils/pageError';
 
   let { data } = $props();
   let movieId = $derived(data.movieId);
   let movie = $derived(data.movie);
   let resumeAt = $derived(resumeSeconds(progressStore.get(movieId)));
-  let error = $state('');
-  let errorSource = $state<'load' | 'play' | null>(null);
+  let error = $state<PageError | null>(null);
+  // Set when the source lookup itself failed, so "Tentar novamente" repeats it.
+  let lookupFailed = false;
+  // Sources that failed for this movie; "Tentar outra fonte" skips them.
+  let failedSources = new SvelteSet<string>();
 
   let videoElement = $state<HTMLVideoElement | null>(null);
   const player = usePlayer(() => videoElement, {
@@ -30,11 +37,9 @@
   $effect(() => {
     if (data.error) {
       logger.error('Falha ao carregar filme:', data.error);
-      error = 'Não foi possível carregar este título. Tente novamente.';
-      errorSource = 'load';
+      error = { message: 'Não foi possível carregar este título.', action: 'reload' };
     } else if (movieId) {
-      error = '';
-      errorSource = null;
+      error = null;
     }
   });
 
@@ -52,6 +57,7 @@
     if (movieId) {
       selectedTorrentHash = '';
       combinedTorrents = [];
+      failedSources = new SvelteSet();
       if (hasMountedTorrentEffect) {
         untrack(() => player.stop());
       }
@@ -95,62 +101,73 @@
   let combinedTorrents = $state<CombinedStreamOption[]>([]);
 
   $effect(() => {
-    if (movie && movie.id) {
-      if (untrack(() => combinedTorrents.length) === 0) {
-        combinedTorrents = [...(movie.torrents || [])];
-        const requestedId = movie.id;
-        getMovieStreams(requestedId.toString())
-          .then((streams) => {
-            if (movie?.id !== requestedId) return;
-            const torrentioOptions = streams
-              .map((s) => {
-                const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
-                const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
-
-                let type = 'Torrentio';
-                const titleLower = (s.title || '').toLowerCase();
-                if (
-                  titleLower.includes('dublado') ||
-                  titleLower.includes('pt-br') ||
-                  titleLower.includes('🇧🇷')
-                )
-                  type += ' (PT)';
-                else if (titleLower.includes('dual')) type += ' (Dual)';
-
-                return {
-                  hash: s.infoHash ?? '',
-                  quality,
-                  type,
-                  seeds: parseSeedCount(s.title),
-                  rawStream: s
-                };
-              })
-              .filter((t) => t.hash);
-
-            const existingHashes: Record<string, boolean> = {};
-            for (const t of combinedTorrents) if (t.hash) existingHashes[t.hash] = true;
-            let changed = false;
-            for (const opt of torrentioOptions) {
-              if (opt.hash && !existingHashes[opt.hash]) {
-                combinedTorrents.push(opt);
-                if (opt.hash) existingHashes[opt.hash] = true;
-                changed = true;
-              }
-            }
-            if (changed) reselectBestTorrent();
-          })
-          .catch((e) => {
-            if (movie?.id !== requestedId) return;
-            logger.error('Falha ao buscar streams do Torrentio:', e);
-          });
-      }
+    if (movie && movie.id && untrack(() => combinedTorrents.length) === 0) {
+      combinedTorrents = [...(movie.torrents || [])];
+      loadSources(movie);
     }
   });
 
-  function reselectBestTorrent() {
-    if (combinedTorrents.length > 0) {
+  function loadSources(target: Movie) {
+    const requestedId = target.id;
+    getMovieStreams(requestedId.toString())
+      .then((streams) => {
+        if (movie?.id !== requestedId) return;
+        const torrentioOptions = streams
+          .map((s) => {
+            const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
+            const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
+
+            let type = 'Torrentio';
+            const titleLower = (s.title || '').toLowerCase();
+            if (
+              titleLower.includes('dublado') ||
+              titleLower.includes('pt-br') ||
+              titleLower.includes('🇧🇷')
+            )
+              type += ' (PT)';
+            else if (titleLower.includes('dual')) type += ' (Dual)';
+
+            return {
+              hash: s.infoHash ?? '',
+              quality,
+              type,
+              seeds: parseSeedCount(s.title),
+              rawStream: s
+            };
+          })
+          .filter((t) => t.hash);
+
+        const existingHashes: Record<string, boolean> = {};
+        for (const t of combinedTorrents) if (t.hash) existingHashes[t.hash] = true;
+        let changed = false;
+        for (const opt of torrentioOptions) {
+          if (opt.hash && !existingHashes[opt.hash]) {
+            combinedTorrents.push(opt);
+            if (opt.hash) existingHashes[opt.hash] = true;
+            changed = true;
+          }
+        }
+        if (changed) reselectBestTorrent();
+      })
+      .catch((e) => {
+        if (movie?.id !== requestedId) return;
+        logger.error('Falha ao buscar streams do Torrentio:', e);
+        if (combinedTorrents.length === 0) {
+          lookupFailed = true;
+          error = {
+            message: 'Não foi possível buscar este filme. Verifique sua conexão.',
+            action: 'retry'
+          };
+        }
+      });
+  }
+
+  /** Selects the best ranked source that has not failed; false when none is left. */
+  function reselectBestTorrent(): boolean {
+    const candidates = combinedTorrents.filter((t) => !failedSources.has(t.hash));
+    if (candidates.length > 0) {
       const sorted = rankStreamOptions(
-        combinedTorrents,
+        candidates,
         (t) => ({
           quality: t.quality,
           text: (
@@ -165,7 +182,9 @@
         { quality: settingsStore.quality, audioPreference: settingsStore.audio }
       );
       selectedTorrentHash = sorted[0].hash;
+      return true;
     }
+    return false;
   }
 
   $effect(() => {
@@ -180,9 +199,9 @@
 
   async function playMovie(startOver = false) {
     lastStartOver = startOver;
+    error = null;
     if (!movie || combinedTorrents.length === 0) {
-      error = 'Nenhum stream disponível para este título.';
-      errorSource = 'load';
+      error = { message: 'Este filme ainda não está disponível para assistir.', action: 'back' };
       return;
     }
 
@@ -211,17 +230,34 @@
     });
     // The route moved to another title while the stream was being prepared.
     if (movieId !== requestedId) return;
-    if (!ok && player.error) {
-      error = player.error;
-      errorSource = 'play';
+    if (!ok && player.error) error = { message: player.error, action: player.errorAction };
+  }
+
+  function tryAnotherSource() {
+    failedSources.add(selectedTorrentHash);
+    if (reselectBestTorrent()) {
+      playMovie(lastStartOver);
+    } else {
+      error = {
+        message: 'Não encontramos outra fonte que funcione para este filme.',
+        action: 'back'
+      };
     }
   }
 
-  function retry() {
-    if (errorSource === 'load') {
+  function handleErrorAction(action: ErrorAction) {
+    if (action === 'reload') {
       window.location.reload();
-    } else {
+    } else if (action === 'otherSource') {
+      tryAnotherSource();
+    } else if (action === 'retry' && lookupFailed && movie) {
+      lookupFailed = false;
+      error = null;
+      loadSources(movie);
+    } else if (action === 'retry') {
       playMovie(lastStartOver);
+    } else {
+      error = null;
     }
   }
 </script>
@@ -251,17 +287,7 @@
 {/if}
 
 {#if error}
-  <div
-    class="border-orange text-orange bg-surface/80 flex flex-col items-start gap-3 border-l-4 p-4 font-mono"
-  >
-    <span>{error}</span>
-    <button
-      onclick={retry}
-      class="border-orange text-orange hover:bg-orange hover:text-dark w-fit rounded border px-4 py-2 text-xs font-bold tracking-widest uppercase transition-colors"
-    >
-      Tentar novamente
-    </button>
-  </div>
+  <ErrorNotice {error} onaction={handleErrorAction} />
 {:else if movie}
   {#if (movie.background_image_original || movie.background_image) && !player.isPlaying}
     <div class="pointer-events-none fixed inset-0">

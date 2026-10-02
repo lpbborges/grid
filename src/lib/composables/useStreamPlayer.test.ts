@@ -78,7 +78,8 @@ describe('useStreamPlayer', () => {
     const ok = await streamPlayer.play('magnet:?xt=urn:btih:abc');
 
     expect(ok).toBe(false);
-    expect(streamPlayer.error).toBe('Não foi possível iniciar a reprodução. Tente novamente.');
+    expect(streamPlayer.error).toBe('Não foi possível iniciar a reprodução desta fonte.');
+    expect(streamPlayer.errorAction).toBe('otherSource');
     expect(streamPlayer.isPlaying).toBe(false);
     expect(playerState.isPlaying).toBe(false);
     expect(streamPlayer.error).not.toContain('ECONNREFUSED');
@@ -99,6 +100,7 @@ describe('useStreamPlayer', () => {
     expect(streamPlayer.error).toBe(
       'Não foi possível iniciar o player. Feche e abra o aplicativo novamente.'
     );
+    expect(streamPlayer.errorAction).toBe('retry');
     expect(streamPlayer.isPlaying).toBe(false);
 
     consoleErrorSpy.mockRestore();
