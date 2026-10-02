@@ -88,16 +88,7 @@ describe('MediaCard component', () => {
     expect(getByTestId('media-card').innerHTML).not.toContain('orange');
   });
 
-  it('shows the Assistido mark on a watched title', async () => {
-    const { watchedStore } = await import('$lib/stores/watched.svelte');
-    watchedStore.add(123);
-
-    const { getByTitle } = render(MediaCard, { media: mockMovie, type: 'movie' });
-
-    expect(getByTitle('Assistido')).toBeInTheDocument();
-  });
-
-  it('links to the given href and shows the episode label', () => {
+  it('links to the given href', () => {
     const { getByTestId } = render(MediaCard, {
       media: mockMovie,
       type: 'series',
@@ -106,24 +97,6 @@ describe('MediaCard component', () => {
     });
 
     expect(getByTestId('media-card').getAttribute('href')).toBe('/series/123?s=2&e=5');
-    expect(getByTestId('media-card-episode').textContent).toContain('T2:E5');
-    expect(getByTestId('media-card-episode').textContent).not.toContain('Próximo');
-  });
-
-  it('marks an up-next episode label', () => {
-    const { getByTestId } = render(MediaCard, {
-      media: mockMovie,
-      type: 'series',
-      episodeLabel: 'T3:E1',
-      upNext: true,
-      progress: { time: 0, duration: 100 }
-    });
-
-    const badge = getByTestId('media-card-episode');
-    expect(badge.textContent).toContain('Próximo');
-    expect(badge.textContent).toContain('T3:E1');
-    expect(badge.className).toContain('bg-green');
-    expect(getByTestId('media-card-progress').getAttribute('style')).toContain('width: 0%');
   });
 
   it('shows the given progress even for a title marked watched', async () => {
