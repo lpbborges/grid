@@ -5,6 +5,7 @@
   import DisclaimerModal from '$lib/components/DisclaimerModal.svelte';
   import Titlebar from '$lib/components/Titlebar.svelte';
   import { afterNavigate } from '$app/navigation';
+  import { page } from '$app/state';
   import { playerState } from '$lib/stores.svelte';
   let { children } = $props();
 
@@ -12,6 +13,7 @@
 
   let main = $state<HTMLElement>();
   let scrolled = $state(false);
+  let showHeader = $derived(!playerState.isPlaying && page.url.pathname !== '/settings');
 
   afterNavigate(({ from, to }) => {
     if (from?.url?.pathname === to?.url?.pathname) return;
@@ -30,10 +32,10 @@
     class="flex-1 overflow-y-auto"
     onscroll={() => (scrolled = (main?.scrollTop ?? 0) > SCROLLED_AFTER_PX)}
   >
-    {#if !playerState.isPlaying}
+    {#if showHeader}
       <AppHeader {scrolled} />
     {/if}
-    <div class="px-10 pb-6 {playerState.isPlaying ? 'pt-6' : 'pt-20'}">
+    <div class="px-10 pb-6 {showHeader ? 'pt-20' : 'pt-6'}">
       {@render children()}
     </div>
   </main>
