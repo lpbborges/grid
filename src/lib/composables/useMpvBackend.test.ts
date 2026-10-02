@@ -542,6 +542,27 @@ describe('useMpvBackend', () => {
     );
   });
 
+  it('forgets what it learned about the file when a later step fails', async () => {
+    vi.mocked(invoke).mockImplementation((async (command: string) => {
+      if (command === 'start_native_player') {
+        return {
+          duration: 100,
+          chapters: [{ title: 'Intro', time: 0 }],
+          tracks: [track({ id: 1, type: 'audio', lang: 'en', selected: true })]
+        };
+      }
+      if (command === 'native_player_set_tracks') throw 'ipc closed';
+      return undefined;
+    }) as never);
+
+    const { player, ok } = await start();
+
+    expect(ok).toBe(false);
+    expect(player.tracks).toEqual([]);
+    expect(player.duration).toBe(0);
+    expect(player.chapters).toEqual([]);
+  });
+
   it('converts the DOM volume scale to mpv percent', async () => {
     const { player } = await start();
 

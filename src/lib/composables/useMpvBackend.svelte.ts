@@ -243,17 +243,21 @@ export function useMpvBackend() {
     }
   }
 
-  async function finish(finished = false) {
-    if (!isRunning) return;
-    isRunning = false;
-    await detach();
+  function clearPlayback() {
     currentTime = 0;
     paused = false;
-    volume = 1;
     tracks = [];
     chapters = [];
     hasVideo = false;
     durationState = 0;
+  }
+
+  async function finish(finished = false) {
+    if (!isRunning) return;
+    isRunning = false;
+    await detach();
+    clearPlayback();
+    volume = 1;
     const request = current;
     current = undefined;
     const callback = finished && request?.onfinished ? request.onfinished : request?.onended;
@@ -345,6 +349,7 @@ export function useMpvBackend() {
       await detach();
       isRunning = false;
       current = undefined;
+      clearPlayback();
       // Leave nothing behind if mpv started but a later step failed.
       try {
         await invoke('stop_native_player');
