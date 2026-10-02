@@ -263,6 +263,17 @@ describe('yts api', () => {
     });
   });
 
+  it('keeps films still in cinemas out of the catalogs but not series', async () => {
+    const recent = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const metas = [
+      { imdb_id: 'tt1', name: 'New', released: recent, year: '2026', poster: 'p.jpg' }
+    ];
+    routeFetch({ 'movie/top.json': { metas }, 'series/top.json': { metas } });
+
+    expect(await getPopularMovies()).toEqual([]);
+    expect(await getPopularSeries()).toHaveLength(1);
+  });
+
   it('leaves the extras out when Cinemeta has none', async () => {
     routeFetch({ 'meta/series/tt987.json': { meta: { name: 'Series', poster: 'p.jpg' } } });
 

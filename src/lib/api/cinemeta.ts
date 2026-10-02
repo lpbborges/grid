@@ -14,7 +14,7 @@ import { searchWikidataImdbIds } from './wikidata';
 import { translateTitle } from './translate';
 import { isImdbId } from '$lib/utils/imdb';
 import { isRecord } from '$lib/utils/isRecord';
-import { isReleased } from '$lib/utils/released';
+import { isAvailable } from '$lib/utils/released';
 
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
@@ -95,7 +95,7 @@ export async function getCatalogPage(
       if (titles.length >= limit) break;
       consumed++;
       const title = mapCinemetaMeta(meta);
-      if (isReleased(title)) titles.push(title);
+      if (isAvailable(title, type)) titles.push(title);
     }
     return { titles, consumed, ended: metas.length === 0 };
   } catch (error) {
@@ -140,7 +140,7 @@ async function searchCinemeta(
 
     return metas
       .map(mapCinemetaMeta)
-      .filter((item: Movie) => isReleased(item))
+      .filter((item: Movie) => isAvailable(item, type))
       .slice(0, limit);
   } catch (error) {
     logger.error(error);
@@ -248,7 +248,9 @@ export async function searchLocalizedCatalog(
 ): Promise<SearchResult[]> {
   const imdbIds = await searchWikidataImdbIds(query, 8, customFetch);
   const titles = await Promise.all(imdbIds.map((imdbId) => getTitle(imdbId, customFetch)));
-  return titles.filter((title): title is SearchResult => title !== null && isReleased(title));
+  return titles.filter(
+    (title): title is SearchResult => title !== null && isAvailable(title, title.type)
+  );
 }
 
 // Localized matches first, then Cinemeta's movies and series alternating,

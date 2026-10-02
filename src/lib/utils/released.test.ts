@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isReleased } from './released';
+import { isAvailable, isReleased } from './released';
 
 const now = new Date('2026-10-02T12:00:00Z');
 
@@ -36,5 +36,25 @@ describe('isReleased', () => {
 
   it('drops a title without a date or a year', () => {
     expect(isReleased({ year: 0 }, now)).toBe(false);
+  });
+});
+
+describe('isAvailable', () => {
+  it('keeps a film that just opened in cinemas out', () => {
+    expect(isAvailable({ releaseDate: '2026-09-25T00:00:00.000Z', year: 2026 }, 'movie', now)).toBe(
+      false
+    );
+  });
+
+  it('offers a film once its cinema window has passed', () => {
+    expect(isAvailable({ releaseDate: '2026-08-10T00:00:00.000Z', year: 2026 }, 'movie', now)).toBe(
+      true
+    );
+  });
+
+  it('offers a series as soon as it has aired', () => {
+    expect(
+      isAvailable({ releaseDate: '2026-09-25T00:00:00.000Z', year: 2026 }, 'series', now)
+    ).toBe(true);
   });
 });
