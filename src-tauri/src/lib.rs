@@ -306,6 +306,23 @@ fn evict_for_space_blocking(
     .map_err(|e| e.to_string())
 }
 
+/// The YouTube page of a trailer; `None` unless `youtube_id` is a plain video id.
+fn trailer_url(youtube_id: &str) -> Option<String> {
+    let well_formed = youtube_id.len() == 11
+        && youtube_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    well_formed.then(|| format!("https://www.youtube.com/watch?v={youtube_id}"))
+}
+
+/// Opens a trailer in the system browser. Only YouTube ids are accepted, so
+/// this can never become a generic "open any URL or file" command.
+#[tauri::command]
+async fn open_trailer(youtube_id: String) -> Result<(), String> {
+    let url = trailer_url(&youtube_id).ok_or("Invalid trailer id")?;
+    open::that_detached(url).map_err(|e| format!("Failed to open the trailer: {}", e))
+}
+
 #[tauri::command]
 async fn clear_cache(
     app: tauri::AppHandle,
@@ -909,6 +926,7 @@ pub fn run() {
             upsert_cache_entry,
             evict_for_space,
             clear_cache,
+            open_trailer,
             start_native_player,
             native_player_set_tracks,
             native_player_set_paused,
@@ -1208,6 +1226,18 @@ mod tests {
         let app_data_dir = fresh_app_data_dir("clear-invalid");
 
         assert!(clear_cache_blocking(&app_data_dir, Some("../x")).is_err());
+    }
+
+    #[test]
+    fn opens_only_well_formed_youtube_trailers() {
+        assert_eq!(
+            trailer_url("FVI84Dfx2-I").as_deref(),
+            Some("https://www.youtube.com/watch?v=FVI84Dfx2-I")
+        );
+        assert_eq!(trailer_url("FVI84Dfx2-"), None);
+        assert_eq!(trailer_url("FVI84Dfx2-I&x"), None);
+        assert_eq!(trailer_url("../../../etc"), None);
+        assert_eq!(trailer_url("https://evil"), None);
     }
 
     #[test]

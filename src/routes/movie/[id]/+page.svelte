@@ -8,6 +8,8 @@
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import ErrorNotice from '$lib/components/ErrorNotice.svelte';
+  import LazyCatalogRow from '$lib/components/LazyCatalogRow.svelte';
+  import { similarTitlesRow } from '$lib/utils/catalogRows';
   import { usePlayer } from '$lib/composables/usePlayer.svelte';
 
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -23,6 +25,7 @@
   let movie = $derived(data.movie);
   let resumeAt = $derived(resumeSeconds(progressStore.get(movieId)));
   let error = $state<PageError | null>(null);
+  let similarRow = $derived(movie ? similarTitlesRow('movie', movie.genres) : null);
   // Set when the source lookup itself failed, so "Tentar novamente" repeats it.
   let lookupFailed = false;
   // Sources that failed for this movie; "Tentar outra fonte" skips them.
@@ -342,8 +345,18 @@
           rating={movie.rating}
           synopsis={translatedSynopsis}
           cast={movie.cast}
+          genres={movie.genres}
+          runtime={movie.runtime}
+          trailerYoutubeId={movie.trailerYoutubeId}
         />
       {/if}
     </div>
   </div>
+  {#if !player.isPlaying && similarRow}
+    <div class="relative z-10 mt-12">
+      {#key movie.id}
+        <LazyCatalogRow row={similarRow} excludeId={movie.id} />
+      {/key}
+    </div>
+  {/if}
 {/if}

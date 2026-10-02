@@ -30,6 +30,11 @@ export interface Movie {
   cast?: CastMember[];
   director?: string[];
   language?: string;
+  /** Cinemeta's English genre names, see `genreName`. */
+  genres?: string[];
+  /** Cinemeta's runtime text, e.g. "136 min". */
+  runtime?: string;
+  trailerYoutubeId?: string;
 }
 
 export type MediaType = 'movie' | 'series';
@@ -103,6 +108,9 @@ export interface CinemetaMeta {
   director?: string[];
   country?: string;
   videos?: Episode[];
+  genres?: unknown;
+  runtime?: unknown;
+  trailers?: unknown;
 }
 
 /** A user's audio preference, as stored in `settingsStore.audio`. */

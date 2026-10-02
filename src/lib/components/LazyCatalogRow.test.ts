@@ -89,4 +89,15 @@ describe('LazyCatalogRow', () => {
 
     expect(screen.queryByText('Séries em destaque')).toBeNull();
   });
+
+  it('leaves out the title being viewed', async () => {
+    getCatalogMock.mockResolvedValue([title('tt1', 'Esta'), title('tt2', 'Outra')]);
+    render(LazyCatalogRow, { row, excludeId: 'tt1' });
+
+    await act(() => reportVisible(true));
+
+    expect(screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'))).toEqual([
+      '/series/tt2'
+    ]);
+  });
 });

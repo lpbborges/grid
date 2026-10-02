@@ -5,14 +5,15 @@
   import type { Movie } from '$lib/types';
   import type { CatalogRow } from '$lib/utils/catalogRows';
 
-  let { row }: { row: CatalogRow } = $props();
+  let { row, excludeId }: { row: CatalogRow; excludeId?: string | number } = $props();
 
   let items = $state<Movie[]>([]);
   let settled = $state(false);
 
   async function load() {
     try {
-      items = await getCatalog(row.query);
+      const titles = await getCatalog(row.query);
+      items = titles.filter((title) => String(title.id) !== String(excludeId));
     } catch (error) {
       logger.warn(`Failed to load the "${row.heading}" row`, error);
     } finally {
