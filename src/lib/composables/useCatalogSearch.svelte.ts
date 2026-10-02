@@ -1,3 +1,4 @@
+import { logger } from '$lib/logger';
 import { searchCatalog } from '$lib/api/cinemeta';
 import type { MediaType, SearchResult } from '$lib/types';
 
@@ -28,9 +29,14 @@ export function useCatalogSearch(
         results = found;
         loading = found.length === 0 && !done;
       };
-      void (scope
+      const search = scope
         ? searchCatalog(query, onUpdate, undefined, undefined, { type: scope })
-        : searchCatalog(query, onUpdate));
+        : searchCatalog(query, onUpdate);
+      search.catch((error) => {
+        if (cancelled) return;
+        logger.warn('Catalog search failed', error);
+        loading = false;
+      });
     }, DEBOUNCE_MS);
 
     return () => {

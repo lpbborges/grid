@@ -4,7 +4,12 @@ import CatalogSearchHarness from './__fixtures__/CatalogSearchHarness.svelte';
 import { searchQuery } from '$lib/stores.svelte';
 import type { SearchResult } from '$lib/types';
 
-const { searchCatalogMock } = vi.hoisted(() => ({ searchCatalogMock: vi.fn() }));
+const { searchCatalogMock, warnMock } = vi.hoisted(() => ({
+  searchCatalogMock: vi.fn(),
+  warnMock: vi.fn()
+}));
+
+vi.mock('$lib/logger', () => ({ logger: { warn: warnMock } }));
 
 vi.mock('$lib/api/cinemeta', () => ({ searchCatalog: searchCatalogMock }));
 
@@ -129,5 +134,29 @@ describe('useCatalogSearch', () => {
     expect(screen.queryByText('Matrix')).toBeNull();
     expect(screen.getByTestId('loading')).toHaveTextContent('false');
     expect(searchCatalogMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops loading and logs when the search fails', async () => {
+    searchCatalogMock.mockRejectedValueOnce(new Error('offline'));
+    render(CatalogSearchHarness);
+    await type('matrix');
+
+    await wait(300);
+
+    expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    expect(warnMock).toHaveBeenCalledWith('Catalog search failed', expect.any(Error));
+  });
+
+  it('does not touch the state of a newer query when an older search fails late', async () => {
+    let fail!: (error: Error) => void;
+    searchCatalogMock.mockReturnValueOnce(new Promise((_, reject) => (fail = reject)));
+    render(CatalogSearchHarness);
+    await type('matrix');
+    await wait(300);
+    await type('inception');
+
+    await act(async () => fail(new Error('late')));
+
+    expect(screen.getByTestId('loading')).toHaveTextContent('true');
   });
 });
