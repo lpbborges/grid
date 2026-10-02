@@ -42,6 +42,11 @@ export function focusedEpisode(
   return listed(videos, latest) ?? listed(videos, requested);
 }
 
+/** The earliest listed episode, or undefined for a series without any. */
+export function firstEpisode(episodes: Episode[]): Episode | undefined {
+  return [...episodes].sort(compareEpisodes)[0];
+}
+
 /** The first aired episode after `current`, or null when there is none. */
 export function nextEpisode(
   episodes: Episode[],

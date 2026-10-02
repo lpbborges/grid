@@ -64,7 +64,9 @@ async function playEpisode(name: RegExp, overrides: Partial<PlaybackBoundaryOpti
     ...overrides
   });
   render(SeriesPage, {
-    props: { data: { seriesId: series.id, series, requestedEpisode: null, error: null } }
+    props: {
+      data: { autoplay: false, seriesId: series.id, series, requestedEpisode: null, error: null }
+    }
   });
   await fireEvent.click(await screen.findByText(name));
 }
@@ -185,7 +187,9 @@ describe('Series playback wiring', () => {
       ]
     });
     const { rerender } = render(SeriesPage, {
-      props: { data: { seriesId: series.id, series, requestedEpisode: null, error: null } }
+      props: {
+        data: { autoplay: false, seriesId: series.id, series, requestedEpisode: null, error: null }
+      }
     });
     const other = {
       ...series,
@@ -194,7 +198,13 @@ describe('Series playback wiring', () => {
       videos: [{ id: 'tt0000003:1:1', season: 1, episode: 1, name: 'Other Pilot' }]
     };
     await rerender({
-      data: { seriesId: other.id, series: other, requestedEpisode: null, error: null }
+      data: {
+        autoplay: false,
+        seriesId: other.id,
+        series: other,
+        requestedEpisode: null,
+        error: null
+      }
     });
 
     await fireEvent.click(await screen.findByText(/Other Pilot/));
@@ -382,7 +392,9 @@ describe('Series playback wiring', () => {
       ]
     });
     render(SeriesPage, {
-      props: { data: { seriesId: series.id, series, requestedEpisode: null, error: null } }
+      props: {
+        data: { autoplay: false, seriesId: series.id, series, requestedEpisode: null, error: null }
+      }
     });
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Começar do início' }));
@@ -589,5 +601,50 @@ describe('Series playback errors', () => {
     await fireEvent.click(retry);
 
     await waitFor(() => expect(torrentioRequests(1, 1)).toBe(2));
+  });
+
+  describe('autoplay from the hover card', () => {
+    async function openWithAutoplay(requestedEpisode: { season: number; episode: number } | null) {
+      boundary = installPlaybackBoundary({
+        files,
+        streams: [
+          { name: 'Torrentio\n1080p', title: 'Season pack\n👤 30', infoHash: HASH, fileIdx: 0 }
+        ]
+      });
+      render(SeriesPage, {
+        props: {
+          data: {
+            seriesId: series.id,
+            series,
+            requestedEpisode,
+            error: null,
+            autoplay: true
+          }
+        }
+      });
+      await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    }
+
+    it('plays the first episode of a series never watched', async () => {
+      await openWithAutoplay(null);
+
+      expect(torrentioRequests(1, 1)).toBe(1);
+      expect(torrentioRequests(1, 2)).toBe(0);
+    });
+
+    it('plays the episode the card links to', async () => {
+      await openWithAutoplay({ season: 1, episode: 2 });
+
+      expect(torrentioRequests(1, 2)).toBe(1);
+      expect(torrentioRequests(1, 1)).toBe(0);
+    });
+
+    it('plays the episode that was being watched', async () => {
+      progressStore.update(series.id, 1, 2, 300, 2700);
+      await openWithAutoplay(null);
+
+      expect(torrentioRequests(1, 2)).toBe(1);
+      expect(torrentioRequests(1, 1)).toBe(0);
+    });
   });
 });
