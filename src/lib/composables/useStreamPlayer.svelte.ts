@@ -5,6 +5,7 @@ import type { SubtitleTrack } from '$lib/api/subtitles';
 import type { CacheEntry } from '$lib/engine/cache';
 import { playerState } from '$lib/stores.svelte';
 import type { LoadingStage } from '$lib/utils/loadingStage';
+import type { ErrorAction } from '$lib/utils/pageError';
 
 export interface PlayOptions {
   mediaId?: string;
@@ -19,6 +20,7 @@ export function useStreamPlayer() {
   let subtitles = $state<SubtitleTrack[]>([]);
   let loadingStage = $state<LoadingStage | null>(null);
   let error = $state('');
+  let errorAction = $state<ErrorAction>('otherSource');
   let infoHash = $state('');
   let fileIdx = $state<number | undefined>(undefined);
   let totalBytes = $state(0);
@@ -66,10 +68,13 @@ export function useStreamPlayer() {
     } catch (e) {
       if (signal.aborted) return false;
       logger.error('Erro ao iniciar reprodução:', e);
-      error =
-        e instanceof EngineStartError
-          ? 'Não foi possível iniciar o player. Feche e abra o aplicativo novamente.'
-          : 'Não foi possível iniciar a reprodução. Tente novamente.';
+      if (e instanceof EngineStartError) {
+        error = 'Não foi possível iniciar o player. Feche e abra o aplicativo novamente.';
+        errorAction = 'retry';
+      } else {
+        error = 'Não foi possível iniciar a reprodução desta fonte.';
+        errorAction = 'otherSource';
+      }
       loadingStage = null;
       isPlaying = false;
       playerState.isPlaying = false;
@@ -125,6 +130,9 @@ export function useStreamPlayer() {
     },
     get error() {
       return error;
+    },
+    get errorAction() {
+      return errorAction;
     },
     get infoHash() {
       return infoHash;

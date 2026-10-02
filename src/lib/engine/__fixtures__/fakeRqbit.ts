@@ -12,6 +12,8 @@ export interface FakeTorrentFile {
 export interface FakeRqbitOptions {
   files: FakeTorrentFile[];
   failAdd?: boolean;
+  /** Info hashes whose add fails, as a source nobody can serve would. */
+  failAddFor?: string[];
   stallAdds?: number;
 }
 
@@ -38,6 +40,7 @@ function json(value: unknown, status = 200): Response {
 export function createFakeRqbit({
   files,
   failAdd = false,
+  failAddFor = [],
   stallAdds = 0
 }: FakeRqbitOptions): FakeRqbit {
   const requests: FakeRqbitRequest[] = [];
@@ -84,6 +87,7 @@ export function createFakeRqbit({
       if (failAdd) return new Response('engine failure', { status: 500 });
       const hash = body.match(/btih:([a-f0-9]{40})/i)?.[1].toLowerCase();
       if (!hash) return new Response('invalid magnet', { status: 400 });
+      if (failAddFor.includes(hash)) return new Response('engine failure', { status: 500 });
       loaded.add(hash);
       return json({ ...postTorrents, details: details(hash) });
     }

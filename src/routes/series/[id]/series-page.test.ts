@@ -92,7 +92,7 @@ describe('Series page error handling', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('shows a friendly message and a retry button when episode playback fails, without leaking the raw exception', async () => {
+  it('shows a friendly message and a retry when the episode lookup fails, without leaking the raw exception', async () => {
     getSeriesStreamsMock.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:1234'));
 
     render(SeriesPage, {
@@ -106,8 +106,8 @@ describe('Series page error handling', () => {
     await Promise.resolve();
 
     expect(screen.queryByText(/ECONNREFUSED/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/não foi possível iniciar a reprodução/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /tentar novamente/i })).toBeInTheDocument();
+    expect(screen.getByText(/não foi possível buscar este episódio/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument();
   });
 });
 

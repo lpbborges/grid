@@ -1,10 +1,12 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { logger } from '$lib/logger';
   import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
   import Player from '$lib/components/Player.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
+  import ErrorNotice from '$lib/components/ErrorNotice.svelte';
   import {
     usePlayer,
     type NextPlaybackResult,
@@ -18,12 +20,12 @@
   import { progressStore } from '$lib/stores/progress.svelte';
   import type { Episode, EpisodeRef, Series, UpNextCard } from '$lib/types';
   import { episodeLabel, focusedEpisode, nextEpisode, sameEpisode } from '$lib/utils/episodes';
+  import type { ErrorAction, PageError } from '$lib/utils/pageError';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
   let series = $derived(data.series);
-  let error = $state('');
-  let errorSource = $state<'load' | 'play' | null>(null);
+  let error = $state<PageError | null>(null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
   let lastStartOver = false;
   let advancingTo = $state<Episode | null>(null);
@@ -106,11 +108,9 @@
   $effect(() => {
     if (data.error) {
       logger.error('Falha ao carregar série:', data.error);
-      error = 'Não foi possível carregar este título. Tente novamente.';
-      errorSource = 'load';
+      error = { message: 'Não foi possível carregar este título.', action: 'reload' };
     } else if (seriesId) {
-      error = '';
-      errorSource = null;
+      error = null;
     }
   });
 
@@ -180,6 +180,31 @@
     };
   }
 
+  // Sources that failed for the episode being tried; "Tentar outra fonte" skips them.
+  let failedSources = new SvelteSet<string>();
+  let failedSourcesFor = '';
+  let currentSource = '';
+
+  async function findSource(shown: Series, episode: Episode) {
+    const key = `${seriesId}:${episodeLabel(episode)}`;
+    if (key !== failedSourcesFor) {
+      failedSources = new SvelteSet();
+      failedSourcesFor = key;
+    }
+    const found = await findEpisodeStream(
+      { id: seriesId, title: shown.title },
+      episode,
+      { quality: settingsStore.quality, audio: settingsStore.audio },
+      failedSources
+    );
+    if (!('error' in found)) currentSource = found.infoHash;
+    return found;
+  }
+
+  function playbackError(): PageError {
+    return { message: player.error, action: player.errorAction };
+  }
+
   async function playEpisode(episode: Episode, startOver = false) {
     if (typeof window === 'undefined' || !series) return;
     const shown = series;
@@ -187,19 +212,13 @@
     lastAttemptedEpisode = episode;
     lastStartOver = startOver;
     const requestedId = seriesId;
+    error = null;
 
-    error = '';
-    errorSource = null;
-
-    const found = await findEpisodeStream({ id: seriesId, title: shown.title }, episode, {
-      quality: settingsStore.quality,
-      audio: settingsStore.audio
-    });
+    const found = await findSource(shown, episode);
     // The route moved to another series while the sources were loading.
     if (seriesId !== requestedId) return;
     if ('error' in found) {
       error = found.error;
-      errorSource = 'play';
       return;
     }
 
@@ -210,10 +229,7 @@
 
     // The route moved to another series while the stream was being prepared.
     if (seriesId !== requestedId) return;
-    if (!ok && player.error) {
-      error = player.error;
-      errorSource = 'play';
-    }
+    if (!ok && player.error) error = playbackError();
   }
 
   async function advanceTo(ref: EpisodeRef) {
@@ -221,35 +237,33 @@
     if (!series || !episode) return;
     const shown = series;
     const requestedId = seriesId;
-    error = '';
-    errorSource = null;
+    error = null;
     advancingTo = episode;
     const ok = await player.advance(async (): Promise<NextPlaybackResult> => {
       // Set only after the release, so the finished file's clock never counts as the next one's.
       lastAttemptedEpisode = episode;
       lastStartOver = false;
-      const found = await findEpisodeStream({ id: requestedId, title: shown.title }, episode, {
-        quality: settingsStore.quality,
-        audio: settingsStore.audio
-      });
+      const found = await findSource(shown, episode);
       if (seriesId !== requestedId) return null;
       if ('error' in found) return found;
       return { magnet: found.magnet, options: episodePlayOptions(shown, episode, found.fileIdx) };
     });
     advancingTo = null;
     if (seriesId !== requestedId) return;
-    if (!ok && player.error) {
-      error = player.error;
-      errorSource = 'play';
-    }
+    if (!ok && player.error) error = playbackError();
   }
 
-  function retry() {
-    if (errorSource === 'load') {
+  function handleErrorAction(action: ErrorAction) {
+    if (action === 'reload') {
       window.location.reload();
-    } else if (lastAttemptedEpisode) {
-      playEpisode(lastAttemptedEpisode, lastStartOver);
+      return;
     }
+    if (action === 'back' || !lastAttemptedEpisode) {
+      error = null;
+      return;
+    }
+    if (action === 'otherSource') failedSources.add(currentSource);
+    playEpisode(lastAttemptedEpisode, lastStartOver);
   }
 </script>
 
@@ -278,17 +292,7 @@
 {/if}
 
 {#if error}
-  <div
-    class="border-orange text-orange bg-surface/80 flex flex-col items-start gap-3 border-l-4 p-4 font-mono"
-  >
-    <span>{error}</span>
-    <button
-      onclick={retry}
-      class="border-orange text-orange hover:bg-orange hover:text-dark w-fit rounded border px-4 py-2 text-xs font-bold tracking-widest uppercase transition-colors"
-    >
-      Tentar novamente
-    </button>
-  </div>
+  <ErrorNotice {error} onaction={handleErrorAction} />
 {:else if series}
   {#if (series.background_image_original || series.background_image) && !player.isPlaying}
     <div class="pointer-events-none fixed inset-0">

@@ -7,6 +7,7 @@ import { useMpvBackend } from '$lib/composables/useMpvBackend.svelte';
 import { progressStore } from '$lib/stores/progress.svelte';
 import type { PlaybackRequest, PlayerBackend, ProgressContext } from '$lib/types';
 import type { PlayOptions } from '$lib/composables/useStreamPlayer.svelte';
+import type { ErrorAction, PageError } from '$lib/utils/pageError';
 
 export function createPlayerBackend(getVideoElement: () => HTMLVideoElement | null): PlayerBackend {
   return playbackMode() === 'native' ? useMpvBackend() : useDomBackend(getVideoElement);
@@ -24,8 +25,8 @@ export interface NextPlayback {
   options: PlayerPlayOptions;
 }
 
-/** `null` means the advance was cancelled; `error` is a pt-BR message to show. */
-export type NextPlaybackResult = NextPlayback | { error: string } | null;
+/** `null` means the advance was cancelled. */
+export type NextPlaybackResult = NextPlayback | { error: PageError } | null;
 
 export function usePlayer(
   getVideoElement: () => HTMLVideoElement | null,
@@ -35,6 +36,7 @@ export function usePlayer(
   const backend = createPlayerBackend(getVideoElement);
 
   let error = $state('');
+  let errorAction = $state<ErrorAction>('otherSource');
   let currentRequest = $state<PlaybackRequest | undefined>(undefined);
   let currentProgress: ProgressContext | undefined;
   let watchedTriggered = false;
@@ -80,7 +82,10 @@ export function usePlayer(
     const ok = await streamPlayer.play(magnet, playOptions);
     // A play cancelled by closing the player fails without an error.
     if (!ok) {
-      if (streamPlayer.error) error = streamPlayer.error;
+      if (streamPlayer.error) {
+        error = streamPlayer.error;
+        errorAction = streamPlayer.errorAction;
+      }
       return false;
     }
     const request: PlaybackRequest = {
@@ -112,6 +117,7 @@ export function usePlayer(
     if (!started) {
       // No fallback: on Windows <video> cannot play this content at all.
       error = backend.error;
+      errorAction = 'otherSource';
       await streamPlayer.stop();
       return false;
     }
@@ -163,7 +169,8 @@ export function usePlayer(
       const next = await load();
       if (generation !== advanceGeneration || !next) return false;
       if ('error' in next) {
-        error = next.error;
+        error = next.error.message;
+        errorAction = next.error.action;
         return false;
       }
       return await play(next.magnet, next.options);
@@ -202,6 +209,9 @@ export function usePlayer(
     },
     get error() {
       return error;
+    },
+    get errorAction() {
+      return errorAction;
     },
     get downloadPercent() {
       return downloadPercent;
