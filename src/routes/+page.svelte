@@ -1,6 +1,5 @@
 <script lang="ts">
   import MediaRow from '$lib/components/MediaRow.svelte';
-  import MediaCard from '$lib/components/MediaCard.svelte';
   import LazyCatalogRow from '$lib/components/LazyCatalogRow.svelte';
   import { catalogRows } from '$lib/utils/catalogRows';
   import EmptyState from '$lib/components/EmptyState.svelte';
@@ -9,9 +8,9 @@
   import { useCatalogSearch } from '$lib/composables/useCatalogSearch.svelte';
   import type { Movie } from '$lib/types';
   import { appReady, searchQuery } from '$lib/stores.svelte';
+  import FavoritesRow from '$lib/components/FavoritesRow.svelte';
   import ContinueWatchingRow from '$lib/components/ContinueWatchingRow.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
-  import { favoritesStore } from '$lib/stores/favorites.svelte';
   import { toContinueWatchingItems } from '$lib/utils/continueWatching';
 
   let { data } = $props();
@@ -27,14 +26,6 @@
 
   let hasSearchQuery = $derived(searchQuery.value.trim().length > 0);
   let continueWatchingItems = $derived(toContinueWatchingItems(progressStore.entries));
-  let favoriteItems = $derived(
-    favoritesStore.titled.map(({ id, meta }) => ({
-      id,
-      type: meta.type,
-      title: meta.title,
-      medium_cover_image: meta.poster
-    }))
-  );
 
   $effect(() => {
     const moviesPromise = data.popularMovies;
@@ -85,9 +76,5 @@
       {/each}
     </div>
   {/if}
-  <MediaRow heading="Meus favoritos" items={favoriteItems} containerClass="">
-    {#snippet card(item)}
-      <MediaCard media={item} type={item.type} />
-    {/snippet}
-  </MediaRow>
+  <FavoritesRow />
 {/if}
