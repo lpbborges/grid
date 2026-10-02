@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getSeriesStreams, getMovieStreams, parseSeedCount, buildMagnet } from './torrentio';
+import { settingsStore } from '../stores/settings.svelte';
 
 globalThis.fetch = vi.fn() as any;
 
@@ -42,6 +43,37 @@ describe('torrentio api', () => {
     expect(await getMovieStreams('tt1')).toEqual([]);
   });
 
+  it('asks Torrentio to leave out cinema recordings, screeners and 3D even without a language', async () => {
+    settingsStore.audio = 'original';
+    settingsStore.subtitle = 'off';
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ streams: [] }))
+    );
+
+    await getMovieStreams('tt1');
+
+    expect(vi.mocked(globalThis.fetch).mock.calls[0][0]).toBe(
+      'https://torrentio.strem.fun/qualityfilter=threed,cam,scr/stream/movie/tt1.json'
+    );
+    settingsStore.audio = 'pt';
+    settingsStore.subtitle = 'pt';
+  });
+
+  it('drops the low-quality releases Torrentio still returns', async () => {
+    const good = { name: 'Torrentio\n1080p', title: 'Dune.2024.1080p.BluRay.x264', infoHash: 'a' };
+    const cam = { name: 'Torrentio\n720p', title: 'Dune.2024.HDCAM.x264\n👤 900', infoHash: 'b' };
+    const screener = { name: 'Torrentio\nscr', title: 'Dune.2024.DVDSCR', infoHash: 'c' };
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ streams: [cam, good, screener] }))
+    );
+
+    expect(await getMovieStreams('tt1')).toEqual([good]);
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ streams: [cam, screener] }))
+    );
+    expect(await getSeriesStreams('tt1', 1, 1)).toEqual([]);
+  });
+
   describe('getSeriesStreams', () => {
     it('returns streams on success', async () => {
       const mockResponse = {
@@ -62,7 +94,7 @@ describe('torrentio api', () => {
 
       const streams = await getSeriesStreams('tt123456', 1, 1);
       expect(fetch).toHaveBeenCalledWith(
-        'https://torrentio.strem.fun/language=portuguese/stream/series/tt123456:1:1.json',
+        'https://torrentio.strem.fun/language=portuguese|qualityfilter=threed,cam,scr/stream/series/tt123456:1:1.json',
         expect.objectContaining({ signal: expect.anything() })
       );
       expect(streams).toHaveLength(1);
@@ -100,7 +132,7 @@ describe('torrentio api', () => {
 
       const streams = await getMovieStreams('tt123456');
       expect(fetch).toHaveBeenCalledWith(
-        'https://torrentio.strem.fun/language=portuguese/stream/movie/tt123456.json',
+        'https://torrentio.strem.fun/language=portuguese|qualityfilter=threed,cam,scr/stream/movie/tt123456.json',
         expect.objectContaining({ signal: expect.anything() })
       );
       expect(streams).toHaveLength(1);

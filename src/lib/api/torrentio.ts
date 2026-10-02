@@ -2,6 +2,7 @@ import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { isRecord } from '../utils/isRecord';
 import { defaultTrackers, endpoints } from './endpoints';
 import { settingsStore } from '../stores/settings.svelte';
+import { isLowQuality } from '../engine/streamQuality';
 
 export interface Stream {
   name?: string;
@@ -34,6 +35,9 @@ export function buildMagnet(
   return `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(name)}${trackers}`;
 }
 
+/** Releases Torrentio leaves out: 3D, cinema recordings and screeners. */
+const QUALITY_FILTER = 'qualityfilter=threed,cam,scr';
+
 const AUDIO_TO_TORRENTIO_LANG: Record<string, string> = {
   pt: 'portuguese',
   en: 'english',
@@ -61,14 +65,14 @@ async function fetchTorrentioStreams(path: string): Promise<Stream[]> {
   const prefLang =
     settingsStore.audio === 'original' ? settingsStore.subtitle : settingsStore.audio;
   const lang = AUDIO_TO_TORRENTIO_LANG[prefLang];
-  const prefix = lang ? `/language=${lang}` : '';
-  const res = await fetchWithTimeout(`${endpoints.torrentio}${prefix}/stream/${path}.json`);
+  const config = [lang && `language=${lang}`, QUALITY_FILTER].filter(Boolean).join('|');
+  const res = await fetchWithTimeout(`${endpoints.torrentio}/${config}/stream/${path}.json`);
   if (!res.ok) {
     throw new Error(`Failed to fetch streams: ${res.statusText}`);
   }
   const data: unknown = await res.json();
   if (!isRecord(data) || !Array.isArray(data.streams)) return [];
-  return data.streams.filter(isStream);
+  return data.streams.filter((stream) => isStream(stream) && !isLowQuality(stream));
 }
 
 export function getSeriesStreams(

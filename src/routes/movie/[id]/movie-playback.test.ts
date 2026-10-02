@@ -133,6 +133,42 @@ describe('Movie playback wiring', () => {
     );
   });
 
+  it('never plays a cinema recording, even with the most seeds', async () => {
+    const recording = {
+      name: 'Torrentio\n1080p',
+      title: 'Grid.Fixture.2026.HDCAM.x264\n👤 900',
+      infoHash: 'c'.repeat(40),
+      fileIdx: 0
+    };
+    await openAndPlay({ streams: [recording, ...baseOptions.streams] });
+
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await waitFor(() =>
+      expect(video.getAttribute('src')).toBe(`${PROXY_ORIGIN}/torrents/${HASH}/stream/1`)
+    );
+    expect(rqbitRequest('POST', '/torrents')?.body).not.toContain(recording.infoHash);
+  });
+
+  it('reports no sources when only cinema recordings exist', async () => {
+    const recording = {
+      name: 'Torrentio\n1080p',
+      title: 'Grid.Fixture.2026.TELESYNC.x264\n👤 900',
+      infoHash: 'c'.repeat(40)
+    };
+    boundary = installPlaybackBoundary({ ...baseOptions, streams: [recording] });
+    render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+
+    await waitFor(() =>
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('torrentio'))).toBe(
+        true
+      )
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(screen.getByText('Nenhuma opção de reprodução disponível')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /reproduzir/i })).toBeNull();
+  });
+
   it('adds the magnet again and plays when the first add stalls', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await openAndPlay({ stallAdds: 1 });

@@ -1,5 +1,11 @@
 import http from 'node:http';
-import { POSTER, type Catalog, type CatalogMovie, type CatalogSeries } from './catalog.ts';
+import {
+  POSTER,
+  type Catalog,
+  type CatalogMovie,
+  type CatalogSeries,
+  type StreamEntry
+} from './catalog.ts';
 
 export const MOCK_PORT = 47100;
 export const MOCK_BASE = `http://127.0.0.1:${MOCK_PORT}`;
@@ -65,6 +71,18 @@ function compactPeers(peerPorts: number[]): Buffer {
   ]);
 }
 
+const QUALITY_FILTER = 'qualityfilter=threed,cam,scr';
+const TORRENTIO_MOVIE = /^(?:[^/]+\/)?stream\/movie\/(tt\d+)\.json$/;
+const TORRENTIO_EPISODE = /^(?:[^/]+\/)?stream\/series\/(tt\d+):(\d+):(\d+)\.json$/;
+
+/** More seeds than the real release, so only the client filter keeps it from being picked. */
+const CAM_RELEASE: StreamEntry = {
+  name: 'Torrentio\n720p',
+  title: 'Grid.Fixture.2026.HDCAM.x264-NOGRP\n👤 999',
+  infoHash: 'c'.repeat(40),
+  fileIdx: 0
+};
+
 export function startMockServer(catalog: Catalog, options: MockServerOptions): Promise<MockServer> {
   let announceCount = 0;
   const unexpectedRequests: string[] = [];
@@ -96,6 +114,15 @@ export function startMockServer(catalog: Catalog, options: MockServerOptions): P
 
     const [service, ...rest] = url.pathname.split('/').filter(Boolean);
     const route = decodeURIComponent(rest.join('/'));
+
+    // Torrentio would leave the cinema recording out when asked to; serving it anyway
+    // proves the app drops it by itself, and asking without the filter is a failure.
+    const sendStreams = (stream: StreamEntry) => {
+      if (!route.includes(`|${QUALITY_FILTER}/`) && !route.startsWith(`${QUALITY_FILTER}/`)) {
+        unexpectedRequests.push(`${url.pathname} (no quality filter)`);
+      }
+      return send(200, { streams: [CAM_RELEASE, stream] });
+    };
     const movie = (id: string) => catalog.movies.find((m) => m.id === id);
     const series = (id: string) => catalog.series.find((s) => s.id === id);
 
@@ -148,17 +175,15 @@ export function startMockServer(catalog: Catalog, options: MockServerOptions): P
     }
 
     if (service === 'torrentio') {
-      const movieStream = route.match(/^(?:language=[^/]+\/)?stream\/movie\/(tt\d+)\.json$/);
+      const movieStream = route.match(TORRENTIO_MOVIE);
       const foundMovie = movieStream && movie(movieStream[1]);
-      if (foundMovie) return send(200, { streams: [foundMovie.stream] });
-      const episodeStream = route.match(
-        /^(?:language=[^/]+\/)?stream\/series\/(tt\d+):(\d+):(\d+)\.json$/
-      );
+      if (foundMovie) return sendStreams(foundMovie.stream);
+      const episodeStream = route.match(TORRENTIO_EPISODE);
       if (episodeStream) {
         const episode = series(episodeStream[1])?.episodes.find(
           (e) => e.season === Number(episodeStream[2]) && e.episode === Number(episodeStream[3])
         );
-        return send(200, { streams: episode ? [episode.stream] : [] });
+        return episode ? sendStreams(episode.stream) : send(200, { streams: [] });
       }
     }
 

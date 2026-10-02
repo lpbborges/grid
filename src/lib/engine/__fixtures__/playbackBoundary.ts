@@ -6,6 +6,10 @@ import { createFakeRqbit, type FakeRqbit, type FakeTorrentFile } from './fakeRqb
 import type { NativeTrack } from '$lib/composables/useMpvBackend.svelte';
 import type { Chapter } from '$lib/types';
 
+/** Torrentio asked the way the app must: in Portuguese and without recordings, screeners or 3D. */
+const TORRENTIO_STREAMS =
+  /^https:\/\/torrentio\.strem\.fun\/language=portuguese\|qualityfilter=threed,cam,scr\/stream\//;
+
 export const ENGINE_ORIGIN = 'http://127.0.0.1:41000';
 export const PROXY_ORIGIN = 'http://127.0.0.1:42000';
 export const FIXTURE_VTT = 'WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nGrid fixture\n';
@@ -107,7 +111,7 @@ export function installPlaybackBoundary(options: PlaybackBoundaryOptions): Playb
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : input.toString());
       if (url.origin === ENGINE_ORIGIN) return rqbit.handle(url, init);
-      if (url.href.startsWith('https://torrentio.strem.fun/language=portuguese/stream/')) {
+      if (TORRENTIO_STREAMS.test(url.href)) {
         if (options.failStreams) return new Response('offline', { status: 503 });
         return json({ streams: options.streams });
       }
