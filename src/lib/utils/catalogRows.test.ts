@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { catalogRows } from './catalogRows';
+import { catalogRows, similarTitlesRow } from './catalogRows';
 
 describe('catalogRows', () => {
   it('starts with this year’s releases and the featured titles', () => {
@@ -15,5 +15,19 @@ describe('catalogRows', () => {
       heading: 'Ficção científica',
       query: { type: 'movie', catalog: 'top', genre: 'Sci-Fi' }
     });
+  });
+});
+
+describe('similarTitlesRow', () => {
+  it('looks for popular titles of the first genre', () => {
+    expect(similarTitlesRow('series', ['Drama', 'Crime'])).toEqual({
+      heading: 'Títulos semelhantes',
+      query: { type: 'series', catalog: 'top', genre: 'Drama' }
+    });
+  });
+
+  it('has nothing to show without genres', () => {
+    expect(similarTitlesRow('movie', [])).toBeNull();
+    expect(similarTitlesRow('movie')).toBeNull();
   });
 });
