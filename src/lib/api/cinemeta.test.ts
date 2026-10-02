@@ -117,6 +117,17 @@ describe('yts api', () => {
     expect(movie.title).toBe('Test Movie');
   });
 
+  it('asks Cinemeta about a movie without waiting for the movie service when it has the IMDb id', async () => {
+    (globalThis.fetch as any).mockReturnValue(new Promise(() => {}));
+
+    void getMovieDetails('tt12345');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const urls = (globalThis.fetch as any).mock.calls.map((call: unknown[]) => String(call[0]));
+    expect(urls).toHaveLength(2);
+    expect(urls.some((url: string) => url.includes('/meta/movie/tt12345.json'))).toBe(true);
+  });
+
   it('encodes a movie id that is not an IMDb id before putting it in the query', async () => {
     (globalThis.fetch as any).mockResolvedValueOnce({
       ok: true,

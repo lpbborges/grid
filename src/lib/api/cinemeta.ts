@@ -338,16 +338,36 @@ export async function searchCatalog(
   return results;
 }
 
+/** Cinemeta's `meta` for a movie, or null: it only enriches the movie service's answer. */
+async function fetchMovieMeta(
+  imdbId: string,
+  customFetch?: typeof fetch
+): Promise<CinemetaMeta | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `${endpoints.cinemeta}/meta/movie/${encodeURIComponent(imdbId)}.json`,
+      { fetch: customFetch }
+    );
+    if (!res.ok) return null;
+    const data: unknown = await res.json();
+    return isRecord(data) && isRecord(data.meta) ? (data.meta as unknown as CinemetaMeta) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getMovieDetails(
   movieId: number | string,
   customFetch?: typeof fetch
 ): Promise<Movie> {
   const byImdbId = isImdbId(movieId);
   const queryParam = `${byImdbId ? 'imdb_id' : 'movie_id'}=${encodeURIComponent(movieId)}`;
-  const res = await fetchWithTimeout(
+  const detailsRequest = fetchWithTimeout(
     `${endpoints.moviesApi}/movie_details.json?${queryParam}&with_cast=true`,
     { fetch: customFetch }
   );
+  const earlyMeta = byImdbId ? fetchMovieMeta(movieId, customFetch) : null;
+  const res = await detailsRequest;
   if (!res.ok) {
     throw new Error(`Failed to fetch movie details: ${res.statusText}`);
   }
@@ -357,30 +377,12 @@ export async function getMovieDetails(
   }
   const movie = data.data.movie;
 
-  if (byImdbId || movie.imdb_code) {
-    const imdbId = byImdbId ? movieId : movie.imdb_code;
-    try {
-      const cineRes = await fetchWithTimeout(
-        `${endpoints.cinemeta}/meta/movie/${encodeURIComponent(imdbId)}.json`,
-        {
-          fetch: customFetch
-        }
-      );
-      if (cineRes.ok) {
-        const cineData = await cineRes.json();
-        if (cineData?.meta?.director) {
-          movie.director = cineData.meta.director;
-        }
-        if (cineData?.meta?.background) {
-          movie.background_image_original = cineData.meta.background;
-        }
-        if (isRecord(cineData?.meta)) {
-          Object.assign(movie, cinemetaExtras(cineData.meta as CinemetaMeta));
-        }
-      }
-    } catch {
-      // Ignore cinemeta fetch errors
-    }
+  const meta = await (earlyMeta ??
+    (movie.imdb_code ? fetchMovieMeta(movie.imdb_code, customFetch) : null));
+  if (meta) {
+    if (meta.director) movie.director = meta.director;
+    if (meta.background) movie.background_image_original = meta.background;
+    Object.assign(movie, cinemetaExtras(meta));
   }
 
   if (movie.imdb_code) {
