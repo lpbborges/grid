@@ -51,6 +51,11 @@ impl PatchCache {
 }
 
 const MAX_REQUEST_HEAD_BYTES: usize = 16 * 1024;
+const REQUEST_HEAD_TIMEOUT: std::time::Duration = if cfg!(test) {
+    std::time::Duration::from_millis(200)
+} else {
+    std::time::Duration::from_secs(10)
+};
 const MAX_PROBE_STEPS: usize = 32;
 const FORWARDED_REQUEST_HEADERS: [&str; 2] = ["range", "origin"];
 const FORWARDED_RESPONSE_HEADERS: [&str; 6] = [
@@ -101,7 +106,9 @@ async fn handle_connection(
     client: reqwest::Client,
     cache: SharedPatchCache,
 ) {
-    let Some(request) = read_request(&mut socket).await else {
+    let Ok(Some(request)) =
+        tokio::time::timeout(REQUEST_HEAD_TIMEOUT, read_request(&mut socket)).await
+    else {
         return;
     };
     let result = match forward(request, &engine_port, &client, &cache).await {
@@ -442,6 +449,18 @@ mod tests {
             }
         });
         (port, requests)
+    }
+
+    #[tokio::test]
+    async fn drops_a_connection_that_never_finishes_its_request() {
+        let proxy = spawn_proxy_with(Arc::new(|| None)).await;
+        let mut socket = TcpStream::connect(("127.0.0.1", proxy)).await.unwrap();
+        socket.write_all(b"GET /torrents/").await.unwrap();
+
+        let mut buf = [0u8; 16];
+        let read = tokio::time::timeout(REQUEST_HEAD_TIMEOUT * 4, socket.read(&mut buf)).await;
+
+        assert!(matches!(read, Ok(Ok(0))), "{read:?}");
     }
 
     #[test]
