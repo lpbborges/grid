@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatTime } from '$lib/utils/formatTime';
   import type { SubtitleTrack } from '$lib/api/subtitles';
   import type { SubtitleGroup } from '$lib/composables/useSubtitleSelection.svelte';
   import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
@@ -75,18 +76,6 @@
     onclose?: () => void;
     onfullscreen?: () => void;
   }>();
-
-  function formatTime(seconds: number) {
-    if (isNaN(seconds)) return '0:00';
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-
-    if (h > 0) {
-      return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-    }
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  }
 
   function seekFromPointer(bar: HTMLElement, clientX: number) {
     // Without a length there is no position to compute: `fraction * 0` is 0,

@@ -10,11 +10,14 @@
 
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
+  import { progressStore } from '$lib/stores/progress.svelte';
+  import { resumeSeconds } from '$lib/utils/resume';
   import { rankStreamOptions } from '$lib/engine/ranking';
 
   let { data } = $props();
   let movieId = $derived(data.movieId);
   let movie = $derived(data.movie);
+  let resumeAt = $derived(resumeSeconds(progressStore.get(movieId)));
   let error = $state('');
   let errorSource = $state<'load' | 'play' | null>(null);
 
@@ -173,7 +176,10 @@
     }
   });
 
-  async function playMovie() {
+  let lastStartOver = false;
+
+  async function playMovie(startOver = false) {
+    lastStartOver = startOver;
     if (!movie || combinedTorrents.length === 0) {
       error = 'Nenhum stream disponível para este título.';
       errorSource = 'load';
@@ -194,6 +200,7 @@
       mediaId: movieId,
       fileIdx,
       originalLanguage: movie.language,
+      startOver,
       progress: {
         meta: {
           type: 'movie',
@@ -214,7 +221,7 @@
     if (errorSource === 'load') {
       window.location.reload();
     } else {
-      playMovie();
+      playMovie(lastStartOver);
     }
   }
 </script>
@@ -281,6 +288,7 @@
           torrents={combinedTorrents}
           bind:selectedTorrentHash
           onPlay={playMovie}
+          resumeSeconds={resumeAt}
           originalLanguage={movie.language}
         />
       {/if}

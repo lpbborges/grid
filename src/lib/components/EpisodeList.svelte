@@ -3,6 +3,9 @@
   import PreferenceSelectors from './PreferenceSelectors.svelte';
   import QualitySelector from './QualitySelector.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
+  import { progressStore } from '$lib/stores/progress.svelte';
+  import { formatTime } from '$lib/utils/formatTime';
+  import { resumeSeconds } from '$lib/utils/resume';
   import { sameEpisode } from '$lib/utils/episodes';
   import type { Episode, EpisodeRef } from '$lib/types';
 
@@ -20,7 +23,7 @@
     translatedEpisodes: Record<string, string>;
     selectedSeason: number | null;
 
-    onPlayEpisode: (episode: Episode) => void;
+    onPlayEpisode: (episode: Episode, startOver?: boolean) => void;
     originalLanguage?: string;
     focusEpisode?: EpisodeRef | null;
   }>();
@@ -90,6 +93,9 @@
           ? new Date(episode.firstAired) > new Date()
           : false}
         {@const isFocused = !!focusEpisode && sameEpisode(focusEpisode, episode)}
+        {@const resumeAt = resumeSeconds(
+          progressStore.get(seriesId, episode.season, episode.episode)
+        )}
         <div
           data-episode={episode.episode}
           {@attach isFocused ? scrollIntoList : undefined}
@@ -134,11 +140,11 @@
                   ).toLocaleDateString('pt-BR')}
                 </span>
               {/if}
-              {#if isFocused}
+              {#if isFocused || resumeAt !== null}
                 <span
                   class="border-green/60 text-green mt-1 w-fit rounded-sm border px-1.5 py-px font-mono text-[10px] font-bold tracking-widest uppercase"
                 >
-                  Continuar
+                  {resumeAt === null ? 'Continuar' : `Continuar de ${formatTime(resumeAt)}`}
                 </span>
               {/if}
             </div>
@@ -165,6 +171,30 @@
               </svg>
             </div>
           </button>
+          {#if resumeAt !== null}
+            <button
+              class="border-primary/50 text-primary hover:text-green hover:border-green group-hover:bg-primary/20 ml-2 rounded-sm border p-2 transition-all duration-300"
+              title="Começar do início"
+              aria-label="Começar do início"
+              onclick={() => onPlayEpisode(episode, true)}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                ><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path
+                  d="M3 3v5h5"
+                /></svg
+              >
+            </button>
+          {/if}
           <button
             class="border-primary/50 text-primary ml-2 rounded-sm border p-2 transition-all duration-300 {watchedStore.has(
               seriesId,
