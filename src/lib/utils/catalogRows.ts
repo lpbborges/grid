@@ -65,17 +65,17 @@ export function parseGenre(type: MediaType, value: string | null | undefined): s
 }
 
 const popularRow = (type: MediaType): CatalogRow => ({
-  heading: type === 'movie' ? 'Filmes populares' : 'Séries populares',
+  heading: 'Populares',
   query: { type, catalog: 'top' }
 });
 
 const featuredRow = (type: MediaType): CatalogRow => ({
-  heading: type === 'movie' ? 'Filmes em destaque' : 'Séries em destaque',
+  heading: 'Em destaque',
   query: { type, catalog: 'imdbRating' }
 });
 
 const releasesRow = (type: MediaType, year: number): CatalogRow => ({
-  heading: type === 'movie' ? 'Lançamentos de filmes' : 'Lançamentos de séries',
+  heading: 'Lançamentos',
   query: { type, catalog: 'year', genre: String(year) }
 });
 

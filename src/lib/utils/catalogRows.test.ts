@@ -83,9 +83,9 @@ describe('page row sets', () => {
 
   it('opens with the popular titles and this year’s releases', () => {
     expect(sets.series.slice(0, 2)).toEqual([
-      { heading: 'Séries populares', query: { type: 'series', catalog: 'top' } },
+      { heading: 'Populares', query: { type: 'series', catalog: 'top' } },
       {
-        heading: 'Lançamentos de séries',
+        heading: 'Lançamentos',
         query: { type: 'series', catalog: 'year', genre: '2026' }
       }
     ]);

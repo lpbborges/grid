@@ -52,7 +52,7 @@ describe('GenreCatalogPage', () => {
     render(GenreCatalogPage, { type: 'movie', genre: null, rows: movieRows() });
 
     expect(screen.getByRole('heading', { level: 1, name: 'Filmes' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Filmes populares' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Populares' })).toBeInTheDocument();
     expect(getCatalogMock).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'series' }),
       expect.anything(),
@@ -73,12 +73,12 @@ describe('GenreCatalogPage', () => {
         0
       )
     );
-    expect(screen.queryByRole('heading', { name: 'Filmes populares' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Populares' })).toBeNull();
   });
 
   it('only asks for series on the series page', async () => {
     render(GenreCatalogPage, { type: 'series', genre: null, rows: seriesRows() });
-    await screen.findByRole('heading', { name: 'Séries populares' });
+    await screen.findByRole('heading', { name: 'Populares' });
 
     expect(getCatalogMock.mock.calls.every(([query]) => query.type === 'series')).toBe(true);
     expect(getCatalogMock).toHaveBeenCalled();
