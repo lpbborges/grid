@@ -129,7 +129,8 @@ function languageName(code: string): string {
 
 /**
  * mpv's per-type track ids for the audio and subtitle tracks that best match the
- * stored preferences, reusing the same resolvers the `<video>` path uses.
+ * stored preferences, reusing the same resolvers the `<video>` path uses. Pass
+ * the tracks through `withExternalLangs` first, so external subtitles carry a language.
  *
  * `null` means mpv's `no` sentinel. For audio that would mute the film, so when
  * nothing matches the track mpv already selected is kept instead. For subtitles
@@ -138,8 +139,7 @@ function languageName(code: string): string {
 export function resolveNativeTracks(
   tracks: NativeTrack[],
   preferences: { audio: string | undefined; subtitle: string | undefined },
-  originalLanguage?: string,
-  externalLangs: string[] = []
+  originalLanguage?: string
 ): { aid: number | null; sid: number | null } {
   const audio = tracks.filter((t) => t.type === 'audio');
   const subs = tracks.filter((t) => t.type === 'sub');
@@ -154,15 +154,10 @@ export function resolveNativeTracks(
   const selectedAudio = audio.find((t) => t.selected) ?? audio[0];
   const aid = audioMatch !== -1 ? audio[audioMatch].id : (selectedAudio?.id ?? null);
 
-  // findPreferredSubtitleIndex matches on `lang`, and mpv reports none for a
-  // file passed with --sub-file. Grid knows what it wrote, and mpv lists
-  // external tracks in the order they were given, so the languages are matched
-  // back on by position.
-  let externalSeen = 0;
   const parsedSubs: SubtitleTrack[] = subs.map((track) => ({
     id: String(track.id),
     url: '',
-    lang: track.external ? (externalLangs[externalSeen++] ?? '') : (trackLanguage(track) ?? ''),
+    lang: trackLanguage(track) ?? '',
     label: nativeTrackLabel(track),
     group: track.external ? 'Extra' : 'Embedded'
   }));
@@ -317,10 +312,9 @@ export function useMpvBackend() {
       isRunning = true;
 
       const { aid, sid } = resolveNativeTracks(
-        playback.tracks,
+        tracks,
         { audio: settingsStore.audio, subtitle: settingsStore.subtitle },
-        options.originalLanguage,
-        external.map((subtitle) => subtitle.lang)
+        options.originalLanguage
       );
       await invoke('native_player_set_volume', { percent: volume * 100 });
       await invoke('native_player_set_subtitle_position', { percent: subtitlePosition });

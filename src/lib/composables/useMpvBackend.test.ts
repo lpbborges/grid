@@ -194,10 +194,10 @@ describe('resolveNativeTracks', () => {
       track({ id: 3, type: 'sub', external: true })
     ];
 
-    const { sid } = resolveNativeTracks(withExternal, { audio: 'en', subtitle: 'pt' }, undefined, [
-      'fr',
-      'pob'
-    ]);
+    const { sid } = resolveNativeTracks(withExternalLangs(withExternal, ['fr', 'pob']), {
+      audio: 'en',
+      subtitle: 'pt'
+    });
 
     // The second external file is the Portuguese one.
     expect(sid).toBe(3);
@@ -209,9 +209,10 @@ describe('resolveNativeTracks', () => {
       track({ id: 2, type: 'sub', external: true })
     ];
 
-    const { sid } = resolveNativeTracks(withExternal, { audio: 'en', subtitle: 'pt' }, undefined, [
-      'fr'
-    ]);
+    const { sid } = resolveNativeTracks(withExternalLangs(withExternal, ['fr']), {
+      audio: 'en',
+      subtitle: 'pt'
+    });
 
     // The embedded Portuguese track wins; the external one is French.
     expect(sid).toBe(1);
