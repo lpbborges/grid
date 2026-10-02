@@ -17,11 +17,11 @@ const UNAVAILABLE: PageError = {
 export async function findEpisodeStream(
   series: { id: string; title: string },
   episode: EpisodeRef,
-  preferences: { quality: string; audio: AudioPreference },
+  preferences: { quality: string; audio: AudioPreference; subtitle: string },
   failed: ReadonlySet<string> = new Set()
 ): Promise<EpisodeStream> {
   try {
-    const streams = await getSeriesStreams(series.id, episode.season, episode.episode);
+    const streams = await getSeriesStreams(series.id, episode.season, episode.episode, preferences);
     const playable = streams.filter((s): s is Stream & { infoHash: string } => !!s.infoHash);
     if (playable.length === 0) return { error: UNAVAILABLE };
 

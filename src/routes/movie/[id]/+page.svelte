@@ -101,7 +101,10 @@
 
   function loadSources(target: Movie) {
     const requestedId = target.id;
-    getMovieStreams(requestedId.toString())
+    getMovieStreams(requestedId.toString(), {
+      audio: settingsStore.audio,
+      subtitle: settingsStore.subtitle
+    })
       .then((streams) => {
         if (movie?.id !== requestedId) return;
         const torrentioOptions = streams.map(streamOption).filter((t) => t.hash);

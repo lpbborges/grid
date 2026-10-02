@@ -220,7 +220,11 @@
     const found = await findEpisodeStream(
       { id: seriesId, title: shown.title },
       episode,
-      { quality: settingsStore.quality, audio: settingsStore.audio },
+      {
+        quality: settingsStore.quality,
+        audio: settingsStore.audio,
+        subtitle: settingsStore.subtitle
+      },
       failedSources
     );
     if (!('error' in found)) currentSource = found.infoHash;
