@@ -145,6 +145,17 @@ pub fn find_orphan_top_level_names(downloads_dir: &Path, manifest: &Manifest) ->
         .collect()
 }
 
+/// Removes the torrent's whole folder, not only the file played last.
+pub fn remove_entry_files(downloads_dir: &Path, entry: &CacheEntry) {
+    let Some(std::path::Component::Normal(top)) = Path::new(&entry.file_name).components().next()
+    else {
+        return;
+    };
+    if top != "manifest.json" {
+        remove_path_best_effort(&downloads_dir.join(top));
+    }
+}
+
 pub fn remove_path_best_effort(path: &Path) {
     if path.is_dir() {
         let _ = std::fs::remove_dir_all(path);

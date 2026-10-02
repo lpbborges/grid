@@ -18,6 +18,7 @@ import {
   getCacheManifest,
   upsertCacheEntry,
   evictForSpace,
+  clearCache,
   parseInfoHashFromMagnet,
   type CacheEntry
 } from '$lib/engine/cache';
@@ -50,6 +51,9 @@ let activeBlobUrls: string[] = [];
 // fire-and-forget). Playing the same title again re-adds the same info hash,
 // so a late forget would delete the torrent the new stream is waiting on.
 let pendingFinalize: Promise<void> = Promise.resolve();
+
+// The stream being prepared or played, whose files must survive a cache clear.
+let streamingInfoHash: string | null = null;
 
 function revokeBlobUrls(urls: string[]): void {
   for (const url of urls) {
@@ -124,6 +128,7 @@ export async function prepareStream({
 
   const parsedInfoHash = parseInfoHashFromMagnet(magnet);
   const existingEntry = manifest.find((e) => e.infoHash === parsedInfoHash);
+  streamingInfoHash = parsedInfoHash;
 
   // Add torrent with a regex filter so rqbit never starts downloading junk
   // files (images, NFO, txt). Only video and subtitle files are selected.
@@ -238,6 +243,7 @@ export async function prepareStream({
       cacheEntry
     };
   } catch (error) {
+    if (streamingInfoHash === parsedInfoHash) streamingInfoHash = null;
     if (signal?.aborted) {
       await removeAbandonedTorrent(
         infoHash,
@@ -268,6 +274,7 @@ async function runFinalizeStream({
   cacheEntry
 }: FinishedStream): Promise<void> {
   if (!infoHash) return;
+  if (streamingInfoHash === infoHash) streamingInfoHash = null;
 
   if (!isCacheable) {
     await deleteTorrent(infoHash);
@@ -299,4 +306,16 @@ async function runFinalizeStream({
   }
 
   await forgetTorrent(infoHash);
+}
+
+export async function clearDownloadedVideos(): Promise<void> {
+  await pendingFinalize;
+  const keep = streamingInfoHash ?? undefined;
+  for (const infoHash of await getLoadedTorrentInfoHashes()) {
+    if (infoHash === keep) continue;
+    await forgetTorrent(infoHash).catch((error) => {
+      logger.warn('Failed to release a loaded video before clearing the cache:', error);
+    });
+  }
+  await clearCache(keep);
 }

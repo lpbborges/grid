@@ -56,7 +56,7 @@ Grid talks directly to Cinemeta and a YTS mirror for metadata, Wikidata to searc
 
 ## Troubleshooting
 
-If the player fails to start, check that the `rqbit` sidecar is executable in `src-tauri/bin/`. The dev server requires port 1420; stop other processes if it is in use. To clear the video cache, delete the `downloads/` folder in the app data directory.
+If the player fails to start, check that the `rqbit` sidecar is executable in `src-tauri/bin/`. The dev server requires port 1420; stop other processes if it is in use. To free the space taken by downloaded videos, use "Limpar vídeos baixados" on the settings screen; the video playing at that moment, if any, is kept.
 
 ## Disclaimer
 

@@ -5,12 +5,32 @@
   import { DISCLAIMER_TEXT } from '$lib/components/DisclaimerModal.svelte';
   import { MAX_CACHE_LIMIT_BYTES, settingsStore } from '$lib/stores/settings.svelte';
   import { BYTES_PER_GB, formatGigabytes } from '$lib/utils/formatBytes';
+  import { clearDownloadedVideos } from '$lib/engine/orchestrator';
+  import { getCacheUsageBytes } from '$lib/engine/cache';
+  import { logger } from '$lib/logger';
   import { version } from '../../../package.json';
 
   let { data } = $props();
 
   let cacheUsageBytes = $derived(data.cacheUsageBytes);
   let cacheLimitGb = $derived(Math.round(settingsStore.cacheLimitBytes / BYTES_PER_GB));
+  let confirmingClear = $state(false);
+  let clearing = $state(false);
+  let clearError = $state('');
+
+  async function clearCache() {
+    confirmingClear = false;
+    clearing = true;
+    clearError = '';
+    try {
+      await clearDownloadedVideos();
+    } catch (error) {
+      logger.error('Failed to clear the downloaded videos', error);
+      clearError = 'Não foi possível apagar os vídeos.';
+    }
+    cacheUsageBytes = await getCacheUsageBytes().catch(() => null);
+    clearing = false;
+  }
 </script>
 
 <div class="mx-auto flex max-w-3xl flex-col gap-10 pb-10">
@@ -58,6 +78,39 @@
           ? 'Uso indisponível'
           : `${formatGigabytes(cacheUsageBytes)} em uso`}
       </p>
+    </div>
+    <div class="mt-6 flex flex-wrap items-center gap-3">
+      {#if confirmingClear}
+        <span class="text-main text-sm">Apagar todos os vídeos guardados?</span>
+        <button
+          type="button"
+          onclick={clearCache}
+          class="border-error text-error hover:bg-error/10 focus-visible:ring-error cursor-pointer rounded-sm border px-4 py-2 text-sm font-bold transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        >
+          Apagar
+        </button>
+        <button
+          type="button"
+          onclick={() => (confirmingClear = false)}
+          class="border-primary/50 text-main hover:border-green focus-visible:ring-green cursor-pointer rounded-sm border px-4 py-2 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        >
+          Cancelar
+        </button>
+      {:else}
+        <button
+          type="button"
+          disabled={clearing || cacheUsageBytes === 0}
+          onclick={() => (confirmingClear = true)}
+          class="border-primary/50 text-main hover:border-green focus-visible:ring-green cursor-pointer rounded-sm border px-4 py-2 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {clearing
+            ? 'Apagando...'
+            : `Limpar vídeos baixados${cacheUsageBytes ? ` (${formatGigabytes(cacheUsageBytes)})` : ''}`}
+        </button>
+      {/if}
+      {#if clearError}
+        <p class="text-error text-sm" role="alert">{clearError}</p>
+      {/if}
     </div>
   </section>
 

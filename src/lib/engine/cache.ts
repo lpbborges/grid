@@ -42,3 +42,8 @@ export async function evictForSpace(
     limitBytes
   });
 }
+
+/** Deletes every downloaded video except the one being streamed. */
+export async function clearCache(excludeInfoHash?: string): Promise<void> {
+  await invoke('clear_cache', { excludeInfoHash: excludeInfoHash ?? null });
+}
