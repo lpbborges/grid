@@ -127,7 +127,7 @@ describe('Series playback wiring', () => {
       expect(video.getAttribute('src')).toBe(`${PROXY_ORIGIN}/torrents/${HASH}/stream/0`)
     );
     expect(requestedUrls()).toContain(
-      'https://torrentio.strem.fun/language=portuguese/stream/series/tt0000002:1:1.json'
+      'https://torrentio.strem.fun/language=portuguese|qualityfilter=threed,cam,scr/stream/series/tt0000002:1:1.json'
     );
     const update = boundary.rqbit.requests.find(
       (r) => r.method === 'POST' && r.path === `/torrents/${HASH}/update_only_files`
@@ -473,6 +473,42 @@ describe('Series playback wiring', () => {
 
     await waitFor(() => expect(title).toHaveTextContent(/T1:E2$/), { timeout: 5000 });
     expect(screen.getByTestId('player-title')).toBe(title);
+  });
+
+  it('never plays a cinema recording of the episode, even with the most seeds', async () => {
+    const recording = {
+      name: 'Torrentio\n1080p',
+      title: 'Grid.Series.S01E01.HDTS.x264\n👤 900',
+      infoHash: 'c'.repeat(40),
+      fileIdx: 0
+    };
+    await playEpisode(/Pilot/, {
+      streams: [
+        recording,
+        { name: 'Torrentio\n1080p', title: 'Season pack\n👤 30', infoHash: HASH, fileIdx: 0 }
+      ]
+    });
+
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await waitFor(() =>
+      expect(video.getAttribute('src')).toBe(`${PROXY_ORIGIN}/torrents/${HASH}/stream/0`)
+    );
+  });
+
+  it('reports no sources when only recordings of the episode exist', async () => {
+    await playEpisode(/Pilot/, {
+      streams: [
+        {
+          name: 'Torrentio\n1080p',
+          title: 'Grid.Series.S01E01.CAM\n👤 900',
+          infoHash: 'c'.repeat(40)
+        }
+      ]
+    });
+
+    expect(
+      await screen.findByText('Este episódio ainda não está disponível para assistir.')
+    ).toBeInTheDocument();
   });
 
   it('names the next episode while it is being prepared', async () => {
