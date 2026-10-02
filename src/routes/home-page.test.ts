@@ -540,9 +540,13 @@ describe('Home page lists', () => {
     progressStore.progress = {
       tt9: { time: 10, duration: 100, updatedAt: 1, meta: { ...movieMeta, title: 'Resumed' } }
     };
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(1000);
+    listsStore.add('watch-later', 'tt3', movieMeta);
+    vi.setSystemTime(2000);
     listsStore.add('favorites', 'tt1', movieMeta);
     listsStore.add('favorites', 'tt2', seriesMeta);
-    listsStore.add('watch-later', 'tt3', movieMeta);
+    vi.useRealTimers();
     render(HomePage, {
       data: popularDataWith(
         [makeMovie('tt5', 'Popular Movie')],
