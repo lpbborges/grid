@@ -137,6 +137,9 @@ export async function prepareStream({
     onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$',
     onRetry: () => onStage('searchingSlow'),
     signal
+  }).catch((error) => {
+    if (streamingInfoHash === parsedInfoHash) streamingInfoHash = null;
+    throw error;
   });
   const infoHash = details.info_hash;
   onStage('preparing');

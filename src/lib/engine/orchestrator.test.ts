@@ -669,6 +669,15 @@ describe('clearDownloadedVideos', () => {
     expect(cacheApi.clearCache).toHaveBeenCalledWith(undefined);
   });
 
+  it('clears everything after an add that failed', async () => {
+    vi.mocked(torrentApi.addTorrent).mockRejectedValue(new Error('add timed out'));
+    await expect(prepareStream({ magnet: 'magnet:?xt=test', onStage: vi.fn() })).rejects.toThrow();
+
+    await clearDownloadedVideos();
+
+    expect(cacheApi.clearCache).toHaveBeenCalledWith(undefined);
+  });
+
   it('still clears the files when letting go of a loaded video fails', async () => {
     vi.mocked(torrentApi.getLoadedTorrentInfoHashes).mockResolvedValue(['old']);
     vi.mocked(torrentApi.forgetTorrent).mockRejectedValue(new Error('engine down'));
