@@ -300,7 +300,9 @@
       {:else}
         <MediaInfo
           id={movie.id}
-          title={translatedTitle}
+          type="movie"
+          poster={movie.medium_cover_image}
+          title={translatedTitle || movie.title}
           year={movie.year}
           director={movie.director}
           rating={movie.rating}

@@ -321,7 +321,9 @@
       {:else}
         <MediaInfo
           id={series.id}
-          title={translatedTitle}
+          type="series"
+          poster={series.medium_cover_image}
+          title={translatedTitle || series.title}
           year={series.year}
           director={series.director}
           rating={series.rating}

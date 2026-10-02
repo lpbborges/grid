@@ -4,6 +4,7 @@ import HomePage from './+page.svelte';
 import type { MediaType, Movie, SearchResult } from '$lib/types';
 import { appReady, searchQuery } from '$lib/stores.svelte';
 import { progressStore } from '$lib/stores/progress.svelte';
+import { favoritesStore } from '$lib/stores/favorites.svelte';
 import { tick } from 'svelte';
 
 const { searchCatalogMock } = vi.hoisted(() => ({
@@ -437,5 +438,89 @@ describe('Home page continue watching', () => {
     await tick();
 
     expect(document.activeElement?.getAttribute('href')).toBe('/movie/tt5');
+  });
+});
+
+describe('Home page favorites', () => {
+  const movieMeta = { type: 'movie' as const, title: 'Favorite Movie', poster: 'm.jpg' };
+  const seriesMeta = { type: 'series' as const, title: 'Favorite Series', poster: 's.jpg' };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    searchQuery.value = '';
+    progressStore.progress = {};
+    favoritesStore.entries = [];
+  });
+
+  function headings() {
+    return screen.getAllByRole('heading').map((h) => h.textContent?.trim());
+  }
+
+  it('hides the row when there are no favorites', async () => {
+    render(HomePage, { data: popularDataWith([makeMovie('tt1', 'Popular')], []) });
+    await act(async () => {});
+
+    expect(screen.queryByText('Meus favoritos')).toBeNull();
+  });
+
+  it('lists favorites newest first, after every other row', async () => {
+    progressStore.progress = {
+      tt9: { time: 10, duration: 100, updatedAt: 1, meta: { ...movieMeta, title: 'Resumed' } }
+    };
+    favoritesStore.entries = [
+      { id: 'tt1', meta: movieMeta },
+      { id: 'tt2', meta: seriesMeta }
+    ];
+    render(HomePage, {
+      data: popularDataWith(
+        [makeMovie('tt5', 'Popular Movie')],
+        [makeMovie('tt6', 'Popular Series')]
+      )
+    });
+    await act(async () => {});
+
+    expect(headings()).toEqual([
+      'Continuar assistindo',
+      'Filmes Populares',
+      'Séries Populares',
+      'Meus favoritos'
+    ]);
+    const hrefs = screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'));
+    expect(hrefs.slice(-2)).toEqual(['/series/tt2', '/movie/tt1']);
+  });
+
+  it('shows the row while the popular titles are still loading', async () => {
+    favoritesStore.entries = [{ id: 'tt1', meta: movieMeta }];
+    render(HomePage, {
+      data: {
+        popularMovies: new Promise<Movie[]>(() => {}),
+        popularSeries: new Promise<Movie[]>(() => {})
+      }
+    });
+    await act(async () => {});
+
+    expect(screen.getByText('Meus favoritos')).toBeTruthy();
+  });
+
+  it('drops a title once it is unfavorited', async () => {
+    favoritesStore.entries = [{ id: 'tt1', meta: movieMeta }];
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+    expect(screen.getByText('Meus favoritos')).toBeTruthy();
+
+    await act(() => favoritesStore.remove('tt1'));
+
+    expect(screen.queryByText('Meus favoritos')).toBeNull();
+  });
+
+  it('adds a legacy favorite once its snapshot arrives', async () => {
+    favoritesStore.entries = [{ id: 'tt1' }];
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+    expect(screen.queryByText('Meus favoritos')).toBeNull();
+
+    await act(() => favoritesStore.attachMeta({ tt1: movieMeta }));
+
+    expect(screen.getAllByText('Favorite Movie')[0]).toBeTruthy();
   });
 });

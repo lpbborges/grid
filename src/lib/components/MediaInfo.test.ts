@@ -8,6 +8,8 @@ describe('MediaInfo component', () => {
     const { getAllByText } = render(MediaInfo, {
       props: {
         id: '123',
+        type: 'movie',
+        poster: 'poster.jpg',
         title: 'Test Movie',
         year: 2023,
         director: ['John Doe'],
@@ -30,6 +32,8 @@ describe('MediaInfo component', () => {
     const { queryByText } = render(MediaInfo, {
       props: {
         id: '123',
+        type: 'movie',
+        poster: 'poster.jpg',
         title: 'Test Movie',
         year: 2023,
         rating: 8.5,
@@ -48,6 +52,8 @@ describe('MediaInfo component', () => {
     const { getByRole } = render(MediaInfo, {
       props: {
         id: '999',
+        type: 'movie',
+        poster: 'poster.jpg',
         title: 'Watched Test Movie',
         year: 2024,
         rating: 9.0,
@@ -69,6 +75,8 @@ describe('MediaInfo component', () => {
     const { getByRole } = render(MediaInfo, {
       props: {
         id: '888',
+        type: 'series',
+        poster: 'poster.jpg',
         title: 'Favorite Test Movie',
         year: 2024,
         rating: 9.0,
@@ -80,6 +88,9 @@ describe('MediaInfo component', () => {
     expect(button).toBeInTheDocument();
 
     await fireEvent.click(button);
-    expect(favoritesStore.has('888')).toBe(true);
+    expect(favoritesStore.titled[0]).toEqual({
+      id: '888',
+      meta: { type: 'series', title: 'Favorite Test Movie', poster: 'poster.jpg' }
+    });
   });
 });

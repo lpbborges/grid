@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import { watchedStore } from './watched.svelte';
 import { readStoredJson, writeStored } from './storage';
 import { isRecord } from '$lib/utils/isRecord';
+import { copyMeta, isProgressMeta } from '$lib/utils/progressMeta';
 import { compareEpisodes, parseProgressKey, progressKey } from '$lib/utils/episodes';
 import type {
   EpisodeRef,
@@ -13,20 +14,6 @@ import type {
 
 export const PROGRESS_PERSIST_INTERVAL_MS = 5000;
 export const CONTINUE_WATCHING_LIMIT = 20;
-
-function isProgressMeta(value: unknown): value is ProgressMeta {
-  if (!isRecord(value)) return false;
-  return (
-    (value.type === 'movie' || value.type === 'series') &&
-    typeof value.title === 'string' &&
-    value.title.length > 0 &&
-    typeof value.poster === 'string'
-  );
-}
-
-function copyMeta(meta: ProgressMeta): ProgressMeta {
-  return { type: meta.type, title: meta.title, poster: meta.poster };
-}
 
 function toProgressData(value: unknown): ProgressData | null {
   if (!isRecord(value)) return null;

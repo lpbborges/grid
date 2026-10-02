@@ -169,7 +169,7 @@ function getTitleSnapshot(
 }
 
 export async function resolveMissingSnapshots(
-  entries: ProgressEntry[],
+  entries: Pick<ProgressEntry, 'id' | 'meta' | 'season'>[],
   customFetch?: typeof fetch
 ): Promise<Record<string, ProgressMeta | null>> {
   const missing = entries.filter((entry) => !entry.meta && isImdbId(entry.id));
