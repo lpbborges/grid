@@ -55,19 +55,9 @@ pub fn options_for(output: VideoOutput) -> Vec<(&'static str, String)> {
     let mut options: Vec<(&'static str, String)> = [
         ("config", "no"),
         ("load-scripts", "no"),
-        ("ytdl", "no"),
         ("input-default-bindings", "no"),
         ("input-vo-keyboard", "no"),
         ("input-cursor", "no"),
-        ("osc", "no"),
-        ("load-stats-overlay", "no"),
-        ("load-console", "no"),
-        ("load-osd-console", "no"),
-        ("load-auto-profiles", "no"),
-        ("load-select", "no"),
-        ("load-commands", "no"),
-        ("load-positioning", "no"),
-        ("load-context-menu", "no"),
         ("terminal", "no"),
         ("sub-auto", "no"),
         ("keep-open", "no"),
@@ -77,6 +67,7 @@ pub fn options_for(output: VideoOutput) -> Vec<(&'static str, String)> {
         ("demuxer-max-bytes", "32MiB"),
     ]
     .into_iter()
+    .chain(BUILTIN_SCRIPT_OPTIONS.map(|key| (key, "no")))
     .map(|(key, value)| (key, value.to_string()))
     .collect();
 
@@ -844,6 +835,14 @@ mod tests {
                     "{output:?} is missing {key}={value}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn every_builtin_script_is_switched_off() {
+        let options = options_for(VideoOutput::Null);
+        for key in BUILTIN_SCRIPT_OPTIONS {
+            assert!(has(&options, key, "no"), "{key} is not switched off");
         }
     }
 
