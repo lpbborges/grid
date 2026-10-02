@@ -1,7 +1,12 @@
 import { logger } from '$lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
-import { getLanguageName, preferredLanguageRank, type SubtitleTrack } from '../api/subtitles';
+import type { SubtitleTrack } from '../types';
+import {
+  getLanguageName,
+  preferredLanguageRank,
+  subtitleFileLanguage
+} from '../utils/subtitleLanguage';
 import { FetchTimeoutError, fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { hasExtension } from '../utils/fileExtension';
 import { isRecord } from '../utils/isRecord';
@@ -309,29 +314,6 @@ export function getStreamUrl(
 
 // fetch_torrent_subtitle (src-tauri/src/lib.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
 const MAX_TORRENT_SUBTITLE_FETCHES = 25;
-
-const BRAZILIAN_MARKERS = new Set(['br', 'ptbr', 'pob', 'pb', 'brazil', 'brazilian', 'brasil']);
-const PORTUGUESE_NAMES = new Set(['pt', 'por', 'portuguese']);
-const SUBTITLE_TAGS = new Set(['forced', 'sdh', 'cc', 'full', 'default']);
-
-function subtitleFileLanguage(path: string): string {
-  const baseName = (path.split(/[/\\]/).pop() || path).replace(/\.[^.]+$/, '');
-  const tokens = baseName.split(/[^a-zA-Z0-9]+/).filter(Boolean);
-  while (tokens.length > 1 && SUBTITLE_TAGS.has(tokens[tokens.length - 1].toLowerCase())) {
-    tokens.pop();
-  }
-  const code = tokens[tokens.length - 1] ?? '';
-  const last = code.toLowerCase();
-  const previous = tokens[tokens.length - 2]?.toLowerCase() ?? '';
-  if (
-    BRAZILIAN_MARKERS.has(last) ||
-    (PORTUGUESE_NAMES.has(last) && BRAZILIAN_MARKERS.has(previous))
-  ) {
-    return 'pob';
-  }
-  if (getLanguageName(last, true) || (tokens.length > 1 && /^[a-z]{2,3}$/.test(last))) return code;
-  return 'Unknown';
-}
 
 export async function getTorrentSubtitles(
   infoHash: string,

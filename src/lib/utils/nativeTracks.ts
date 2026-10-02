@@ -1,6 +1,6 @@
 import type { NativeTrack } from '$lib/types';
-import { findPreferredSubtitleIndex, getLanguageName } from '$lib/api/subtitles';
-import type { SubtitleTrack } from '$lib/api/subtitles';
+import { findPreferredSubtitleIndex, getLanguageName } from '$lib/utils/subtitleLanguage';
+import type { SubtitleTrack } from '$lib/types';
 import { resolvePreferredAudioTrack, type ParsedAudioTrack } from '$lib/utils/audioTrack';
 
 /**

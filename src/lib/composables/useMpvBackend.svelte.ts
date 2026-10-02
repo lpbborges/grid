@@ -4,7 +4,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { logger } from '$lib/logger';
 import type { Chapter, NativePlayback, NativeTrack, PlaybackRequest } from '$lib/types';
 import { settingsStore } from '$lib/stores/settings.svelte';
-import type { SubtitleTrack } from '$lib/api/subtitles';
+import type { SubtitleTrack } from '$lib/types';
 import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
 import {
   nativeTrackLabel,

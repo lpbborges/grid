@@ -1,6 +1,6 @@
 <script lang="ts">
   import { formatTime } from '$lib/utils/formatTime';
-  import type { SubtitleTrack } from '$lib/api/subtitles';
+  import type { SubtitleTrack } from '$lib/types';
   import type { SubtitleGroup } from '$lib/composables/useSubtitleSelection.svelte';
   import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
   import AudioMenu from './AudioMenu.svelte';

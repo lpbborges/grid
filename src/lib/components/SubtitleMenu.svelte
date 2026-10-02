@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SubtitleTrack } from '$lib/api/subtitles';
+  import type { SubtitleTrack } from '$lib/types';
 
   interface SubtitleGroup {
     label: string;

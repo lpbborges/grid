@@ -27,7 +27,8 @@ import {
   parseInfoHashFromMagnet,
   type CacheEntry
 } from '$lib/engine/cache';
-import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
+import { getExternalSubtitles } from '$lib/api/subtitles';
+import type { SubtitleTrack } from '$lib/types';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import type { LoadingStage } from '$lib/utils/loadingStage';
 

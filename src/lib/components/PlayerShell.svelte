@@ -6,7 +6,7 @@
   import { findIntro } from '$lib/utils/intro';
   import { groupByLanguage } from '$lib/composables/useSubtitleSelection.svelte';
   import type { PlayerBackend, UpNextCard } from '$lib/types';
-  import type { SubtitleTrack } from '$lib/api/subtitles';
+  import type { SubtitleTrack } from '$lib/types';
   import type { Snippet } from 'svelte';
   import {
     loadingStageLabel,

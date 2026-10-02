@@ -142,7 +142,6 @@ export interface TorrentEngineDetails {
   }[];
 }
 
-import type { SubtitleTrack } from '$lib/api/subtitles';
 import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
 
 /** Everything a backend needs to start one stream. */
@@ -240,4 +239,12 @@ export interface NativeTrack {
   selected: boolean;
   original: boolean;
   hearing_impaired: boolean;
+}
+
+export interface SubtitleTrack {
+  id: string;
+  url: string;
+  lang: string;
+  label: string;
+  group: 'Embedded' | 'Extra';
 }
