@@ -237,13 +237,16 @@ describe('Series playback wiring', () => {
     expect(add?.body).toContain('&tr=udp%3A%2F%2Ftracker.example.org%3A1337%2Fannounce');
   });
 
-  it('tells the user when no source exists for the episode', async () => {
+  it('tells the user when no source exists for the episode and lets them go back', async () => {
     await playEpisode(/Pilot/, { streams: [] });
 
     expect(
-      await screen.findByText(/nenhuma fonte encontrada para este episódio/i)
+      await screen.findByText('Este episódio ainda não está disponível para assistir.')
     ).toBeInTheDocument();
     expect(boundary.rqbit.requests).toEqual([]);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    expect(screen.getByText(/Pilot/)).toBeInTheDocument();
   });
 
   it('marks only the finished episode as watched, not the whole series', async () => {
@@ -471,7 +474,7 @@ describe('Series playback wiring', () => {
     await waitFor(() => expect(torrentioRequests(1, 2)).toBe(1));
   });
 
-  it('offers a retry for the next episode when it has no source', async () => {
+  it('lets the user go back when the next episode has no source', async () => {
     await playEpisode(/Pilot/);
     const video = await startedVideo();
     const real = globalThis.fetch;
@@ -488,11 +491,54 @@ describe('Series playback wiring', () => {
     await fireEvent.ended(video);
 
     expect(
-      await screen.findByText(/nenhuma fonte encontrada para este episódio/i)
+      await screen.findByText('Este episódio ainda não está disponível para assistir.')
     ).toBeInTheDocument();
     expect(screen.queryByTestId('video-player-container')).toBeNull();
 
-    await fireEvent.click(screen.getByRole('button', { name: /tentar novamente/i }));
-    await waitFor(() => expect(torrentioRequests(1, 2)).toBe(2));
+    await fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText(/Pilot/)).toBeInTheDocument();
+  });
+});
+
+describe('Series playback errors', () => {
+  const OTHER_HASH = 'a'.repeat(40);
+
+  beforeEach(() => {
+    localStorage.clear();
+    progressStore.progress = {};
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('plays the next ranked source when the first one fails', async () => {
+    await playEpisode(/Pilot/, {
+      streams: [
+        { name: 'Torrentio\n1080p', title: 'Season pack\n👤 30', infoHash: HASH, fileIdx: 0 },
+        { name: 'Torrentio\n720p', title: 'Season pack\n👤 3', infoHash: OTHER_HASH, fileIdx: 0 }
+      ],
+      failAddFor: [HASH]
+    });
+
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Tentar outra fonte' }, { timeout: 5000 })
+    );
+
+    const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    await waitFor(() => expect(video.getAttribute('src')).toContain(`/torrents/${OTHER_HASH}/`));
+  });
+
+  it('looks the sources up again when they could not be reached', async () => {
+    await playEpisode(/Pilot/, { failStreams: true });
+
+    const retry = await screen.findByRole('button', { name: 'Tentar novamente' });
+    expect(
+      screen.getByText('Não foi possível buscar este episódio. Verifique sua conexão.')
+    ).toBeInTheDocument();
+    await fireEvent.click(retry);
+
+    await waitFor(() => expect(torrentioRequests(1, 1)).toBe(2));
   });
 });

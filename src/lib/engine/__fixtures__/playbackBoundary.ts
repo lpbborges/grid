@@ -15,6 +15,9 @@ export interface PlaybackBoundaryOptions {
   externalSubtitles?: ExternalSubtitleEntry[];
   engineStartError?: unknown;
   failAdd?: boolean;
+  failAddFor?: string[];
+  /** Torrentio cannot be reached. */
+  failStreams?: boolean;
   stallAdds?: number;
   /** Delays `upsert_cache_entry`, like the slower IPC on Windows. */
   cacheWriteDelayMs?: number;
@@ -48,6 +51,7 @@ export function installPlaybackBoundary(options: PlaybackBoundaryOptions): Playb
   const rqbit = createFakeRqbit({
     files: options.files,
     failAdd: options.failAdd,
+    failAddFor: options.failAddFor,
     stallAdds: options.stallAdds
   });
   const invokeCalls: InvokeCall[] = [];
@@ -103,6 +107,7 @@ export function installPlaybackBoundary(options: PlaybackBoundaryOptions): Playb
       const url = new URL(input instanceof Request ? input.url : input.toString());
       if (url.origin === ENGINE_ORIGIN) return rqbit.handle(url, init);
       if (url.href.startsWith('https://torrentio.strem.fun/language=portuguese/stream/')) {
+        if (options.failStreams) return new Response('offline', { status: 503 });
         return json({ streams: options.streams });
       }
       if (url.href.startsWith('https://opensubtitles-v3.strem.io/subtitles/')) {

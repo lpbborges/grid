@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
     subtitles: [],
     loadingStage: null,
     error: '',
+    errorAction: 'otherSource',
     infoHash: '',
     fileIdx: 0,
     totalBytes: 0,
@@ -90,6 +91,7 @@ describe('usePlayer', () => {
     await player.play('magnet:?xt=urn:btih:abc', { mediaId: 'tt1' });
 
     expect(player.error).toBe('Não foi possível abrir o player. Tente novamente.');
+    expect(player.errorAction).toBe('otherSource');
     expect(streamPlayer.stop).toHaveBeenCalled();
   });
 
@@ -239,12 +241,13 @@ describe('usePlayer', () => {
     await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
 
     const ok = await player.advance(async () => ({
-      error: 'Nenhuma fonte encontrada para este episódio.'
+      error: { message: 'Nenhuma fonte encontrada para este episódio.', action: 'back' as const }
     }));
 
     expect(ok).toBe(false);
     expect(player.error).toBe('Nenhuma fonte encontrada para este episódio.');
     expect(player.advancing).toBe(false);
+    expect(player.errorAction).toBe('back');
   });
 
   it('ignores the backend closing itself during an advance', async () => {

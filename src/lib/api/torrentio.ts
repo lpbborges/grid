@@ -1,4 +1,3 @@
-import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { isRecord } from '../utils/isRecord';
 import { defaultTrackers, endpoints } from './endpoints';
@@ -57,23 +56,19 @@ function isStream(value: unknown): value is Stream {
   );
 }
 
+/** Rejects when the service can't be reached, so callers can tell an outage from no sources. */
 async function fetchTorrentioStreams(path: string): Promise<Stream[]> {
-  try {
-    const prefLang =
-      settingsStore.audio === 'original' ? settingsStore.subtitle : settingsStore.audio;
-    const lang = AUDIO_TO_TORRENTIO_LANG[prefLang];
-    const prefix = lang ? `/language=${lang}` : '';
-    const res = await fetchWithTimeout(`${endpoints.torrentio}${prefix}/stream/${path}.json`);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch streams: ${res.statusText}`);
-    }
-    const data: unknown = await res.json();
-    if (!isRecord(data) || !Array.isArray(data.streams)) return [];
-    return data.streams.filter(isStream);
-  } catch (error) {
-    logger.error(error);
-    return [];
+  const prefLang =
+    settingsStore.audio === 'original' ? settingsStore.subtitle : settingsStore.audio;
+  const lang = AUDIO_TO_TORRENTIO_LANG[prefLang];
+  const prefix = lang ? `/language=${lang}` : '';
+  const res = await fetchWithTimeout(`${endpoints.torrentio}${prefix}/stream/${path}.json`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch streams: ${res.statusText}`);
   }
+  const data: unknown = await res.json();
+  if (!isRecord(data) || !Array.isArray(data.streams)) return [];
+  return data.streams.filter(isStream);
 }
 
 export function getSeriesStreams(

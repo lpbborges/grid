@@ -69,16 +69,14 @@ describe('torrentio api', () => {
       expect(streams[0].infoHash).toBe('abcdef123456');
     });
 
-    it('returns empty array on error', async () => {
-      (fetch as any).mockResolvedValue({ ok: false });
-      const streams = await getSeriesStreams('tt123456', 1, 1);
-      expect(streams).toEqual([]);
+    it('rejects when the service answers with an error', async () => {
+      (fetch as any).mockResolvedValue({ ok: false, statusText: 'Bad Gateway' });
+      await expect(getSeriesStreams('tt123456', 1, 1)).rejects.toThrow('Bad Gateway');
     });
 
-    it('returns empty array on fetch throw', async () => {
+    it('rejects when the service cannot be reached', async () => {
       (fetch as any).mockRejectedValue(new Error('Network error'));
-      const streams = await getSeriesStreams('tt123456', 1, 1);
-      expect(streams).toEqual([]);
+      await expect(getSeriesStreams('tt123456', 1, 1)).rejects.toThrow('Network error');
     });
   });
 
@@ -109,16 +107,14 @@ describe('torrentio api', () => {
       expect(streams[0].infoHash).toBe('abcdef123456');
     });
 
-    it('returns empty array on error', async () => {
-      (fetch as any).mockResolvedValue({ ok: false });
-      const streams = await getMovieStreams('tt123456');
-      expect(streams).toEqual([]);
+    it('rejects when the service answers with an error', async () => {
+      (fetch as any).mockResolvedValue({ ok: false, statusText: 'Bad Gateway' });
+      await expect(getMovieStreams('tt123456')).rejects.toThrow('Bad Gateway');
     });
 
-    it('returns empty array on fetch throw', async () => {
+    it('rejects when the service cannot be reached', async () => {
       (fetch as any).mockRejectedValue(new Error('Network error'));
-      const streams = await getMovieStreams('tt123456');
-      expect(streams).toEqual([]);
+      await expect(getMovieStreams('tt123456')).rejects.toThrow('Network error');
     });
   });
 });
