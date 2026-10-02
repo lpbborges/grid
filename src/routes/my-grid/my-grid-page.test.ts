@@ -85,37 +85,11 @@ describe('My Grid page', () => {
     expect(created.ok).toBe(true);
   });
 
-  it('creates a list from the page', async () => {
+  it('has no way to create a list, which is done from the list menu of a title', () => {
     render(MyGridPage);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Nova lista' }));
-    const input = screen.getByRole('textbox', { name: 'Nome da nova lista' });
-    await fireEvent.input(input, { target: { value: 'Cinema' } });
-    await fireEvent.keyDown(input, { key: 'Enter' });
-
-    expect(screen.getByRole('heading', { name: 'Cinema' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nova lista' })).toBeNull();
     expect(screen.queryByRole('textbox')).toBeNull();
-  });
-
-  it('explains a refused name and creates nothing', async () => {
-    render(MyGridPage);
-
-    await fireEvent.click(screen.getByRole('button', { name: 'Nova lista' }));
-    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'FAVORITOS' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Criar' }));
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Já existe uma lista com esse nome.');
-    expect(listsStore.lists).toHaveLength(2);
-  });
-
-  it('cancels the new list form', async () => {
-    render(MyGridPage);
-
-    await fireEvent.click(screen.getByRole('button', { name: 'Nova lista' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
-
-    expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Nova lista' })).toBeInTheDocument();
   });
 
   it('deletes a list and offers to undo, bringing back its titles', async () => {
