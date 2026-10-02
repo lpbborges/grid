@@ -4,7 +4,7 @@ import HomePage from './+page.svelte';
 import type { MediaType, Movie, SearchResult } from '$lib/types';
 import { appReady, searchQuery } from '$lib/stores.svelte';
 import { progressStore } from '$lib/stores/progress.svelte';
-import { favoritesStore } from '$lib/stores/favorites.svelte';
+import { listsStore } from '$lib/stores/lists.svelte';
 import { tick } from 'svelte';
 
 const { searchCatalogMock, getCatalogMock } = vi.hoisted(() => ({
@@ -508,37 +508,41 @@ describe('Home page popular row', () => {
   });
 });
 
-describe('Home page favorites', () => {
-  const movieMeta = { type: 'movie' as const, title: 'Favorite Movie', poster: 'm.jpg' };
-  const seriesMeta = { type: 'series' as const, title: 'Favorite Series', poster: 's.jpg' };
+describe('Home page lists', () => {
+  const movieMeta = { type: 'movie' as const, title: 'Listed Movie', poster: 'm.jpg' };
+  const seriesMeta = { type: 'series' as const, title: 'Listed Series', poster: 's.jpg' };
 
   beforeEach(() => {
     vi.resetAllMocks();
     getCatalogMock.mockResolvedValue([]);
     searchQuery.value = '';
     progressStore.progress = {};
-    favoritesStore.entries = [];
+    listsStore.lists = [
+      { id: 'favorites', name: 'Favoritos', system: 'favorites', items: [] },
+      { id: 'watch-later', name: 'Assistir depois', system: 'watch-later', items: [] }
+    ];
   });
 
   function headings() {
     return screen.getAllByRole('heading').map((h) => h.textContent?.trim());
   }
 
-  it('hides the row when there are no favorites', async () => {
+  it('hides the rows of empty lists', async () => {
     render(HomePage, { data: popularDataWith([makeMovie('tt1', 'Popular')], []) });
     await act(async () => {});
 
+    expect(screen.queryByText('Favoritos')).toBeNull();
+    expect(screen.queryByText('Assistir depois')).toBeNull();
     expect(screen.queryByText('Meus favoritos')).toBeNull();
   });
 
-  it('lists favorites newest first, after every other row', async () => {
+  it('shows one row per non-empty list, newest title first, after every other row', async () => {
     progressStore.progress = {
       tt9: { time: 10, duration: 100, updatedAt: 1, meta: { ...movieMeta, title: 'Resumed' } }
     };
-    favoritesStore.entries = [
-      { id: 'tt1', meta: movieMeta },
-      { id: 'tt2', meta: seriesMeta }
-    ];
+    listsStore.add('favorites', 'tt1', movieMeta);
+    listsStore.add('favorites', 'tt2', seriesMeta);
+    listsStore.add('watch-later', 'tt3', movieMeta);
     render(HomePage, {
       data: popularDataWith(
         [makeMovie('tt5', 'Popular Movie')],
@@ -547,24 +551,39 @@ describe('Home page favorites', () => {
     });
     await act(async () => {});
 
-    expect(headings()).toEqual(['Continuar assistindo', 'Populares', 'Meus favoritos']);
+    expect(headings()).toEqual([
+      'Continuar assistindo',
+      'Populares',
+      'Favoritos',
+      'Assistir depois'
+    ]);
     const hrefs = screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'));
-    expect(hrefs.slice(-2)).toEqual(['/series/tt2', '/movie/tt1']);
+    expect(hrefs.slice(-3)).toEqual(['/series/tt2', '/movie/tt1', '/movie/tt3']);
   });
 
-  it('browses catalog rows between the popular rows and the favorites', async () => {
+  it('shows the rows of the lists the user created', async () => {
+    const created = listsStore.create('Cinema');
+    if (!created.ok) throw new Error('create failed');
+    listsStore.add(created.list.id, 'tt1', movieMeta);
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    expect(headings()).toEqual(['Cinema']);
+  });
+
+  it('browses catalog rows between the popular rows and the lists', async () => {
     getCatalogMock.mockImplementation(async (query: { type: string; genre?: string }) =>
       query.type === 'movie' && query.genre === 'Horror' ? [makeMovie('tt7', 'Scary Movie')] : []
     );
-    favoritesStore.entries = [{ id: 'tt1', meta: movieMeta }];
+    listsStore.add('favorites', 'tt1', movieMeta);
     render(HomePage, { data: popularDataWith([makeMovie('tt5', 'Popular Movie')], []) });
     await screen.findByText('Terror');
 
-    expect(headings()).toEqual(['Populares', 'Terror', 'Meus favoritos']);
+    expect(headings()).toEqual(['Populares', 'Terror', 'Favoritos']);
   });
 
-  it('shows the row while the popular titles are still loading', async () => {
-    favoritesStore.entries = [{ id: 'tt1', meta: movieMeta }];
+  it('shows the rows while the popular titles are still loading', async () => {
+    listsStore.add('favorites', 'tt1', movieMeta);
     render(HomePage, {
       data: {
         popularMovies: new Promise<Movie[]>(() => {}),
@@ -573,28 +592,28 @@ describe('Home page favorites', () => {
     });
     await act(async () => {});
 
-    expect(screen.getByText('Meus favoritos')).toBeTruthy();
+    expect(screen.getByText('Favoritos')).toBeTruthy();
   });
 
-  it('drops a title once it is unfavorited', async () => {
-    favoritesStore.entries = [{ id: 'tt1', meta: movieMeta }];
+  it('drops a row once its last title leaves the list', async () => {
+    listsStore.add('favorites', 'tt1', movieMeta);
     render(HomePage, { data: popularDataWith([], []) });
     await act(async () => {});
-    expect(screen.getByText('Meus favoritos')).toBeTruthy();
+    expect(screen.getByText('Favoritos')).toBeTruthy();
 
-    await act(() => favoritesStore.remove('tt1'));
+    await act(() => listsStore.removeItem('favorites', 'tt1'));
 
-    expect(screen.queryByText('Meus favoritos')).toBeNull();
+    expect(screen.queryByText('Favoritos')).toBeNull();
   });
 
-  it('adds a legacy favorite once its snapshot arrives', async () => {
-    favoritesStore.entries = [{ id: 'tt1' }];
+  it('adds a legacy title once its snapshot arrives', async () => {
+    listsStore.add('favorites', 'tt1');
     render(HomePage, { data: popularDataWith([], []) });
     await act(async () => {});
-    expect(screen.queryByText('Meus favoritos')).toBeNull();
+    expect(screen.queryByText('Favoritos')).toBeNull();
 
-    await act(() => favoritesStore.attachMeta({ tt1: movieMeta }));
+    await act(() => listsStore.attachMeta({ tt1: movieMeta }));
 
-    expect(screen.getAllByText('Favorite Movie')[0]).toBeTruthy();
+    expect(screen.getAllByText('Listed Movie')[0]).toBeTruthy();
   });
 });
