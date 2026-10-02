@@ -272,15 +272,15 @@ describe('AppHeader', () => {
       expect(searchQuery.value).toBe('');
     });
 
-    it('keeps working on the first navigation, which has no page it came from', () => {
+    it('keeps the query when the header mounts again after playback, which has no page it came from', () => {
       searchQuery.value = 'matrix';
       renderAt('/');
 
       navigation.callbacks.forEach((callback) =>
-        callback({ from: { url: null }, to: { url: new URL('http://localhost/') } })
+        callback({ from: null, to: { url: new URL('http://localhost/') } })
       );
 
-      expect(searchQuery.value).toBe('');
+      expect(searchQuery.value).toBe('matrix');
     });
 
     it('keeps the search when only the genre changes', () => {

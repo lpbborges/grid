@@ -51,7 +51,7 @@
   afterNavigate(({ from, to }) => {
     const ownNavigation = searchOwnsNavigation;
     searchOwnsNavigation = false;
-    if (ownNavigation || from?.url?.pathname === to?.url?.pathname) return;
+    if (ownNavigation || !from?.url || from.url.pathname === to?.url?.pathname) return;
     searchQuery.value = '';
   });
 
