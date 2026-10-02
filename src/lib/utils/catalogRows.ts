@@ -1,10 +1,11 @@
 import type { CatalogQuery } from '$lib/api/cinemeta';
+import type { MixedCatalogQuery } from '$lib/api/mixedCatalog';
 import type { MediaType } from '$lib/types';
 import { genreName } from '$lib/utils/genres';
 
 export interface CatalogRow {
   heading: string;
-  query: CatalogQuery;
+  query: CatalogQuery | MixedCatalogQuery;
 }
 
 const MOVIE_ROW_GENRES = [
@@ -104,25 +105,27 @@ export function seriesRows(year = new Date().getFullYear()): CatalogRow[] {
   ];
 }
 
-/** Recent releases first, then what is popular. */
+const mixedReleasesRow = (year: number): CatalogRow => ({
+  heading: 'Lançamentos',
+  query: { catalog: 'year', genre: String(year), order: 'releaseDate' }
+});
+
+/** Recent releases first, then what is popular, movies and series together. */
 export function newAndPopularRows(year = new Date().getFullYear()): CatalogRow[] {
   return [
-    releasesRow('movie', year),
-    releasesRow('series', year),
-    popularRow('movie'),
-    popularRow('series')
+    mixedReleasesRow(year),
+    { heading: 'Populares', query: { catalog: 'top', order: 'rating' } }
   ];
 }
 
-/** The browsing rows under the popular ones, in order. */
+/** The browsing rows of the home page under the popular one, movies and series together. */
 export function catalogRows(year = new Date().getFullYear()): CatalogRow[] {
   return [
-    { heading: 'Lançamentos', query: { type: 'movie', catalog: 'year', genre: String(year) } },
-    { heading: 'Filmes em destaque', query: { type: 'movie', catalog: 'imdbRating' } },
-    { heading: 'Séries em destaque', query: { type: 'series', catalog: 'imdbRating' } },
+    mixedReleasesRow(year),
+    { heading: 'Em destaque', query: { catalog: 'imdbRating', order: 'rating' } },
     ...MOVIE_ROW_GENRES.map((genre): CatalogRow => ({
       heading: genreName(genre),
-      query: { type: 'movie', catalog: 'top', genre }
+      query: { catalog: 'top', genre, order: 'rating' }
     }))
   ];
 }

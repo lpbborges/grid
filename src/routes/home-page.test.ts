@@ -445,6 +445,69 @@ describe('Home page continue watching', () => {
   });
 });
 
+describe('Home page popular row', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    getCatalogMock.mockResolvedValue([]);
+    searchQuery.value = '';
+    progressStore.progress = {};
+  });
+
+  const rated = (id: string, rating: number, type = 'movie') => ({
+    ...makeMovie(id, `${type} ${id}`),
+    rating
+  });
+
+  it('mixes movies and series by rating in one row, each opening its own page', async () => {
+    render(HomePage, {
+      data: popularDataWith(
+        [rated('tt1', 9), rated('tt2', 7), rated('tt3', 6)],
+        [rated('tt4', 8), rated('tt5', 6.5)].map((s) => ({ ...s, title: `series ${s.id}` }))
+      )
+    });
+    await act(async () => {});
+
+    const cards = screen.getAllByTestId('media-card');
+    expect(cards.map((card) => card.getAttribute('href'))).toEqual([
+      '/movie/tt1',
+      '/series/tt4',
+      '/movie/tt2',
+      '/series/tt5',
+      '/movie/tt3'
+    ]);
+    expect(screen.queryByText('Filmes Populares')).toBeNull();
+    expect(screen.queryByText('Séries Populares')).toBeNull();
+    expect(screen.getAllByTestId('media-card-type')).toHaveLength(5);
+  });
+
+  it('shows the series when the movie catalog fails to load', async () => {
+    render(HomePage, {
+      data: {
+        popularMovies: Promise.reject(new Error('offline')),
+        popularSeries: Promise.resolve([rated('tt4', 8)])
+      }
+    });
+    await act(async () => {});
+
+    expect(screen.getByText('Populares')).toBeTruthy();
+    expect(screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'))).toEqual([
+      '/series/tt4'
+    ]);
+  });
+
+  it('reports an error only when neither catalog loaded', async () => {
+    render(HomePage, {
+      data: {
+        popularMovies: Promise.reject(new Error('offline')),
+        popularSeries: Promise.reject(new Error('offline'))
+      }
+    });
+    await act(async () => {});
+
+    expect(screen.getByText('Erro ao carregar dados')).toBeTruthy();
+  });
+});
+
 describe('Home page favorites', () => {
   const movieMeta = { type: 'movie' as const, title: 'Favorite Movie', poster: 'm.jpg' };
   const seriesMeta = { type: 'series' as const, title: 'Favorite Series', poster: 's.jpg' };
@@ -484,25 +547,20 @@ describe('Home page favorites', () => {
     });
     await act(async () => {});
 
-    expect(headings()).toEqual([
-      'Continuar assistindo',
-      'Filmes Populares',
-      'Séries Populares',
-      'Meus favoritos'
-    ]);
+    expect(headings()).toEqual(['Continuar assistindo', 'Populares', 'Meus favoritos']);
     const hrefs = screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'));
     expect(hrefs.slice(-2)).toEqual(['/series/tt2', '/movie/tt1']);
   });
 
   it('browses catalog rows between the popular rows and the favorites', async () => {
-    getCatalogMock.mockImplementation(async (query: { catalog: string; genre?: string }) =>
-      query.genre === 'Horror' ? [makeMovie('tt7', 'Scary Movie')] : []
+    getCatalogMock.mockImplementation(async (query: { type: string; genre?: string }) =>
+      query.type === 'movie' && query.genre === 'Horror' ? [makeMovie('tt7', 'Scary Movie')] : []
     );
     favoritesStore.entries = [{ id: 'tt1', meta: movieMeta }];
     render(HomePage, { data: popularDataWith([makeMovie('tt5', 'Popular Movie')], []) });
     await screen.findByText('Terror');
 
-    expect(headings()).toEqual(['Filmes Populares', 'Terror', 'Meus favoritos']);
+    expect(headings()).toEqual(['Populares', 'Terror', 'Meus favoritos']);
   });
 
   it('shows the row while the popular titles are still loading', async () => {

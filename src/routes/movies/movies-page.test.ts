@@ -9,7 +9,7 @@ describe('movies page load', () => {
     const data = (await run('')) as { rows: CatalogRow[] };
 
     expect(await run('')).toMatchObject({ type: 'movie', genre: null });
-    expect(data.rows.every((row) => row.query.type === 'movie')).toBe(true);
+    expect(data.rows.every((row) => 'type' in row.query && row.query.type === 'movie')).toBe(true);
   });
 
   it('returns a listed genre', async () => {

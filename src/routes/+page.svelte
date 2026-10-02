@@ -1,6 +1,7 @@
 <script lang="ts">
   import MediaRow from '$lib/components/MediaRow.svelte';
   import LazyCatalogRow from '$lib/components/LazyCatalogRow.svelte';
+  import MediaCard from '$lib/components/MediaCard.svelte';
   import { catalogRows } from '$lib/utils/catalogRows';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
@@ -12,6 +13,7 @@
   import ContinueWatchingRow from '$lib/components/ContinueWatchingRow.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { toContinueWatchingItems } from '$lib/utils/continueWatching';
+  import { mergeTitles } from '$lib/utils/mergeTitles';
 
   let { data } = $props();
 
@@ -19,6 +21,7 @@
 
   let popularMovies = $state<Movie[]>([]);
   let popularSeries = $state<Movie[]>([]);
+  let popular = $derived(mergeTitles(popularMovies, popularSeries, 'rating'));
   let popularLoading = $state(true);
   let popularError = $state(false);
 
@@ -61,7 +64,7 @@
   <ContinueWatchingRow items={continueWatchingItems} />
   {#if popularLoading}
     <LoadingIndicator label="Carregando..." />
-  {:else if !popularMovies.length && !popularSeries.length}
+  {:else if !popular.length}
     <div class="flex h-full min-h-[400px] items-center justify-center">
       <EmptyState
         message={popularError ? 'Erro ao carregar dados' : 'Nenhum título disponível no momento'}
@@ -69,8 +72,11 @@
     </div>
   {:else}
     <div>
-      <MediaRow heading="Filmes Populares" items={popularMovies} type="movie" />
-      <MediaRow heading="Séries Populares" items={popularSeries} type="series" />
+      <MediaRow heading="Populares" items={popular}>
+        {#snippet card(item)}
+          <MediaCard media={item} type={item.type} showType />
+        {/snippet}
+      </MediaRow>
       {#each browsingRows as row (row.heading)}
         <LazyCatalogRow {row} />
       {/each}

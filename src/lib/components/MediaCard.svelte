@@ -10,7 +10,8 @@
     href,
     episodeLabel,
     upNext = false,
-    progress
+    progress,
+    showType = false
   }: {
     media: CardMedia;
     type?: MediaType;
@@ -18,6 +19,8 @@
     episodeLabel?: string;
     upNext?: boolean;
     progress?: { time: number; duration: number };
+    /** Names the type on the poster, for rows that mix movies and series. */
+    showType?: boolean;
   } = $props();
   let shownProgress = $derived(progress ?? progressStore.latestFor(media.id));
   let progressPercent = $derived(
@@ -96,6 +99,15 @@
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
       </div>
+    {/if}
+    {#if showType}
+      <span
+        aria-hidden="true"
+        data-testid="media-card-type"
+        class="border-primary/60 bg-dark/85 text-main pointer-events-none absolute top-2.5 left-2 z-20 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-widest uppercase backdrop-blur-sm"
+      >
+        {type === 'movie' ? 'Filme' : 'Série'}
+      </span>
     {/if}
     {#if episodeLabel}
       <span
