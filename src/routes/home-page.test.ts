@@ -7,13 +7,15 @@ import { progressStore } from '$lib/stores/progress.svelte';
 import { favoritesStore } from '$lib/stores/favorites.svelte';
 import { tick } from 'svelte';
 
-const { searchCatalogMock } = vi.hoisted(() => ({
-  searchCatalogMock: vi.fn()
+const { searchCatalogMock, getCatalogMock } = vi.hoisted(() => ({
+  searchCatalogMock: vi.fn(),
+  getCatalogMock: vi.fn()
 }));
 
 vi.mock('$lib/api/cinemeta', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$lib/api/cinemeta')>()),
-  searchCatalog: searchCatalogMock
+  searchCatalog: searchCatalogMock,
+  getCatalog: getCatalogMock
 }));
 
 type SearchReport = (results: SearchResult[], done: boolean) => void;
@@ -70,6 +72,7 @@ function popularDataWith(movies: Movie[], series: Movie[]) {
 describe('Home page search', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    getCatalogMock.mockResolvedValue([]);
     vi.useFakeTimers();
     searchQuery.value = '';
     appReady.value = false;
@@ -306,6 +309,7 @@ describe('Home page continue watching', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    getCatalogMock.mockResolvedValue([]);
     searchQuery.value = '';
     progressStore.progress = {};
   });
@@ -447,6 +451,7 @@ describe('Home page favorites', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    getCatalogMock.mockResolvedValue([]);
     searchQuery.value = '';
     progressStore.progress = {};
     favoritesStore.entries = [];
@@ -487,6 +492,17 @@ describe('Home page favorites', () => {
     ]);
     const hrefs = screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'));
     expect(hrefs.slice(-2)).toEqual(['/series/tt2', '/movie/tt1']);
+  });
+
+  it('browses catalog rows between the popular rows and the favorites', async () => {
+    getCatalogMock.mockImplementation(async (query: { catalog: string; genre?: string }) =>
+      query.genre === 'Horror' ? [makeMovie('tt7', 'Scary Movie')] : []
+    );
+    favoritesStore.entries = [{ id: 'tt1', meta: movieMeta }];
+    render(HomePage, { data: popularDataWith([makeMovie('tt5', 'Popular Movie')], []) });
+    await screen.findByText('Terror');
+
+    expect(headings()).toEqual(['Filmes Populares', 'Terror', 'Meus favoritos']);
   });
 
   it('shows the row while the popular titles are still loading', async () => {

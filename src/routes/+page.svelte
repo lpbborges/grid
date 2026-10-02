@@ -2,6 +2,8 @@
   import MediaGrid from '$lib/components/MediaGrid.svelte';
   import MediaRow from '$lib/components/MediaRow.svelte';
   import MediaCard from '$lib/components/MediaCard.svelte';
+  import LazyCatalogRow from '$lib/components/LazyCatalogRow.svelte';
+  import { catalogRows } from '$lib/utils/catalogRows';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import type { Movie, SearchResult } from '$lib/types';
   import { appReady, searchQuery } from '$lib/stores.svelte';
@@ -20,6 +22,8 @@
   let popularSeries = $state<Movie[]>([]);
   let popularLoading = $state(true);
   let popularError = $state(false);
+
+  const browsingRows = catalogRows();
 
   let hasSearchQuery = $derived(searchQuery.value.trim().length > 0);
   let continueWatchingItems = $derived(toContinueWatchingItems(progressStore.entries));
@@ -121,12 +125,10 @@
   {:else}
     <div>
       <MediaRow heading="Filmes Populares" items={popularMovies} type="movie" />
-      <MediaRow
-        heading="Séries Populares"
-        items={popularSeries}
-        type="series"
-        containerClass={favoriteItems.length ? undefined : ''}
-      />
+      <MediaRow heading="Séries Populares" items={popularSeries} type="series" />
+      {#each browsingRows as row (row.heading)}
+        <LazyCatalogRow {row} />
+      {/each}
     </div>
   {/if}
   <MediaRow heading="Meus favoritos" items={favoriteItems} containerClass="">

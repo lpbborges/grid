@@ -111,6 +111,8 @@ export function startMockServer(catalog: Catalog, options: MockServerOptions): P
             : catalog.series.filter((s) => s.title.toLowerCase().includes(query)).map(seriesMeta);
         return send(200, { metas });
       }
+      if (/^catalog\/(movie|series)\/(top|year|imdbRating)(\/genre=[^/]+)?\.json$/.test(route))
+        return send(200, { metas: [] });
       const movieMatch = route.match(/^meta\/movie\/(tt\d+)\.json$/);
       const found = movieMatch && movie(movieMatch[1]);
       if (found) return send(200, { meta: movieMeta(found) });
