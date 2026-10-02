@@ -111,7 +111,6 @@ This document serves as a living repository of the core architectural decisions,
 
 Update `README.md` in the same change whenever you:
 
-- add or change a user-visible feature (**Features**);
 - add or rename an npm script (**Scripts**);
 - add, remove, or change an external service (**Data Sources & Privacy**, plus the CSP);
 - change where state is stored or how the frontend talks to the backend (**Architecture**);
