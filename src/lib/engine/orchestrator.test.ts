@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { prepareStream, finalizeStream } from './orchestrator';
+import { prepareStream, finalizeStream, clearDownloadedVideos } from './orchestrator';
 import * as torrentApi from './torrent';
 import * as cacheApi from './cache';
 import * as subtitlesApi from '$lib/api/subtitles';
@@ -24,6 +24,7 @@ vi.mock('./cache', () => ({
   getCacheManifest: vi.fn(),
   upsertCacheEntry: vi.fn(),
   evictForSpace: vi.fn(),
+  clearCache: vi.fn(),
   parseInfoHashFromMagnet: vi.fn()
 }));
 
@@ -46,33 +47,35 @@ function mockDetails(
   };
 }
 
-describe('prepareStream', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    settingsStore.cacheLimitBytes = DEFAULT_LIMIT;
-    vi.mocked(torrentApi.updateOnlyFiles).mockResolvedValue(undefined);
-    vi.mocked(torrentApi.getLoadedTorrentInfoHashes).mockResolvedValue([]);
-    vi.mocked(torrentApi.forgetTorrent).mockResolvedValue(undefined);
-    vi.mocked(torrentApi.deleteTorrent).mockResolvedValue(undefined);
+function mockPreparation() {
+  vi.clearAllMocks();
+  settingsStore.cacheLimitBytes = DEFAULT_LIMIT;
+  vi.mocked(torrentApi.updateOnlyFiles).mockResolvedValue(undefined);
+  vi.mocked(torrentApi.getLoadedTorrentInfoHashes).mockResolvedValue([]);
+  vi.mocked(torrentApi.forgetTorrent).mockResolvedValue(undefined);
+  vi.mocked(torrentApi.deleteTorrent).mockResolvedValue(undefined);
 
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('/subtitles')) {
-        return { ok: true, blob: async () => new Blob() } as any;
-      }
-      return { ok: true } as any;
-    });
-    vi.mocked(cacheApi.getCacheManifest).mockResolvedValue([]);
-    vi.mocked(cacheApi.upsertCacheEntry).mockResolvedValue(undefined);
-    vi.mocked(cacheApi.evictForSpace).mockResolvedValue([]);
-    vi.mocked(cacheApi.parseInfoHashFromMagnet).mockReturnValue('1'.repeat(40));
-    vi.mocked(torrentApi.getWantedFileIndices).mockReturnValue([1]);
-    vi.mocked(torrentApi.getTorrentSubtitles).mockResolvedValue([]);
-    vi.mocked(subtitlesApi.getExternalSubtitles).mockResolvedValue([]);
-    vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
-    vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails() as any);
-    vi.mocked(torrentApi.waitForTorrentLive).mockResolvedValue(undefined);
-    vi.mocked(torrentApi.getTorrentStats).mockResolvedValue(null);
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+    if (String(url).includes('/subtitles')) {
+      return { ok: true, blob: async () => new Blob() } as any;
+    }
+    return { ok: true } as any;
   });
+  vi.mocked(cacheApi.getCacheManifest).mockResolvedValue([]);
+  vi.mocked(cacheApi.upsertCacheEntry).mockResolvedValue(undefined);
+  vi.mocked(cacheApi.evictForSpace).mockResolvedValue([]);
+  vi.mocked(cacheApi.parseInfoHashFromMagnet).mockReturnValue('1'.repeat(40));
+  vi.mocked(torrentApi.getWantedFileIndices).mockReturnValue([1]);
+  vi.mocked(torrentApi.getTorrentSubtitles).mockResolvedValue([]);
+  vi.mocked(subtitlesApi.getExternalSubtitles).mockResolvedValue([]);
+  vi.mocked(torrentApi.getStreamUrl).mockReturnValue('http://localhost/stream');
+  vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails() as any);
+  vi.mocked(torrentApi.waitForTorrentLive).mockResolvedValue(undefined);
+  vi.mocked(torrentApi.getTorrentStats).mockResolvedValue(null);
+}
+
+describe('prepareStream', () => {
+  beforeEach(mockPreparation);
 
   it('adds the torrent with sub_folder set to the parsed info hash and onlyFilesRegex', async () => {
     await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn(), mediaId: 'media-123' });
@@ -623,5 +626,77 @@ describe('finalizeStream', () => {
     vi.mocked(torrentApi.getTorrentStats).mockRejectedValue(new Error('engine down'));
     await finalizeStream({ infoHash: 'abc', isCacheable: true, cacheEntry: cachedEntry });
     expect(torrentApi.forgetTorrent).toHaveBeenCalledWith('abc');
+  });
+});
+
+describe('clearDownloadedVideos', () => {
+  const playing = '1'.repeat(40);
+
+  beforeEach(() => {
+    mockPreparation();
+    vi.mocked(cacheApi.clearCache).mockResolvedValue(undefined);
+  });
+
+  it('keeps the video being streamed and lets go of every other loaded one', async () => {
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn() });
+    vi.mocked(torrentApi.getLoadedTorrentInfoHashes).mockResolvedValue([playing, 'old']);
+
+    await clearDownloadedVideos();
+
+    expect(torrentApi.forgetTorrent).toHaveBeenCalledWith('old');
+    expect(torrentApi.forgetTorrent).not.toHaveBeenCalledWith(playing);
+    expect(cacheApi.clearCache).toHaveBeenCalledWith(playing);
+  });
+
+  it('clears everything once the stream has ended', async () => {
+    await prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn() });
+    await finalizeStream({ infoHash: playing, isCacheable: true });
+
+    await clearDownloadedVideos();
+
+    expect(cacheApi.clearCache).toHaveBeenCalledWith(undefined);
+  });
+
+  it('clears everything after a preparation that failed', async () => {
+    vi.mocked(torrentApi.waitForTorrentLive).mockRejectedValue(new Error('stalled'));
+    await expect(prepareStream({ magnet: 'magnet:?xt=test', onStatus: vi.fn() })).rejects.toThrow();
+
+    await clearDownloadedVideos();
+
+    expect(cacheApi.clearCache).toHaveBeenCalledWith(undefined);
+  });
+
+  it('still clears the files when letting go of a loaded video fails', async () => {
+    vi.mocked(torrentApi.getLoadedTorrentInfoHashes).mockResolvedValue(['old']);
+    vi.mocked(torrentApi.forgetTorrent).mockRejectedValue(new Error('engine down'));
+
+    await clearDownloadedVideos();
+
+    expect(cacheApi.clearCache).toHaveBeenCalled();
+  });
+
+  it('waits for the stream that just ended to finish closing', async () => {
+    let finishStats!: () => void;
+    vi.mocked(torrentApi.getTorrentStats).mockReturnValue(
+      new Promise((resolve) => (finishStats = () => resolve(null)))
+    );
+    const cacheEntry = {
+      infoHash: playing,
+      magnet: '',
+      fileName: 'movie.mkv',
+      totalBytes: 1,
+      downloadedBytes: 0,
+      complete: false,
+      lastAccessedAt: 0
+    };
+    void finalizeStream({ infoHash: playing, isCacheable: true, cacheEntry });
+
+    const clearing = clearDownloadedVideos();
+    await Promise.resolve();
+    expect(cacheApi.clearCache).not.toHaveBeenCalled();
+    finishStats();
+    await clearing;
+
+    expect(cacheApi.clearCache).toHaveBeenCalled();
   });
 });

@@ -297,20 +297,49 @@ fn evict_for_space_blocking(
             cache::pick_eviction_candidates(manifest, exclude_info_hash, needed_bytes, limit_bytes);
 
         for info_hash in &to_evict {
-            let Some(entry) = cache::remove_entry(manifest, info_hash) else {
-                continue;
-            };
-            // The torrent's whole folder, not only the file played last.
-            let Some(std::path::Component::Normal(top)) =
-                std::path::Path::new(&entry.file_name).components().next()
-            else {
-                continue;
-            };
-            if top != "manifest.json" {
-                cache::remove_path_best_effort(&downloads_dir.join(top));
+            if let Some(entry) = cache::remove_entry(manifest, info_hash) {
+                cache::remove_entry_files(&downloads_dir, &entry);
             }
         }
         to_evict
+    })
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn clear_cache(
+    app: tauri::AppHandle,
+    exclude_info_hash: Option<String>,
+) -> Result<(), String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        clear_cache_blocking(&app_data_dir, exclude_info_hash.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Cache clearing task failed: {}", e))?
+}
+
+fn clear_cache_blocking(
+    app_data_dir: &Path,
+    exclude_info_hash: Option<&str>,
+) -> Result<(), String> {
+    if exclude_info_hash.is_some_and(|hash| !subtitles::is_valid_info_hash(hash)) {
+        return Err("Invalid info hash".to_string());
+    }
+    let downloads_dir = cache::downloads_dir(app_data_dir);
+    cache::update_manifest(&cache::manifest_path(app_data_dir), |manifest| {
+        let (kept, removed) = std::mem::take(&mut manifest.entries)
+            .into_iter()
+            .partition(|entry| Some(entry.info_hash.as_str()) == exclude_info_hash);
+        manifest.entries = kept;
+        for entry in &removed {
+            cache::remove_entry_files(&downloads_dir, entry);
+        }
+        for name in cache::find_orphan_top_level_names(&downloads_dir, manifest) {
+            if Some(name.as_str()) != exclude_info_hash {
+                cache::remove_path_best_effort(&downloads_dir.join(name));
+            }
+        }
     })
     .map_err(|e| e.to_string())
 }
@@ -879,6 +908,7 @@ pub fn run() {
             get_cache_manifest,
             upsert_cache_entry,
             evict_for_space,
+            clear_cache,
             start_native_player,
             native_player_set_tracks,
             native_player_set_paused,
@@ -1086,6 +1116,98 @@ mod tests {
         assert_eq!(evicted, vec![hash.clone()]);
         assert!(!cache::downloads_dir(&app_data_dir).join(&hash).exists());
         let _ = std::fs::remove_dir_all(&app_data_dir);
+    }
+
+    fn cached_movie(hash: &str) -> cache::CacheEntry {
+        cache::CacheEntry {
+            info_hash: hash.to_string(),
+            magnet: String::new(),
+            media_id: None,
+            season: None,
+            episode: None,
+            file_name: format!("{hash}/movie.mkv"),
+            total_bytes: 100,
+            downloaded_bytes: 100,
+            complete: true,
+            last_accessed_at: 0,
+        }
+    }
+
+    fn write_video(app_data_dir: &Path, hash: &str) {
+        let folder = cache::downloads_dir(app_data_dir).join(hash);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("movie.mkv"), b"video").unwrap();
+    }
+
+    fn fresh_app_data_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("grid-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn clearing_the_cache_deletes_every_video_and_empties_the_manifest() {
+        let app_data_dir = fresh_app_data_dir("clear-all");
+        let (cached, orphan) = ("a".repeat(40), "c".repeat(40));
+        write_video(&app_data_dir, &cached);
+        write_video(&app_data_dir, &orphan);
+        let outside = app_data_dir.join("outside.mkv");
+        std::fs::write(&outside, b"keep").unwrap();
+        let manifest = cache::Manifest {
+            entries: vec![cached_movie(&cached)],
+        };
+        cache::write_manifest(&cache::manifest_path(&app_data_dir), &manifest).unwrap();
+
+        clear_cache_blocking(&app_data_dir, None).unwrap();
+
+        let left: Vec<_> = std::fs::read_dir(cache::downloads_dir(&app_data_dir))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(left, vec!["manifest.json"]);
+        let manifest = cache::read_manifest(&cache::manifest_path(&app_data_dir));
+        assert!(manifest.entries.is_empty());
+        assert!(outside.exists());
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+    }
+
+    #[test]
+    fn clearing_the_cache_keeps_the_video_being_streamed() {
+        let app_data_dir = fresh_app_data_dir("clear-keep");
+        let (playing, cached) = ("a".repeat(40), "b".repeat(40));
+        write_video(&app_data_dir, &playing);
+        write_video(&app_data_dir, &cached);
+        let manifest = cache::Manifest {
+            entries: vec![cached_movie(&playing), cached_movie(&cached)],
+        };
+        cache::write_manifest(&cache::manifest_path(&app_data_dir), &manifest).unwrap();
+
+        clear_cache_blocking(&app_data_dir, Some(&playing)).unwrap();
+
+        let manifest = cache::read_manifest(&cache::manifest_path(&app_data_dir));
+        assert_eq!(manifest.entries, vec![cached_movie(&playing)]);
+        assert!(cache::downloads_dir(&app_data_dir).join(&playing).exists());
+        assert!(!cache::downloads_dir(&app_data_dir).join(&cached).exists());
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+    }
+
+    #[test]
+    fn clearing_the_cache_keeps_a_stream_not_yet_in_the_manifest() {
+        let app_data_dir = fresh_app_data_dir("clear-adding");
+        let playing = "d".repeat(40);
+        write_video(&app_data_dir, &playing);
+
+        clear_cache_blocking(&app_data_dir, Some(&playing)).unwrap();
+
+        assert!(cache::downloads_dir(&app_data_dir).join(&playing).exists());
+        let _ = std::fs::remove_dir_all(&app_data_dir);
+    }
+
+    #[test]
+    fn clearing_the_cache_rejects_an_invalid_stream_to_keep() {
+        let app_data_dir = fresh_app_data_dir("clear-invalid");
+
+        assert!(clear_cache_blocking(&app_data_dir, Some("../x")).is_err());
     }
 
     #[test]
