@@ -318,6 +318,26 @@ describe('yts api', () => {
     expect(details.id).toBe('tt987');
   });
 
+  it('reads the year of a series from releaseInfo when year is missing, and keeps its release date', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        meta: {
+          id: 'tt987',
+          name: 'Test Series Detail',
+          releaseInfo: '2011-2015',
+          released: '2011-04-17T00:00:00.000Z',
+          poster: 'img_series.jpg'
+        }
+      })
+    });
+
+    const details = await getSeriesDetails('tt987');
+
+    expect(details.year).toBe(2011);
+    expect(details.releaseDate).toBe('2011-04-17T00:00:00.000Z');
+  });
+
   it('keeps the genres, runtime and first trailer of a series', async () => {
     routeFetch({
       'meta/series/tt987.json': {

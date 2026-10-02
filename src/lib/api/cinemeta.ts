@@ -457,23 +457,10 @@ export async function getSeriesDetails(
   }
 
   const meta = data.meta;
-  const id = meta.imdb_id || meta.id || seriesId;
-  const poster = correctedPoster(id, meta.poster);
-  const series = {
-    id,
-    title: meta.name,
-    year: parseInt(meta.year || '') || 0,
-    rating: parseFloat(meta.imdbRating || '') || 0,
-    medium_cover_image: poster,
-    large_cover_image: poster,
-    background_image_original: meta.background,
-    summary: meta.description || '',
-    description_full: meta.description || '',
+  const series: Series = {
+    ...mapCinemetaMeta({ ...meta, id: meta.imdb_id || meta.id || seriesId }),
     cast: (meta.cast || []).map((c) => ({
-      name: c
-        .replace(/&apos;/g, "'")
-        .replace(/&quot;/g, '"')
-        .replace(/&amp;/g, '&'),
+      name: decodeHtmlEntities(c),
       character_name: '',
       url_small_image: null,
       imdb_code: ''
@@ -481,11 +468,17 @@ export async function getSeriesDetails(
     director: meta.director || [],
     language: mapCountryToLanguage(meta.country),
     videos: (meta.videos || []).filter((video) => video.season > 0),
-    torrents: [],
     ...cinemetaExtras(meta)
   };
 
   return series;
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&');
 }
 
 /** What the hover card shows beyond the title and poster. */
