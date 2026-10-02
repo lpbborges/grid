@@ -100,4 +100,12 @@ describe('Layout', () => {
     expect(document.activeElement).toBe(other);
     other.remove();
   });
+
+  it('keeps the header above the backdrop that title pages fix behind them', () => {
+    pageState.url = new URL('http://localhost/movie/tt1');
+    const { container } = render(Layout, { children });
+
+    expect(container.querySelector('header')?.classList).toContain('z-20');
+    expect(container.querySelector('header')?.classList).toContain('relative');
+  });
 });
