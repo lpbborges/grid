@@ -41,6 +41,14 @@ pub struct Track {
 pub struct Playback {
     pub tracks: Vec<Track>,
     pub duration: f64,
+    pub chapters: Vec<Chapter>,
+}
+
+/// One entry of mpv's `chapter-list`: where a chapter starts, in seconds.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Chapter {
+    pub title: Option<String>,
+    pub time: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -142,6 +150,22 @@ pub fn parse_tracks(value: &Value) -> Vec<Track> {
                 selected: bool_field(entry, "selected"),
                 original: bool_field(entry, "original"),
                 hearing_impaired: bool_field(entry, "hearing-impaired"),
+            })
+        })
+        .collect()
+}
+
+pub fn parse_chapters(value: &Value) -> Vec<Chapter> {
+    let Some(entries) = value.as_array() else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let time = entry.get("time")?.as_f64()?;
+            time.is_finite().then(|| Chapter {
+                title: string_field(entry, "title"),
+                time,
             })
         })
         .collect()
@@ -336,6 +360,35 @@ mod tests {
         ]));
         assert_eq!(tracks.len(), 1);
         assert_eq!(tracks[0].id, 3);
+    }
+
+    #[test]
+    fn reads_the_chapters_mpv_lists() {
+        let chapters = parse_chapters(&serde_json::json!([
+            { "title": "Opening", "time": 0.0 },
+            { "time": 90.5 },
+            { "title": "Broken" },
+            "not a chapter"
+        ]));
+
+        assert_eq!(
+            chapters,
+            vec![
+                Chapter {
+                    title: Some("Opening".to_string()),
+                    time: 0.0
+                },
+                Chapter {
+                    title: None,
+                    time: 90.5
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_file_without_chapters_has_none() {
+        assert!(parse_chapters(&serde_json::json!(null)).is_empty());
     }
 
     #[test]

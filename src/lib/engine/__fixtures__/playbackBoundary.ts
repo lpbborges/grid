@@ -4,6 +4,7 @@ import type { Stream } from '$lib/api/torrentio';
 import type { ExternalSubtitleEntry } from '$lib/types';
 import { createFakeRqbit, type FakeRqbit, type FakeTorrentFile } from './fakeRqbit';
 import type { NativeTrack } from '$lib/composables/useMpvBackend.svelte';
+import type { Chapter } from '$lib/types';
 
 export const ENGINE_ORIGIN = 'http://127.0.0.1:41000';
 export const PROXY_ORIGIN = 'http://127.0.0.1:42000';
@@ -26,7 +27,7 @@ export interface PlaybackBoundaryOptions {
    * asks, and mpv itself is never involved: these stand in for the in-process
    * libmpv the same way the fake rqbit stands in for the engine.
    */
-  nativePlayback?: { tracks: NativeTrack[]; duration: number };
+  nativePlayback?: { tracks: NativeTrack[]; duration: number; chapters?: Chapter[] };
   nativeStartError?: unknown;
 }
 
@@ -82,7 +83,7 @@ export function installPlaybackBoundary(options: PlaybackBoundaryOptions): Playb
         return [];
       case 'start_native_player':
         if (options.nativeStartError !== undefined) throw options.nativeStartError;
-        return options.nativePlayback ?? { tracks: [], duration: 0 };
+        return { chapters: [], ...(options.nativePlayback ?? { tracks: [], duration: 0 }) };
       // The mid-playback controls: recorded in `invokeCalls`, answered with
       // nothing, exactly as mpv answers a `set_property`.
       case 'native_player_set_tracks':

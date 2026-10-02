@@ -34,6 +34,7 @@ export function createFakeMpvBackend() {
     activeSubtitleIndex: -1,
     failedSubtitleIndexes: [],
     subtitleError: '',
+    chapters: [],
     start: vi.fn().mockImplementation(function (
       this: { onended: (() => void) | undefined; onfinished: (() => void) | undefined },
       request: { onended?: () => void; onfinished?: () => void }

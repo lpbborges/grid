@@ -20,6 +20,7 @@ function fakeBackend(overrides: Partial<PlayerBackend> = {}): PlayerBackend {
     activeSubtitleIndex: -1,
     failedSubtitleIndexes: [],
     subtitleError: '',
+    chapters: [],
     start: vi.fn(),
     stop: vi.fn(),
     togglePlay: vi.fn(),
@@ -491,5 +492,51 @@ describe('PlayerShell keyboard shortcuts', () => {
 
     expect(backend.toggleFullscreen).not.toHaveBeenCalled();
     expect(backend.seek).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlayerShell skip intro', () => {
+  const chapters = [
+    { title: 'Prologue', time: 0 },
+    { title: 'Opening', time: 60 },
+    { title: 'Part A', time: 150 }
+  ];
+
+  function renderAt(currentTime: number, overrides: Partial<PlayerBackend> = {}) {
+    const backend = fakeBackend({
+      hasStarted: true,
+      duration: 1500,
+      chapters,
+      currentTime,
+      ...overrides
+    });
+    render(PlayerShell, { props: { backend, surface: emptySurface } });
+    return backend;
+  }
+
+  it('offers to skip the intro while it plays and jumps to its end', async () => {
+    const backend = renderAt(70);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Pular abertura' }));
+
+    expect(backend.seek).toHaveBeenCalledWith(150);
+  });
+
+  it.each([30, 149.5, 200])('stays out of the way outside the intro (at %is)', (time) => {
+    renderAt(time);
+
+    expect(screen.queryByRole('button', { name: 'Pular abertura' })).toBeNull();
+  });
+
+  it('never offers it when the file names no intro', () => {
+    renderAt(70, { chapters: [] });
+
+    expect(screen.queryByRole('button', { name: 'Pular abertura' })).toBeNull();
+  });
+
+  it('waits for the video to start', () => {
+    renderAt(70, { hasStarted: false });
+
+    expect(screen.queryByRole('button', { name: 'Pular abertura' })).toBeNull();
   });
 });
