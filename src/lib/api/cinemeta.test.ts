@@ -12,7 +12,8 @@ import {
   searchLocalizedCatalog,
   resolveMissingSnapshots,
   getPreviewMeta,
-  clearPreviewMetaCache
+  clearPreviewMetaCache,
+  MAX_CACHED_PREVIEW_METAS
 } from './cinemeta';
 
 const { translateTitleMock } = vi.hoisted(() => ({
@@ -1021,6 +1022,19 @@ describe('getPreviewMeta', () => {
 
     expect(again).toEqual({ runtime: '90 min' });
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets the oldest preview once the cache is full', async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(
+      async () => new Response(JSON.stringify({ meta: { name: 'Filme', poster: 'p.jpg' } }))
+    );
+
+    for (let i = 0; i <= MAX_CACHED_PREVIEW_METAS; i++) await getPreviewMeta('movie', `tt${i}`);
+    await getPreviewMeta('movie', `tt${MAX_CACHED_PREVIEW_METAS}`);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(MAX_CACHED_PREVIEW_METAS + 1);
+
+    await getPreviewMeta('movie', 'tt0');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(MAX_CACHED_PREVIEW_METAS + 2);
   });
 
   it('does not cache a failed request', async () => {

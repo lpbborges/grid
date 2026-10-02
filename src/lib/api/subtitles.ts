@@ -244,22 +244,37 @@ function selectSubtitlesToFetch(
 // Converted VTT text by source URL, so replaying a title doesn't spend the
 // Rust-side rate limit again.
 const MAX_CACHED_EXTERNAL_SUBTITLES = 100;
+export const MAX_CACHED_SUBTITLE_CHARS = 8 * 1024 * 1024;
 const externalSubtitleCache = new Map<string, string>();
+let externalSubtitleCacheChars = 0;
+
+function cacheExternalSubtitle(url: string, vtt: string): void {
+  externalSubtitleCache.set(url, vtt);
+  externalSubtitleCacheChars += vtt.length;
+  for (const [oldest, text] of externalSubtitleCache) {
+    if (
+      oldest === url ||
+      (externalSubtitleCache.size <= MAX_CACHED_EXTERNAL_SUBTITLES &&
+        externalSubtitleCacheChars <= MAX_CACHED_SUBTITLE_CHARS)
+    ) {
+      break;
+    }
+    externalSubtitleCache.delete(oldest);
+    externalSubtitleCacheChars -= text.length;
+  }
+}
 
 async function fetchExternalSubtitleContent(url: string): Promise<string> {
   const cached = externalSubtitleCache.get(url);
   if (cached !== undefined) return cached;
   const vtt = await invoke<string>('fetch_external_subtitle', { url });
-  if (externalSubtitleCache.size >= MAX_CACHED_EXTERNAL_SUBTITLES) {
-    const oldest = externalSubtitleCache.keys().next().value;
-    if (oldest !== undefined) externalSubtitleCache.delete(oldest);
-  }
-  externalSubtitleCache.set(url, vtt);
+  cacheExternalSubtitle(url, vtt);
   return vtt;
 }
 
 export function clearExternalSubtitleCache(): void {
   externalSubtitleCache.clear();
+  externalSubtitleCacheChars = 0;
 }
 
 // Stremio addon "extra" arguments, sent the same way Stremio sends them.

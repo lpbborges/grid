@@ -496,6 +496,7 @@ export interface PreviewMeta {
   seasons?: number;
 }
 
+export const MAX_CACHED_PREVIEW_METAS = 200;
 const previewMetaCache = new Map<string, PreviewMeta>();
 
 export function clearPreviewMetaCache(): void {
@@ -530,6 +531,10 @@ export async function getPreviewMeta(
     ...(genres && { genres }),
     ...(type === 'series' && seasons > 0 && { seasons })
   };
+  if (previewMetaCache.size >= MAX_CACHED_PREVIEW_METAS) {
+    const oldest = previewMetaCache.keys().next().value;
+    if (oldest !== undefined) previewMetaCache.delete(oldest);
+  }
   previewMetaCache.set(key, preview);
   return preview;
 }

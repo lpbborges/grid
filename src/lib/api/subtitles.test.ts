@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   clearExternalSubtitleCache,
   findPreferredSubtitleIndex,
-  getExternalSubtitles
+  getExternalSubtitles,
+  MAX_CACHED_SUBTITLE_CHARS
 } from './subtitles';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -22,6 +23,25 @@ describe('subtitles api', () => {
   });
 
   describe('getExternalSubtitles', () => {
+    it('keeps the converted subtitles cache under a size cap', async () => {
+      const entries = ['a', 'b', 'c', 'd'].map((id) => ({
+        id,
+        url: `https://subs.strem.io/${id}.srt`,
+        lang: 'eng'
+      }));
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ subtitles: entries })
+      });
+      (invoke as any).mockResolvedValue('x'.repeat(MAX_CACHED_SUBTITLE_CHARS / 2.5));
+
+      await getExternalSubtitles('tt1');
+      expect(invoke).toHaveBeenCalledTimes(4);
+      await getExternalSubtitles('tt1');
+
+      expect(invoke).toHaveBeenCalledTimes(6);
+    });
+
     it('fetches correct URL for series when season and episode are provided', async () => {
       (fetch as any).mockResolvedValue({
         ok: true,
