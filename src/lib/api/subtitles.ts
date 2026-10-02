@@ -241,8 +241,8 @@ function selectSubtitlesToFetch(
   return selected;
 }
 
-// Converted VTT text by source URL, so replaying a title (or retrying within
-// the same minute) doesn't spend the Rust-side rate limit again.
+// Converted VTT text by source URL, so replaying a title doesn't spend the
+// Rust-side rate limit again.
 const MAX_CACHED_EXTERNAL_SUBTITLES = 100;
 const externalSubtitleCache = new Map<string, string>();
 

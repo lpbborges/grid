@@ -40,17 +40,12 @@ export type FinishedStream = Pick<StreamDetails, 'infoHash' | 'isCacheable' | 'c
   fileIdx?: number;
 };
 
-// Blob URLs created for the subtitles of the most recently prepared stream.
-// Tracked so they can be revoked when a new stream is prepared, otherwise
-// every torrent/episode load leaks the previous session's subtitle blobs
-// for the lifetime of the process.
+// Subtitle blob URLs of the latest prepared stream, revoked when the next one is prepared.
 let activeBlobUrls: string[] = [];
 
-// The finalize of the stream that just ended, while it is still running.
-// finalizeStream writes the cache entry over IPC before it forgets the
-// torrent, and nothing awaits it (the player's close button calls stop()
-// fire-and-forget). Playing the same title again re-adds the same info hash,
-// so a late forget would delete the torrent the new stream is waiting on.
+// The finalize of the stream that just ended, while it still runs. Nothing awaits
+// it (the close button calls stop() fire-and-forget), and playing the same title
+// again re-adds the same info hash, so a late forget would drop the new torrent.
 let pendingFinalize: Promise<void> = Promise.resolve();
 
 // The stream being prepared or played, whose files must survive a cache clear.
@@ -67,11 +62,9 @@ function revokeBlobUrls(urls: string[]): void {
   }
 }
 
-// Only one torrent is ever meant to be actively loaded in rqbit at a time,
-// but a crash or a missed cleanup can leave stragglers. Before adding a new
-// one: any loaded torrent the manifest still tracks is forgotten (its files
-// stay cached), and anything else (an oversized "no-cache" leftover) is
-// deleted outright.
+// Only one torrent should be loaded in rqbit at a time; a crash can leave
+// stragglers. Ones the manifest tracks are forgotten (files stay cached), the
+// rest (e.g. an oversized leftover) are deleted.
 async function reconcileLoadedTorrents(manifestInfoHashes: string[]): Promise<void> {
   const known = new Set(manifestInfoHashes);
   const loaded = await getLoadedTorrentInfoHashes();

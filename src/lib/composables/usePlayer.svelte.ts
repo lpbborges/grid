@@ -128,8 +128,6 @@ export function usePlayer(
     await Promise.all([backend.stop(), streamPlayer.stop()]);
   }
 
-  // The single progress writer. Both backends used to keep their own.
-
   async function stop() {
     advanceGeneration++;
     advancing = false;

@@ -32,9 +32,9 @@ pub use unavailable::Controller;
 #[cfg(any(target_os = "linux", windows))]
 use controller::VideoOutput;
 
-/// The app's single player, created on the first playback (spec L5).
+/// The app's single player, created on the first playback.
 ///
-/// A creation failure is kept, not retried: with no `<video>` fallback (L3),
+/// A creation failure is kept, not retried: with no `<video>` fallback,
 /// every later Play shows the same error instead of re-running GTK surgery.
 /// Empty where there is no libmpv: every call then reports it unavailable.
 #[derive(Default)]

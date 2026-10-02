@@ -50,11 +50,9 @@ export interface NativePlayOptions {
 }
 
 /**
- * Builds the label `resolvePreferredAudioTrack` matches against.
- *
- * That function was extracted from `VideoPlayer`, where it worked on DOM
- * `audioTracks` labels, so it matches on human-readable language names rather
- * than codes. It is also the label the audio and subtitle menus show.
+ * The label `resolvePreferredAudioTrack` matches against (it expects
+ * human-readable language names, not codes), also shown in the audio and
+ * subtitle menus.
  */
 export function nativeTrackLabel(track: NativeTrack): string {
   const code = trackLanguage(track);
@@ -62,12 +60,10 @@ export function nativeTrackLabel(track: NativeTrack): string {
   if (!code) return track.title?.trim() ?? '';
 
   const language = languageName(code);
-  // Release titles mostly restate the language ("German (Germany)"), which
-  // next to the Portuguese name reads as the language twice. Only a variant
-  // of the language itself is shown - never track details such as SDH or
-  // forced. Tracks that still share a label end up grouped as
-  // "Opção 1 / Opção 2" in the menu, like external subtitles.
-  // The tag's region counts too: "es-419" is Latin American Spanish.
+  // Titles mostly restate the language ("German (Germany)"), so only a variant
+  // of the language itself is shown, never SDH or forced. Tracks that still
+  // share a label are grouped as "Opção 1 / Opção 2". The region counts:
+  // "es-419" is Latin American Spanish.
   const source = `${track.title ?? ''} ${track.lang ?? ''}`;
   const variant = LANGUAGE_VARIANTS.find(([pattern]) => pattern.test(source))?.[1];
   // A table entry like "Espanhol (América Latina)" already names its variant.
@@ -177,14 +173,9 @@ export function resolveNativeTracks(
 }
 
 /**
- * Fills in the language of every external subtitle track.
- *
- * mpv reports no `lang` for a track added with `--sub-file`, which is how Grid
- * passes every subtitle it fetched, so those tracks would label themselves
- * "Legenda 3" in the menu with no way to tell Portuguese from English. Grid
- * knows what it wrote and mpv lists external tracks in the order they were
- * given, so the languages are matched back on by position - the same rule
- * `resolveNativeTracks` applies when picking the preferred one.
+ * Fills in the language of every external subtitle track. mpv reports no `lang`
+ * for a `--sub-file` track, and lists them in the order given, so Grid's
+ * languages are matched back on by position.
  */
 export function withExternalLangs(tracks: NativeTrack[], externalLangs: string[]): NativeTrack[] {
   let seen = 0;
@@ -196,11 +187,8 @@ export function withExternalLangs(tracks: NativeTrack[], externalLangs: string[]
 }
 
 /**
- * Reads the already-fetched subtitle text back out of its `blob:` URL and hands
- * it to Rust to write into the app cache.
- *
- * Reading the blob avoids fetching anything twice and leaves the strem.io
- * allowlist and rate limit on the original fetch path untouched. A subtitle
+ * Reads the fetched subtitle text back out of its `blob:` URL and hands it to
+ * Rust to write into the app cache, so nothing is fetched twice. A subtitle
  * that cannot be read is dropped rather than failing playback.
  */
 async function cacheSubtitles(subtitles: SubtitleTrack[]): Promise<string[]> {

@@ -34,12 +34,8 @@ const SUBTITLE_RATE_LIMIT_PER_MINUTE: u32 = 30;
 /// A custom redirect policy gets no default hop limit, so it sets its own.
 const MAX_SUBTITLE_REDIRECTS: usize = 10;
 
-/// Hard cap on how many bytes of a subtitle response we'll buffer into
-/// memory. Real subtitle files are at most a few hundred KB; this is
-/// generous headroom while still making it impossible for a
-/// mis-resolved/attacker-influenced `file_idx` (or a malicious external
-/// host) to force multi-gigabyte buffering, as defense in depth on top of
-/// the subtitle-file-name check in `fetch_torrent_subtitle`.
+/// Most bytes of a subtitle response buffered into memory: real files are a few
+/// hundred KB, and this bounds what a wrong `file_idx` or a hostile host can force.
 const MAX_SUBTITLE_RESPONSE_BYTES: usize = 5 * 1024 * 1024;
 
 fn check_subtitle_rate_limit(state: &SubtitleRateLimit, key: &str) -> bool {
@@ -76,9 +72,7 @@ async fn fetch_torrent_subtitle(
     fetch_torrent_subtitle_impl(info_hash, file_idx, port, &rate_limit).await
 }
 
-/// The actual logic behind the `fetch_torrent_subtitle` command, factored
-/// out so it can be exercised in tests without needing a real `tauri::State`
-/// (whose only public constructor requires a live `AppHandle`/`Manager`).
+/// The logic behind `fetch_torrent_subtitle`, split out so tests need no `tauri::State`.
 async fn fetch_torrent_subtitle_impl(
     info_hash: String,
     file_idx: i64,
@@ -92,12 +86,8 @@ async fn fetch_torrent_subtitle_impl(
         return Err("Invalid parameters".to_string());
     }
 
-    // `file_idx` is caller-supplied and only format-validated above — it is
-    // NOT yet checked against this torrent's actual file list. Resolve the
-    // real file name from the torrent engine and reject anything that isn't
-    // a subtitle file (e.g. the main video) before fetching its content,
-    // which would otherwise buffer a potentially multi-gigabyte file into
-    // memory (see fetch_and_convert).
+    // `file_idx` is only format-checked so far: reject anything the engine does not
+    // list as a subtitle before fetching it, or the main video would be buffered.
     let file_name = resolve_torrent_file_name(port, &info_hash, file_idx).await?;
     if !subtitles::is_subtitle_file_name(&file_name) {
         return Err("Requested file is not a subtitle".to_string());
@@ -117,9 +107,7 @@ struct TorrentDetailsResponse {
     files: Option<Vec<TorrentDetailsFile>>,
 }
 
-/// Queries the local torrent engine for `info_hash`'s file listing and
-/// returns the name of the file at `file_idx`, so callers can validate it
-/// server-side before treating it as a subtitle (see `fetch_torrent_subtitle`).
+/// The name the engine lists for `file_idx` of `info_hash`.
 async fn resolve_torrent_file_name(
     port: u16,
     info_hash: &str,
@@ -167,11 +155,8 @@ async fn fetch_external_subtitle(
     fetch_and_convert(&url).await
 }
 
-/// Redirect policy shared by the subtitle-fetching client: every redirect
-/// target (not just the original request URL) is re-validated against the
-/// strem.io allowlist before being followed. This closes an SSRF hole where
-/// an allowed host could redirect the fetch to an arbitrary internal or
-/// external address.
+/// Every redirect target, not just the first URL, must pass the allowlist, so an
+/// allowed host cannot bounce the fetch to an arbitrary address (SSRF).
 fn redirect_policy_allowing(is_allowed: fn(&str) -> bool) -> reqwest::redirect::Policy {
     reqwest::redirect::Policy::custom(move |attempt| {
         if attempt.previous().len() >= MAX_SUBTITLE_REDIRECTS {
@@ -218,12 +203,8 @@ async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
     }
 }
 
-/// Reads `res`'s body as subtitle text, streaming it in chunks and
-/// aborting with an error as soon as more than `max_bytes` have been read.
-/// This is defense in depth on top of the subtitle-file-name validation in
-/// `fetch_torrent_subtitle`: even if a non-subtitle (e.g. multi-gigabyte
-/// video) file were ever reached here, this keeps memory use bounded
-/// instead of buffering the whole response via `Response::text()`.
+/// Streams `res` as subtitle text and fails once more than `max_bytes` arrive,
+/// instead of buffering the whole body with `Response::text()`.
 async fn read_capped_body_as_string(
     res: reqwest::Response,
     max_bytes: usize,
@@ -513,11 +494,8 @@ async fn start_torrent_engine(
     app: tauri::AppHandle,
     state: State<'_, EngineState>,
 ) -> Result<String, String> {
-    // Check-and-bail without holding any lock across the (up to ~3s)
-    // cleanup wait below: the window CloseRequested handler needs to be
-    // able to acquire `state.child` promptly even if a startup cleanup is
-    // still polling for a stale process to die, otherwise closing the
-    // window could block on this same mutex.
+    // No lock is held across the cleanup wait below, so closing the window
+    // (which takes `state.child`) never blocks on it.
     {
         let mut child_guard = state.child.lock().unwrap();
         forget_exited_engine(&mut child_guard);
@@ -530,9 +508,7 @@ async fn start_torrent_engine(
         }
     }
 
-    // Identity-validated cleanup of any orphaned rqbit process from a
-    // previous run, tracked via the PID file (see cleanup_stale_engine).
-    // Deliberately run with no EngineState locks held (see comment above).
+    // Kill an rqbit orphaned by a previous run, found through the PID file.
     let app_cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
     if let Err(e) = std::fs::create_dir_all(&app_cache_dir) {
         eprintln!("Failed to create app cache dir for engine PID file: {}", e);
@@ -559,9 +535,8 @@ async fn start_torrent_engine(
     let output_folder = cache::downloads_dir(&app_data_dir);
     let _ = std::fs::create_dir_all(&output_folder);
 
-    // The downloads folder now persists across restarts (it backs the video
-    // cache), so instead of wiping it we only remove state inconsistent with
-    // the manifest: entries the manifest no longer knows about.
+    // The downloads folder backs the video cache, so only entries the manifest
+    // no longer knows about are removed.
     let manifest = cache::read_manifest(&cache::manifest_path(&app_data_dir));
     for orphan_name in cache::find_orphan_top_level_names(&output_folder, &manifest) {
         cache::remove_path_best_effort(&output_folder.join(orphan_name));
@@ -641,12 +616,8 @@ async fn get_stream_proxy_url(state: State<'_, StreamProxyState>) -> Result<Stri
 }
 
 /// Writes the fetched subtitles where mpv can read them, replacing the previous
-/// playback's.
-///
-/// External subtitles reach the frontend as `blob:` URLs, which mpv cannot load,
-/// so the text is written to the app cache and passed as `--sub-file`. The
-/// strem.io allowlist and the rate limit stay on the fetch path, untouched:
-/// this only persists what those checks already approved.
+/// playback's. mpv cannot load the frontend's `blob:` URLs, so the text goes to
+/// the app cache; the allowlist and rate limit stay on the fetch path.
 #[tauri::command]
 async fn cache_native_subtitles(
     app: tauri::AppHandle,
@@ -745,11 +716,10 @@ fn running_player(state: &player::NativePlayerState) -> Result<player::Controlle
 /// The mid-session controls below are separate for exactly that reason.
 ///
 /// Also where the playback's events start flowing to the frontend.
-/// `useMpvBackend.start` (src/lib/composables/useMpvBackend.svelte.ts)
-/// awaits every `listen()` (lines 218-245) before it invokes this command
-/// (line 255), so nothing emitted from here on can be dropped for lack of a
-/// listener. Pumped before the tracks are applied so a failure below still
-/// leaves mpv's own events (e.g. an error) reaching the UI.
+/// `useMpvBackend.start` awaits every `listen()` before invoking this command,
+/// so nothing emitted from here on is dropped for lack of a listener. Pumped
+/// before the tracks are applied so a failure below still lets mpv's own
+/// events (e.g. an error) reach the UI.
 #[tauri::command]
 async fn native_player_set_tracks(
     app: tauri::AppHandle,

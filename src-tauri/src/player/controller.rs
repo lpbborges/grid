@@ -1,4 +1,4 @@
-//! One in-process libmpv instance for the whole app run (spec L1, L5).
+//! One in-process libmpv instance for the whole app run.
 //!
 //! Leaked on purpose: the Linux render context and the event thread borrow it
 //! for `'static`, and the instance is reused for every playback - `stop` ends a
@@ -11,17 +11,11 @@
 //!
 //! ## Attributing events to the load that started them
 //!
-//! Two loads can race: `load` B can be called while `load` A is still
-//! waiting on mpv. mpv's own playlist entry id (returned by `loadfile`
-//! itself, see [`loadfile_with_entry_id`]) is the only thing that reliably
-//! tells A's events apart from B's, because mpv's event queue can still
-//! deliver a stale `StartFile`/`EndFile` for A *after* B has already
-//! installed its own sink (A's `StartFile` was already queued when B
-//! replaced the sink). Without checking the entry id, that stale event would
-//! either wrongly promote B's sink or - worse - forward A's `EndFile` as
-//! B's "the file closed before it loaded". Every raw mpv event the event
-//! thread sees is decoded with its entry id attached (`RawEvent`), and
-//! `route` drops anything whose id doesn't match the sink it would apply to.
+//! `load` B can be called while `load` A still waits on mpv, and mpv's queue
+//! can deliver A's `StartFile`/`EndFile` after B installed its sink. Only the
+//! playlist entry id (returned by `loadfile`, see [`loadfile_with_entry_id`])
+//! tells them apart, so every raw event is decoded with it (`RawEvent`) and
+//! `route` drops any whose id does not match the sink.
 
 use crate::player::model::{parse_chapters, parse_tracks, Playback, PlayerEvent, TimeThrottle};
 use libmpv2::{Format, Mpv};
@@ -603,8 +597,7 @@ impl Controller {
         let own_tx = tx.downgrade();
 
         {
-            // Held only across these synchronous FFI calls - never across
-            // the `.await` below. See `command_lock`'s doc comment.
+            // Held only across these synchronous calls, never the `.await` below.
             let _command_guard = self
                 .command_lock
                 .lock()
@@ -616,17 +609,10 @@ impl Controller {
                 .set_property("pause", true)
                 .map_err(|e| format!("mpv could not load the stream: {}", describe_error(&e)))?;
 
-            // Held across `loadfile_with_entry_id` and the sink install
-            // below, so the event thread cannot route this entry's
-            // `StartFile`/`FileLoaded` (or an immediate `EndFile` for a bad
-            // URL) against the old sink in the gap between mpv assigning the
-            // entry and this sink existing to catch it. This is safe to do
-            // without deadlocking or stalling other loads' events: mpv's
-            // core never blocks a command on a client draining its event
-            // queue, and `run_events` only ever takes this same lock briefly
-            // to route an already-received event - never while blocked
-            // inside `mpv_wait_event` waiting for the next one (see
-            // `run_events`'s doc comment).
+            // Held across `loadfile` and the sink install, so the event thread
+            // cannot route this entry's first events (or an immediate `EndFile`
+            // for a bad URL) against the old sink. It cannot deadlock:
+            // `run_events` takes this lock only after receiving an event.
             let mut routing = self.routing.lock().unwrap_or_else(PoisonError::into_inner);
 
             let entry = loadfile_with_entry_id(self.mpv, url, start_seconds)?;
