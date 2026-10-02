@@ -109,7 +109,59 @@
   }
 
   let containerElement = $state<HTMLElement | null>(null);
-  const SEEK_STEP_SECONDS = 5;
+  const SEEK_STEP_SECONDS = 10;
+  const VOLUME_STEP = 0.05;
+  const FEEDBACK_MS = 1200;
+
+  let feedback = $state('');
+  let feedbackTimeout: number | undefined;
+  let volumeBeforeMute = 1;
+
+  $effect(() => () => clearTimeout(feedbackTimeout));
+
+  function showFeedback(message: string) {
+    feedback = message;
+    clearTimeout(feedbackTimeout);
+    feedbackTimeout = window.setTimeout(() => (feedback = ''), FEEDBACK_MS);
+  }
+
+  function revealControls() {
+    showControls = true;
+    scheduleHideControls();
+  }
+
+  function seekBy(seconds: number) {
+    const target = Math.min(backend.duration || 0, Math.max(0, backend.currentTime + seconds));
+    backend.seek(target);
+    showFeedback(seconds > 0 ? `+${seconds}s` : `${seconds}s`);
+    revealControls();
+  }
+
+  function changeVolume(delta: number) {
+    const volume = Math.round(Math.min(1, Math.max(0, backend.volume + delta)) * 100) / 100;
+    backend.setVolume(volume);
+    showFeedback(`Volume ${Math.round(volume * 100)}%`);
+  }
+
+  function toggleMute() {
+    if (backend.volume > 0) {
+      volumeBeforeMute = backend.volume;
+      backend.setVolume(0);
+      showFeedback('Mudo');
+    } else {
+      backend.setVolume(volumeBeforeMute);
+      showFeedback(`Volume ${Math.round(volumeBeforeMute * 100)}%`);
+    }
+  }
+
+  function cycleSubtitle() {
+    const next = backend.activeSubtitleIndex + 1;
+    const index = next < backend.subtitles.length ? next : -1;
+    backend.selectSubtitle(index);
+    showFeedback(
+      index === -1 ? 'Legendas desativadas' : `Legenda: ${backend.subtitles[index].label}`
+    );
+  }
 
   function handleGlobalKeydown(e: KeyboardEvent) {
     const active = document.activeElement as HTMLElement;
@@ -117,31 +169,44 @@
     const isButton = active && active.tagName === 'BUTTON';
     const isSlider = active && active.getAttribute('role') === 'slider';
 
-    if (isInput) return;
+    if (isInput || e.ctrlKey || e.metaKey || e.altKey) return;
 
-    switch (e.key) {
+    switch (e.key.length === 1 ? e.key.toLowerCase() : e.key) {
       case ' ':
         if (isButton || isSlider) return;
         e.preventDefault();
         backend.togglePlay();
-        showControls = true;
-        scheduleHideControls();
+        revealControls();
         break;
       case 'ArrowLeft':
-        if (active && active.tagName === 'INPUT' && (active as HTMLInputElement).type === 'range')
-          return;
+      case 'j':
         e.preventDefault();
-        backend.seek(Math.max(0, backend.currentTime - SEEK_STEP_SECONDS));
-        showControls = true;
-        scheduleHideControls();
+        seekBy(-SEEK_STEP_SECONDS);
         break;
       case 'ArrowRight':
-        if (active && active.tagName === 'INPUT' && (active as HTMLInputElement).type === 'range')
-          return;
+      case 'l':
         e.preventDefault();
-        backend.seek(Math.min(backend.duration || 0, backend.currentTime + SEEK_STEP_SECONDS));
-        showControls = true;
-        scheduleHideControls();
+        seekBy(SEEK_STEP_SECONDS);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        changeVolume(VOLUME_STEP);
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        changeVolume(-VOLUME_STEP);
+        break;
+      case 'f':
+        e.preventDefault();
+        backend.toggleFullscreen();
+        break;
+      case 'm':
+        e.preventDefault();
+        toggleMute();
+        break;
+      case 'c':
+        e.preventDefault();
+        cycleSubtitle();
         break;
       case 'Escape':
         if (showCard && upNext) {
@@ -254,6 +319,16 @@
     </div>
   {/if}
 
+  {#if feedback}
+    <div
+      class="bg-backdrop/80 text-main pointer-events-none absolute top-8 left-1/2 z-50 -translate-x-1/2 rounded-sm px-4 py-2 font-mono text-lg font-bold"
+      data-testid="player-feedback"
+      aria-live="polite"
+    >
+      {feedback}
+    </div>
+  {/if}
+
   {#if showCard && upNext}
     <NextEpisodeCard {...upNext} paused={backend.paused} />
   {/if}
@@ -279,6 +354,7 @@
     onplaypause={() => backend.togglePlay()}
     onseek={(seconds) => backend.seek(seconds)}
     onvolume={(value) => backend.setVolume(value)}
+    onmute={toggleMute}
     onselectaudio={(index) => backend.selectAudio(index)}
     onselectsubtitle={(index) => backend.selectSubtitle(index)}
     ontogglesubtitlemenu={() => (showSubtitleMenu = !showSubtitleMenu)}

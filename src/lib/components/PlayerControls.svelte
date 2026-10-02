@@ -38,6 +38,7 @@
     onplaypause,
     onseek,
     onvolume,
+    onmute,
     onselectaudio,
     onselectsubtitle,
     ontogglesubtitlemenu,
@@ -65,6 +66,7 @@
     onplaypause: () => void;
     onseek: (seconds: number) => void;
     onvolume: (value: number) => void;
+    onmute: () => void;
     onselectaudio: (index: number) => void;
     onselectsubtitle: (index: number) => void;
     ontogglesubtitlemenu?: () => void;
@@ -206,7 +208,7 @@
 
       <div class="group relative ml-4 flex items-center gap-2">
         <button
-          onclick={() => onvolume(volume === 0 ? 1 : 0)}
+          onclick={onmute}
           aria-label="Ativar/desativar mudo"
           class="hover:text-primary rounded p-2 transition-colors"
         >
