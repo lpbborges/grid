@@ -56,7 +56,9 @@ async function openAndPlay(chapters: Chapter[] = []) {
     ...baseOptions,
     nativePlayback: { tracks: [], duration: 100, chapters }
   });
-  render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+  render(MoviePage, {
+    props: { data: { autoplay: false, movieId: movie.id, movie, error: null } }
+  });
   await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
 
   vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -106,7 +108,9 @@ describe('Movie native playback wiring', () => {
         duration: 100
       }
     });
-    render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+    render(MoviePage, {
+      props: { data: { autoplay: false, movieId: movie.id, movie, error: null } }
+    });
     await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
 
     await waitFor(
@@ -256,7 +260,9 @@ describe('Movie native playback wiring', () => {
       nativePlayback: { tracks: [], duration: 100 }
     });
 
-    render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+    render(MoviePage, {
+      props: { data: { autoplay: false, movieId: movie.id, movie, error: null } }
+    });
     await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
 
     vi.useFakeTimers({ shouldAdvanceTime: true });

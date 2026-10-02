@@ -49,6 +49,7 @@ function seriesMeta(series: CatalogSeries) {
     poster: POSTER,
     description: `${series.title} synopsis`,
     country: 'United States',
+    genres: ['Drama', 'Sci-Fi'],
     videos: series.episodes.map((e) => ({
       id: `${series.id}:${e.season}:${e.episode}`,
       season: e.season,

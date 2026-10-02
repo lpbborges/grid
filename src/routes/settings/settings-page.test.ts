@@ -37,6 +37,7 @@ describe('Settings page', () => {
     settingsStore.quality = '1080p';
     settingsStore.subtitle = 'pt';
     settingsStore.cacheLimitBytes = 3 * BYTES_PER_GB;
+    settingsStore.hoverPreview = true;
   });
 
   it('titles the page with a slim bar instead of the catalog header', () => {
@@ -164,5 +165,17 @@ describe('Settings page load', () => {
     const { load } = await import('./+page');
 
     expect(await load({} as never)).toEqual({ cacheUsageBytes: null });
+  });
+
+  it('turns the hover preview off and on', async () => {
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+    const toggle = screen.getByRole('checkbox', { name: 'Prévia ao passar o mouse' });
+    expect((toggle as HTMLInputElement).checked).toBe(true);
+
+    await fireEvent.click(toggle);
+    expect(settingsStore.hoverPreview).toBe(false);
+
+    await fireEvent.click(toggle);
+    expect(settingsStore.hoverPreview).toBe(true);
   });
 });

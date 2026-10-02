@@ -47,6 +47,8 @@
   });
 
   let selectedTorrentHash = $state('');
+  let sourcesLoaded = $state(false);
+  let autoplayStarted = false;
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
@@ -59,6 +61,8 @@
   $effect(() => {
     if (movieId) {
       selectedTorrentHash = '';
+      sourcesLoaded = false;
+      autoplayStarted = false;
       combinedTorrents = [];
       failedSources = new SvelteSet();
       if (hasMountedTorrentEffect) {
@@ -151,9 +155,11 @@
           }
         }
         if (changed) reselectBestTorrent();
+        sourcesLoaded = true;
       })
       .catch((e) => {
         if (movie?.id !== requestedId) return;
+        sourcesLoaded = true;
         logger.error('Falha ao buscar streams do Torrentio:', e);
         if (combinedTorrents.length === 0) {
           lookupFailed = true;
@@ -195,6 +201,14 @@
       if (combinedTorrents.length > 0) {
         reselectBestTorrent();
       }
+    }
+  });
+
+  // The hover card's Play opens the page with ?play=1: start once the sources are in.
+  $effect(() => {
+    if (data.autoplay && movie && sourcesLoaded && !autoplayStarted) {
+      autoplayStarted = true;
+      untrack(() => void playMovie());
     }
   });
 

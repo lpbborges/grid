@@ -75,7 +75,7 @@
     <div>
       <MediaRow heading="Populares" items={popular}>
         {#snippet card(item)}
-          <MediaCard media={item} type={item.type} showType />
+          <MediaCard media={item} type={item.type} />
         {/snippet}
       </MediaRow>
       {#each browsingRows as row (row.heading)}

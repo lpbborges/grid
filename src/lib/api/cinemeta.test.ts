@@ -10,7 +10,9 @@ import {
   searchSeries,
   searchCatalog,
   searchLocalizedCatalog,
-  resolveMissingSnapshots
+  resolveMissingSnapshots,
+  getPreviewMeta,
+  clearPreviewMetaCache
 } from './cinemeta';
 
 const { translateTitleMock } = vi.hoisted(() => ({
@@ -883,5 +885,82 @@ describe('getCatalogPage', () => {
     const page = await getCatalogPage({ type: 'movie', catalog: 'top' });
 
     expect(page).toMatchObject({ titles: [], consumed: 0, ended: true });
+  });
+});
+
+describe('getPreviewMeta', () => {
+  beforeEach(() => {
+    clearPreviewMetaCache();
+    vi.spyOn(globalThis, 'fetch');
+  });
+
+  const answer = (meta: unknown) =>
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ meta })));
+
+  it('reads the backdrop, runtime and genres of a movie', async () => {
+    answer({
+      name: 'Filme',
+      poster: 'p.jpg',
+      background: 'bg.jpg',
+      runtime: '136 min',
+      genres: ['Action']
+    });
+
+    const meta = await getPreviewMeta('movie', 'tt1');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('meta/movie/tt1.json'),
+      expect.anything()
+    );
+    expect(meta).toEqual({ backdrop: 'bg.jpg', runtime: '136 min', genres: ['Action'] });
+  });
+
+  it('counts the seasons of a series, ignoring specials', async () => {
+    answer({
+      name: 'Série',
+      poster: 'p.jpg',
+      videos: [
+        { id: 'a', season: 0, episode: 1 },
+        { id: 'b', season: 1, episode: 1 },
+        { id: 'c', season: 1, episode: 2 },
+        { id: 'd', season: 2, episode: 1 }
+      ]
+    });
+
+    expect(await getPreviewMeta('series', 'tt2')).toEqual({ seasons: 2 });
+  });
+
+  it('leaves out what Cinemeta does not have', async () => {
+    answer({ name: 'Filme', poster: 'p.jpg' });
+
+    expect(await getPreviewMeta('movie', 'tt3')).toEqual({});
+  });
+
+  it('answers a repeated request from the cache', async () => {
+    answer({ name: 'Filme', poster: 'p.jpg', runtime: '90 min' });
+
+    await getPreviewMeta('movie', 'tt4');
+    const again = await getPreviewMeta('movie', 'tt4');
+
+    expect(again).toEqual({ runtime: '90 min' });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache a failed request', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response('', { status: 500 }));
+    await expect(getPreviewMeta('movie', 'tt5')).rejects.toThrow();
+
+    answer({ name: 'Filme', poster: 'p.jpg', runtime: '90 min' });
+    expect(await getPreviewMeta('movie', 'tt5')).toEqual({ runtime: '90 min' });
+  });
+
+  it('rejects when the caller aborts', async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException('left', 'AbortError'));
+
+    await expect(
+      getPreviewMeta('movie', 'tt6', { signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

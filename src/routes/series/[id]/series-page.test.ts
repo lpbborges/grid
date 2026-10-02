@@ -65,7 +65,15 @@ describe('Series page error handling', () => {
     const rawMessage = 'TypeError: Failed to fetch at yts.ts:42';
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series: null, requestedEpisode: null, error: rawMessage } }
+      props: {
+        data: {
+          autoplay: false,
+          seriesId: 'tt1',
+          series: null,
+          requestedEpisode: null,
+          error: rawMessage
+        }
+      }
     });
 
     expect(screen.queryByText(rawMessage, { exact: false })).not.toBeInTheDocument();
@@ -74,7 +82,15 @@ describe('Series page error handling', () => {
 
   it('shows a retry button when the load fails', () => {
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series: null, requestedEpisode: null, error: 'boom' } }
+      props: {
+        data: {
+          autoplay: false,
+          seriesId: 'tt1',
+          series: null,
+          requestedEpisode: null,
+          error: 'boom'
+        }
+      }
     });
 
     expect(screen.getByRole('button', { name: /tentar novamente/i })).toBeInTheDocument();
@@ -85,7 +101,15 @@ describe('Series page error handling', () => {
     const rawMessage = 'network down';
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series: null, requestedEpisode: null, error: rawMessage } }
+      props: {
+        data: {
+          autoplay: false,
+          seriesId: 'tt1',
+          series: null,
+          requestedEpisode: null,
+          error: rawMessage
+        }
+      }
     });
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(expect.anything(), rawMessage);
@@ -96,7 +120,9 @@ describe('Series page error handling', () => {
     getSeriesStreamsMock.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:1234'));
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series, requestedEpisode: null, error: null } }
+      props: {
+        data: { autoplay: false, seriesId: 'tt1', series, requestedEpisode: null, error: null }
+      }
     });
 
     const episodeButton = screen.getByText(/Pilot/i);
@@ -141,7 +167,9 @@ describe('Series page integration flow', () => {
     });
 
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series, requestedEpisode: null, error: null } }
+      props: {
+        data: { autoplay: false, seriesId: 'tt1', series, requestedEpisode: null, error: null }
+      }
     });
 
     const episodeButton = screen.getByText(/Pilot/i);
@@ -175,6 +203,7 @@ describe('Series page integration flow', () => {
     render(SeriesPage, {
       props: {
         data: {
+          autoplay: false,
           seriesId: 'tt1',
           series: deepSeries,
           requestedEpisode: { season: 2, episode: 5 },
@@ -196,6 +225,7 @@ describe('Series page integration flow', () => {
     render(SeriesPage, {
       props: {
         data: {
+          autoplay: false,
           seriesId: 'tt1',
           series: {
             ...series,
@@ -216,7 +246,9 @@ describe('Series page integration flow', () => {
 
   it('selects the first season when there is no episode to open on', async () => {
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series, requestedEpisode: null, error: null } }
+      props: {
+        data: { autoplay: false, seriesId: 'tt1', series, requestedEpisode: null, error: null }
+      }
     });
 
     expect(await screen.findByDisplayValue('Temporada 1')).toBeInTheDocument();
@@ -226,7 +258,9 @@ describe('Series page integration flow', () => {
     getSeriesStreamsMock.mockResolvedValue([{ title: '1080p', infoHash: 'def', fileIdx: 0 }]);
     prepareStreamMock.mockRejectedValue(new EngineStartError('spawn failed'));
     render(SeriesPage, {
-      props: { data: { seriesId: 'tt1', series, requestedEpisode: null, error: null } }
+      props: {
+        data: { autoplay: false, seriesId: 'tt1', series, requestedEpisode: null, error: null }
+      }
     });
 
     await fireEvent.click(screen.getByText(/Pilot/i));
@@ -245,6 +279,7 @@ describe('Series page integration flow', () => {
     render(SeriesPage, {
       props: {
         data: {
+          autoplay: false,
           seriesId: 'tt1',
           series: {
             ...series,

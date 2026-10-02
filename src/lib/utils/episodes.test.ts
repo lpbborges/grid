@@ -3,6 +3,7 @@ import {
   compareEpisodes,
   episodeLabel,
   episodeQuery,
+  firstEpisode,
   focusedEpisode,
   nextEpisode,
   parseEpisodeParams,
@@ -107,5 +108,15 @@ describe('focusedEpisode', () => {
   it('ignores episodes the series does not list', () => {
     expect(focusedEpisode(videos, ref(7, 1), ref(9, 9))).toBeNull();
     expect(focusedEpisode(videos, null, null)).toBeNull();
+  });
+});
+
+describe('firstEpisode', () => {
+  it('is the earliest episode however the list is ordered', () => {
+    expect(firstEpisode([ep(2, 1), ep(1, 3), ep(1, 2)])).toMatchObject({ season: 1, episode: 2 });
+  });
+
+  it('is undefined for a series without episodes', () => {
+    expect(firstEpisode([])).toBeUndefined();
   });
 });

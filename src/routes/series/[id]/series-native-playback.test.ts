@@ -64,7 +64,9 @@ async function playPilotToPicture() {
     nativePlayback: { tracks: [], duration: 2700 }
   });
   render(SeriesPage, {
-    props: { data: { seriesId: series.id, series, requestedEpisode: null, error: null } }
+    props: {
+      data: { autoplay: false, seriesId: series.id, series, requestedEpisode: null, error: null }
+    }
   });
   await fireEvent.click(await screen.findByText(/Pilot/));
   await waitFor(() => expect(handlers['native-player-presenting']).toBeDefined(), {

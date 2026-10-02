@@ -468,3 +468,46 @@ export async function getSeriesDetails(
 
   return series;
 }
+
+/** What the hover card shows beyond the title and poster. */
+export interface PreviewMeta {
+  backdrop?: string;
+  runtime?: string;
+  genres?: string[];
+  seasons?: number;
+}
+
+const previewMetaCache = new Map<string, PreviewMeta>();
+
+export function clearPreviewMetaCache(): void {
+  previewMetaCache.clear();
+}
+
+export async function getPreviewMeta(
+  type: MediaType,
+  id: string | number,
+  options: { signal?: AbortSignal; fetch?: typeof fetch } = {}
+): Promise<PreviewMeta> {
+  const key = `${type}:${id}`;
+  const cached = previewMetaCache.get(key);
+  if (cached) return cached;
+
+  const res = await fetchWithTimeout(`${endpoints.cinemeta}/meta/${type}/${id}.json`, options);
+  if (!res.ok) throw new Error(`Failed to fetch preview details: ${res.statusText}`);
+  const data = await res.json();
+  if (!isRecord(data?.meta)) throw new Error('Cinemeta returned no details');
+
+  const meta = data.meta as CinemetaMeta;
+  const { genres, runtime } = cinemetaExtras(meta);
+  const seasons = new Set(
+    (Array.isArray(meta.videos) ? meta.videos : []).filter((v) => v.season > 0).map((v) => v.season)
+  ).size;
+  const preview: PreviewMeta = {
+    ...(meta.background && { backdrop: meta.background }),
+    ...(runtime && { runtime }),
+    ...(genres && { genres }),
+    ...(type === 'series' && seasons > 0 && { seasons })
+  };
+  previewMetaCache.set(key, preview);
+  return preview;
+}

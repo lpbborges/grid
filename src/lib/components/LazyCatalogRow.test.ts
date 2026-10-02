@@ -84,10 +84,6 @@ describe('LazyCatalogRow', () => {
     expect(await screen.findByText('Em destaque')).toBeTruthy();
     const cards = screen.getAllByTestId('media-card');
     expect(cards.map((c) => c.getAttribute('href'))).toEqual(['/movie/tt1', '/series/tt2']);
-    expect(screen.getAllByTestId('media-card-type').map((t) => t.textContent?.trim())).toEqual([
-      'Filme',
-      'Série'
-    ]);
   });
 
   it('keeps the row of the catalog that loaded when the other one fails', async () => {
@@ -103,16 +99,6 @@ describe('LazyCatalogRow', () => {
 
     expect(await screen.findByText('Populares')).toBeTruthy();
     expect(screen.getAllByTestId('media-card')).toHaveLength(1);
-  });
-
-  it('shows no type on the cards of a single-type row', async () => {
-    getCatalogMock.mockResolvedValue([title('tt1', 'Série')]);
-    render(LazyCatalogRow, { row });
-
-    await act(() => reportVisible(true));
-
-    expect(await screen.findByText('Séries em destaque')).toBeTruthy();
-    expect(screen.queryByTestId('media-card-type')).toBeNull();
   });
 
   it('leaves out the title being viewed from a mixed row too', async () => {

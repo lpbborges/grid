@@ -1,21 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/svelte';
 import HomePage from './+page.svelte';
+import HoverPreview from '$lib/components/HoverPreview.svelte';
+import { removeViaHover } from '$lib/components/__fixtures__/hoverRemove';
 import type { MediaType, Movie, SearchResult } from '$lib/types';
 import { appReady, searchQuery } from '$lib/stores.svelte';
 import { progressStore } from '$lib/stores/progress.svelte';
 import { listsStore } from '$lib/stores/lists.svelte';
 import { tick } from 'svelte';
 
-const { searchCatalogMock, getCatalogMock } = vi.hoisted(() => ({
+const { searchCatalogMock, getCatalogMock, previewMetaMock } = vi.hoisted(() => ({
   searchCatalogMock: vi.fn(),
-  getCatalogMock: vi.fn()
+  getCatalogMock: vi.fn(),
+  previewMetaMock: vi.fn()
 }));
 
 vi.mock('$lib/api/cinemeta', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$lib/api/cinemeta')>()),
   searchCatalog: searchCatalogMock,
-  getCatalog: getCatalogMock
+  getCatalog: getCatalogMock,
+  getPreviewMeta: previewMetaMock
 }));
 
 type SearchReport = (results: SearchResult[], done: boolean) => void;
@@ -310,9 +314,12 @@ describe('Home page continue watching', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     getCatalogMock.mockResolvedValue([]);
+    previewMetaMock.mockResolvedValue({});
     searchQuery.value = '';
     progressStore.progress = {};
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it('hides the row when there is no progress', async () => {
     render(HomePage, { data: popularDataWith([makeMovie('tt1', 'Popular')], []) });
@@ -424,8 +431,10 @@ describe('Home page continue watching', () => {
     progressStore.progress = { tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta } };
     render(HomePage, { data: popularDataWith([], []) });
     await act(async () => {});
+    render(HoverPreview);
+    vi.useFakeTimers();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Remover de Continuar assistindo' }));
+    await removeViaHover(screen.getAllByTestId('media-card')[0]);
     expect(screen.queryByText('Continuar assistindo')).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: 'Desfazer' }));
 
@@ -436,8 +445,10 @@ describe('Home page continue watching', () => {
     progressStore.progress = { tt1: { time: 10, duration: 100, updatedAt: 1, meta: movieMeta } };
     render(HomePage, { data: popularDataWith([makeMovie('tt5', 'Popular Movie')], []) });
     await act(async () => {});
+    render(HoverPreview);
+    vi.useFakeTimers();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Remover de Continuar assistindo' }));
+    await removeViaHover(screen.getAllByTestId('media-card')[0]);
     await fireEvent.keyDown(screen.getByRole('button', { name: 'Desfazer' }), { key: 'Escape' });
     await tick();
 
@@ -477,7 +488,6 @@ describe('Home page popular row', () => {
     ]);
     expect(screen.queryByText('Filmes Populares')).toBeNull();
     expect(screen.queryByText('Séries Populares')).toBeNull();
-    expect(screen.getAllByTestId('media-card-type')).toHaveLength(5);
   });
 
   it('shows the series when the movie catalog fails to load', async () => {

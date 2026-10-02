@@ -21,7 +21,13 @@
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
   import type { Episode, EpisodeRef, Series, UpNextCard } from '$lib/types';
-  import { episodeLabel, focusedEpisode, nextEpisode, sameEpisode } from '$lib/utils/episodes';
+  import {
+    episodeLabel,
+    firstEpisode,
+    focusedEpisode,
+    nextEpisode,
+    sameEpisode
+  } from '$lib/utils/episodes';
   import type { ErrorAction, PageError } from '$lib/utils/pageError';
 
   let { data } = $props();
@@ -122,8 +128,10 @@
   // to stop yet. Calling stop() unconditionally on mount let this effect race
   // with an immediate play() click (see the video-cache feature's Task 9).
   let hasMountedTorrentEffect = false;
+  let autoplayStarted = false;
   $effect(() => {
     if (seriesId) {
+      autoplayStarted = false;
       selectedSeason = untrack(() => focusEpisode?.season) ?? null;
       translatedEpisodes = {};
       if (hasMountedTorrentEffect) {
@@ -159,6 +167,17 @@
         });
       }
     }
+  });
+
+  // The hover card's Play opens the page with ?play=1: play the episode in focus, or the first.
+  $effect(() => {
+    if (!data.autoplay || !series || autoplayStarted) return;
+    autoplayStarted = true;
+    const shown = series;
+    const target =
+      shown.videos.find((v) => focusEpisode && sameEpisode(v, focusEpisode)) ??
+      firstEpisode(shown.videos);
+    if (target) untrack(() => void playEpisode(target));
   });
 
   function episodePlayOptions(

@@ -16,6 +16,7 @@ class SettingsStore {
   #quality = $state('1080p');
   #cacheLimitBytes = $state(3 * BYTES_PER_GB);
   #acceptedDisclaimer = $state(false);
+  #hoverPreview = $state(true);
 
   constructor() {
     if (browser) {
@@ -30,6 +31,11 @@ class SettingsStore {
 
       const storedDisclaimer = localStorage.getItem('grid-accepted-disclaimer');
       if (storedDisclaimer === 'true') this.#acceptedDisclaimer = true;
+
+      const storedHoverPreview = localStorage.getItem('grid-hover-preview');
+      if (storedHoverPreview === 'true' || storedHoverPreview === 'false') {
+        this.#hoverPreview = storedHoverPreview === 'true';
+      }
 
       const storedCacheLimit = localStorage.getItem('grid-cache-limit-bytes');
       const parsedCacheLimit = normalizeCacheLimit(
@@ -81,6 +87,14 @@ class SettingsStore {
   set acceptedDisclaimer(value: boolean) {
     this.#acceptedDisclaimer = value;
     this.persist('grid-accepted-disclaimer', String(value));
+  }
+
+  get hoverPreview() {
+    return this.#hoverPreview;
+  }
+  set hoverPreview(value: boolean) {
+    this.#hoverPreview = value;
+    this.persist('grid-hover-preview', String(value));
   }
 
   private persist(key: string, value: string) {

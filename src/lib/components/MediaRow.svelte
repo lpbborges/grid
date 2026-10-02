@@ -1,6 +1,7 @@
 <script lang="ts" generics="T extends CardMedia">
   import type { Snippet } from 'svelte';
   import MediaCard from '$lib/components/MediaCard.svelte';
+  import { hoverPreview } from '$lib/stores/hoverPreview.svelte';
   import SectionHeading from '$lib/components/SectionHeading.svelte';
   import type { CardMedia, MediaType } from '$lib/types';
 
@@ -21,6 +22,11 @@
   let scrollContainer = $state<HTMLDivElement>();
   let canScrollLeft = $state(false);
   let canScrollRight = $state(false);
+
+  function onScroll() {
+    hoverPreview.noteScroll();
+    checkScroll();
+  }
 
   function checkScroll() {
     if (!scrollContainer) return;
@@ -62,7 +68,7 @@
 
     <div
       bind:this={scrollContainer}
-      onscroll={checkScroll}
+      onscroll={onScroll}
       class="scrollbar-hide -mt-4 -mb-12 flex gap-5 overflow-x-auto scroll-smooth px-4 pt-8 pb-24"
     >
       {#each items as item (item.id)}

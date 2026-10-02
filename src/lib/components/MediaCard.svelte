@@ -2,6 +2,8 @@
   import type { CardMedia, MediaType } from '../types';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
+  import { hoverPreview } from '$lib/stores/hoverPreview.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   let {
     media,
@@ -10,7 +12,7 @@
     episodeLabel,
     upNext = false,
     progress,
-    showType = false
+    onremove
   }: {
     media: CardMedia;
     type?: MediaType;
@@ -18,30 +20,48 @@
     episodeLabel?: string;
     upNext?: boolean;
     progress?: { time: number; duration: number };
-    /** Names the type on the poster, for rows that mix movies and series. */
-    showType?: boolean;
+    /** Offers removing the title from its row in the hover preview. */
+    onremove?: () => void;
   } = $props();
   let shownProgress = $derived(progress ?? progressStore.latestFor(media.id));
   let progressPercent = $derived(
     shownProgress ? Math.min(100, (shownProgress.time / shownProgress.duration) * 100) : 0
   );
+
+  // The details card covers the poster, so the poster only keeps its glow; without
+  // the card, the full lift, zoom and scanline effect is the only feedback.
+  let fullEffect = $derived(!settingsStore.hoverPreview);
+
+  function rowContext() {
+    return { href, onremove, progress, episodeLabel, upNext };
+  }
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Tab' || e.shiftKey || hoverPreview.active?.el !== e.currentTarget) return;
+    if (hoverPreview.focusActions()) e.preventDefault();
+  }
 </script>
 
 <a
   href={href ?? `/${type}/${media.id}`}
-  class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 will-change-transform hover:-translate-y-2 focus-visible:ring-2 focus-visible:outline-none {watchedStore.has(
-    media.id
-  )
-    ? 'hover:shadow-[0_0_20px_rgba(54,211,83,0.4)]'
-    : 'hover:shadow-[0_0_20px_rgba(107,33,168,0.4)]'}"
+  class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent focus-visible:ring-2 focus-visible:outline-none {fullEffect
+    ? 'transition-all duration-300 will-change-transform hover:-translate-y-2'
+    : 'transition-shadow duration-[600ms]'} {watchedStore.has(media.id)
+    ? 'hover:shadow-[0_0_20px_rgba(54,211,83,0.4)] focus-visible:shadow-[0_0_20px_rgba(54,211,83,0.4)]'
+    : 'hover:shadow-[0_0_20px_rgba(107,33,168,0.4)] focus-visible:shadow-[0_0_20px_rgba(107,33,168,0.4)]'}"
   data-testid="media-card"
+  onmouseenter={(e) => hoverPreview.request(e.currentTarget, media, type, rowContext())}
+  onmouseleave={(e) => hoverPreview.leave(e.currentTarget)}
+  onfocus={(e) => hoverPreview.request(e.currentTarget, media, type, rowContext())}
+  onblur={(e) => hoverPreview.leave(e.currentTarget)}
+  onkeydown={onKeydown}
 >
   <!-- Cyberpunk border effect -->
   <div
-    class="border-primary/20 group-hover:border-primary/80 pointer-events-none absolute inset-0 border transition-colors duration-300"
+    class="border-primary/20 group-hover:border-primary/80 group-focus-visible:border-primary/80 pointer-events-none absolute inset-0 border transition-colors duration-300"
   ></div>
   <div
-    class="group-hover:border-green pointer-events-none absolute -top-[1px] -left-[1px] z-40 h-2 w-2 border-t-2 border-l-2 border-transparent transition-colors duration-300"
+    class="group-hover:border-green group-focus-visible:border-green pointer-events-none absolute -top-[1px] -left-[1px] z-40 h-2 w-2 border-t-2 border-l-2 border-transparent transition-colors duration-300"
   ></div>
 
   <div class="relative h-[270px] w-full overflow-hidden">
@@ -49,15 +69,21 @@
       src={media.medium_cover_image}
       alt={media.title}
       loading="lazy"
-      class="h-full w-full object-cover transition-transform duration-500 will-change-transform group-hover:scale-110 group-hover:opacity-80"
+      class="h-full w-full object-cover {fullEffect
+        ? 'transition-transform duration-500 will-change-transform group-hover:scale-110 group-hover:opacity-80'
+        : ''}"
     />
     <!-- Scanline effect overlay on hover -->
-    <div
-      class="pointer-events-none absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-    ></div>
+    {#if fullEffect}
+      <div
+        class="pointer-events-none absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+      ></div>
+    {/if}
     {#if watchedStore.has(media.id)}
       <div
-        class="text-green pointer-events-none absolute top-2.5 right-2.5 z-20 [filter:drop-shadow(0_0_8px_rgba(54,211,83,0.9))] transition-transform duration-300 will-change-transform group-hover:scale-110"
+        class="text-green pointer-events-none absolute top-2.5 right-2.5 z-20 [filter:drop-shadow(0_0_8px_rgba(54,211,83,0.9))] transition-transform duration-300 will-change-transform {fullEffect
+          ? 'group-hover:scale-110'
+          : ''}"
         title="Assistido"
       >
         <svg
@@ -75,15 +101,6 @@
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
       </div>
-    {/if}
-    {#if showType}
-      <span
-        aria-hidden="true"
-        data-testid="media-card-type"
-        class="border-primary/60 bg-dark/85 text-main pointer-events-none absolute top-2.5 left-2 z-20 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-widest uppercase backdrop-blur-sm"
-      >
-        {type === 'movie' ? 'Filme' : 'Série'}
-      </span>
     {/if}
     {#if episodeLabel}
       <span
@@ -126,19 +143,5 @@
         {episodeLabel ? `${episodeLabel} ` : ''}{Math.round(progressPercent)}% assistido
       </span>
     {/if}
-
-    <div
-      aria-hidden="true"
-      class="bg-surface/95 border-primary pointer-events-none absolute top-[-1px] right-[-1px] left-[-1px] z-30 border px-3 py-[11px] opacity-0 shadow-[0_10px_30px_rgba(0,0,0,0.9)] transition-opacity duration-300 group-hover:opacity-100"
-    >
-      <div
-        class="border-green pointer-events-none absolute -right-[1px] -bottom-[1px] z-40 h-2 w-2 border-r-2 border-b-2"
-      ></div>
-      <div
-        class="text-main font-cyber w-full text-center text-sm tracking-wider break-words uppercase"
-      >
-        {media.title}
-      </div>
-    </div>
   </div>
 </a>

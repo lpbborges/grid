@@ -54,7 +54,9 @@ let boundary: PlaybackBoundary;
 
 async function openAndPlay(overrides: Partial<PlaybackBoundaryOptions> = {}) {
   boundary = installPlaybackBoundary({ ...baseOptions, ...overrides });
-  render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+  render(MoviePage, {
+    props: { data: { autoplay: false, movieId: movie.id, movie, error: null } }
+  });
   await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
 }
 
@@ -100,7 +102,9 @@ describe('Movie playback wiring', () => {
   ])('starts the movie with %s at %is', async (button, startAt) => {
     progressStore.update(movie.id, undefined, undefined, 2530, 6000);
     boundary = installPlaybackBoundary(baseOptions);
-    render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+    render(MoviePage, {
+      props: { data: { autoplay: false, movieId: movie.id, movie, error: null } }
+    });
 
     await fireEvent.click(await screen.findByRole('button', { name: button }));
     const video = (await screen.findByTestId(
@@ -156,7 +160,9 @@ describe('Movie playback wiring', () => {
       infoHash: 'c'.repeat(40)
     };
     boundary = installPlaybackBoundary({ ...baseOptions, streams: [recording] });
-    render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+    render(MoviePage, {
+      props: { data: { autoplay: false, movieId: movie.id, movie, error: null } }
+    });
 
     await waitFor(() =>
       expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('torrentio'))).toBe(
@@ -323,10 +329,10 @@ describe('Movie playback wiring', () => {
       streams: [{ ...baseOptions.streams[0], infoHash: hash }]
     });
     const { rerender } = render(MoviePage, {
-      props: { data: { movieId: movie.id, movie, error: null } }
+      props: { data: { autoplay: false, movieId: movie.id, movie, error: null } }
     });
     const other = { ...movie, id: 'tt0000002', title: 'Grid Fixture Two' };
-    await rerender({ data: { movieId: other.id, movie: other, error: null } });
+    await rerender({ data: { autoplay: false, movieId: other.id, movie: other, error: null } });
 
     await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
     const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });
@@ -440,7 +446,9 @@ describe('Movie playback errors', () => {
 
   it('looks the sources up again when they could not be reached', async () => {
     boundary = installPlaybackBoundary({ ...baseOptions, failStreams: true });
-    render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
+    render(MoviePage, {
+      props: { data: { autoplay: false, movieId: movie.id, movie, error: null } }
+    });
 
     const retry = await screen.findByRole('button', { name: 'Tentar novamente' });
     expect(
@@ -450,5 +458,46 @@ describe('Movie playback errors', () => {
     await fireEvent.click(retry);
 
     expect(await screen.findByRole('button', { name: /reproduzir/i })).toBeInTheDocument();
+  });
+
+  describe('autoplay from the hover card', () => {
+    async function openWithAutoplay(autoplay: boolean) {
+      boundary = installPlaybackBoundary(baseOptions);
+      render(MoviePage, {
+        props: { data: { movieId: movie.id, movie, error: null, autoplay } }
+      });
+    }
+
+    async function loadedVideo(duration: number) {
+      const video = (await screen.findByTestId(
+        'video-element',
+        {},
+        { timeout: 5000 }
+      )) as HTMLVideoElement;
+      await waitFor(() => expect(video.getAttribute('src')).toBeTruthy());
+      Object.defineProperty(video, 'duration', { configurable: true, value: duration });
+      await fireEvent.loadedMetadata(video);
+      return video;
+    }
+
+    it('goes straight to the player and starts from the beginning with no progress', async () => {
+      await openWithAutoplay(true);
+
+      expect((await loadedVideo(6000)).currentTime).toBe(0);
+    });
+
+    it('resumes from where the movie stopped', async () => {
+      progressStore.update(movie.id, undefined, undefined, 2530, 6000);
+      await openWithAutoplay(true);
+
+      expect((await loadedVideo(6000)).currentTime).toBe(2530);
+    });
+
+    it('stays on the details page without autoplay', async () => {
+      await openWithAutoplay(false);
+
+      await screen.findByRole('button', { name: /reproduzir/i });
+      expect(screen.queryByTestId('video-element')).toBeNull();
+    });
   });
 });

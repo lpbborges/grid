@@ -70,7 +70,7 @@ describe('Movie page error handling', () => {
     const rawMessage = 'TypeError: Failed to fetch at yts.ts:42';
 
     render(MoviePage, {
-      props: { data: { movieId: 'tt1', movie: null, error: rawMessage } }
+      props: { data: { autoplay: false, movieId: 'tt1', movie: null, error: rawMessage } }
     });
 
     expect(screen.queryByText(rawMessage, { exact: false })).not.toBeInTheDocument();
@@ -79,7 +79,7 @@ describe('Movie page error handling', () => {
 
   it('shows a retry button when the load fails', () => {
     render(MoviePage, {
-      props: { data: { movieId: 'tt1', movie: null, error: 'boom' } }
+      props: { data: { autoplay: false, movieId: 'tt1', movie: null, error: 'boom' } }
     });
 
     expect(screen.getByRole('button', { name: /tentar novamente/i })).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe('Movie page error handling', () => {
     const rawMessage = 'network down';
 
     render(MoviePage, {
-      props: { data: { movieId: 'tt1', movie: null, error: rawMessage } }
+      props: { data: { autoplay: false, movieId: 'tt1', movie: null, error: rawMessage } }
     });
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(expect.anything(), rawMessage);
@@ -101,7 +101,7 @@ describe('Movie page error handling', () => {
     prepareStreamMock.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:1234'));
 
     render(MoviePage, {
-      props: { data: { movieId: 'tt1', movie, error: null } }
+      props: { data: { autoplay: false, movieId: 'tt1', movie, error: null } }
     });
 
     const playButton = screen.getByRole('button', { name: /reproduzir/i });
@@ -139,7 +139,7 @@ describe('Movie page integration flow', () => {
     });
 
     render(MoviePage, {
-      props: { data: { movieId: 'tt1', movie, error: null } }
+      props: { data: { autoplay: false, movieId: 'tt1', movie, error: null } }
     });
 
     const playButton = screen.getByRole('button', { name: /reproduzir/i });
@@ -171,7 +171,7 @@ describe('Movie page integration flow', () => {
     ]);
 
     render(MoviePage, {
-      props: { data: { movieId: 'tt1', movie: movieWithoutTorrents, error: null } }
+      props: { data: { autoplay: false, movieId: 'tt1', movie: movieWithoutTorrents, error: null } }
     });
 
     expect(await screen.findByRole('button', { name: /reproduzir/i })).toBeInTheDocument();
@@ -194,10 +194,10 @@ describe('Movie page integration flow', () => {
     };
 
     const { rerender } = render(MoviePage, {
-      props: { data: { movieId: 'tt1', movie, error: null } }
+      props: { data: { autoplay: false, movieId: 'tt1', movie, error: null } }
     });
 
-    rerender({ data: { movieId: 'tt2', movie: movieB, error: null } });
+    rerender({ data: { autoplay: false, movieId: 'tt2', movie: movieB, error: null } });
     await new Promise((r) => setTimeout(r, 0));
 
     const playButton = screen.getByRole('button', { name: /reproduzir/i });
@@ -242,11 +242,11 @@ describe('Movie page integration flow', () => {
     );
 
     const { rerender } = render(MoviePage, {
-      props: { data: { movieId: 'tt1', movie, error: null } }
+      props: { data: { autoplay: false, movieId: 'tt1', movie, error: null } }
     });
     expect(getMovieStreamsMock).toHaveBeenCalledWith('tt1');
 
-    await rerender({ data: { movieId: 'tt2', movie: movieB, error: null } });
+    await rerender({ data: { autoplay: false, movieId: 'tt2', movie: movieB, error: null } });
     expect(getMovieStreamsMock).toHaveBeenCalledWith('tt2');
 
     resolveB([]);
@@ -284,7 +284,7 @@ describe('Movie page integration flow', () => {
     getMovieStreamsMock.mockRejectedValue(failure);
 
     render(MoviePage, {
-      props: { data: { movieId: 'tt1', movie, error: null } }
+      props: { data: { autoplay: false, movieId: 'tt1', movie, error: null } }
     });
     await new Promise((r) => setTimeout(r, 0));
 
@@ -324,7 +324,7 @@ describe('Movie page dubbed-audio heuristic (reselectBestTorrent)', () => {
     ]);
 
     render(MoviePage, {
-      props: { data: { movieId: 'tt1', movie, error: null } }
+      props: { data: { autoplay: false, movieId: 'tt1', movie, error: null } }
     });
 
     // Let the async getMovieStreams effect resolve and reselectBestTorrent run.
@@ -362,6 +362,7 @@ describe('Movie page details', () => {
     render(MoviePage, {
       props: {
         data: {
+          autoplay: false,
           movieId: 'tt1',
           movie: {
             ...movie,
