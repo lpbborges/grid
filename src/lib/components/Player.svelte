@@ -11,7 +11,9 @@
     downloadPercent = 0,
     onclose,
     upNext = null,
-    loadingLabel = ''
+    loadingLabel = '',
+    title = '',
+    episodeLabel = ''
   } = $props<{
     backend: PlayerBackend;
     videoElement?: HTMLVideoElement | null;
@@ -20,6 +22,8 @@
     onclose?: () => void;
     upNext?: UpNextCard | null;
     loadingLabel?: string;
+    title?: string;
+    episodeLabel?: string;
   }>();
 
   const dom = $derived(isDomBackend(backend) ? backend : undefined);
@@ -84,4 +88,6 @@
   {onclose}
   {upNext}
   {loadingLabel}
+  {title}
+  {episodeLabel}
 />

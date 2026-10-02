@@ -303,6 +303,8 @@
           downloadPercent={player.downloadPercent}
           upNext={upNextCard}
           loadingLabel={preparingEpisode ? episodeTitle(preparingEpisode) : ''}
+          title={translatedTitle || series.title}
+          episodeLabel={preparingEpisode ? episodeLabel(preparingEpisode) : ''}
           onclose={() => {
             player.stop();
           }}

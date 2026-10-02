@@ -306,6 +306,7 @@
           bind:videoElement
           loadingStage={player.loadingStage}
           downloadPercent={player.downloadPercent}
+          title={translatedTitle || movie.title}
           onclose={() => {
             player.stop();
           }}
