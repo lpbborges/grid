@@ -266,6 +266,22 @@ describe('prepareStream', () => {
     expect(torrentApi.deleteTorrent).toHaveBeenCalledWith('untracked');
   });
 
+  it('lets go of the stragglers concurrently', async () => {
+    vi.mocked(torrentApi.getLoadedTorrentInfoHashes).mockResolvedValue(['old-1', 'old-2']);
+    vi.mocked(cacheApi.getCacheManifest).mockResolvedValue([]);
+    let started = 0;
+    let release!: () => void;
+    const bothStarted = new Promise<void>((resolve) => (release = resolve));
+    vi.mocked(torrentApi.deleteTorrent).mockImplementation(async () => {
+      if (++started === 2) release();
+      await bothStarted;
+    });
+
+    await prepareStream({ magnet: 'magnet:?xt=test', onStage: vi.fn() });
+
+    expect(torrentApi.deleteTorrent).toHaveBeenCalledTimes(2);
+  });
+
   it('orchestrates stream preparation correctly', async () => {
     vi.mocked(torrentApi.addTorrent).mockResolvedValue(mockDetails({ info_hash: '12345' }) as any);
     vi.mocked(torrentApi.getWantedFileIndices).mockReturnValue([1]);

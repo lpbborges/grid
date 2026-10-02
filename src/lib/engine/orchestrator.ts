@@ -68,13 +68,11 @@ function revokeBlobUrls(urls: string[]): void {
 async function reconcileLoadedTorrents(manifestInfoHashes: string[]): Promise<void> {
   const known = new Set(manifestInfoHashes);
   const loaded = await getLoadedTorrentInfoHashes();
-  for (const infoHash of loaded) {
-    if (known.has(infoHash)) {
-      await forgetTorrent(infoHash);
-    } else {
-      await deleteTorrent(infoHash);
-    }
-  }
+  await Promise.all(
+    loaded.map((infoHash) =>
+      known.has(infoHash) ? forgetTorrent(infoHash) : deleteTorrent(infoHash)
+    )
+  );
 }
 
 export interface PrepareStreamOptions {
