@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { afterNavigate, goto } from '$app/navigation';
   import SectionHeading from '$lib/components/SectionHeading.svelte';
   import PreferenceSelectors from '$lib/components/PreferenceSelectors.svelte';
   import QualitySelector from '$lib/components/QualitySelector.svelte';
@@ -18,6 +19,14 @@
   let clearing = $state(false);
   let clearError = $state('');
 
+  let canGoBack = false;
+  afterNavigate(({ from }) => (canGoBack = from !== null));
+
+  function goBack() {
+    if (canGoBack) history.back();
+    else void goto('/');
+  }
+
   async function clearCache() {
     confirmingClear = false;
     clearing = true;
@@ -34,6 +43,29 @@
 </script>
 
 <div class="mx-auto flex max-w-3xl flex-col gap-10 pb-10">
+  <div class="flex items-center gap-3">
+    <button
+      type="button"
+      onclick={goBack}
+      class="text-main hover:text-green focus-visible:ring-green flex h-10 cursor-pointer items-center gap-1.5 rounded-xs pr-3 text-base font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg
+      >
+      Voltar
+    </button>
+    <h1 class="text-main text-xl font-bold">Configurações</h1>
+  </div>
+
   <section>
     <SectionHeading heading="Reprodução" />
     <p class="text-muted mb-4 text-sm">Usado sempre que você começa a assistir algo.</p>

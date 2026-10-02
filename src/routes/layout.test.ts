@@ -89,6 +89,25 @@ describe('Layout', () => {
     expect(screen.queryByRole('searchbox')).toBeNull();
   });
 
+  it('shows no header on the settings page, which has its own top bar', () => {
+    pageState.url = new URL('http://localhost/settings');
+    const { container } = render(Layout, { children });
+
+    expect(container.querySelector('header')).toBeNull();
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pesquisar' })).toBeNull();
+  });
+
+  it('does not open a search on the settings page', async () => {
+    pageState.url = new URL('http://localhost/settings');
+    render(Layout, { children });
+
+    await fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    await fireEvent.keyDown(window, { key: '/' });
+
+    expect(screen.queryByRole('searchbox')).toBeNull();
+  });
+
   it('keeps the opaque dark root that the window transparency rule relies on', () => {
     const { container } = render(Layout, { children });
 

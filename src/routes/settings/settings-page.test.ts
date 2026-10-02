@@ -5,9 +5,20 @@ import { settingsStore } from '$lib/stores/settings.svelte';
 import { BYTES_PER_GB } from '$lib/utils/formatBytes';
 import { version } from '../../../package.json';
 
-const { getCacheUsageBytesMock, clearDownloadedVideosMock } = vi.hoisted(() => ({
-  getCacheUsageBytesMock: vi.fn(),
-  clearDownloadedVideosMock: vi.fn()
+const { getCacheUsageBytesMock, clearDownloadedVideosMock, gotoMock, navigation } = vi.hoisted(
+  () => ({
+    getCacheUsageBytesMock: vi.fn(),
+    clearDownloadedVideosMock: vi.fn(),
+    gotoMock: vi.fn(),
+    navigation: { callbacks: [] as ((nav: { from: unknown }) => void)[] }
+  })
+);
+
+vi.mock('$app/navigation', () => ({
+  goto: gotoMock,
+  afterNavigate: (callback: (nav: { from: unknown }) => void) => {
+    navigation.callbacks.push(callback);
+  }
 }));
 
 vi.mock('$lib/engine/orchestrator', () => ({ clearDownloadedVideos: clearDownloadedVideosMock }));
@@ -20,11 +31,43 @@ vi.mock('$lib/engine/cache', async (importOriginal) => ({
 describe('Settings page', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    navigation.callbacks = [];
     getCacheUsageBytesMock.mockResolvedValue(0);
     localStorage.clear();
     settingsStore.quality = '1080p';
     settingsStore.subtitle = 'pt';
     settingsStore.cacheLimitBytes = 3 * BYTES_PER_GB;
+  });
+
+  it('titles the page with a slim bar instead of the catalog header', () => {
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Configurações' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Voltar' })).toBeTruthy();
+  });
+
+  it('goes back to the previous page when there is one', async () => {
+    const back = vi.spyOn(history, 'back').mockImplementation(() => {});
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+    navigation.callbacks.forEach((callback) => callback({ from: { url: new URL('http://x/') } }));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+
+    expect(back).toHaveBeenCalledOnce();
+    expect(gotoMock).not.toHaveBeenCalled();
+    back.mockRestore();
+  });
+
+  it('falls back to the home page when it was the first page opened', async () => {
+    const back = vi.spyOn(history, 'back').mockImplementation(() => {});
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+    navigation.callbacks.forEach((callback) => callback({ from: null }));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+
+    expect(gotoMock).toHaveBeenCalledWith('/');
+    expect(back).not.toHaveBeenCalled();
+    back.mockRestore();
   });
 
   it('saves the default quality and subtitles for the next playback', async () => {
