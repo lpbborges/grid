@@ -1,6 +1,7 @@
 import { logger } from '$lib/logger';
 import { buildMagnet, getSeriesStreams, parseSeedCount, type Stream } from '$lib/api/torrentio';
 import { rankStreamOptions } from '$lib/engine/ranking';
+import { qualityOf } from '$lib/engine/streamOption';
 import type { AudioPreference, EpisodeRef } from '$lib/types';
 import type { PageError } from '$lib/utils/pageError';
 
@@ -38,9 +39,7 @@ export async function findEpisodeStream(
       rankableStreams,
       (s) => {
         const text = ((s.title || '') + ' ' + (s.name || '')).toLowerCase();
-        const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
-        const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
-        return { quality, text, seeds: parseSeedCount(s.title) };
+        return { quality: qualityOf(s.name), text, seeds: parseSeedCount(s.title) };
       },
       { quality: preferences.quality, audioPreference: preferences.audio }
     );
