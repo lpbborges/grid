@@ -15,6 +15,13 @@ use std::time::Instant;
 use tauri::{Manager, State};
 use tauri_plugin_shell::ShellExt;
 
+/// Locks `mutex`, carrying on with the data of a poisoned one.
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 struct EngineState {
     child: Mutex<Option<std::process::Child>>,
     pid: Mutex<Option<u32>>,
@@ -66,7 +73,7 @@ async fn fetch_torrent_subtitle(
     rate_limit: State<'_, SubtitleRateLimit>,
 ) -> Result<String, String> {
     let port = {
-        let port_guard = state.port.lock().unwrap();
+        let port_guard = lock(&state.port);
         port_guard.ok_or_else(|| "Engine not running".to_string())?
     };
     fetch_torrent_subtitle_impl(info_hash, file_idx, port, &rate_limit).await
@@ -439,13 +446,13 @@ fn cleanup_stale_engine(pid_path: &Path) {
                 }
             }
             if !died {
-                println!(
+                eprintln!(
                     "PID {} (rqbit) did not exit within 3s of being killed; proceeding anyway",
                     pid
                 );
             }
         } else {
-            println!(
+            eprintln!(
                 "PID {} from stale PID file does not look like our rqbit process (name: {}); leaving it alone",
                 pid, name
             );
@@ -489,6 +496,14 @@ fn forget_exited_engine(child: &mut Option<std::process::Child>) {
     }
 }
 
+/// A port nothing is listening on right now, for the engine to take.
+fn free_port() -> Result<u16, String> {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .and_then(|listener| listener.local_addr())
+        .map(|addr| addr.port())
+        .map_err(|e| e.to_string())
+}
+
 fn engine_environment() -> [(&'static str, &'static str); 1] {
     [("CORS_ALLOW_REGEXP", r"^http://tauri\.localhost$")]
 }
@@ -501,9 +516,9 @@ async fn start_torrent_engine(
     // No lock is held across the cleanup wait below, so closing the window
     // (which takes `state.child`) never blocks on it.
     {
-        let mut child_guard = state.child.lock().unwrap();
+        let mut child_guard = lock(&state.child);
         forget_exited_engine(&mut child_guard);
-        let port_guard = state.port.lock().unwrap();
+        let port_guard = lock(&state.port);
         if child_guard.is_some() {
             if let Some(p) = *port_guard {
                 return Ok(format!("http://127.0.0.1:{}", p));
@@ -523,10 +538,10 @@ async fn start_torrent_engine(
         .await
         .map_err(|e| e.to_string())?;
 
-    let mut child_guard = state.child.lock().unwrap();
+    let mut child_guard = lock(&state.child);
     forget_exited_engine(&mut child_guard);
-    let mut pid_guard = state.pid.lock().unwrap();
-    let mut port_guard = state.port.lock().unwrap();
+    let mut pid_guard = lock(&state.pid);
+    let mut port_guard = lock(&state.port);
     // Re-check in case another invocation raced us while cleanup ran.
     if child_guard.is_some() {
         if let Some(p) = *port_guard {
@@ -546,17 +561,8 @@ async fn start_torrent_engine(
         cache::remove_path_best_effort(&output_folder.join(orphan_name));
     }
 
-    let port = std::net::TcpListener::bind("127.0.0.1:0")
-        .map_err(|e| e.to_string())?
-        .local_addr()
-        .map_err(|e| e.to_string())?
-        .port();
-
-    let peer_port = std::net::TcpListener::bind("127.0.0.1:0")
-        .map_err(|e| e.to_string())?
-        .local_addr()
-        .map_err(|e| e.to_string())?
-        .port();
+    let port = free_port()?;
+    let peer_port = free_port()?;
 
     // The shell plugin resolves the sidecar path; spawning the resulting std
     // command ourselves lets engine_process tie the engine to the app.
@@ -564,7 +570,7 @@ async fn start_torrent_engine(
         .shell()
         .sidecar("rqbit")
         .map_err(|e| {
-            println!("Sidecar builder error: {}", e);
+            eprintln!("Sidecar builder error: {}", e);
             e.to_string()
         })?
         .envs(engine_environment())
@@ -586,7 +592,7 @@ async fn start_torrent_engine(
     // Spawned on this async command's Tokio worker thread, never inside
     // spawn_blocking: on Linux the engine is tied to the spawning thread.
     let mut child = engine_process::spawn_tied_to_app(&mut command).map_err(|e| {
-        println!("Sidecar spawn error: {}", e);
+        eprintln!("Sidecar spawn error: {}", e);
         e.to_string()
     })?;
     if let Some(stdout) = child.stdout.take() {
@@ -614,7 +620,7 @@ struct StreamProxyState {
 
 #[tauri::command]
 async fn get_stream_proxy_url(state: State<'_, StreamProxyState>) -> Result<String, String> {
-    let port = state.port.lock().unwrap();
+    let port = lock(&state.port);
     port.map(|p| format!("http://127.0.0.1:{}", p))
         .ok_or_else(|| "Stream proxy not running".to_string())
 }
@@ -868,7 +874,7 @@ fn start_stream_proxy(app: &tauri::AppHandle) -> std::io::Result<u16> {
     let port = listener.local_addr()?.port();
     let engine_app = app.clone();
     let engine_port: stream_proxy::EnginePort =
-        std::sync::Arc::new(move || *engine_app.state::<EngineState>().port.lock().unwrap());
+        std::sync::Arc::new(move || *lock(&engine_app.state::<EngineState>().port));
     tauri::async_runtime::spawn(async move {
         match tokio::net::TcpListener::from_std(listener) {
             Ok(listener) => stream_proxy::serve(listener, engine_port).await,
@@ -934,7 +940,7 @@ pub fn run() {
                 libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr());
             }
             match start_stream_proxy(app.handle()) {
-                Ok(port) => *app.state::<StreamProxyState>().port.lock().unwrap() = Some(port),
+                Ok(port) => *lock(&app.state::<StreamProxyState>().port) = Some(port),
                 Err(e) => eprintln!("Failed to bind the stream proxy: {}", e),
             }
             if let Some(window) = app.get_webview_window("main") {
@@ -946,11 +952,11 @@ pub fn run() {
                         // Drop on EngineState is not guaranteed to run on
                         // Tauri's close/force-quit paths.
                         let state = app_handle.state::<EngineState>();
-                        if let Some(mut child) = state.child.lock().unwrap().take() {
+                        if let Some(mut child) = lock(&state.child).take() {
                             let _ = child.kill();
                         }
-                        *state.pid.lock().unwrap() = None;
-                        *state.port.lock().unwrap() = None;
+                        *lock(&state.pid) = None;
+                        *lock(&state.port) = None;
                         if let Ok(app_cache_dir) = app_handle.path().app_cache_dir() {
                             remove_pid_file(&pid_file_path(&app_cache_dir));
                         }
@@ -966,6 +972,25 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn free_port_gives_a_port_that_can_be_bound() {
+        let port = free_port().unwrap();
+        assert!(std::net::TcpListener::bind(("127.0.0.1", port)).is_ok());
+    }
+
+    #[test]
+    fn lock_carries_on_with_a_poisoned_mutex() {
+        let mutex = std::sync::Arc::new(Mutex::new(5));
+        let poisoner = mutex.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = poisoner.lock().unwrap();
+            panic!("poison it");
+        })
+        .join();
+
+        assert_eq!(*lock(&mutex), 5);
+    }
 
     #[test]
     fn rate_limit_allows_a_burst_then_blocks() {
