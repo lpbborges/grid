@@ -2,6 +2,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import EpisodeList from './EpisodeList.svelte';
 import '@testing-library/jest-dom';
+import { progressStore } from '$lib/stores/progress.svelte';
 
 describe('EpisodeList component', () => {
   it('renders episodes and handles play action', async () => {
@@ -35,6 +36,35 @@ describe('EpisodeList component', () => {
     await fireEvent.click(playButton!);
 
     expect(onPlayEpisode).toHaveBeenCalledWith(episodes[0]);
+  });
+
+  it('offers to continue an episode with saved progress or to start it over', async () => {
+    progressStore.progress = {
+      'series-123-S1E2': { time: 750, duration: 2400, updatedAt: 1 },
+      'series-123-S1E1': { time: 30, duration: 2400, updatedAt: 1 }
+    };
+    const onPlayEpisode = vi.fn();
+    const episodes = [
+      { id: '1', season: 1, episode: 1, name: 'Ep 1' },
+      { id: '2', season: 1, episode: 2, name: 'Ep 2' }
+    ];
+    const { getByText, getAllByRole } = render(EpisodeList, {
+      props: {
+        seriesId: 'series-123',
+        episodes,
+        translatedEpisodes: {},
+        selectedSeason: 1,
+        onPlayEpisode
+      }
+    });
+
+    expect(getByText('Continuar de 12:30')).toBeInTheDocument();
+    const restarts = getAllByRole('button', { name: 'Começar do início' });
+    expect(restarts).toHaveLength(1);
+
+    await fireEvent.click(restarts[0]);
+    expect(onPlayEpisode).toHaveBeenCalledWith(episodes[1], true);
+    progressStore.progress = {};
   });
 
   it('shows an empty state when there are no episodes', () => {
