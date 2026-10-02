@@ -10,6 +10,9 @@
   import { toContinueWatchingItems } from '$lib/utils/continueWatching';
 
   let continueWatchingItems = $derived(toContinueWatchingItems(progressStore.entries));
+  let shownLists = $derived(
+    listsStore.recent.filter((list) => list.system !== 'watch-later' || list.items.length > 0)
+  );
   let creating = $state(false);
   let lastDeleted = $state<RemovedList | null>(null);
   let newListButton = $state<HTMLButtonElement>();
@@ -41,7 +44,7 @@
 <CatalogPage title="Meu Grid">
   <ContinueWatchingRow items={continueWatchingItems} />
 
-  {#each listsStore.lists as list (list.id)}
+  {#each shownLists as list (list.id)}
     <ListSection {list} ondelete={(removed) => (lastDeleted = removed)} />
   {/each}
 

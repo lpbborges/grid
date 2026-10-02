@@ -204,6 +204,100 @@ describe('listsStore', () => {
     });
   });
 
+  describe('order by last update', () => {
+    const at = (time: number, action: () => void) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(time);
+      action();
+      vi.useRealTimers();
+    };
+    const recent = () => store.recent.map((list) => list.name);
+
+    it('puts the list changed last first, ties keeping the stored order', () => {
+      expect(recent()).toEqual(['Favoritos', 'Assistir depois']);
+
+      at(1000, () => store.add('watch-later', 'tt1', movieMeta));
+      expect(recent()).toEqual(['Assistir depois', 'Favoritos']);
+
+      at(2000, () => store.add('favorites', 'tt2', movieMeta));
+      expect(recent()).toEqual(['Favoritos', 'Assistir depois']);
+    });
+
+    it('counts creating, renaming, adding and removing as an update', () => {
+      let id = '';
+      at(1000, () => {
+        const result = store.create('A');
+        if (result.ok) id = result.list.id;
+      });
+      at(2000, () => store.create('B'));
+      expect(recent().slice(0, 2)).toEqual(['B', 'A']);
+
+      at(3000, () => store.rename(id, 'A2'));
+      expect(recent().slice(0, 2)).toEqual(['A2', 'B']);
+
+      at(4000, () => store.add('favorites', 'tt1', movieMeta));
+      expect(recent()[0]).toBe('Favoritos');
+
+      at(5000, () => store.removeItem('favorites', 'tt1'));
+      at(6000, () => store.add(id, 'tt2', movieMeta));
+      expect(recent().slice(0, 2)).toEqual(['A2', 'Favoritos']);
+    });
+
+    it('does not count a looked-up snapshot or a no-op as an update', () => {
+      at(1000, () => store.add('favorites', 'tt1'));
+      at(2000, () => store.add('watch-later', 'tt2', movieMeta));
+      at(3000, () => store.attachMeta({ tt1: movieMeta }));
+      at(4000, () => store.add('watch-later', 'tt2', movieMeta));
+      at(5000, () => store.removeItem('favorites', 'nope'));
+
+      expect(recent()).toEqual(['Assistir depois', 'Favoritos']);
+    });
+
+    it('keeps the order across loads, and a list saved without a date goes last', async () => {
+      at(1000, () => store.add('watch-later', 'tt1', movieMeta));
+      expect(names(await freshStore())).toEqual(['Favoritos', 'Assistir depois']);
+      expect((await freshStore()).recent.map((list) => list.name)).toEqual([
+        'Assistir depois',
+        'Favoritos'
+      ]);
+
+      localStorage.setItem(
+        'grid-lists',
+        JSON.stringify([
+          { id: 'old', name: 'Antiga', items: [] },
+          { id: 'new', name: 'Nova', updatedAt: 5, items: [] },
+          { id: 'bad', name: 'Ruim', updatedAt: 'x', items: [] }
+        ])
+      );
+      expect((await freshStore()).recent.map((list) => list.name)).toEqual([
+        'Nova',
+        'Favoritos',
+        'Assistir depois',
+        'Antiga',
+        'Ruim'
+      ]);
+    });
+
+    it('lists the lists with titles in the same order', () => {
+      at(1000, () => store.add('favorites', 'tt1', movieMeta));
+      at(2000, () => store.add('watch-later', 'tt2', movieMeta));
+
+      expect(store.withTitles.map((list) => list.id)).toEqual(['watch-later', 'favorites']);
+    });
+
+    it('keeps its date when a deleted list is restored', () => {
+      let removed: ReturnType<typeof store.remove> = null;
+      at(1000, () => {
+        const result = store.create('A');
+        if (result.ok) removed = store.remove(result.list.id);
+      });
+      at(2000, () => store.add('favorites', 'tt1', movieMeta));
+      if (removed) store.restore(removed);
+
+      expect(recent()).toEqual(['Favoritos', 'A', 'Assistir depois']);
+    });
+  });
+
   describe('titles', () => {
     it('adds a title once, to one list at a time', () => {
       store.add('favorites', 'tt1', movieMeta);

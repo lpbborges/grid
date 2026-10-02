@@ -518,8 +518,8 @@ describe('Home page lists', () => {
     searchQuery.value = '';
     progressStore.progress = {};
     listsStore.lists = [
-      { id: 'favorites', name: 'Favoritos', system: 'favorites', items: [] },
-      { id: 'watch-later', name: 'Assistir depois', system: 'watch-later', items: [] }
+      { id: 'favorites', name: 'Favoritos', system: 'favorites', updatedAt: 0, items: [] },
+      { id: 'watch-later', name: 'Assistir depois', system: 'watch-later', updatedAt: 0, items: [] }
     ];
   });
 
@@ -559,6 +559,19 @@ describe('Home page lists', () => {
     ]);
     const hrefs = screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'));
     expect(hrefs.slice(-3)).toEqual(['/series/tt2', '/movie/tt1', '/movie/tt3']);
+  });
+
+  it('orders the list rows by the last update, most recent first', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(1000);
+    listsStore.add('favorites', 'tt1', movieMeta);
+    vi.setSystemTime(2000);
+    listsStore.add('watch-later', 'tt2', seriesMeta);
+    vi.useRealTimers();
+    render(HomePage, { data: popularDataWith([], []) });
+    await act(async () => {});
+
+    expect(headings()).toEqual(['Assistir depois', 'Favoritos']);
   });
 
   it('shows the rows of the lists the user created', async () => {

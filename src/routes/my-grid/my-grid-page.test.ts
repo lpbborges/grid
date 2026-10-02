@@ -11,8 +11,8 @@ describe('My Grid page', () => {
   beforeEach(() => {
     localStorage.clear();
     listsStore.lists = [
-      { id: 'favorites', name: 'Favoritos', system: 'favorites', items: [] },
-      { id: 'watch-later', name: 'Assistir depois', system: 'watch-later', items: [] }
+      { id: 'favorites', name: 'Favoritos', system: 'favorites', updatedAt: 0, items: [] },
+      { id: 'watch-later', name: 'Assistir depois', system: 'watch-later', updatedAt: 0, items: [] }
     ];
     progressStore.progress = {};
   });
@@ -23,11 +23,13 @@ describe('My Grid page', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Meu Grid' })).toBeInTheDocument();
   });
 
-  it('shows every list, including the empty ones, each with an empty state', () => {
+  it('shows Favoritos and the lists of the user even when empty, but not an empty Assistir depois', () => {
+    listsStore.create('Cinema');
     render(MyGridPage);
 
     expect(screen.getByRole('heading', { name: 'Favoritos' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Assistir depois' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cinema' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Assistir depois' })).toBeNull();
     expect(screen.getAllByText('Nenhum título nesta lista ainda')).toHaveLength(2);
     expect(screen.queryByText('Continuar assistindo')).toBeNull();
   });
@@ -38,16 +40,47 @@ describe('My Grid page', () => {
     render(MyGridPage);
 
     const headings = screen.getAllByRole('heading').map((h) => h.textContent?.trim());
-    expect(headings.slice(1, 4)).toEqual(['Continuar assistindo', 'Favoritos', 'Assistir depois']);
+    expect(headings.slice(1, 3)).toEqual(['Continuar assistindo', 'Favoritos']);
   });
 
-  it('lists the titles of each list and updates when one is added', async () => {
+  it('shows Assistir depois as soon as it gets a title', async () => {
     render(MyGridPage);
 
     await act(() => listsStore.add('watch-later', 'tt1', meta));
 
+    expect(screen.getByRole('heading', { name: 'Assistir depois' })).toBeInTheDocument();
     expect(screen.getAllByText('Filme')[0]).toBeInTheDocument();
     expect(screen.getAllByText('Nenhum título nesta lista ainda')).toHaveLength(1);
+  });
+
+  it('keeps Assistir depois once it has a title, then shows it again only when it has one', async () => {
+    listsStore.add('watch-later', 'tt1', meta);
+    render(MyGridPage);
+    expect(screen.getByRole('heading', { name: 'Assistir depois' })).toBeInTheDocument();
+
+    await act(() => listsStore.removeItem('watch-later', 'tt1'));
+
+    expect(screen.queryByRole('heading', { name: 'Assistir depois' })).toBeNull();
+  });
+
+  it('orders the lists by the last update, most recent first', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    listsStore.add('favorites', 'tt1', meta);
+    vi.setSystemTime(2000);
+    const created = listsStore.create('Cinema');
+    vi.setSystemTime(3000);
+    listsStore.add('watch-later', 'tt2', meta);
+    vi.useRealTimers();
+    render(MyGridPage);
+
+    const lists = () =>
+      screen.getAllByRole('region').map((section) => section.getAttribute('aria-label'));
+    expect(lists()).toEqual(['Assistir depois', 'Cinema', 'Favoritos']);
+
+    await act(() => listsStore.add('favorites', 'tt3', meta));
+    expect(lists()).toEqual(['Favoritos', 'Assistir depois', 'Cinema']);
+    expect(created.ok).toBe(true);
   });
 
   it('creates a list from the page', async () => {
@@ -89,7 +122,8 @@ describe('My Grid page', () => {
     listsStore.add(created.list.id, 'tt1', meta);
     render(MyGridPage);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Excluir Cinema' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Opções de Cinema' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Excluir' }));
 
     expect(screen.queryByRole('heading', { name: 'Cinema' })).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('Lista excluída');
@@ -107,7 +141,8 @@ describe('My Grid page', () => {
     if (!created.ok) throw new Error('create failed');
     render(MyGridPage);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Excluir Cinema' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Opções de Cinema' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Excluir' }));
     await vi.advanceTimersByTimeAsync(UNDO_TOAST_DURATION_MS + 100);
 
     expect(screen.queryByRole('status')).toBeNull();
