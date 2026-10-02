@@ -1,6 +1,7 @@
 import { untrack } from 'svelte';
 import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
 import { getTorrentStats } from '$lib/engine/torrent';
+import { fileDownloadedBytes } from '$lib/engine/torrentStats';
 import { playbackMode } from '$lib/engine/platform';
 import { useDomBackend } from '$lib/composables/useDomBackend.svelte';
 import { useMpvBackend } from '$lib/composables/useMpvBackend.svelte';
@@ -54,16 +55,7 @@ export function usePlayer(
       const stats = await getTorrentStats(streamPlayer.infoHash);
       if (cancelled) return;
       if (stats && streamPlayer.totalBytes > 0) {
-        let downloaded = 0;
-        if (
-          streamPlayer.fileIdx !== undefined &&
-          stats.file_progress &&
-          stats.file_progress[streamPlayer.fileIdx] !== undefined
-        ) {
-          downloaded = stats.file_progress[streamPlayer.fileIdx];
-        } else if (stats.live?.snapshot) {
-          downloaded = stats.live.snapshot.downloaded_and_checked_bytes || 0;
-        }
+        const downloaded = fileDownloadedBytes(stats, streamPlayer.fileIdx) ?? 0;
         downloadPercent = Math.min((downloaded / streamPlayer.totalBytes) * 100, 100);
       }
       timer = setTimeout(poll, 1000);

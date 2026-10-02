@@ -13,6 +13,11 @@ import {
   deleteTorrent,
   getTorrentStats
 } from '$lib/engine/torrent';
+import {
+  fileDownloadedBytes,
+  sumFileProgress,
+  totalDownloadedBytes
+} from '$lib/engine/torrentStats';
 import { playbackMode } from '$lib/engine/platform';
 import {
   getCacheManifest,
@@ -167,8 +172,9 @@ export async function prepareStream({
       const fileProgress = (await getTorrentStats(infoHash))?.file_progress;
       const fileBytes =
         fileProgress?.[bestFileIdx] ?? (sameFile ? existingEntry.downloadedBytes : 0);
-      const onDisk =
-        fileProgress?.reduce((sum, bytes) => sum + bytes, 0) ?? existingEntry?.downloadedBytes ?? 0;
+      const onDisk = fileProgress
+        ? sumFileProgress(fileProgress)
+        : (existingEntry?.downloadedBytes ?? 0);
       const neededBytes = Math.max(totalBytes - fileBytes, 0);
       await evictForSpace(infoHash, neededBytes, cacheLimitBytes);
       signal?.throwIfAborted();
@@ -273,14 +279,8 @@ async function runFinalizeStream({
   if (cacheEntry) {
     try {
       const stats = await getTorrentStats(infoHash);
-      const fileProgress = stats?.file_progress;
-      const downloadedBytes = fileProgress
-        ? fileProgress.reduce((sum, bytes) => sum + bytes, 0)
-        : stats?.live?.snapshot?.downloaded_and_checked_bytes;
-      const playedBytes =
-        fileIdx !== undefined && fileProgress?.[fileIdx] !== undefined
-          ? fileProgress[fileIdx]
-          : downloadedBytes;
+      const downloadedBytes = totalDownloadedBytes(stats);
+      const playedBytes = fileDownloadedBytes(stats, fileIdx);
       if (downloadedBytes !== undefined && playedBytes !== undefined) {
         await upsertCacheEntry({
           ...cacheEntry,
