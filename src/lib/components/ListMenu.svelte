@@ -33,7 +33,7 @@
   }
 
   function onWindowClick(e: MouseEvent) {
-    if (open && root && e.target instanceof Node && !root.contains(e.target)) close();
+    if (open && root && !e.composedPath().includes(root)) close();
   }
 </script>
 
@@ -81,8 +81,24 @@
                 type="checkbox"
                 checked={listsStore.has(list.id, id)}
                 onchange={() => listsStore.toggle(list.id, id, meta)}
-                class="accent-green focus-visible:ring-green h-4 w-4 cursor-pointer focus-visible:ring-2 focus-visible:outline-none"
+                class="peer sr-only"
               />
+              <span
+                aria-hidden="true"
+                class="border-primary/60 bg-dark peer-checked:border-green peer-checked:bg-green peer-focus-visible:ring-green text-dark flex h-5 w-5 shrink-0 items-center justify-center rounded-xs border transition-colors peer-focus-visible:ring-2 peer-[:not(:checked)]:text-transparent"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg
+                >
+              </span>
               <span class="min-w-0 truncate">{list.name}</span>
             </label>
           </li>

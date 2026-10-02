@@ -118,6 +118,17 @@ describe('ListMenu', () => {
     expect(screen.queryByRole('group', { name: 'Listas' })).toBeNull();
   });
 
+  it('stays open when the pressed button leaves the page before the click reaches the window', async () => {
+    await open();
+    const newList = screen.getByRole('button', { name: 'Nova lista' });
+    newList.addEventListener('click', () => newList.remove());
+
+    newList.click();
+    await tick();
+
+    expect(screen.getByRole('textbox', { name: 'Nome da nova lista' })).toBeInTheDocument();
+  });
+
   it('forgets a half-typed name when it closes', async () => {
     await open();
     await fireEvent.click(screen.getByRole('button', { name: 'Nova lista' }));
