@@ -23,7 +23,7 @@
 //! thread sees is decoded with its entry id attached (`RawEvent`), and
 //! `route` drops anything whose id doesn't match the sink it would apply to.
 
-use crate::player::model::{parse_tracks, Playback, PlayerEvent, TimeThrottle};
+use crate::player::model::{parse_chapters, parse_tracks, Playback, PlayerEvent, TimeThrottle};
 use libmpv2::{Format, Mpv};
 use std::ffi::CString;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -671,9 +671,18 @@ impl Controller {
             .map_err(|e| format!("mpv returned an unreadable track list: {e}"))?;
         // A stream mpv cannot measure reports no duration; progress is then untracked.
         let duration = self.mpv.get_property::<f64>("duration").unwrap_or(0.0);
+        // Chapters only feed the "Pular abertura" button, so a file without them is fine.
+        let chapters = self
+            .mpv
+            .get_property::<String>("chapter-list")
+            .ok()
+            .and_then(|raw| serde_json::from_str(&raw).ok())
+            .map(|value| parse_chapters(&value))
+            .unwrap_or_default();
         Ok(Playback {
             tracks: parse_tracks(&value),
             duration,
+            chapters,
         })
     }
 

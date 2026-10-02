@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { logger } from '$lib/logger';
-import type { PlaybackRequest } from '$lib/types';
+import type { Chapter, PlaybackRequest } from '$lib/types';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { findPreferredSubtitleIndex, getLanguageName } from '$lib/api/subtitles';
 import { resolvePreferredAudioTrack, type ParsedAudioTrack } from '$lib/utils/audioTrack';
@@ -16,6 +16,7 @@ export interface NativePlayback {
   tracks: NativeTrack[];
   /** 0 when mpv could not determine it; progress is then not tracked. */
   duration: number;
+  chapters: Chapter[];
 }
 
 /** One entry of mpv's `track-list`. */
@@ -224,6 +225,7 @@ export function useMpvBackend() {
   let tracks = $state<NativeTrack[]>([]);
   let hasVideo = $state(false);
   let durationState = $state(0);
+  let chapters = $state<Chapter[]>([]);
   let subtitlePosition = 80;
 
   let unlisteners: UnlistenFn[] = [];
@@ -249,6 +251,7 @@ export function useMpvBackend() {
     paused = false;
     volume = 1;
     tracks = [];
+    chapters = [];
     hasVideo = false;
     durationState = 0;
     const request = current;
@@ -285,6 +288,7 @@ export function useMpvBackend() {
         subtitleFiles
       });
       durationState = playback.duration;
+      chapters = playback.chapters ?? [];
       tracks = withExternalLangs(
         playback.tracks,
         external.map((subtitle) => subtitle.lang)
@@ -518,6 +522,9 @@ export function useMpvBackend() {
     },
     get subtitleError() {
       return '';
+    },
+    get chapters() {
+      return chapters;
     },
     get hasStarted() {
       return hasVideo;

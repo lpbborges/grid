@@ -3,6 +3,7 @@
   import PlayerControls from './PlayerControls.svelte';
   import NextEpisodeCard from './NextEpisodeCard.svelte';
   import { UP_NEXT_COUNTDOWN_SECONDS } from '$lib/utils/upNext';
+  import { findIntro } from '$lib/utils/intro';
   import { groupByLanguage } from '$lib/composables/useSubtitleSelection.svelte';
   import type { PlayerBackend, UpNextCard } from '$lib/types';
   import type { SubtitleTrack } from '$lib/api/subtitles';
@@ -45,6 +46,15 @@
     showControls || backend.paused || showSubtitleMenu || showAudioMenu
   );
   const shownPercent = $derived(Math.round(downloadPercent));
+  const intro = $derived(findIntro(backend.chapters));
+  // Gone a second before the end, so it never flashes as the intro finishes.
+  const showSkipIntro = $derived(
+    !!intro &&
+      backend.hasStarted &&
+      !backend.error &&
+      backend.currentTime >= intro.start &&
+      backend.currentTime < intro.end - 1
+  );
   const menusOpen = $derived(showSubtitleMenu || showAudioMenu);
   const showCard = $derived(!!upNext && backend.hasStarted && !backend.buffering && !backend.error);
   // Never reads secondsLeft, so it is announced once rather than every second.
@@ -348,6 +358,16 @@
     >
       {feedback}
     </div>
+  {/if}
+
+  {#if showSkipIntro && intro}
+    <button
+      type="button"
+      onclick={() => backend.seek(intro.end)}
+      class="border-main/60 bg-backdrop/80 text-main hover:border-green hover:text-green focus-visible:ring-green absolute right-8 bottom-32 z-50 cursor-pointer rounded-sm border px-5 py-3 font-bold tracking-wider backdrop-blur-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
+    >
+      Pular abertura
+    </button>
   {/if}
 
   {#if showCard && upNext}

@@ -1,4 +1,4 @@
-import type { PlaybackRequest, PlayerBackend } from '$lib/types';
+import type { Chapter, PlaybackRequest, PlayerBackend } from '$lib/types';
 import { useAudioTrackSelection } from './useAudioTrackSelection.svelte';
 import { useSubtitleSelection } from './useSubtitleSelection.svelte';
 import { settingsStore } from '$lib/stores/settings.svelte';
@@ -191,6 +191,9 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
     },
     get subtitleError() {
       return subtitleSelection.subtitleError;
+    },
+    get chapters(): Chapter[] {
+      return [];
     },
 
     get audioTracks() {

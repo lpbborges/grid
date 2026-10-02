@@ -8,6 +8,8 @@ import {
 } from '$lib/engine/__fixtures__/playbackBoundary';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import type { Chapter } from '$lib/types';
+import { progressStore } from '$lib/stores/progress.svelte';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { watchedStore } from '$lib/stores/watched.svelte';
 import { clearExternalSubtitleCache } from '$lib/api/subtitles';
@@ -49,10 +51,10 @@ const baseOptions: PlaybackBoundaryOptions = {
 let boundary: PlaybackBoundary;
 let handlers: Record<string, (event: { payload: unknown }) => void>;
 
-async function openAndPlay() {
+async function openAndPlay(chapters: Chapter[] = []) {
   boundary = installPlaybackBoundary({
     ...baseOptions,
-    nativePlayback: { tracks: [], duration: 100 }
+    nativePlayback: { tracks: [], duration: 100, chapters }
   });
   render(MoviePage, { props: { data: { movieId: movie.id, movie, error: null } } });
   await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
@@ -63,6 +65,7 @@ async function openAndPlay() {
 describe('Movie native playback wiring', () => {
   beforeEach(() => {
     localStorage.clear();
+    progressStore.progress = {};
     clearExternalSubtitleCache();
     handlers = {};
     vi.mocked(listen).mockImplementation((async (name: string, handler: never) => {
@@ -170,6 +173,27 @@ describe('Movie native playback wiring', () => {
     // Otherwise the controls float over a transparent hole with no video.
     await waitFor(() => expect(screen.queryByTestId('native-player-surface')).toBeNull());
     expect(document.body.classList.contains('native-player-active')).toBe(false);
+  });
+
+  it('skips the intro the file names as a chapter', async () => {
+    await openAndPlay([
+      { title: 'Opening', time: 10 },
+      { title: 'Part A', time: 70 }
+    ]);
+    await waitFor(() => expect(handlers['native-player-presenting']).toBeDefined(), {
+      timeout: 5000
+    });
+
+    handlers['native-player-presenting']({ payload: null });
+    handlers['native-player-time']({ payload: 20 });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Pular abertura' }));
+
+    await waitFor(() =>
+      expect(boundary.invokeCalls).toContainEqual({
+        command: 'native_player_seek',
+        args: { seconds: 70 }
+      })
+    );
   });
 
   it('marks the movie as watched when passing 95% on mpv', async () => {

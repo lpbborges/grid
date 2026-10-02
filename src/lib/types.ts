@@ -166,6 +166,12 @@ export interface PlaybackRequest {
  * per type, and letting an mpv id reach a component silently selects the wrong
  * track. Mapping an index to whatever the backend uses is the backend's job.
  */
+/** Where a chapter of the file starts, from mpv's `chapter-list`. */
+export interface Chapter {
+  title: string | null;
+  time: number;
+}
+
 export interface PlayerBackend {
   readonly currentTime: number;
   readonly duration: number;
@@ -185,6 +191,8 @@ export interface PlayerBackend {
   readonly failedSubtitleIndexes: number[];
   /** DOM-only. Always `''` for mpv. */
   readonly subtitleError: string;
+  /** mpv-only. Always `[]` for the DOM backend, which cannot read chapters. */
+  readonly chapters: Chapter[];
 
   start(request: PlaybackRequest): Promise<boolean>;
   stop(): Promise<void>;
