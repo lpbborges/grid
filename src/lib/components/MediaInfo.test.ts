@@ -71,29 +71,31 @@ describe('MediaInfo component', () => {
     expect(watchedStore.watchedIds.includes('999')).toBe(true);
   });
 
-  it('renders the favorites button and toggles favorite status', async () => {
+  it('has no favorite heart, only the list menu', async () => {
     const { fireEvent } = await import('@testing-library/svelte');
-    const { favoritesStore } = await import('$lib/stores/favorites.svelte');
+    const { listsStore } = await import('$lib/stores/lists.svelte');
 
-    const { getByRole } = render(MediaInfo, {
+    const { getByRole, queryByRole } = render(MediaInfo, {
       props: {
         id: '888',
         type: 'series',
         poster: 'poster.jpg',
-        title: 'Favorite Test Movie',
+        title: 'List Test Series',
         year: 2024,
         rating: 9.0,
         synopsis: 'Test synopsis.'
       }
     });
 
-    const button = getByRole('button', { name: /adicionar aos favoritos/i });
-    expect(button).toBeInTheDocument();
+    expect(queryByRole('button', { name: /favoritos/i })).not.toBeInTheDocument();
 
-    await fireEvent.click(button);
-    expect(favoritesStore.titled[0]).toEqual({
+    await fireEvent.click(getByRole('button', { name: 'Adicionar a uma lista' }));
+    await fireEvent.click(getByRole('checkbox', { name: 'Favoritos' }));
+
+    expect(listsStore.titled('favorites')[0]).toEqual({
       id: '888',
-      meta: { type: 'series', title: 'Favorite Test Movie', poster: 'poster.jpg' }
+      addedAt: expect.any(Number),
+      meta: { type: 'series', title: 'List Test Series', poster: 'poster.jpg' }
     });
   });
 

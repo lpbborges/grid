@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { favoritesStore } from '$lib/stores/favorites.svelte';
+  import ListMenu from '$lib/components/ListMenu.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import type { CastMember, MediaType } from '$lib/types';
   import { genreName } from '$lib/utils/genres';
@@ -201,51 +201,7 @@
     </svg>
   </button>
 
-  <!-- Favorites toggle button -->
-  <button
-    onclick={() => favoritesStore.toggle(id, { type, title, poster })}
-    title={favoritesStore.has(id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-    aria-label={favoritesStore.has(id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-    class="group focus-visible:ring-orange relative flex h-11 w-11 items-center justify-center rounded-sm border transition-all duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:outline-none active:scale-95 {favoritesStore.has(
-      id
-    )
-      ? 'bg-orange/15 border-orange text-orange shadow-[0_0_15px_rgba(249,115,22,0.4)]'
-      : 'border-primary/50 text-muted bg-surface/60 hover:border-orange hover:text-orange hover:bg-surface hover:shadow-[0_0_15px_rgba(249,115,22,0.25)]'}"
-  >
-    <!-- Cyberpunk corner bracket accents -->
-    <div
-      class="absolute -top-[1px] -left-[1px] h-2.5 w-2.5 border-t-2 border-l-2 transition-colors duration-300 {favoritesStore.has(
-        id
-      )
-        ? 'border-orange'
-        : 'border-primary/70 group-hover:border-orange'}"
-    ></div>
-    <div
-      class="absolute -right-[1px] -bottom-[1px] h-2.5 w-2.5 border-r-2 border-b-2 transition-colors duration-300 {favoritesStore.has(
-        id
-      )
-        ? 'border-orange'
-        : 'border-primary/70 group-hover:border-orange'}"
-    ></div>
-
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill={favoritesStore.has(id) ? 'currentColor' : 'none'}
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="transition-transform duration-300 group-hover:scale-110"
-      aria-hidden="true"
-    >
-      <path
-        d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
-      />
-    </svg>
-  </button>
+  <ListMenu {id} meta={{ type, title, poster }} />
 
   {#if trailerYoutubeId}
     <button

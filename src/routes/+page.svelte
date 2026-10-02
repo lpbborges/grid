@@ -9,7 +9,8 @@
   import { useCatalogSearch } from '$lib/composables/useCatalogSearch.svelte';
   import type { Movie } from '$lib/types';
   import { appReady, searchQuery } from '$lib/stores.svelte';
-  import FavoritesRow from '$lib/components/FavoritesRow.svelte';
+  import ListRow from '$lib/components/ListRow.svelte';
+  import { listsStore } from '$lib/stores/lists.svelte';
   import ContinueWatchingRow from '$lib/components/ContinueWatchingRow.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { toContinueWatchingItems } from '$lib/utils/continueWatching';
@@ -82,5 +83,7 @@
       {/each}
     </div>
   {/if}
-  <FavoritesRow />
+  {#each listsStore.withTitles as list (list.id)}
+    <ListRow {list} />
+  {/each}
 {/if}

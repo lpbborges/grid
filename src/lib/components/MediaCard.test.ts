@@ -75,16 +75,24 @@ describe('MediaCard component', () => {
     expect(link?.getAttribute('href')).toBe('/series/123');
   });
 
-  it('renders Favorito badge with priority over Assistido badge', async () => {
-    const { favoritesStore } = await import('$lib/stores/favorites.svelte');
-    const { watchedStore } = await import('$lib/stores/watched.svelte');
+  it('shows no mark for a title that is in a list', async () => {
+    const { listsStore } = await import('$lib/stores/lists.svelte');
+    listsStore.add('favorites', 123, { type: 'movie', title: 'Test Movie', poster: 'p.jpg' });
 
-    favoritesStore.add(123);
+    const { queryByTitle, getByTestId } = render(MediaCard, { media: mockMovie, type: 'movie' });
+
+    expect(queryByTitle('Favorito')).not.toBeInTheDocument();
+    expect(getByTestId('media-card').className).not.toContain('orange');
+    expect(getByTestId('media-card').innerHTML).not.toContain('orange');
+  });
+
+  it('shows the Assistido mark on a watched title', async () => {
+    const { watchedStore } = await import('$lib/stores/watched.svelte');
     watchedStore.add(123);
 
-    const { getByTitle, queryByTitle } = render(MediaCard, { media: mockMovie, type: 'movie' });
-    expect(getByTitle('Favorito')).toBeInTheDocument();
-    expect(queryByTitle('Assistido')).not.toBeInTheDocument();
+    const { getByTitle } = render(MediaCard, { media: mockMovie, type: 'movie' });
+
+    expect(getByTitle('Assistido')).toBeInTheDocument();
   });
 
   it.each([

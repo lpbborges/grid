@@ -5,13 +5,13 @@
   import type { CardMedia, MediaType } from '$lib/types';
 
   let {
-    heading,
+    heading = '',
     items,
     type = 'movie',
     containerClass = 'mb-8',
     card
   }: {
-    heading: string;
+    heading?: string;
     items: T[];
     type?: MediaType;
     containerClass?: string;
@@ -45,7 +45,9 @@
 </script>
 
 {#if items.length > 0}
-  <SectionHeading {heading} />
+  {#if heading}
+    <SectionHeading {heading} />
+  {/if}
 
   <div class="relative {containerClass}">
     {#if canScrollLeft}

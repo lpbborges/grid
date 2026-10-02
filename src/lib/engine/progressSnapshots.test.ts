@@ -14,9 +14,9 @@ const movieMeta = { type: 'movie' as const, title: 'Filme', poster: 'm.jpg' };
 async function load() {
   vi.resetModules();
   const { progressStore } = await import('$lib/stores/progress.svelte');
-  const { favoritesStore } = await import('$lib/stores/favorites.svelte');
+  const { listsStore } = await import('$lib/stores/lists.svelte');
   const { backfillProgressSnapshots } = await import('./progressSnapshots');
-  return { progressStore, favoritesStore, backfillProgressSnapshots };
+  return { progressStore, listsStore, backfillProgressSnapshots };
 }
 
 describe('backfillProgressSnapshots', () => {
@@ -54,14 +54,14 @@ describe('backfillProgressSnapshots', () => {
     expect(resolveMissingSnapshotsMock).toHaveBeenCalledTimes(1);
   });
 
-  it('looks up favorites saved without a snapshot once, even when also in progress', async () => {
+  it('looks up listed titles saved without a snapshot once, even when also in progress', async () => {
     localStorage.setItem(
       'grid-progress',
       JSON.stringify({ 'tt1-S1E2': { time: 1, duration: 100, updatedAt: 1 } })
     );
     localStorage.setItem('grid-favorites', JSON.stringify(['tt1', 'tt2']));
     resolveMissingSnapshotsMock.mockResolvedValue({ tt1: movieMeta, tt2: movieMeta });
-    const { progressStore, favoritesStore, backfillProgressSnapshots } = await load();
+    const { progressStore, listsStore, backfillProgressSnapshots } = await load();
 
     await backfillProgressSnapshots();
 
@@ -70,6 +70,6 @@ describe('backfillProgressSnapshots', () => {
       { id: 'tt2' }
     ]);
     expect(progressStore.get('tt1', 1, 2)?.meta).toEqual(movieMeta);
-    expect(favoritesStore.titled.map((entry) => entry.id)).toEqual(['tt2', 'tt1']);
+    expect(listsStore.titled('favorites').map((item) => item.id)).toEqual(['tt2', 'tt1']);
   });
 });

@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { CardMedia, MediaType } from '../types';
-  import { favoritesStore } from '$lib/stores/favorites.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
 
@@ -30,13 +29,11 @@
 
 <a
   href={href ?? `/${type}/${media.id}`}
-  class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 will-change-transform hover:-translate-y-2 focus-visible:ring-2 focus-visible:outline-none {favoritesStore.has(
+  class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-all duration-300 will-change-transform hover:-translate-y-2 focus-visible:ring-2 focus-visible:outline-none {watchedStore.has(
     media.id
   )
-    ? 'hover:shadow-[0_0_20px_rgba(249,115,22,0.4)]'
-    : watchedStore.has(media.id)
-      ? 'hover:shadow-[0_0_20px_rgba(54,211,83,0.4)]'
-      : 'hover:shadow-[0_0_20px_rgba(107,33,168,0.4)]'}"
+    ? 'hover:shadow-[0_0_20px_rgba(54,211,83,0.4)]'
+    : 'hover:shadow-[0_0_20px_rgba(107,33,168,0.4)]'}"
   data-testid="media-card"
 >
   <!-- Cyberpunk border effect -->
@@ -44,9 +41,7 @@
     class="border-primary/20 group-hover:border-primary/80 pointer-events-none absolute inset-0 border transition-colors duration-300"
   ></div>
   <div
-    class="{favoritesStore.has(media.id)
-      ? 'group-hover:border-orange'
-      : 'group-hover:border-green'} pointer-events-none absolute -top-[1px] -left-[1px] z-40 h-2 w-2 border-t-2 border-l-2 border-transparent transition-colors duration-300"
+    class="group-hover:border-green pointer-events-none absolute -top-[1px] -left-[1px] z-40 h-2 w-2 border-t-2 border-l-2 border-transparent transition-colors duration-300"
   ></div>
 
   <div class="relative h-[270px] w-full overflow-hidden">
@@ -60,26 +55,7 @@
     <div
       class="pointer-events-none absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
     ></div>
-    {#if favoritesStore.has(media.id)}
-      <div
-        class="text-orange pointer-events-none absolute top-2.5 right-2.5 z-20 [filter:drop-shadow(0_0_8px_rgba(249,115,22,0.9))] transition-transform duration-300 will-change-transform group-hover:scale-110"
-        title="Favorito"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          stroke="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
-          />
-        </svg>
-      </div>
-    {:else if watchedStore.has(media.id)}
+    {#if watchedStore.has(media.id)}
       <div
         class="text-green pointer-events-none absolute top-2.5 right-2.5 z-20 [filter:drop-shadow(0_0_8px_rgba(54,211,83,0.9))] transition-transform duration-300 will-change-transform group-hover:scale-110"
         title="Assistido"
@@ -156,9 +132,7 @@
       class="bg-surface/95 border-primary pointer-events-none absolute top-[-1px] right-[-1px] left-[-1px] z-30 border px-3 py-[11px] opacity-0 shadow-[0_10px_30px_rgba(0,0,0,0.9)] transition-opacity duration-300 group-hover:opacity-100"
     >
       <div
-        class="{favoritesStore.has(media.id)
-          ? 'border-orange'
-          : 'border-green'} pointer-events-none absolute -right-[1px] -bottom-[1px] z-40 h-2 w-2 border-r-2 border-b-2"
+        class="border-green pointer-events-none absolute -right-[1px] -bottom-[1px] z-40 h-2 w-2 border-r-2 border-b-2"
       ></div>
       <div
         class="text-main font-cyber w-full text-center text-sm tracking-wider break-words uppercase"

@@ -30,3 +30,12 @@ export function readStoredIds(key: string): string[] {
     .filter((id): id is string | number => typeof id === 'string' || typeof id === 'number')
     .map(String);
 }
+
+export function removeStored(key: string): void {
+  if (!browser) return;
+  try {
+    localStorage.removeItem(key);
+  } catch (error) {
+    logger.warn(`Failed to remove ${key}`, error);
+  }
+}
