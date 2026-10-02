@@ -31,6 +31,9 @@ struct SubtitleRateLimit {
 const SUBTITLE_RATE_LIMIT_BURST: u32 = 50;
 const SUBTITLE_RATE_LIMIT_PER_MINUTE: u32 = 30;
 
+/// A custom redirect policy gets no default hop limit, so it sets its own.
+const MAX_SUBTITLE_REDIRECTS: usize = 10;
+
 /// Hard cap on how many bytes of a subtitle response we'll buffer into
 /// memory. Real subtitle files are at most a few hundred KB; this is
 /// generous headroom while still making it impossible for a
@@ -171,7 +174,9 @@ async fn fetch_external_subtitle(
 /// external address.
 fn redirect_policy_allowing(is_allowed: fn(&str) -> bool) -> reqwest::redirect::Policy {
     reqwest::redirect::Policy::custom(move |attempt| {
-        if is_allowed(attempt.url().as_str()) {
+        if attempt.previous().len() >= MAX_SUBTITLE_REDIRECTS {
+            attempt.error("too many redirects")
+        } else if is_allowed(attempt.url().as_str()) {
             attempt.follow()
         } else {
             attempt.stop()
@@ -1076,6 +1081,38 @@ mod tests {
             res.headers().get("location").unwrap(),
             "https://evil.example.com/payload.srt"
         );
+    }
+
+    #[tokio::test]
+    async fn a_redirect_loop_between_allowed_hosts_is_cut_short() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/loop.srt", listener.local_addr().unwrap());
+        let requests = Arc::new(AtomicUsize::new(0));
+        let served = requests.clone();
+        let target = url.clone();
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                served.fetch_add(1, Ordering::SeqCst);
+                let response = format!(
+                    "HTTP/1.1 302 Found\r\nLocation: {target}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                );
+                let mut buf = [0u8; 1024];
+                let _ = socket.read(&mut buf).await;
+                let _ = socket.write_all(response.as_bytes()).await;
+                let _ = socket.shutdown().await;
+            }
+        });
+
+        let client = build_client_with_redirect_allowlist(|_| true).expect("client builds");
+        let result = client.get(&url).send().await;
+
+        assert!(result.is_err_and(|error| error.is_redirect()));
+        assert!(requests.load(Ordering::SeqCst) <= 11);
     }
 
     #[tokio::test]
