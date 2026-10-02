@@ -19,6 +19,14 @@ import { isAvailable } from '$lib/utils/released';
 
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
+function isCinemetaMeta(value: unknown): value is CinemetaMeta {
+  return isRecord(value) && typeof value.name === 'string' && value.name !== '';
+}
+
+function entriesOf(data: unknown): unknown[] {
+  return isRecord(data) && Array.isArray(data.metas) ? data.metas : [];
+}
+
 /** Genres, runtime and trailer, each left out when Cinemeta has nothing usable. */
 function cinemetaExtras(
   meta: CinemetaMeta
@@ -90,13 +98,13 @@ export async function getCatalogPage(
         `Failed to fetch the ${type} ${catalog} catalog from cinemeta: ${res.statusText}`
       );
     }
-    const data: unknown = await res.json();
-    const metas = isRecord(data) && Array.isArray(data.metas) ? (data.metas as CinemetaMeta[]) : [];
+    const metas = entriesOf(await res.json());
     const titles: Movie[] = [];
     let consumed = 0;
     for (const meta of metas) {
       if (titles.length >= limit) break;
       consumed++;
+      if (!isCinemetaMeta(meta)) continue;
       const title = mapCinemetaMeta(meta);
       if (isAvailable(title, type)) titles.push(title);
     }
@@ -138,12 +146,10 @@ async function searchCinemeta(
     if (!res.ok) {
       throw new Error(`Failed to search cinemeta: ${res.statusText}`);
     }
-    const data = await res.json();
-    const metas = data.metas || [];
-
-    return metas
+    return entriesOf(await res.json())
+      .filter(isCinemetaMeta)
       .map(mapCinemetaMeta)
-      .filter((item: Movie) => isAvailable(item, type))
+      .filter((item) => isAvailable(item, type))
       .slice(0, limit);
   } catch (error) {
     logger.error(error);
@@ -173,12 +179,17 @@ async function getSearchResult(
   customFetch?: typeof fetch
 ): Promise<SearchResult | null> {
   try {
-    const res = await fetchWithTimeout(`${endpoints.cinemeta}/meta/${type}/${imdbId}.json`, {
-      fetch: customFetch
-    });
+    const res = await fetchWithTimeout(
+      `${endpoints.cinemeta}/meta/${type}/${encodeURIComponent(imdbId)}.json`,
+      {
+        fetch: customFetch
+      }
+    );
     if (!res.ok) return null;
-    const data = await res.json();
-    return data?.meta?.name ? { ...mapCinemetaMeta(data.meta), type } : null;
+    const data: unknown = await res.json();
+    return isRecord(data) && isCinemetaMeta(data.meta)
+      ? { ...mapCinemetaMeta(data.meta), type }
+      : null;
   } catch (error) {
     logger.warn(`Failed to load ${type} ${imdbId} from cinemeta:`, error);
     return null;
@@ -331,8 +342,8 @@ export async function getMovieDetails(
   movieId: number | string,
   customFetch?: typeof fetch
 ): Promise<Movie> {
-  const isImdbId = typeof movieId === 'string' && movieId.startsWith('tt');
-  const queryParam = isImdbId ? `imdb_id=${movieId}` : `movie_id=${movieId}`;
+  const byImdbId = isImdbId(movieId);
+  const queryParam = `${byImdbId ? 'imdb_id' : 'movie_id'}=${encodeURIComponent(movieId)}`;
   const res = await fetchWithTimeout(
     `${endpoints.moviesApi}/movie_details.json?${queryParam}&with_cast=true`,
     { fetch: customFetch }
@@ -346,12 +357,15 @@ export async function getMovieDetails(
   }
   const movie = data.data.movie;
 
-  if (isImdbId || movie.imdb_code) {
-    const imdbId = isImdbId ? movieId : movie.imdb_code;
+  if (byImdbId || movie.imdb_code) {
+    const imdbId = byImdbId ? movieId : movie.imdb_code;
     try {
-      const cineRes = await fetchWithTimeout(`${endpoints.cinemeta}/meta/movie/${imdbId}.json`, {
-        fetch: customFetch
-      });
+      const cineRes = await fetchWithTimeout(
+        `${endpoints.cinemeta}/meta/movie/${encodeURIComponent(imdbId)}.json`,
+        {
+          fetch: customFetch
+        }
+      );
       if (cineRes.ok) {
         const cineData = await cineRes.json();
         if (cineData?.meta?.director) {
@@ -426,18 +440,21 @@ export async function getSeriesDetails(
   seriesId: string,
   customFetch?: typeof fetch
 ): Promise<Series> {
-  const res = await fetchWithTimeout(`${endpoints.cinemeta}/meta/series/${seriesId}.json`, {
-    fetch: customFetch
-  });
+  const res = await fetchWithTimeout(
+    `${endpoints.cinemeta}/meta/series/${encodeURIComponent(seriesId)}.json`,
+    {
+      fetch: customFetch
+    }
+  );
   if (!res.ok) {
     throw new Error(`Failed to fetch series details: ${res.statusText}`);
   }
-  const data = await res.json();
-  if (!data.meta) {
+  const data: unknown = await res.json();
+  if (!isRecord(data) || !isCinemetaMeta(data.meta)) {
     throw new Error('API returned an error');
   }
 
-  const meta: CinemetaMeta = data.meta;
+  const meta = data.meta;
   const id = meta.imdb_id || meta.id || seriesId;
   const poster = correctedPoster(id, meta.poster);
   const series = {
@@ -492,12 +509,15 @@ export async function getPreviewMeta(
   const cached = previewMetaCache.get(key);
   if (cached) return cached;
 
-  const res = await fetchWithTimeout(`${endpoints.cinemeta}/meta/${type}/${id}.json`, options);
+  const res = await fetchWithTimeout(
+    `${endpoints.cinemeta}/meta/${type}/${encodeURIComponent(id)}.json`,
+    options
+  );
   if (!res.ok) throw new Error(`Failed to fetch preview details: ${res.statusText}`);
-  const data = await res.json();
-  if (!isRecord(data?.meta)) throw new Error('Cinemeta returned no details');
+  const data: unknown = await res.json();
+  if (!isRecord(data) || !isRecord(data.meta)) throw new Error('Cinemeta returned no details');
 
-  const meta = data.meta as CinemetaMeta;
+  const meta = data.meta as unknown as CinemetaMeta;
   const { genres, runtime } = cinemetaExtras(meta);
   const seasons = new Set(
     (Array.isArray(meta.videos) ? meta.videos : []).filter((v) => v.season > 0).map((v) => v.season)

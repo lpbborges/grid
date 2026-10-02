@@ -117,6 +117,72 @@ describe('yts api', () => {
     expect(movie.title).toBe('Test Movie');
   });
 
+  it('encodes a movie id that is not an IMDb id before putting it in the query', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'ok', data: { movie: mockMovie } })
+    });
+
+    await getMovieDetails('a&b=c');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('movie_details.json?movie_id=a%26b%3Dc&'),
+      expect.anything()
+    );
+  });
+
+  it('encodes a series id before putting it in the path', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      statusText: 'Not Found'
+    });
+
+    await expect(getSeriesDetails('x/../y?z')).rejects.toThrow();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/meta/series/x%2F..%2Fy%3Fz.json'),
+      expect.anything()
+    );
+  });
+
+  it('skips entries Cinemeta lists without a usable title instead of failing the search', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        metas: [
+          null,
+          'oops',
+          { id: 'tt0', poster: 'p.jpg' },
+          {
+            id: 'tt1375666',
+            imdb_id: 'tt1375666',
+            name: 'Inception',
+            releaseInfo: '2010',
+            poster: 'i.jpg'
+          }
+        ]
+      })
+    });
+
+    const results = await searchMovies('inception');
+
+    expect(results.map((movie) => movie.title)).toEqual(['Inception']);
+  });
+
+  it('skips unusable catalog entries but still counts them as read', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        metas: [null, { id: 'tt1', imdb_id: 'tt1', name: 'Ok', releaseInfo: '2010', poster: 'a' }]
+      })
+    });
+
+    const page = await getCatalogPage({ type: 'movie', catalog: 'top' });
+
+    expect(page.titles.map((movie) => movie.title)).toEqual(['Ok']);
+    expect(page.consumed).toBe(2);
+  });
+
   it('adds the genres, runtime and trailer from Cinemeta to a movie', async () => {
     routeFetch({
       'movie_details.json': { status: 'ok', data: { movie: { ...mockMovie, imdb_code: 'tt1' } } },
