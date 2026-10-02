@@ -59,7 +59,7 @@ describe('useStreamPlayer', () => {
     expect(streamPlayer.totalBytes).toBe(1234);
     expect(prepareStreamMock).toHaveBeenCalledWith({
       magnet: 'magnet:?xt=urn:btih:abc',
-      onStatus: expect.any(Function),
+      onStage: expect.any(Function),
       mediaId: 'tt1',
       season: undefined,
       episode: undefined,
@@ -136,7 +136,7 @@ describe('useStreamPlayer', () => {
     expect(streamPlayer.videoSrc).toBe('');
     expect(streamPlayer.infoHash).toBe('');
     expect(streamPlayer.totalBytes).toBe(0);
-    expect(streamPlayer.engineStatus).toBe('');
+    expect(streamPlayer.loadingStage).toBeNull();
     expect(finalizeStreamMock).toHaveBeenCalledWith({
       infoHash: 'abc',
       isCacheable: true,
@@ -172,12 +172,12 @@ describe('useStreamPlayer', () => {
     expect(finalizeStreamMock).toHaveBeenCalledTimes(1);
   });
 
-  it('engineStatus updates as the onStatus callback fires during play()', async () => {
+  it('loadingStage follows the stages reported during play()', async () => {
     prepareStreamMock.mockImplementation(
-      ({ onStatus }: { onStatus: (status: string) => void }) =>
+      ({ onStage }: { onStage: (stage: string) => void }) =>
         new Promise((resolve) => {
-          onStatus('Iniciando player...');
-          onStatus('Preparando stream...');
+          onStage('searching');
+          onStage('preparing');
           resolve({
             infoHash: 'abc',
             totalBytes: 1234,
@@ -190,7 +190,7 @@ describe('useStreamPlayer', () => {
     const streamPlayer = await mount();
     await streamPlayer.play('magnet:?xt=urn:btih:abc');
 
-    expect(streamPlayer.engineStatus).toBe('Preparando stream...');
+    expect(streamPlayer.loadingStage).toBe('preparing');
   });
 
   it('stop() during play(): aborts the preparation and ignores its late result', async () => {
@@ -226,10 +226,10 @@ describe('useStreamPlayer', () => {
   it('a cancelled play() that rejects with the abort reports no error and no status', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     prepareStreamMock.mockImplementation(
-      ({ signal, onStatus }: { signal: AbortSignal; onStatus: (s: string) => void }) =>
+      ({ signal, onStage }: { signal: AbortSignal; onStage: (s: string) => void }) =>
         new Promise((_, reject) => {
           signal.addEventListener('abort', () => {
-            onStatus('Ainda preparando o stream, aguarde...');
+            onStage('searchingSlow');
             reject(signal.reason);
           });
         })
@@ -241,7 +241,7 @@ describe('useStreamPlayer', () => {
 
     expect(await playPromise).toBe(false);
     expect(streamPlayer.error).toBe('');
-    expect(streamPlayer.engineStatus).toBe('');
+    expect(streamPlayer.loadingStage).toBeNull();
     expect(consoleErrorSpy).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();

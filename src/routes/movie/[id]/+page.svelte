@@ -291,7 +291,7 @@
         <Player
           {backend}
           bind:videoElement
-          engineStatus={player.engineStatus}
+          loadingStage={player.loadingStage}
           downloadPercent={player.downloadPercent}
           onclose={() => {
             player.stop();

@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
     isPlaying: false,
     videoSrc: 'http://test',
     subtitles: [],
-    engineStatus: '',
+    loadingStage: null,
     error: '',
     infoHash: '',
     fileIdx: 0,

@@ -2,11 +2,12 @@
   import PlayerShell from './PlayerShell.svelte';
   import { isDomBackend } from '$lib/composables/useDomBackend.svelte';
   import type { PlayerBackend, UpNextCard } from '$lib/types';
+  import type { LoadingStage } from '$lib/utils/loadingStage';
 
   let {
     backend,
     videoElement = $bindable(null),
-    engineStatus = '',
+    loadingStage = null,
     downloadPercent = 0,
     onclose,
     upNext = null,
@@ -14,7 +15,7 @@
   } = $props<{
     backend: PlayerBackend;
     videoElement?: HTMLVideoElement | null;
-    engineStatus?: string;
+    loadingStage?: LoadingStage | null;
     downloadPercent?: number;
     onclose?: () => void;
     upNext?: UpNextCard | null;
@@ -76,7 +77,7 @@
 
 <PlayerShell
   {backend}
-  {engineStatus}
+  {loadingStage}
   {downloadPercent}
   transparent={!dom}
   {surface}

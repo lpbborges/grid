@@ -24,6 +24,7 @@ import {
 } from '$lib/engine/cache';
 import { getExternalSubtitles, type SubtitleTrack } from '$lib/api/subtitles';
 import { settingsStore } from '$lib/stores/settings.svelte';
+import type { LoadingStage } from '$lib/utils/loadingStage';
 
 export interface StreamDetails {
   infoHash: string;
@@ -85,7 +86,7 @@ async function reconcileLoadedTorrents(manifestInfoHashes: string[]): Promise<vo
 
 export interface PrepareStreamOptions {
   magnet: string;
-  onStatus: (status: string) => void;
+  onStage: (stage: LoadingStage) => void;
   mediaId?: string;
   season?: number;
   episode?: number;
@@ -107,19 +108,18 @@ async function removeAbandonedTorrent(infoHash: string, keepFiles: boolean): Pro
 
 export async function prepareStream({
   magnet,
-  onStatus,
+  onStage,
   mediaId,
   season,
   episode,
   preferredFileIdx,
   signal
 }: PrepareStreamOptions): Promise<StreamDetails> {
-  onStatus('Iniciando player...');
+  onStage('searching');
   await startEngine();
   await waitForEngine();
   signal?.throwIfAborted();
 
-  onStatus('Preparando stream...');
   await pendingFinalize;
   signal?.throwIfAborted();
   const manifest = await getCacheManifest();
@@ -135,10 +135,11 @@ export async function prepareStream({
   // Aborting the add also cancels rqbit's lookup, so nothing is left behind.
   const details = await addTorrent(magnet, parsedInfoHash ?? undefined, {
     onlyFilesRegex: '(?i)\\.(mp4|mkv|webm|srt|vtt)$',
-    onRetry: () => onStatus('Ainda preparando o stream, aguarde...'),
+    onRetry: () => onStage('searchingSlow'),
     signal
   });
   const infoHash = details.info_hash;
+  onStage('preparing');
   let cacheEntry: CacheEntry | undefined;
 
   try {
@@ -194,7 +195,6 @@ export async function prepareStream({
       signal?.throwIfAborted();
     }
 
-    onStatus('Baixando legendas...');
     // Subtitle failures must never block video playback, which does not
     // depend on them, so each source is isolated with its own catch and
     // fetched concurrently rather than sequentially.
@@ -223,7 +223,7 @@ export async function prepareStream({
       signal.throwIfAborted();
     }
 
-    onStatus('Carregando vídeo...');
+    onStage('loading');
     revokeBlobUrls(activeBlobUrls);
     activeBlobUrls = subtitles.map((s) => s.url);
     // mpv demuxes Matroska correctly, so it must get the unpatched stream: the

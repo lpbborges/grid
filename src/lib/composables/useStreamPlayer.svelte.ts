@@ -4,6 +4,7 @@ import { EngineStartError } from '$lib/engine/torrent';
 import type { SubtitleTrack } from '$lib/api/subtitles';
 import type { CacheEntry } from '$lib/engine/cache';
 import { playerState } from '$lib/stores.svelte';
+import type { LoadingStage } from '$lib/utils/loadingStage';
 
 export interface PlayOptions {
   mediaId?: string;
@@ -16,7 +17,7 @@ export function useStreamPlayer() {
   let isPlaying = $state(false);
   let videoSrc = $state('');
   let subtitles = $state<SubtitleTrack[]>([]);
-  let engineStatus = $state('');
+  let loadingStage = $state<LoadingStage | null>(null);
   let error = $state('');
   let infoHash = $state('');
   let fileIdx = $state<number | undefined>(undefined);
@@ -42,8 +43,8 @@ export function useStreamPlayer() {
     try {
       const streamData = await prepareStream({
         magnet,
-        onStatus: (status) => {
-          if (!signal.aborted) engineStatus = status;
+        onStage: (stage) => {
+          if (!signal.aborted) loadingStage = stage;
         },
         mediaId: options.mediaId,
         season: options.season,
@@ -69,7 +70,7 @@ export function useStreamPlayer() {
         e instanceof EngineStartError
           ? 'Não foi possível iniciar o player. Feche e abra o aplicativo novamente.'
           : 'Não foi possível iniciar a reprodução. Tente novamente.';
-      engineStatus = '';
+      loadingStage = null;
       isPlaying = false;
       playerState.isPlaying = false;
       return false;
@@ -85,7 +86,7 @@ export function useStreamPlayer() {
     isPlaying = false;
     playerState.isPlaying = false;
     videoSrc = '';
-    engineStatus = '';
+    loadingStage = null;
     infoHash = '';
     fileIdx = undefined;
     totalBytes = 0;
@@ -119,8 +120,8 @@ export function useStreamPlayer() {
     get subtitles() {
       return subtitles;
     },
-    get engineStatus() {
-      return engineStatus;
+    get loadingStage() {
+      return loadingStage;
     },
     get error() {
       return error;
