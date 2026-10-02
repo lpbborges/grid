@@ -4,7 +4,11 @@
   import { listsStore } from '$lib/stores/lists.svelte';
   import type { ProgressMeta } from '$lib/types';
 
-  let { id, meta }: { id: string | number; meta: ProgressMeta } = $props();
+  let {
+    id,
+    meta,
+    compact = false
+  }: { id: string | number; meta: ProgressMeta; compact?: boolean } = $props();
 
   const menuId = $props.id();
   let open = $state(false);
@@ -48,12 +52,16 @@
     aria-expanded={open}
     aria-controls={open ? menuId : undefined}
     onclick={() => (open ? close() : (open = true))}
-    class="group border-primary/50 text-muted bg-surface/60 hover:border-green hover:text-green hover:bg-surface focus-visible:ring-green flex h-11 w-11 cursor-pointer items-center justify-center rounded-sm border transition-all duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:outline-none active:scale-95"
+    class="group border-primary/50 text-muted bg-surface/60 hover:border-green hover:text-green hover:bg-surface focus-visible:ring-green flex {compact
+      ? 'h-8 w-8'
+      : 'h-11 w-11'} cursor-pointer items-center justify-center {compact
+      ? 'rounded-sm border-2'
+      : 'rounded-sm border'} transition-all duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:outline-none active:scale-95"
   >
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      width="20"
-      height="20"
+      width={compact ? 16 : 20}
+      height={compact ? 16 : 20}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

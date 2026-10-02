@@ -3,10 +3,12 @@
   import AppHeader from '$lib/components/AppHeader.svelte';
   import SplashScreen from '$lib/components/SplashScreen.svelte';
   import DisclaimerModal from '$lib/components/DisclaimerModal.svelte';
+  import HoverPreview from '$lib/components/HoverPreview.svelte';
   import Titlebar from '$lib/components/Titlebar.svelte';
   import { afterNavigate } from '$app/navigation';
   import { page } from '$app/state';
   import { playerState } from '$lib/stores.svelte';
+  import { hoverPreview } from '$lib/stores/hoverPreview.svelte';
   let { children } = $props();
 
   const SCROLLED_AFTER_PX = 8;
@@ -30,7 +32,10 @@
   <main
     bind:this={main}
     class="flex-1 overflow-y-auto"
-    onscroll={() => (scrolled = (main?.scrollTop ?? 0) > SCROLLED_AFTER_PX)}
+    onscroll={() => {
+      scrolled = (main?.scrollTop ?? 0) > SCROLLED_AFTER_PX;
+      hoverPreview.noteScroll();
+    }}
   >
     {#if showHeader}
       <AppHeader {scrolled} />
@@ -39,4 +44,5 @@
       {@render children()}
     </div>
   </main>
+  <HoverPreview />
 </div>

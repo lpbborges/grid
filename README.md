@@ -40,7 +40,7 @@ Use VS Code with the Svelte, Tauri, and rust-analyzer extensions.
 
 ## Architecture
 
-The SvelteKit frontend runs in the Tauri webview, fetching from APIs and invoking Rust commands. The Rust backend handles sidecar spawning, stream proxying, cache management, and native playback via libmpv. WebKitGTK requires a stream proxy (`src-tauri/src/stream_proxy.rs`) to patch headers in Matroska and MP4 files so embedded subtitles work. Preferences, progress and the user's lists (Favoritos, Assistir depois and their own) live in `localStorage`, translations in IndexedDB, and the video cache in the app data directory.
+The SvelteKit frontend runs in the Tauri webview, fetching from APIs and invoking Rust commands. The Rust backend handles sidecar spawning, stream proxying, cache management, and native playback via libmpv. WebKitGTK requires a stream proxy (`src-tauri/src/stream_proxy.rs`) to patch headers in Matroska and MP4 files so embedded subtitles work. Hovering a card for a moment (or focusing it with the keyboard) opens a details card with the genres and runtime, read from Cinemeta and cached in memory; Settings can turn it off. Preferences, progress and the user's lists (Favoritos, Assistir depois and their own) live in `localStorage`, translations in IndexedDB, and the video cache in the app data directory.
 
 ## Sidecars and dependencies
 

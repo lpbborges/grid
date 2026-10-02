@@ -75,6 +75,17 @@
         <QualitySelector />
       </div>
     </div>
+    <label class="text-main mt-6 flex cursor-pointer items-center gap-3 text-sm">
+      <input
+        type="checkbox"
+        bind:checked={settingsStore.hoverPreview}
+        class="accent-green focus-visible:ring-green h-4 w-4 cursor-pointer focus-visible:ring-2 focus-visible:outline-none"
+      />
+      Prévia ao passar o mouse
+    </label>
+    <p class="text-muted mt-1 text-sm">
+      Mostra os detalhes de um título ao passar o mouse sobre ele.
+    </p>
   </section>
 
   <section>

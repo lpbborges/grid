@@ -10,7 +10,6 @@
   let { row, excludeId }: { row: CatalogRow; excludeId?: string | number } = $props();
 
   let items = $state<SearchResult[]>([]);
-  let mixed = $derived(isMixedQuery(row.query));
   let settled = $state(false);
 
   const tagged = (titles: Movie[], type: MediaType): SearchResult[] =>
@@ -53,7 +52,7 @@
 {:else}
   <MediaRow heading={row.heading} {items}>
     {#snippet card(item)}
-      <MediaCard media={item} type={item.type} showType={mixed} />
+      <MediaCard media={item} type={item.type} />
     {/snippet}
   </MediaRow>
 {/if}

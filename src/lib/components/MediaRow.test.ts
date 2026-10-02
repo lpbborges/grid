@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import MediaRow from './MediaRow.svelte';
 import MediaRowCardHarness from './__fixtures__/MediaRowCardHarness.svelte';
 import type { Movie } from '../types';
+import { hoverPreview } from '$lib/stores/hoverPreview.svelte';
 
 function makeMovie(id: string, title: string): Movie {
   return {
@@ -91,5 +92,15 @@ describe('MediaRow component', () => {
       'Beta'
     ]);
     expect(screen.queryByTestId('media-card')).toBeNull();
+  });
+
+  it('closes the hover preview while the row scrolls', async () => {
+    const close = vi.spyOn(hoverPreview, 'noteScroll');
+    const { container } = render(MediaRow, { items: [makeMovie('tt1', 'Alpha')] });
+
+    await fireEvent.scroll(container.querySelector('.scrollbar-hide') as HTMLElement);
+
+    expect(close).toHaveBeenCalled();
+    close.mockRestore();
   });
 });

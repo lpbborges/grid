@@ -60,4 +60,19 @@ describe(`Playing ${FIXTURE_SERIES.title}`, () => {
     await closePlayer();
     await backToCatalog();
   });
+
+  it('plays straight from the hover card without opening the details page', async () => {
+    const card = await $(`a[href="/series/${FIXTURE_SERIES.id}"]`);
+    await card.waitForClickable({ timeout: 30000 });
+    await card.moveTo();
+    const play = await $('[data-testid="hover-preview-play"]');
+    await play.waitForClickable({ timeout: 15000 });
+    await play.click();
+
+    const state = await waitForPlaybackPast(1);
+    expect(state.duration).toBeGreaterThan(9);
+
+    await closePlayer();
+    await backToCatalog();
+  });
 });

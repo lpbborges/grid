@@ -2,7 +2,6 @@
   import { tick } from 'svelte';
   import MediaRow from './MediaRow.svelte';
   import MediaCard from './MediaCard.svelte';
-  import RemovableCard from './RemovableCard.svelte';
   import UndoToast from './UndoToast.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
   import type { ProgressData } from '$lib/types';
@@ -53,19 +52,17 @@
 <div bind:this={root} class="contents">
   <MediaRow heading="Continuar assistindo" {items}>
     {#snippet card(item)}
-      <RemovableCard
-        id={item.id}
-        label="Remover de Continuar assistindo"
-        onremove={() => remove(item.id)}
-      >
+      <div class="contents" data-id={item.id}>
         <MediaCard
           media={item}
+          type={item.type}
           href={item.href}
           episodeLabel={item.episodeLabel}
           upNext={item.upNext}
           progress={item}
+          onremove={() => remove(item.id)}
         />
-      </RemovableCard>
+      </div>
     {/snippet}
   </MediaRow>
 </div>

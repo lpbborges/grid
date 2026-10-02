@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import MediaCard from './MediaCard.svelte';
 import type { Movie } from '../types';
+import { settingsStore } from '$lib/stores/settings.svelte';
 import { progressStore } from '$lib/stores/progress.svelte';
+import { hoverPreview, HOVER_DELAY_MS } from '$lib/stores/hoverPreview.svelte';
 
 const mockMovie: Movie = {
   id: 123,
@@ -95,21 +97,6 @@ describe('MediaCard component', () => {
     expect(getByTitle('Assistido')).toBeInTheDocument();
   });
 
-  it.each([
-    ['movie', 'Filme'],
-    ['series', 'Série']
-  ] as const)('names a %s as %s when the row does not imply the type', (type, label) => {
-    const { getByTestId } = render(MediaCard, { media: mockMovie, type, showType: true });
-
-    expect(getByTestId('media-card-type')).toHaveTextContent(label);
-  });
-
-  it('shows no type unless asked to', () => {
-    const { queryByTestId } = render(MediaCard, { media: mockMovie, type: 'series' });
-
-    expect(queryByTestId('media-card-type')).not.toBeInTheDocument();
-  });
-
   it('links to the given href and shows the episode label', () => {
     const { getByTestId } = render(MediaCard, {
       media: mockMovie,
@@ -186,5 +173,99 @@ describe('MediaCard component', () => {
 
     expect(queryByTestId('media-card-progress-track')).toBeNull();
     expect(getByTestId('media-card').textContent).not.toContain('assistido');
+  });
+
+  describe('hover effects', () => {
+    afterEach(() => {
+      settingsStore.hoverPreview = true;
+    });
+
+    it('only glows while the hover preview covers the poster', () => {
+      settingsStore.hoverPreview = true;
+      const { getByTestId, getByAltText } = render(MediaCard, { media: mockMovie, type: 'movie' });
+
+      const card = getByTestId('media-card');
+      expect(card.className).not.toContain('hover:-translate-y-2');
+      expect(card.className).toContain('focus-visible:shadow-');
+      expect(getByAltText('Test Movie').className).not.toContain('group-hover:scale-110');
+      expect(card.querySelector('.bg-\\[length\\:100\\%_4px\\]')).toBeNull();
+    });
+
+    it('keeps the full lift, zoom and scanline when the preview is off', () => {
+      settingsStore.hoverPreview = false;
+      const { getByTestId, getByAltText } = render(MediaCard, { media: mockMovie, type: 'movie' });
+
+      const card = getByTestId('media-card');
+      expect(card.className).toContain('hover:-translate-y-2');
+      expect(getByAltText('Test Movie').className).toContain('group-hover:scale-110');
+      expect(card.querySelector('.bg-\\[length\\:100\\%_4px\\]')).not.toBeNull();
+    });
+  });
+
+  describe('hover preview', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => {
+      hoverPreview.close();
+      vi.useRealTimers();
+    });
+
+    it('opens the preview after hovering the card', async () => {
+      const { getByTestId } = render(MediaCard, { media: mockMovie, type: 'series' });
+      const card = getByTestId('media-card');
+
+      await fireEvent.mouseEnter(card);
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+
+      expect(hoverPreview.active).toMatchObject({ el: card, media: mockMovie, type: 'series' });
+    });
+
+    it('does not open when the pointer only passes over the card', async () => {
+      const { getByTestId } = render(MediaCard, { media: mockMovie, type: 'movie' });
+      const card = getByTestId('media-card');
+
+      await fireEvent.mouseEnter(card);
+      await fireEvent.mouseLeave(card);
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+
+      expect(hoverPreview.active).toBeNull();
+    });
+
+    it('opens the preview when the card gets keyboard focus', async () => {
+      const { getByTestId } = render(MediaCard, { media: mockMovie, type: 'movie' });
+      const card = getByTestId('media-card');
+
+      await fireEvent.focus(card);
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+
+      expect(hoverPreview.active?.el).toBe(card);
+    });
+
+    it('moves Tab into the open preview instead of the next card', async () => {
+      const panel = document.createElement('div');
+      const play = document.createElement('a');
+      play.href = '/movie/123';
+      panel.append(play);
+      document.body.append(panel);
+      hoverPreview.panel = panel;
+      const { getByTestId } = render(MediaCard, { media: mockMovie, type: 'movie' });
+      const card = getByTestId('media-card');
+      await fireEvent.focus(card);
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+
+      const notCancelled = await fireEvent.keyDown(card, { key: 'Tab' });
+
+      expect(notCancelled).toBe(false);
+      expect(document.activeElement).toBe(play);
+      panel.remove();
+      hoverPreview.panel = undefined;
+    });
+
+    it('leaves Tab alone when no preview is open', async () => {
+      const { getByTestId } = render(MediaCard, { media: mockMovie, type: 'movie' });
+
+      const notCancelled = await fireEvent.keyDown(getByTestId('media-card'), { key: 'Tab' });
+
+      expect(notCancelled).toBe(true);
+    });
   });
 });
