@@ -15,6 +15,27 @@ import { translateTitle } from './translate';
 import { isImdbId } from '$lib/utils/imdb';
 import { isRecord } from '$lib/utils/isRecord';
 
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+
+/** Genres, runtime and trailer, each left out when Cinemeta has nothing usable. */
+function cinemetaExtras(
+  meta: CinemetaMeta
+): Pick<Movie, 'genres' | 'runtime' | 'trailerYoutubeId'> {
+  const genres = Array.isArray(meta.genres)
+    ? meta.genres.filter((genre): genre is string => typeof genre === 'string')
+    : [];
+  const trailer = Array.isArray(meta.trailers)
+    ? meta.trailers.find(
+        (t) => isRecord(t) && typeof t.source === 'string' && YOUTUBE_ID.test(t.source)
+      )
+    : undefined;
+  return {
+    ...(genres.length > 0 && { genres }),
+    ...(typeof meta.runtime === 'string' && meta.runtime && { runtime: meta.runtime }),
+    ...(isRecord(trailer) && { trailerYoutubeId: String(trailer.source) })
+  };
+}
+
 function mapCinemetaMeta(m: CinemetaMeta): Movie {
   return {
     id: m.imdb_id || m.id || '',
@@ -296,6 +317,9 @@ export async function getMovieDetails(
         if (cineData?.meta?.background) {
           movie.background_image_original = cineData.meta.background;
         }
+        if (isRecord(cineData?.meta)) {
+          Object.assign(movie, cinemetaExtras(cineData.meta as CinemetaMeta));
+        }
       }
     } catch {
       // Ignore cinemeta fetch errors
@@ -393,7 +417,8 @@ export async function getSeriesDetails(
     director: meta.director || [],
     language: mapCountryToLanguage(meta.country),
     videos: (meta.videos || []).filter((video) => video.season > 0),
-    torrents: []
+    torrents: [],
+    ...cinemetaExtras(meta)
   };
 
   return series;

@@ -7,6 +7,8 @@
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
   import ErrorNotice from '$lib/components/ErrorNotice.svelte';
+  import LazyCatalogRow from '$lib/components/LazyCatalogRow.svelte';
+  import { similarTitlesRow } from '$lib/utils/catalogRows';
   import {
     usePlayer,
     type NextPlaybackResult,
@@ -26,6 +28,7 @@
   let seriesId = $derived(data.seriesId);
   let series = $derived(data.series);
   let error = $state<PageError | null>(null);
+  let similarRow = $derived(series ? similarTitlesRow('series', series.genres) : null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
   let lastStartOver = false;
   let advancingTo = $state<Episode | null>(null);
@@ -339,6 +342,9 @@
           rating={series.rating}
           synopsis={translatedSynopsis}
           cast={series.cast}
+          genres={series.genres}
+          runtime={series.runtime}
+          trailerYoutubeId={series.trailerYoutubeId}
         />
       {/if}
     </div>
@@ -358,4 +364,11 @@
       {/if}
     </div>
   </div>
+  {#if !player.isPlaying && similarRow}
+    <div class="relative z-10 mt-12">
+      {#key series.id}
+        <LazyCatalogRow row={similarRow} excludeId={series.id} />
+      {/key}
+    </div>
+  {/if}
 {/if}

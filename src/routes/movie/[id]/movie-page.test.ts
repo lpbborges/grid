@@ -2,13 +2,24 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import MoviePage from './+page.svelte';
 
-const { prepareStreamMock, finalizeStreamMock, translateMediaInfoMock, getMovieStreamsMock } =
-  vi.hoisted(() => ({
-    prepareStreamMock: vi.fn(),
-    finalizeStreamMock: vi.fn(),
-    translateMediaInfoMock: vi.fn(),
-    getMovieStreamsMock: vi.fn()
-  }));
+const {
+  prepareStreamMock,
+  finalizeStreamMock,
+  translateMediaInfoMock,
+  getMovieStreamsMock,
+  getCatalogMock
+} = vi.hoisted(() => ({
+  prepareStreamMock: vi.fn(),
+  finalizeStreamMock: vi.fn(),
+  translateMediaInfoMock: vi.fn(),
+  getMovieStreamsMock: vi.fn(),
+  getCatalogMock: vi.fn()
+}));
+
+vi.mock('$lib/api/cinemeta', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/api/cinemeta')>()),
+  getCatalog: getCatalogMock
+}));
 
 // This suite drives the <video> path, which Linux no longer plays through by
 // default; pin it rather than depend on the test runner's user agent.
@@ -332,5 +343,44 @@ describe('Movie page dubbed-audio heuristic (reselectBestTorrent)', () => {
       preferredFileIdx: 0,
       signal: expect.any(AbortSignal)
     });
+  });
+});
+
+describe('Movie page details', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    finalizeStreamMock.mockResolvedValue(undefined);
+    getMovieStreamsMock.mockResolvedValue([]);
+    translateMediaInfoMock.mockResolvedValue({ title: movie.title, synopsis: movie.summary });
+  });
+
+  it('shows genres, runtime, the trailer and similar titles without the movie itself', async () => {
+    getCatalogMock.mockResolvedValue([
+      { ...movie, id: 'tt1' },
+      { ...movie, id: 'tt2', title: 'Another Movie' }
+    ]);
+    render(MoviePage, {
+      props: {
+        data: {
+          movieId: 'tt1',
+          movie: {
+            ...movie,
+            genres: ['Action'],
+            runtime: '95 min',
+            trailerYoutubeId: 'FVI84Dfx2-I'
+          },
+          error: null
+        }
+      }
+    });
+
+    expect(screen.getByText('Ação')).toBeInTheDocument();
+    expect(screen.getByText('DURAÇÃO: 1h 35min')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assistir ao trailer' })).toBeInTheDocument();
+    expect(await screen.findByText('Títulos semelhantes')).toBeInTheDocument();
+    expect(getCatalogMock).toHaveBeenCalledWith({ type: 'movie', catalog: 'top', genre: 'Action' });
+    expect(screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'))).toEqual([
+      '/movie/tt2'
+    ]);
   });
 });

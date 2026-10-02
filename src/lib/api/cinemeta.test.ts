@@ -114,6 +114,29 @@ describe('yts api', () => {
     expect(movie.title).toBe('Test Movie');
   });
 
+  it('adds the genres, runtime and trailer from Cinemeta to a movie', async () => {
+    routeFetch({
+      'movie_details.json': { status: 'ok', data: { movie: { ...mockMovie, imdb_code: 'tt1' } } },
+      'meta/movie/tt1.json': {
+        meta: {
+          name: 'Test Movie',
+          poster: 'p.jpg',
+          genres: ['Action', 'Sci-Fi'],
+          runtime: '136 min',
+          trailers: [{ source: 'FVI84Dfx2-I', type: 'Trailer' }]
+        }
+      }
+    });
+
+    const movie = await getMovieDetails('tt1');
+
+    expect(movie).toMatchObject({
+      genres: ['Action', 'Sci-Fi'],
+      runtime: '136 min',
+      trailerYoutubeId: 'FVI84Dfx2-I'
+    });
+  });
+
   it('normalizes movie.id to movie.imdb_code when available', async () => {
     const movieWithImdbCode = { ...mockMovie, imdb_code: 'tt9999999' };
     (globalThis.fetch as any).mockResolvedValueOnce({
@@ -212,6 +235,41 @@ describe('yts api', () => {
     );
     expect(details.title).toBe('Test Series Detail');
     expect(details.id).toBe('tt987');
+  });
+
+  it('keeps the genres, runtime and first trailer of a series', async () => {
+    routeFetch({
+      'meta/series/tt987.json': {
+        meta: {
+          name: 'Series',
+          poster: 'p.jpg',
+          genres: ['Drama', 42],
+          runtime: '50 min',
+          trailers: [
+            { source: 'not a valid id!', type: 'Trailer' },
+            { source: 'FVI84Dfx2-I', type: 'Trailer' }
+          ]
+        }
+      }
+    });
+
+    const details = await getSeriesDetails('tt987');
+
+    expect(details).toMatchObject({
+      genres: ['Drama'],
+      runtime: '50 min',
+      trailerYoutubeId: 'FVI84Dfx2-I'
+    });
+  });
+
+  it('leaves the extras out when Cinemeta has none', async () => {
+    routeFetch({ 'meta/series/tt987.json': { meta: { name: 'Series', poster: 'p.jpg' } } });
+
+    const details = await getSeriesDetails('tt987');
+
+    expect(details.genres).toBeUndefined();
+    expect(details.runtime).toBeUndefined();
+    expect(details.trailerYoutubeId).toBeUndefined();
   });
 
   it('leaves out the specials season', async () => {

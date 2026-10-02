@@ -2,8 +2,25 @@
   import { favoritesStore } from '$lib/stores/favorites.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
   import type { CastMember, MediaType } from '$lib/types';
+  import { genreName } from '$lib/utils/genres';
+  import { formatRuntime } from '$lib/utils/formatRuntime';
+  import { openTrailer } from '$lib/engine/trailer';
+  import { logger } from '$lib/logger';
 
-  let { id, type, poster, title, year, director, rating, synopsis, cast } = $props<{
+  let {
+    id,
+    type,
+    poster,
+    title,
+    year,
+    director,
+    rating,
+    synopsis,
+    cast,
+    genres = [],
+    runtime,
+    trailerYoutubeId
+  } = $props<{
     id: string | number;
     type: MediaType;
     poster: string;
@@ -13,7 +30,16 @@
     rating: number;
     synopsis: string;
     cast?: CastMember[];
+    genres?: string[];
+    runtime?: string;
+    trailerYoutubeId?: string;
   }>();
+
+  const shownRuntime = $derived(formatRuntime(runtime));
+
+  function watchTrailer(youtubeId: string) {
+    openTrailer(youtubeId).catch((error) => logger.error('Failed to open the trailer', error));
+  }
 </script>
 
 <div class="mb-2">
@@ -27,6 +53,11 @@
 
 <div class="text-main mb-6 flex flex-wrap gap-4 font-mono text-sm">
   <span class="border-primary/50 bg-surface rounded border px-3 py-1">ANO: {year}</span>
+  {#if shownRuntime}
+    <span class="border-primary/50 bg-surface rounded border px-3 py-1"
+      >DURAÇÃO: {shownRuntime}</span
+    >
+  {/if}
   {#if director && director.length > 0}
     <span class="border-primary/50 bg-surface rounded border px-3 py-1"
       >DIRETOR: {director.join(', ')}</span
@@ -48,6 +79,16 @@
     IMDB: {rating}
   </span>
 </div>
+
+{#if genres.length > 0}
+  <ul class="-mt-3 mb-6 flex flex-wrap gap-2" aria-label="Gêneros">
+    {#each genres as genre (genre)}
+      <li class="border-green/50 text-green rounded-full border px-3 py-0.5 text-xs font-bold">
+        {genreName(genre)}
+      </li>
+    {/each}
+  </ul>
+{/if}
 
 <div class="prose prose-invert text-muted mb-8 max-w-none leading-relaxed">
   <h3
@@ -205,4 +246,28 @@
       />
     </svg>
   </button>
+
+  {#if trailerYoutubeId}
+    <button
+      onclick={() => watchTrailer(trailerYoutubeId)}
+      aria-label="Assistir ao trailer"
+      title="Assistir ao trailer (abre no navegador)"
+      class="border-primary/50 text-main bg-surface/60 hover:border-green hover:text-green focus-visible:ring-green flex h-11 items-center gap-2 rounded-sm border px-4 font-mono text-sm font-bold tracking-wider uppercase transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        ><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m10 9 5 3-5 3z" /></svg
+      >
+      Trailer
+    </button>
+  {/if}
 </div>
