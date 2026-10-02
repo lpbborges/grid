@@ -10,7 +10,7 @@ mod window_embed;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
 use tauri::{Manager, State};
 use tauri_plugin_shell::ShellExt;
@@ -113,13 +113,8 @@ async fn resolve_torrent_file_name(
     info_hash: &str,
     file_idx: i64,
 ) -> Result<String, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_millis(8000))
-        .build()
-        .map_err(|e| e.to_string())?;
-
     let details_url = format!("http://127.0.0.1:{}/torrents/{}", port, info_hash);
-    let res = client
+    let res = ENGINE_CLIENT
         .get(&details_url)
         .send()
         .await
@@ -182,10 +177,19 @@ fn build_subtitle_client() -> Result<reqwest::Client, reqwest::Error> {
     build_client_with_redirect_allowlist(subtitles::is_allowed_subtitle_url)
 }
 
-async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
-    let client = build_subtitle_client().map_err(|e| e.to_string())?;
+/// Shared by every fetch so connections to the same host are reused.
+static SUBTITLE_CLIENT: LazyLock<reqwest::Client> =
+    LazyLock::new(|| build_subtitle_client().expect("the subtitle HTTP client builds"));
 
-    let res = client
+static ENGINE_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(8000))
+        .build()
+        .expect("the engine HTTP client builds")
+});
+
+async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
+    let res = SUBTITLE_CLIENT
         .get(target_url)
         .send()
         .await
