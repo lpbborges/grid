@@ -228,8 +228,7 @@ pub fn write_subtitles(
             "too many subtitle files",
         ));
     }
-    if let Some(oversized) = contents.iter().find(|c| c.len() > MAX_SUBTITLE_FILE_BYTES) {
-        let _ = oversized;
+    if contents.iter().any(|c| c.len() > MAX_SUBTITLE_FILE_BYTES) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             "subtitle file too large",

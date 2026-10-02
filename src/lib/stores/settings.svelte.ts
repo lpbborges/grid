@@ -58,7 +58,7 @@ class SettingsStore {
   }
   set audio(value: AudioPreference) {
     this.#audio = value;
-    this.persist('grid-audio', value);
+    writeStored('grid-audio', value);
   }
 
   get subtitle() {
@@ -66,7 +66,7 @@ class SettingsStore {
   }
   set subtitle(value: string) {
     this.#subtitle = value;
-    this.persist('grid-subtitle', value);
+    writeStored('grid-subtitle', value);
   }
 
   get quality() {
@@ -74,7 +74,7 @@ class SettingsStore {
   }
   set quality(value: string) {
     this.#quality = value;
-    this.persist('grid-quality', value);
+    writeStored('grid-quality', value);
   }
 
   get cacheLimitBytes() {
@@ -84,7 +84,7 @@ class SettingsStore {
     const normalized = normalizeCacheLimit(value);
     if (normalized === null) return;
     this.#cacheLimitBytes = normalized;
-    this.persist('grid-cache-limit-bytes', String(normalized));
+    writeStored('grid-cache-limit-bytes', String(normalized));
   }
 
   get acceptedDisclaimer() {
@@ -92,7 +92,7 @@ class SettingsStore {
   }
   set acceptedDisclaimer(value: boolean) {
     this.#acceptedDisclaimer = value;
-    this.persist('grid-accepted-disclaimer', String(value));
+    writeStored('grid-accepted-disclaimer', String(value));
   }
 
   get hoverPreview() {
@@ -100,11 +100,7 @@ class SettingsStore {
   }
   set hoverPreview(value: boolean) {
     this.#hoverPreview = value;
-    this.persist('grid-hover-preview', String(value));
-  }
-
-  private persist(key: string, value: string) {
-    writeStored(key, value);
+    writeStored('grid-hover-preview', String(value));
   }
 }
 
