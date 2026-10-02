@@ -8,6 +8,6 @@
   });
 </script>
 
-<div data-testid="status">{streamPlayer.engineStatus}</div>
+<div data-testid="status">{streamPlayer.loadingStage}</div>
 <div data-testid="playing">{String(streamPlayer.isPlaying)}</div>
 <div data-testid="error">{streamPlayer.error}</div>

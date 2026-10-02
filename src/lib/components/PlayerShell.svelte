@@ -7,10 +7,15 @@
   import type { PlayerBackend, UpNextCard } from '$lib/types';
   import type { SubtitleTrack } from '$lib/api/subtitles';
   import type { Snippet } from 'svelte';
+  import {
+    loadingStageLabel,
+    loadingStageProgress,
+    type LoadingStage
+  } from '$lib/utils/loadingStage';
 
   let {
     backend,
-    engineStatus = '',
+    loadingStage = null,
     downloadPercent = 0,
     transparent = false,
     surface,
@@ -19,7 +24,7 @@
     loadingLabel = ''
   } = $props<{
     backend: PlayerBackend;
-    engineStatus?: string;
+    loadingStage?: LoadingStage | null;
     downloadPercent?: number;
     transparent?: boolean;
     surface: Snippet;
@@ -39,6 +44,7 @@
   const controlsVisible = $derived(
     showControls || backend.paused || showSubtitleMenu || showAudioMenu
   );
+  const shownPercent = $derived(Math.round(downloadPercent));
   const menusOpen = $derived(showSubtitleMenu || showAudioMenu);
   const showCard = $derived(!!upNext && backend.hasStarted && !backend.buffering && !backend.error);
   // Never reads secondsLeft, so it is announced once rather than every second.
@@ -300,7 +306,22 @@
             ? 'text-error [text-shadow:0_0_10px_rgba(239,68,68,0.8)]'
             : 'text-green [text-shadow:0_0_10px_rgba(54,211,83,0.8)]'}"
         >
-          {backend.error || engineStatus || 'Carregando...'}
+          {backend.error || (loadingStage ? loadingStageLabel(loadingStage) : 'Carregando...')}
+        </div>
+      {/if}
+      {#if !backend.error && !backend.hasStarted && loadingStage}
+        <div
+          class="bg-surface mb-3 h-1.5 w-64 overflow-hidden rounded-full"
+          role="progressbar"
+          aria-label="Progresso do carregamento"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow={loadingStageProgress(loadingStage)}
+        >
+          <div
+            class="bg-green h-full rounded-full transition-[width] duration-700 ease-out"
+            style="width: {loadingStageProgress(loadingStage)}%"
+          ></div>
         </div>
       {/if}
       {#if !backend.error && !backend.hasStarted && loadingLabel}
@@ -311,9 +332,9 @@
           {loadingLabel}
         </p>
       {/if}
-      {#if !backend.error && downloadPercent > 0}
+      {#if !backend.error && shownPercent > 0}
         <div class="text-main font-mono text-sm">
-          {downloadPercent.toFixed(2)}%
+          {shownPercent}%
         </div>
       {/if}
     </div>

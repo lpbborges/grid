@@ -195,17 +195,40 @@ describe('PlayerShell', () => {
     expect(screen.queryByTestId('loading-label')).not.toBeInTheDocument();
   });
 
-  it('shows the opaque loading overlay with the engine status until a frame paints', () => {
+  it('shows the opaque loading overlay with the stage until a frame paints', () => {
     render(PlayerShell, {
       props: {
         backend: fakeBackend({ hasStarted: false }),
-        engineStatus: 'Conectando...',
+        loadingStage: 'preparing',
         surface: emptySurface
       }
     });
 
     expect(screen.getByTestId('loading-overlay')).toBeInTheDocument();
-    expect(screen.getByText('Conectando...')).toBeInTheDocument();
+    expect(screen.getByText('Preparando vídeo…')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('65');
+  });
+
+  it('starts with a generic loading message before any stage is known', () => {
+    render(PlayerShell, {
+      props: { backend: fakeBackend({ hasStarted: false }), surface: emptySurface }
+    });
+
+    expect(screen.getByText('Carregando...')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  it('shows the download as a whole percentage', () => {
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: true, buffering: true }),
+        downloadPercent: 37.42,
+        surface: emptySurface
+      }
+    });
+
+    expect(screen.getByText('37%')).toBeInTheDocument();
+    expect(screen.queryByText(/37[.,]4/)).not.toBeInTheDocument();
   });
 
   it('shows the translucent buffering overlay once playback has started', () => {

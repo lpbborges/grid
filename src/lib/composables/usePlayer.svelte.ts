@@ -194,8 +194,8 @@ export function usePlayer(
     get advancing() {
       return advancing;
     },
-    get engineStatus() {
-      return streamPlayer.engineStatus;
+    get loadingStage() {
+      return streamPlayer.loadingStage;
     },
     get error() {
       return error;

@@ -152,7 +152,7 @@ describe('Series page integration flow', () => {
 
     expect(prepareStreamMock).toHaveBeenCalledWith({
       magnet: expect.stringMatching(/^magnet:\?xt=urn:btih:def&dn=Some%20Series%20S1E1(&|$)/),
-      onStatus: expect.any(Function),
+      onStage: expect.any(Function),
       mediaId: 'tt1',
       season: 1,
       episode: 1,
