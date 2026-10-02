@@ -1,18 +1,27 @@
 <script lang="ts">
+  import MediaCard from './MediaCard.svelte';
   import MediaRow from './MediaRow.svelte';
   import { getCatalog } from '$lib/api/cinemeta';
+  import { getMixedCatalog, isMixedQuery } from '$lib/api/mixedCatalog';
   import { logger } from '$lib/logger';
-  import type { Movie } from '$lib/types';
+  import type { MediaType, Movie, SearchResult } from '$lib/types';
   import type { CatalogRow } from '$lib/utils/catalogRows';
 
   let { row, excludeId }: { row: CatalogRow; excludeId?: string | number } = $props();
 
-  let items = $state<Movie[]>([]);
+  let items = $state<SearchResult[]>([]);
+  let mixed = $derived(isMixedQuery(row.query));
   let settled = $state(false);
+
+  const tagged = (titles: Movie[], type: MediaType): SearchResult[] =>
+    titles.map((title) => ({ ...title, type }));
 
   async function load() {
     try {
-      const titles = await getCatalog(row.query);
+      const { query } = row;
+      const titles = isMixedQuery(query)
+        ? await getMixedCatalog(query)
+        : tagged(await getCatalog(query), query.type);
       items = titles.filter((title) => String(title.id) !== String(excludeId));
     } catch (error) {
       logger.warn(`Failed to load the "${row.heading}" row`, error);
@@ -42,5 +51,9 @@
 {#if !settled}
   <div class="h-[340px]" data-testid="catalog-row-placeholder" {@attach loadWhenNear}></div>
 {:else}
-  <MediaRow heading={row.heading} {items} type={row.query.type} />
+  <MediaRow heading={row.heading} {items}>
+    {#snippet card(item)}
+      <MediaCard media={item} type={item.type} showType={mixed} />
+    {/snippet}
+  </MediaRow>
 {/if}

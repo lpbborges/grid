@@ -24,7 +24,9 @@ const movie = {
 
 describe('new and popular page', () => {
   it('shows releases of both types and the popular rows', async () => {
-    getCatalogMock.mockResolvedValue([movie]);
+    getCatalogMock.mockImplementation(async ({ type }: { type: string }) => [
+      { ...movie, id: `${type}-1` }
+    ]);
     const data = (await load({} as never)) as { rows: never[] };
 
     render(NewPage, { data });
@@ -32,12 +34,7 @@ describe('new and popular page', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Novidades e Populares' })
     ).toBeInTheDocument();
-    for (const heading of [
-      'Lançamentos de filmes',
-      'Lançamentos de séries',
-      'Filmes populares',
-      'Séries populares'
-    ]) {
+    for (const heading of ['Lançamentos', 'Populares']) {
       expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
     }
   });

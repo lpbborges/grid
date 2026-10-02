@@ -11,19 +11,38 @@ import {
 import { genreName } from './genres';
 
 describe('catalogRows', () => {
-  it('starts with this year’s releases and the featured titles', () => {
-    expect(catalogRows(2026).slice(0, 3)).toEqual([
-      { heading: 'Lançamentos', query: { type: 'movie', catalog: 'year', genre: '2026' } },
-      { heading: 'Filmes em destaque', query: { type: 'movie', catalog: 'imdbRating' } },
-      { heading: 'Séries em destaque', query: { type: 'series', catalog: 'imdbRating' } }
+  it('starts with this year’s releases and the featured titles, movies and series together', () => {
+    expect(catalogRows(2026).slice(0, 2)).toEqual([
+      {
+        heading: 'Lançamentos',
+        query: { catalog: 'year', genre: '2026', order: 'releaseDate' }
+      },
+      { heading: 'Em destaque', query: { catalog: 'imdbRating', order: 'rating' } }
     ]);
   });
 
   it('names the genre rows in pt-BR while asking Cinemeta in English', () => {
     expect(catalogRows(2026)).toContainEqual({
       heading: 'Ficção científica',
-      query: { type: 'movie', catalog: 'top', genre: 'Sci-Fi' }
+      query: { catalog: 'top', genre: 'Sci-Fi', order: 'rating' }
     });
+  });
+
+  it('mixes every row and only asks for genres both catalogs list', () => {
+    for (const row of catalogRows(2026)) {
+      expect(row.query).not.toHaveProperty('type');
+      expect(row.query).toHaveProperty('order');
+      if (row.query.catalog === 'top' && row.query.genre) {
+        expect(genresFor('movie')).toContain(row.query.genre);
+        expect(genresFor('series')).toContain(row.query.genre);
+      }
+    }
+  });
+
+  it('names no row after a type, since the row no longer implies one', () => {
+    for (const row of [...catalogRows(2026), ...newAndPopularRows(2026)]) {
+      expect(row.heading).not.toMatch(/filmes|séries/i);
+    }
   });
 });
 
@@ -54,8 +73,12 @@ describe('page row sets', () => {
   });
 
   it('keeps movie rows to movies and series rows to series', () => {
-    expect(sets.movies.every((row) => row.query.type === 'movie')).toBe(true);
-    expect(sets.series.every((row) => row.query.type === 'series')).toBe(true);
+    expect(sets.movies.every((row) => 'type' in row.query && row.query.type === 'movie')).toBe(
+      true
+    );
+    expect(sets.series.every((row) => 'type' in row.query && row.query.type === 'series')).toBe(
+      true
+    );
   });
 
   it('opens with the popular titles and this year’s releases', () => {
@@ -68,12 +91,13 @@ describe('page row sets', () => {
     ]);
   });
 
-  it('lists releases before popular titles on the new and popular page', () => {
-    expect(sets.new.map((row) => [row.query.type, row.query.catalog])).toEqual([
-      ['movie', 'year'],
-      ['series', 'year'],
-      ['movie', 'top'],
-      ['series', 'top']
+  it('lists releases before popular titles on the new and popular page, both types mixed', () => {
+    expect(sets.new).toEqual([
+      {
+        heading: 'Lançamentos',
+        query: { catalog: 'year', genre: '2026', order: 'releaseDate' }
+      },
+      { heading: 'Populares', query: { catalog: 'top', order: 'rating' } }
     ]);
   });
 

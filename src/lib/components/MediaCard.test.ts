@@ -87,6 +87,21 @@ describe('MediaCard component', () => {
     expect(queryByTitle('Assistido')).not.toBeInTheDocument();
   });
 
+  it.each([
+    ['movie', 'Filme'],
+    ['series', 'Série']
+  ] as const)('names a %s as %s when the row does not imply the type', (type, label) => {
+    const { getByTestId } = render(MediaCard, { media: mockMovie, type, showType: true });
+
+    expect(getByTestId('media-card-type')).toHaveTextContent(label);
+  });
+
+  it('shows no type unless asked to', () => {
+    const { queryByTestId } = render(MediaCard, { media: mockMovie, type: 'series' });
+
+    expect(queryByTestId('media-card-type')).not.toBeInTheDocument();
+  });
+
   it('links to the given href and shows the episode label', () => {
     const { getByTestId } = render(MediaCard, {
       media: mockMovie,
