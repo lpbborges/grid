@@ -24,7 +24,8 @@
     upNext = null,
     loadingLabel = '',
     title = '',
-    episodeLabel = ''
+    episodeLabel = '',
+    episodeName = ''
   } = $props<{
     backend: PlayerBackend;
     loadingStage?: LoadingStage | null;
@@ -37,6 +38,7 @@
     loadingLabel?: string;
     title?: string;
     episodeLabel?: string;
+    episodeName?: string;
   }>();
 
   let showControls = $state(true);
@@ -408,6 +410,7 @@
     {onclose}
     {title}
     {episodeLabel}
+    {episodeName}
     onfullscreen={() => backend.toggleFullscreen()}
   />
 </div>

@@ -13,7 +13,8 @@
     upNext = null,
     loadingLabel = '',
     title = '',
-    episodeLabel = ''
+    episodeLabel = '',
+    episodeName = ''
   } = $props<{
     backend: PlayerBackend;
     videoElement?: HTMLVideoElement | null;
@@ -24,6 +25,7 @@
     loadingLabel?: string;
     title?: string;
     episodeLabel?: string;
+    episodeName?: string;
   }>();
 
   const dom = $derived(isDomBackend(backend) ? backend : undefined);
@@ -90,4 +92,5 @@
   {loadingLabel}
   {title}
   {episodeLabel}
+  {episodeName}
 />

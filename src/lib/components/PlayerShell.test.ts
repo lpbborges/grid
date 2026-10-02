@@ -296,15 +296,51 @@ describe('PlayerShell', () => {
         surface: emptySurface,
         onclose: vi.fn(),
         title: 'Breaking Bad',
-        episodeLabel: 'T1:E1'
+        episodeLabel: 'T1:E1',
+        episodeName: 'Pilot'
       }
     });
 
     const title = screen.getByTestId('player-title');
-    expect(title).toHaveTextContent('Breaking Bad T1:E1');
-    expect(within(title).getByText('T1:E1').className).toContain('text-muted');
+    expect(title).toHaveTextContent('Breaking Bad');
     expect(title.className).toContain('truncate');
-    expect(screen.getByLabelText('Fechar').nextElementSibling).toBe(title);
+    expect(title.className).toContain('font-cyber');
+    expect(screen.getByLabelText('Fechar').nextElementSibling).toContainElement(title);
+  });
+
+  it('names the episode under the title', () => {
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend(),
+        surface: emptySurface,
+        title: 'Breaking Bad',
+        episodeLabel: 'T1:E1',
+        episodeName: 'Pilot'
+      }
+    });
+
+    const episode = screen.getByTestId('player-episode');
+    expect(episode).toHaveTextContent('T1:E1 · Pilot');
+    expect(within(episode).getByText('T1:E1').className).toContain('text-green');
+    expect(episode.compareDocumentPosition(screen.getByTestId('player-title'))).toBe(
+      Node.DOCUMENT_POSITION_PRECEDING
+    );
+  });
+
+  it('shows the episode label alone when the episode has no name', () => {
+    render(PlayerShell, {
+      props: { backend: fakeBackend(), surface: emptySurface, title: 'Show', episodeLabel: 'T2:E3' }
+    });
+
+    expect(screen.getByTestId('player-episode')).toHaveTextContent(/^T2:E3$/);
+  });
+
+  it('has no episode line for a movie', () => {
+    render(PlayerShell, {
+      props: { backend: fakeBackend(), surface: emptySurface, title: 'Matrix' }
+    });
+
+    expect(screen.queryByTestId('player-episode')).not.toBeInTheDocument();
   });
 
   it('shows a movie title alone', () => {
@@ -318,12 +354,12 @@ describe('PlayerShell', () => {
   it('follows the episode without remounting', async () => {
     const props = { backend: fakeBackend(), surface: emptySurface, title: 'Show' };
     const { rerender } = render(PlayerShell, { props: { ...props, episodeLabel: 'T1:E1' } });
-    const title = screen.getByTestId('player-title');
+    const episode = screen.getByTestId('player-episode');
 
-    await rerender({ ...props, episodeLabel: 'T1:E2' });
+    await rerender({ ...props, episodeLabel: 'T1:E2', episodeName: 'Second' });
 
-    expect(screen.getByTestId('player-title')).toBe(title);
-    expect(title).toHaveTextContent('Show T1:E2');
+    expect(screen.getByTestId('player-episode')).toBe(episode);
+    expect(episode).toHaveTextContent('T1:E2 · Second');
   });
 
   it('shows no title when the page names none', () => {
@@ -337,13 +373,13 @@ describe('PlayerShell', () => {
     render(PlayerShell, {
       props: { backend: fakeBackend(), surface: emptySurface, onclose: vi.fn(), title: 'Matrix' }
     });
-    const title = screen.getByTestId('player-title');
-    expect(title.parentElement?.className).toContain('opacity-100');
+    const title = screen.getByTestId('player-title').parentElement?.parentElement;
+    expect(title?.className).toContain('opacity-100');
 
     await fireEvent.mouseMove(screen.getByTestId('video-player-container'));
     await vi.advanceTimersByTimeAsync(3100);
 
-    expect(title.parentElement?.className).toContain('opacity-0');
+    expect(title?.className).toContain('opacity-0');
   });
 
   it('toggles fullscreen', async () => {

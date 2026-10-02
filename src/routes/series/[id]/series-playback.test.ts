@@ -478,13 +478,16 @@ describe('Series playback wiring', () => {
     await playEpisode(/Pilot/);
     const video = await startedVideo();
     const title = await screen.findByTestId('player-title');
-    expect(title).toHaveTextContent(/^(Grid Series|Série da Grade) T1:E1$/);
+    expect(title).toHaveTextContent(/^(Grid Series|Série da Grade)$/);
+    const episode = screen.getByTestId('player-episode');
+    expect(episode).toHaveTextContent(/^T1:E1 · Pilot$/);
 
     await reachCredits(video);
     await fireEvent.ended(video);
 
-    await waitFor(() => expect(title).toHaveTextContent(/T1:E2$/), { timeout: 5000 });
+    await waitFor(() => expect(episode).toHaveTextContent(/^T1:E2/), { timeout: 5000 });
     expect(screen.getByTestId('player-title')).toBe(title);
+    expect(screen.getByTestId('player-episode')).toBe(episode);
   });
 
   it('never plays a cinema recording of the episode, even with the most seeds', async () => {

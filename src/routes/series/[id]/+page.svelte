@@ -88,9 +88,13 @@
     }
   );
 
-  function episodeTitle(ref: EpisodeRef): string {
+  function episodeName(ref: EpisodeRef): string {
     const episode = series?.videos.find((v) => sameEpisode(v, ref));
-    const name = (episode && (translatedEpisodes[episode.id] || episode.name)) || '';
+    return (episode && (translatedEpisodes[episode.id] || episode.name)) || '';
+  }
+
+  function episodeTitle(ref: EpisodeRef): string {
+    const name = episodeName(ref);
     return name ? `${episodeLabel(ref)} · ${name}` : episodeLabel(ref);
   }
 
@@ -324,6 +328,7 @@
           loadingLabel={preparingEpisode ? episodeTitle(preparingEpisode) : ''}
           title={translatedTitle || series.title}
           episodeLabel={preparingEpisode ? episodeLabel(preparingEpisode) : ''}
+          episodeName={preparingEpisode ? episodeName(preparingEpisode) : ''}
           onclose={() => {
             player.stop();
           }}

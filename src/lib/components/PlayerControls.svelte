@@ -48,6 +48,7 @@
     onclose,
     title = '',
     episodeLabel = '',
+    episodeName = '',
     onfullscreen
   } = $props<{
     currentTime: number;
@@ -78,8 +79,9 @@
     onclose?: () => void;
     /** What is playing; shown right after the close button. */
     title?: string;
-    /** Season and episode of a series, shown smaller after the title. */
+    /** Season and episode of a series, shown under the title. */
     episodeLabel?: string;
+    episodeName?: string;
     onfullscreen?: () => void;
   }>();
 
@@ -122,14 +124,18 @@
       </button>
     {/if}
     {#if title}
-      <p
-        data-testid="player-title"
-        class="text-main min-w-0 truncate text-xl font-bold [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]"
-      >
-        {title}{#if episodeLabel}<span class="text-muted text-sm font-semibold"
-            >{` ${episodeLabel}`}</span
-          >{/if}
-      </p>
+      <div class="min-w-0 [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
+        <p data-testid="player-title" class="font-cyber text-main truncate text-xl font-bold">
+          {title}
+        </p>
+        {#if episodeLabel}
+          <p data-testid="player-episode" class="truncate text-base font-semibold">
+            <span class="font-cyber text-green">{episodeLabel}</span>{#if episodeName}<span
+                class="text-main/80">{` · ${episodeName}`}</span
+              >{/if}
+          </p>
+        {/if}
+      </div>
     {/if}
   </div>
 {/if}
