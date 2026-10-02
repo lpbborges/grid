@@ -108,7 +108,7 @@
         ></div>
       {/if}
       <div
-        class="bg-green absolute bottom-0 left-0 z-20 h-1 shadow-[0_0_8px_rgba(54,211,83,0.8)] will-change-transform"
+        class="bg-secondary absolute bottom-0 left-0 z-20 h-1 shadow-[0_0_8px_rgba(249,115,22,0.8)] will-change-transform"
         data-testid="media-card-progress"
         style="width: {progressPercent}%"
       ></div>

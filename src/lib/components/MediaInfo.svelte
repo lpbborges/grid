@@ -63,7 +63,9 @@
       >DIRETOR: {director.join(', ')}</span
     >
   {/if}
-  <span class="border-primary/50 bg-surface flex items-center gap-1 rounded border px-3 py-1">
+  <span
+    class="border-secondary/60 bg-surface text-secondary flex items-center gap-1 rounded border px-3 py-1"
+  >
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="12"
@@ -208,7 +210,7 @@
       onclick={() => watchTrailer(trailerYoutubeId)}
       aria-label="Assistir ao trailer"
       title="Assistir ao trailer (abre no navegador)"
-      class="border-primary/50 text-main bg-surface/60 hover:border-green hover:text-green focus-visible:ring-green flex h-11 items-center gap-2 rounded-sm border px-4 font-mono text-sm font-bold tracking-wider uppercase transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none"
+      class="border-secondary/60 text-secondary bg-surface/60 hover:bg-secondary hover:text-dark focus-visible:ring-secondary flex h-11 items-center gap-2 rounded-sm border px-4 font-mono text-sm font-bold tracking-wider uppercase transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

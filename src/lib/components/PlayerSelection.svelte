@@ -68,8 +68,22 @@
     {#if resumeSeconds !== null}
       <button
         onclick={() => onPlay(true)}
-        class="border-primary/50 text-main hover:border-green hover:text-green focus-visible:ring-green w-full cursor-pointer rounded-sm border py-2 font-mono text-sm tracking-wider uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        class="group border-primary/50 text-muted hover:border-green hover:bg-green/10 hover:text-green focus-visible:ring-green flex w-full cursor-pointer items-center justify-center gap-2 rounded-sm border py-2.5 font-mono text-sm tracking-wider uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none"
       >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="transition-transform duration-300 group-hover:-rotate-90"
+          aria-hidden="true"
+          ><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg
+        >
         Começar do início
       </button>
     {/if}
