@@ -44,6 +44,7 @@ export function usePlayer(
   let advancing = $state(false);
   let advanceGeneration = 0;
   let lastDuration = 0;
+  let lastWrittenSecond = -1;
 
   $effect(() => {
     if (!streamPlayer.isPlaying || !streamPlayer.infoHash) return;
@@ -78,6 +79,7 @@ export function usePlayer(
     error = '';
     watchedTriggered = false;
     lastDuration = 0;
+    lastWrittenSecond = -1;
     downloadPercent = 0;
     const ok = await streamPlayer.play(magnet, playOptions);
     // A play cancelled by closing the player fails without an error.
@@ -183,6 +185,9 @@ export function usePlayer(
     if (backend.currentTime / backend.duration > 0.95) markWatched();
     const { currentTime, duration } = backend;
     lastDuration = duration;
+    const second = Math.floor(currentTime);
+    if (second === lastWrittenSecond) return;
+    lastWrittenSecond = second;
     untrack(() =>
       progressStore.update(
         request.mediaId,
