@@ -120,6 +120,35 @@ describe('prepareStream', () => {
     expect(liveOrder).toBeLessThan(vi.mocked(torrentApi.getStreamUrl).mock.invocationCallOrder[0]);
   });
 
+  it('deletes the torrent it added when the preparation fails', async () => {
+    vi.mocked(torrentApi.waitForTorrentLive).mockRejectedValue(new Error('stalled'));
+
+    await expect(prepareStream({ magnet: 'magnet:?xt=test', onStage: vi.fn() })).rejects.toThrow();
+
+    expect(torrentApi.deleteTorrent).toHaveBeenCalledWith('1'.repeat(40));
+    expect(torrentApi.forgetTorrent).not.toHaveBeenCalled();
+  });
+
+  it('only forgets a failed torrent whose files are already cached', async () => {
+    vi.mocked(cacheApi.getCacheManifest).mockResolvedValue([
+      {
+        infoHash: '1'.repeat(40),
+        magnet: '',
+        fileName: `${'1'.repeat(40)}/movie.mkv`,
+        totalBytes: 200,
+        downloadedBytes: 200,
+        complete: true,
+        lastAccessedAt: 0
+      }
+    ]);
+    vi.mocked(torrentApi.waitForTorrentLive).mockRejectedValue(new Error('stalled'));
+
+    await expect(prepareStream({ magnet: 'magnet:?xt=test', onStage: vi.fn() })).rejects.toThrow();
+
+    expect(torrentApi.forgetTorrent).toHaveBeenCalledWith('1'.repeat(40));
+    expect(torrentApi.deleteTorrent).not.toHaveBeenCalled();
+  });
+
   it('rejects without building a stream URL when the torrent never goes live', async () => {
     vi.mocked(torrentApi.waitForTorrentLive).mockRejectedValue(
       new Error('Torrent failed to become ready in time')

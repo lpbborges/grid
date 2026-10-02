@@ -86,8 +86,8 @@ export interface PrepareStreamOptions {
   signal?: AbortSignal;
 }
 
-// A preparation cancelled after its add would otherwise leave the torrent
-// downloading with nobody watching. Files of a title already in the cache
+// A preparation that fails or is cancelled after its add would otherwise leave
+// the torrent downloading with nobody watching. Files of a title already in the cache
 // stay on disk (forget); anything else is deleted.
 async function removeAbandonedTorrent(infoHash: string, keepFiles: boolean): Promise<void> {
   if (keepFiles) {
@@ -238,12 +238,7 @@ export async function prepareStream({
     };
   } catch (error) {
     if (streamingInfoHash === parsedInfoHash) streamingInfoHash = null;
-    if (signal?.aborted) {
-      await removeAbandonedTorrent(
-        infoHash,
-        existingEntry !== undefined || cacheEntry !== undefined
-      );
-    }
+    await removeAbandonedTorrent(infoHash, existingEntry !== undefined || cacheEntry !== undefined);
     throw error;
   }
 }
