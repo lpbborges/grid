@@ -533,8 +533,8 @@ describe('Series playback wiring', () => {
     await reachCredits(video);
     await fireEvent.ended(video);
 
-    const label = await screen.findByTestId('loading-label');
-    expect(label).toHaveTextContent('T1:E2 · Second');
+    const episode = await screen.findByTestId('player-episode');
+    expect(episode).toHaveTextContent('T1:E2 · Second');
     await waitFor(() => expect(torrentioRequests(1, 2)).toBe(1));
   });
 

@@ -177,25 +177,6 @@ describe('PlayerShell', () => {
     expect(backend.syncOverlayLayout).toHaveBeenLastCalledWith(true, false, true);
   });
 
-  it('names what it is preparing under the loading status', async () => {
-    const props = { surface: emptySurface, loadingLabel: 'T1:E2 · Segundo' };
-    const { rerender } = render(PlayerShell, {
-      props: { ...props, backend: fakeBackend({ hasStarted: false }) }
-    });
-    expect(screen.getByTestId('loading-label')).toHaveTextContent('T1:E2 · Segundo');
-
-    await rerender({ ...props, backend: fakeBackend({ hasStarted: true }) });
-    expect(screen.queryByTestId('loading-label')).not.toBeInTheDocument();
-  });
-
-  it('shows no loading label when the page names nothing', () => {
-    render(PlayerShell, {
-      props: { backend: fakeBackend({ hasStarted: false }), surface: emptySurface }
-    });
-
-    expect(screen.queryByTestId('loading-label')).not.toBeInTheDocument();
-  });
-
   it('shows the opaque loading overlay with the stage until a frame paints', () => {
     render(PlayerShell, {
       props: {

@@ -117,15 +117,6 @@ describe('Player', () => {
     }
   });
 
-  it('passes the loading label on to the shell', () => {
-    vi.mocked(playbackMode).mockReturnValue('native');
-    render(Player, {
-      props: { backend: fakeMpvBackend({ hasStarted: false }), loadingLabel: 'T1:E2 · Segundo' }
-    });
-
-    expect(screen.getByTestId('loading-label')).toHaveTextContent('T1:E2 · Segundo');
-  });
-
   it('renders an empty hole and adds the body class only once mpv paints', async () => {
     vi.mocked(playbackMode).mockReturnValue('native');
     const backend = fakeMpvBackend({ hasStarted: false });

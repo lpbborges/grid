@@ -11,7 +11,6 @@
     downloadPercent = 0,
     onclose,
     upNext = null,
-    loadingLabel = '',
     title = '',
     episodeLabel = '',
     episodeName = ''
@@ -22,7 +21,6 @@
     downloadPercent?: number;
     onclose?: () => void;
     upNext?: UpNextCard | null;
-    loadingLabel?: string;
     title?: string;
     episodeLabel?: string;
     episodeName?: string;
@@ -89,7 +87,6 @@
   {surface}
   {onclose}
   {upNext}
-  {loadingLabel}
   {title}
   {episodeLabel}
   {episodeName}

@@ -325,7 +325,6 @@
           loadingStage={player.loadingStage}
           downloadPercent={player.downloadPercent}
           upNext={upNextCard}
-          loadingLabel={preparingEpisode ? episodeTitle(preparingEpisode) : ''}
           title={translatedTitle || series.title}
           episodeLabel={preparingEpisode ? episodeLabel(preparingEpisode) : ''}
           episodeName={preparingEpisode ? episodeName(preparingEpisode) : ''}

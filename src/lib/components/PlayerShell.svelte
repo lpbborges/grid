@@ -22,7 +22,6 @@
     surface,
     onclose,
     upNext = null,
-    loadingLabel = '',
     title = '',
     episodeLabel = '',
     episodeName = ''
@@ -34,8 +33,6 @@
     surface: Snippet;
     onclose?: () => void;
     upNext?: UpNextCard | null;
-    /** Names what is being prepared under the loading status. */
-    loadingLabel?: string;
     title?: string;
     episodeLabel?: string;
     episodeName?: string;
@@ -339,14 +336,6 @@
             style="width: {loadingStageProgress(loadingStage)}%"
           ></div>
         </div>
-      {/if}
-      {#if !backend.error && !backend.hasStarted && loadingLabel}
-        <p
-          class="text-muted mb-2 max-w-md truncate text-base font-semibold"
-          data-testid="loading-label"
-        >
-          {loadingLabel}
-        </p>
       {/if}
       {#if !backend.error && shownPercent > 0}
         <div class="text-main font-mono text-sm">
