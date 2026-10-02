@@ -13,6 +13,7 @@ import { endpoints } from './endpoints';
 import { searchWikidataImdbIds } from './wikidata';
 import { translateTitle } from './translate';
 import { isImdbId } from '$lib/utils/imdb';
+import { isRecord } from '$lib/utils/isRecord';
 
 function mapCinemetaMeta(m: CinemetaMeta): Movie {
   return {
@@ -29,17 +30,31 @@ function mapCinemetaMeta(m: CinemetaMeta): Movie {
   };
 }
 
-export async function getPopularMovies(limit = 24, customFetch?: typeof fetch): Promise<Movie[]> {
-  try {
-    const res = await fetchWithTimeout(`${endpoints.cinemeta}/catalog/movie/top.json`, {
-      fetch: customFetch
-    });
-    if (!res.ok) {
-      throw new Error(`Failed to fetch popular movies from cinemeta: ${res.statusText}`);
-    }
-    const data = await res.json();
-    const metas = data.metas || [];
+export interface CatalogQuery {
+  type: MediaType;
+  catalog: 'top' | 'year' | 'imdbRating';
+  /** A genre for `top`/`imdbRating`, a year for `year`. */
+  genre?: string;
+}
 
+export async function getCatalog(
+  { type, catalog, genre }: CatalogQuery,
+  limit = 24,
+  customFetch?: typeof fetch
+): Promise<Movie[]> {
+  try {
+    const extra = genre ? `/genre=${encodeURIComponent(genre)}` : '';
+    const res = await fetchWithTimeout(
+      `${endpoints.cinemeta}/catalog/${type}/${catalog}${extra}.json`,
+      { fetch: customFetch }
+    );
+    if (!res.ok) {
+      throw new Error(
+        `Failed to fetch the ${type} ${catalog} catalog from cinemeta: ${res.statusText}`
+      );
+    }
+    const data: unknown = await res.json();
+    const metas = isRecord(data) && Array.isArray(data.metas) ? (data.metas as CinemetaMeta[]) : [];
     return metas.slice(0, limit).map(mapCinemetaMeta);
   } catch (error) {
     logger.error(error);
@@ -47,22 +62,12 @@ export async function getPopularMovies(limit = 24, customFetch?: typeof fetch): 
   }
 }
 
-export async function getPopularSeries(limit = 24, customFetch?: typeof fetch): Promise<Movie[]> {
-  try {
-    const res = await fetchWithTimeout(`${endpoints.cinemeta}/catalog/series/top.json`, {
-      fetch: customFetch
-    });
-    if (!res.ok) {
-      throw new Error(`Failed to fetch popular series from cinemeta: ${res.statusText}`);
-    }
-    const data = await res.json();
-    const metas = data.metas || [];
+export function getPopularMovies(limit = 24, customFetch?: typeof fetch): Promise<Movie[]> {
+  return getCatalog({ type: 'movie', catalog: 'top' }, limit, customFetch);
+}
 
-    return metas.slice(0, limit).map(mapCinemetaMeta);
-  } catch (error) {
-    logger.error(error);
-    throw error;
-  }
+export function getPopularSeries(limit = 24, customFetch?: typeof fetch): Promise<Movie[]> {
+  return getCatalog({ type: 'series', catalog: 'top' }, limit, customFetch);
 }
 
 async function searchCinemeta(

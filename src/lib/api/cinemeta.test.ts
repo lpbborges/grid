@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  getCatalog,
   getPopularMovies,
   getMovieDetails,
   getPopularSeries,
@@ -138,7 +139,7 @@ describe('yts api', () => {
     console.error = vi.fn();
 
     await expect(getPopularMovies()).rejects.toThrow(
-      'Failed to fetch popular movies from cinemeta: Not Found'
+      'Failed to fetch the movie top catalog from cinemeta: Not Found'
     );
 
     console.error = originalConsoleError;
@@ -572,5 +573,47 @@ describe('continue watching metadata', () => {
     (globalThis.fetch as any).mockRejectedValue(new TypeError('Failed to fetch'));
 
     await expect(resolve([entry('tt1')])).resolves.toEqual({ tt1: null });
+  });
+});
+
+describe('getCatalog', () => {
+  beforeEach(() => {
+    vi.spyOn(globalThis, 'fetch');
+  });
+
+  it('asks for a genre of a catalog and caps the result', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          metas: [
+            { id: 'tt1', imdb_id: 'tt1', name: 'Um', poster: 'a.jpg', type: 'movie' },
+            { id: 'tt2', imdb_id: 'tt2', name: 'Dois', poster: 'b.jpg', type: 'movie' }
+          ]
+        })
+      )
+    );
+
+    const movies = await getCatalog({ type: 'movie', catalog: 'top', genre: 'Sci-Fi' }, 1);
+
+    expect(String(vi.mocked(globalThis.fetch).mock.calls[0][0])).toBe(
+      'https://v3-cinemeta.strem.io/catalog/movie/top/genre=Sci-Fi.json'
+    );
+    expect(movies.map((m) => m.title)).toEqual(['Um']);
+  });
+
+  it('asks for a whole catalog without a genre', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas: [] })));
+
+    await getCatalog({ type: 'series', catalog: 'imdbRating' });
+
+    expect(String(vi.mocked(globalThis.fetch).mock.calls[0][0])).toBe(
+      'https://v3-cinemeta.strem.io/catalog/series/imdbRating.json'
+    );
+  });
+
+  it('treats an unexpected answer as an empty catalog', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas: 'x' })));
+
+    expect(await getCatalog({ type: 'movie', catalog: 'year', genre: '2026' })).toEqual([]);
   });
 });
