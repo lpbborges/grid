@@ -264,7 +264,7 @@
   bind:this={containerElement}
   role="region"
   aria-label="Reprodutor de Vídeo"
-  class="fixed inset-0 z-[100] flex h-screen w-screen flex-col overflow-hidden {transparent
+  class="z-player fixed inset-0 flex h-screen w-screen flex-col overflow-hidden {transparent
     ? ''
     : 'bg-backdrop'} {!controlsVisible ? 'cursor-none' : ''}"
   data-testid="video-player-container"

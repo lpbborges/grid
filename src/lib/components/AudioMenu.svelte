@@ -1,4 +1,9 @@
 <script lang="ts">
+  import Button from '$lib/components/ui/Button.svelte';
+  import Label from '$lib/components/ui/Label.svelte';
+  import MenuItem from '$lib/components/ui/MenuItem.svelte';
+  import Panel from '$lib/components/ui/Panel.svelte';
+
   interface AudioTrackOption {
     index: number;
     id: string;
@@ -6,6 +11,8 @@
     enabled: boolean;
   }
 
+  // Open state belongs to PlayerShell, whose global click and key handlers close it and which
+  // recognises these elements by data-menu-element. That is why this does not use ui/Menu.
   let {
     audioTracks,
     activeAudioIndex,
@@ -23,45 +30,40 @@
 
 {#if audioTracks.length > 1}
   <div class="relative">
-    <button
+    <Button
       data-menu-element
+      variant="ghost"
+      surface="player"
+      size="sm"
       onclick={ontoggle}
       aria-label="Menu de Faixas de Áudio"
       aria-haspopup="menu"
       aria-expanded={showAudioMenu}
-      class="hover:text-primary rounded px-2 py-1 text-sm font-bold tracking-widest transition-colors {showAudioMenu
-        ? 'text-primary'
-        : ''}"
     >
       ÁUDIO
-    </button>
+    </Button>
 
     {#if showAudioMenu}
-      <div
+      <Panel
         data-menu-element
         role="menu"
         aria-label="Faixa de Áudio"
-        class="border-primary/50 bg-surface/95 absolute right-0 bottom-full mb-4 max-h-[60vh] w-56 overflow-y-auto rounded border p-2 shadow-[0_0_15px_rgba(118,52,194,0.5)] backdrop-blur-md"
+        glass
+        padding="xs"
+        shadow="glow-primary"
+        class="z-dropdown absolute right-0 bottom-full mb-2 max-h-[60vh] w-56 overflow-y-auto"
       >
-        <div
-          class="text-primary border-main/10 mt-1 mb-1 border-b px-3 pb-1 text-xs font-bold tracking-widest uppercase"
-        >
-          Faixa de Áudio
-        </div>
-        {#each audioTracks as track}
-          <button
-            role="menuitem"
-            class="text-muted hover:bg-main/10 hover:text-main w-full truncate rounded px-3 py-1.5 text-left text-sm transition-colors {activeAudioIndex ===
-            track.index
-              ? 'bg-primary/30 text-primary font-bold'
-              : ''}"
+        <Label class="border-main/10 mb-1 block border-b px-3 pb-1">Faixa de Áudio</Label>
+        {#each audioTracks as track (track.index)}
+          <MenuItem
+            selected={activeAudioIndex === track.index}
             title={track.label}
             onclick={() => onselect(track.index)}
           >
             {track.label}
-          </button>
+          </MenuItem>
         {/each}
-      </div>
+      </Panel>
     {/if}
   </div>
 {/if}

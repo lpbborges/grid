@@ -140,4 +140,47 @@ describe('ListMenu', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.getByRole('button', { name: 'Nova lista' })).toBeInTheDocument();
   });
+
+  it('stays open for the click that opened it, for clicks inside and while a list is ticked', async () => {
+    await open();
+    expect(screen.getByRole('group', { name: 'Listas' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('group', { name: 'Listas' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Favoritos' }));
+
+    expect(screen.getByRole('group', { name: 'Listas' })).toBeInTheDocument();
+  });
+
+  it('closes on Escape, giving the focus back to the button', async () => {
+    await open();
+
+    await fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(screen.queryByRole('group', { name: 'Listas' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Adicionar a uma lista' })).toHaveFocus();
+  });
+
+  it('closes when clicking elsewhere without taking the focus', async () => {
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    await open();
+    outside.focus();
+
+    await fireEvent.click(outside);
+
+    expect(screen.queryByRole('group', { name: 'Listas' })).toBeNull();
+    expect(outside).toHaveFocus();
+    outside.remove();
+  });
+
+  it('does not move the focus on open and does not close when Tab leaves it', async () => {
+    await open();
+
+    expect(screen.getByRole('group', { name: 'Listas' }).contains(document.activeElement)).toBe(
+      false
+    );
+    await fireEvent.keyDown(screen.getByRole('checkbox', { name: 'Favoritos' }), { key: 'Tab' });
+
+    expect(screen.getByRole('group', { name: 'Listas' })).toBeInTheDocument();
+  });
 });

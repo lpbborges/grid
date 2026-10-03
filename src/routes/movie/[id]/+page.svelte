@@ -269,7 +269,7 @@
       <img
         src={movie.large_cover_image}
         alt={movie.title}
-        class="h-auto w-full rounded object-cover shadow-lg"
+        class="h-auto w-full rounded-sm object-cover shadow-lg"
       />
 
       {#if !player.isPlaying}

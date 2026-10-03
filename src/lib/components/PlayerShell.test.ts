@@ -335,6 +335,73 @@ describe('PlayerShell', () => {
 
     expect(backend.syncOverlayLayout).toHaveBeenCalledWith(true, true, false);
   });
+  describe('audio and subtitle menus', () => {
+    const twoAudio = [
+      { index: 0, id: 'a0', label: 'Inglês', enabled: true },
+      { index: 1, id: 'a1', label: 'Português', enabled: false }
+    ];
+
+    it('opens from the trigger, marks trigger and panel as menu elements and picks a track', async () => {
+      const backend = fakeBackend({ hasStarted: true, audioTracks: twoAudio });
+      render(PlayerShell, { props: { backend, surface: emptySurface } });
+      const trigger = screen.getByLabelText('Menu de Faixas de Áudio');
+
+      await fireEvent.click(trigger);
+
+      const menu = screen.getByRole('menu', { name: 'Faixa de Áudio' });
+      expect(trigger).toHaveAttribute('data-menu-element');
+      expect(menu).toHaveAttribute('data-menu-element');
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+      await fireEvent.click(within(menu).getByRole('menuitem', { name: 'Português' }));
+
+      expect(backend.selectAudio).toHaveBeenCalledWith(1);
+      expect(screen.queryByRole('menu', { name: 'Faixa de Áudio' })).toBeNull();
+    });
+
+    it('stays open for clicks on the panel and closes for a click elsewhere in the player', async () => {
+      render(PlayerShell, {
+        props: {
+          backend: fakeBackend({ hasStarted: true, audioTracks: twoAudio }),
+          surface: emptySurface
+        }
+      });
+      await fireEvent.click(screen.getByLabelText('Menu de Faixas de Áudio'));
+
+      await fireEvent.click(screen.getByRole('menu', { name: 'Faixa de Áudio' }));
+      expect(screen.getByRole('menu', { name: 'Faixa de Áudio' })).toBeInTheDocument();
+
+      await fireEvent.click(screen.getByTestId('video-player-container'));
+      expect(screen.queryByRole('menu', { name: 'Faixa de Áudio' })).toBeNull();
+    });
+
+    it('closes the audio menu when the trigger is pressed again', async () => {
+      render(PlayerShell, {
+        props: {
+          backend: fakeBackend({ hasStarted: true, audioTracks: twoAudio }),
+          surface: emptySurface
+        }
+      });
+      const trigger = screen.getByLabelText('Menu de Faixas de Áudio');
+
+      await fireEvent.click(trigger);
+      await fireEvent.click(trigger);
+
+      expect(screen.queryByRole('menu', { name: 'Faixa de Áudio' })).toBeNull();
+    });
+
+    it('lists the subtitles with Desativado first and picks one', async () => {
+      const backend = fakeBackend({ hasStarted: true });
+      render(PlayerShell, { props: { backend, surface: emptySurface } });
+
+      await fireEvent.click(screen.getByLabelText('Menu de Legendas'));
+      const menu = screen.getByRole('menu', { name: 'Legendas' });
+
+      expect(menu).toHaveAttribute('data-menu-element');
+      expect(within(menu).getAllByRole('menuitem')[0]).toHaveTextContent('Desativado');
+    });
+  });
+
   it('renders close button when onclose is provided', async () => {
     const onclose = vi.fn();
     render(PlayerShell, { props: { backend: fakeBackend(), surface: emptySurface, onclose } });

@@ -32,3 +32,8 @@ if (typeof HTMLElement !== 'undefined' && !('animate' in HTMLElement.prototype))
     }
   });
 }
+
+import { expect } from 'vitest';
+import * as axeMatchers from 'vitest-axe/matchers';
+
+expect.extend(axeMatchers);

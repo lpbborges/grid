@@ -54,8 +54,8 @@
   class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent focus-visible:ring-2 focus-visible:outline-none {fullEffect
     ? 'transition-all duration-300 will-change-transform hover:-translate-y-2'
     : 'transition-shadow duration-[600ms]'} {watchedStore.has(media.id)
-    ? 'hover:shadow-[0_0_20px_rgba(54,211,83,0.4)] focus-visible:shadow-[0_0_20px_rgba(54,211,83,0.4)]'
-    : 'hover:shadow-[0_0_20px_rgba(107,33,168,0.4)] focus-visible:shadow-[0_0_20px_rgba(107,33,168,0.4)]'}"
+    ? 'hover:shadow-glow-green focus-visible:shadow-glow-green'
+    : 'hover:shadow-glow-primary focus-visible:shadow-glow-primary'}"
   data-testid="media-card"
   onmouseenter={(e) => hoverPreview.request(e.currentTarget, media, type, rowContext())}
   onmouseleave={(e) => hoverPreview.leave(e.currentTarget)}
@@ -104,7 +104,7 @@
         ></div>
       {/if}
       <div
-        class="bg-secondary absolute bottom-0 left-0 z-20 h-1 shadow-[0_0_8px_rgba(249,115,22,0.8)] will-change-transform"
+        class="bg-secondary shadow-glow-orange absolute bottom-0 left-0 z-20 h-1 will-change-transform"
         data-testid="media-card-progress"
         style="width: {progressPercent}%"
       ></div>

@@ -142,6 +142,35 @@ describe('HoverPreview', () => {
     expect(document.activeElement).toBe(card);
   });
 
+  it('closes the whole preview on Escape while its list menu is open, leaving the focus on the card', async () => {
+    getPreviewMetaMock.mockResolvedValue({});
+    card.tabIndex = 0;
+    render(HoverPreview);
+    await open(card);
+    await fireEvent.click(screen.getByLabelText('Adicionar a uma lista'));
+    expect(screen.getByRole('group', { name: 'Listas' })).toBeInTheDocument();
+    screen.getByRole('checkbox', { name: 'Favoritos' }).focus();
+
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(screen.queryByTestId('hover-preview')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Listas' })).toBeNull();
+    expect(document.activeElement).toBe(card);
+  });
+
+  it('keeps the preview open when the list menu opens and when a list is ticked', async () => {
+    getPreviewMetaMock.mockResolvedValue({});
+    render(HoverPreview);
+    await open(card);
+
+    await fireEvent.click(screen.getByLabelText('Adicionar a uma lista'));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Favoritos' }));
+
+    expect(screen.getByTestId('hover-preview')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Listas' })).toBeInTheDocument();
+  });
+
   it('hands keyboard focus to the first action', async () => {
     getPreviewMetaMock.mockResolvedValue({});
     render(HoverPreview);

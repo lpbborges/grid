@@ -2,45 +2,69 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+/** Returns the body of the first `{ ... }` block opened after `header`, honouring nesting. */
+function balancedBlock(css: string, header: RegExp): string | null {
+  const start = header.exec(css);
+  if (!start) return null;
+  const open = css.indexOf('{', start.index);
+  let depth = 0;
+  for (let i = open; i < css.length; i++) {
+    if (css[i] === '{') depth++;
+    else if (css[i] === '}' && --depth === 0) return css.slice(open + 1, i);
+  }
+  return null;
+}
+
+const FORBIDDEN_COLOR_PREFIXES = [
+  'text-',
+  'bg-',
+  'accent-',
+  'border-',
+  'ring-',
+  'fill-',
+  'stroke-',
+  'outline-',
+  'shadow-',
+  'divide-',
+  'caret-',
+  'decoration-'
+];
+
+function findForbiddenColorNames(themeBlock: string): string[] {
+  const violations: string[] = [];
+  for (const match of themeBlock.matchAll(/--color-([a-zA-Z0-9-]+)\s*:/g)) {
+    for (const prefix of FORBIDDEN_COLOR_PREFIXES) {
+      if (match[1].startsWith(prefix)) {
+        violations.push(`--color-${match[1]} (redundant prefix '${prefix}')`);
+      }
+    }
+  }
+  return violations;
+}
+
 describe('Tailwind Theme & CSS Variables Validation', () => {
   const appCssPath = path.resolve('src/app.css');
   const appCss = fs.readFileSync(appCssPath, 'utf-8');
-  // Property context prefixes that Tailwind prepends to color utility classes.
-  // Including these prefixes in @theme --color-* names causes duplicated class names
-  // such as text-text-main, bg-bg-dark, accent-accent-green, border-border-default, etc.
-  const FORBIDDEN_COLOR_PREFIXES = [
-    'text-',
-    'bg-',
-    'accent-',
-    'border-',
-    'ring-',
-    'fill-',
-    'stroke-',
-    'outline-',
-    'shadow-',
-    'divide-',
-    'caret-',
-    'decoration-'
-  ];
+  const themeBlock = balancedBlock(appCss, /@theme\s*\{/) ?? '';
 
+  it('scans the whole @theme block, past its nested @keyframes', () => {
+    expect(
+      balancedBlock(
+        '@theme { --a: 1; @keyframes x { to { y: 1; } } --b: 2; } .z { }',
+        /@theme\s*\{/
+      )
+    ).toContain('--b: 2');
+    expect(themeBlock).toContain('--color-purple-500');
+    expect(themeBlock).toContain('@keyframes logo-glitch');
+    expect(themeBlock.trimEnd().endsWith('}')).toBe(true);
+  });
+
+  it('flags a forbidden --color-* name placed after a nested @keyframes block', () => {
+    const css = '@theme { @keyframes x { from { a: 1; } } --color-bg-late: #000; }';
+    expect(findForbiddenColorNames(balancedBlock(css, /@theme\s*\{/) ?? '')).toHaveLength(1);
+  });
   it('disallows redundant property context prefixes in @theme --color-* variables', () => {
-    const themeMatch = appCss.match(/@theme\s*\{([^}]+)\}/);
-    expect(themeMatch).toBeTruthy();
-
-    const themeBlock = themeMatch![1];
-    const colorVarRegex = /--color-([a-zA-Z0-9-]+)\s*:/g;
-
-    const violatingVars: string[] = [];
-    let match: RegExpExecArray | null;
-
-    while ((match = colorVarRegex.exec(themeBlock)) !== null) {
-      const varName = match[1];
-      for (const prefix of FORBIDDEN_COLOR_PREFIXES) {
-        if (varName.startsWith(prefix)) {
-          violatingVars.push(`--color-${varName} (redundant prefix '${prefix}')`);
-        }
-      }
-    }
+    const violatingVars = findForbiddenColorNames(themeBlock);
 
     expect(
       violatingVars,

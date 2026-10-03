@@ -147,7 +147,7 @@
     : 'opacity-0'}"
 >
   <div
-    class="group mb-3 flex w-full cursor-pointer items-center rounded py-2"
+    class="group mb-3 flex w-full cursor-pointer items-center rounded-sm py-2"
     onclick={(e) => seekFromPointer(e.currentTarget, e.clientX)}
     onkeydown={(e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -180,7 +180,7 @@
         style="width: {duration ? (currentTime / duration) * 100 : 0}%"
       ></div>
       <div
-        class="bg-primary absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 shadow-[0_0_6px_rgba(168,85,247,0.6)] transition-opacity group-hover:h-4 group-hover:w-4 group-hover:opacity-100"
+        class="bg-primary shadow-glow-primary-sm absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:h-4 group-hover:w-4 group-hover:opacity-100"
         style="left: {duration ? (currentTime / duration) * 100 : 0}%"
       ></div>
     </div>
@@ -191,7 +191,7 @@
       <button
         onclick={onplaypause}
         aria-label={paused ? 'Reproduzir' : 'Pausar'}
-        class="hover:text-primary rounded transition-colors"
+        class="hover:text-primary rounded-sm transition-colors"
       >
         {#if paused}
           <svg
@@ -227,7 +227,7 @@
         <button
           onclick={onmute}
           aria-label="Ativar/desativar mudo"
-          class="hover:text-primary rounded p-2 transition-colors"
+          class="hover:text-primary rounded-sm p-2 transition-colors"
         >
           {#if volume > 0}
             <svg
@@ -275,7 +275,7 @@
             value={volume}
             oninput={(e) => onvolume(Number(e.currentTarget.value))}
             aria-label="Volume"
-            class="accent-primary w-full cursor-pointer rounded"
+            class="accent-primary w-full cursor-pointer rounded-sm"
           />
         </div>
       </div>
@@ -314,7 +314,7 @@
         <button
           onclick={onfullscreen}
           aria-label="Tela cheia"
-          class="hover:text-primary ml-2 rounded p-2 transition-colors"
+          class="hover:text-primary ml-2 rounded-sm p-2 transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

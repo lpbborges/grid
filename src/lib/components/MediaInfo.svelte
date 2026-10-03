@@ -52,19 +52,19 @@
 </div>
 
 <div class="text-main mb-6 flex flex-wrap gap-4 font-mono text-sm">
-  <span class="border-primary/50 bg-surface rounded border px-3 py-1">ANO: {year}</span>
+  <span class="border-primary/50 bg-surface rounded-sm border px-3 py-1">ANO: {year}</span>
   {#if shownRuntime}
-    <span class="border-primary/50 bg-surface rounded border px-3 py-1"
+    <span class="border-primary/50 bg-surface rounded-sm border px-3 py-1"
       >DURAÇÃO: {shownRuntime}</span
     >
   {/if}
   {#if director && director.length > 0}
-    <span class="border-primary/50 bg-surface rounded border px-3 py-1"
+    <span class="border-primary/50 bg-surface rounded-sm border px-3 py-1"
       >DIRETOR: {director.join(', ')}</span
     >
   {/if}
   <span
-    class="border-secondary/60 bg-surface text-secondary flex items-center gap-1 rounded border px-3 py-1"
+    class="border-secondary/60 bg-surface text-secondary flex items-center gap-1 rounded-sm border px-3 py-1"
   >
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -167,8 +167,8 @@
     class="group focus-visible:ring-green relative flex h-11 w-11 items-center justify-center rounded-sm border transition-all duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:outline-none active:scale-95 {watchedStore.watchedIds.includes(
       String(id)
     )
-      ? 'bg-green/15 border-green text-green shadow-[0_0_15px_rgba(54,211,83,0.4)]'
-      : 'border-primary/50 text-muted bg-surface/60 hover:border-green hover:text-green hover:bg-surface hover:shadow-[0_0_15px_rgba(54,211,83,0.25)]'}"
+      ? 'bg-green/15 border-green text-green shadow-glow-green'
+      : 'border-primary/50 text-muted bg-surface/60 hover:border-green hover:text-green hover:bg-surface hover:shadow-glow-green'}"
   >
     <!-- Cyberpunk corner bracket accents -->
     <div
