@@ -218,6 +218,16 @@ describe('useMpvBackend', () => {
     expect(windowApi.minimize).not.toHaveBeenCalled();
   });
 
+  it('forgets a failure on stop() so the next attempt does not show it', async () => {
+    vi.mocked(invoke).mockRejectedValue('sidecar missing');
+    const { player } = await start();
+    expect(player.error).not.toBe('');
+
+    await player.stop();
+
+    expect(player.error).toBe('');
+  });
+
   it('stops mpv on stop()', async () => {
     const { player } = await start();
     vi.mocked(invoke).mockClear();

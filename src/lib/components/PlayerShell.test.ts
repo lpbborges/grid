@@ -192,6 +192,77 @@ describe('PlayerShell', () => {
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('65');
   });
 
+  it('exposes the loading stage as a named progressbar', () => {
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: false }),
+        loadingStage: 'preparing',
+        surface: emptySurface
+      }
+    });
+
+    const bar = screen.getByRole('progressbar', { name: 'Progresso do carregamento' });
+    expect(bar.getAttribute('aria-valuenow')).toBe('65');
+    expect(bar.getAttribute('aria-valuemin')).toBe('0');
+    expect(bar.getAttribute('aria-valuemax')).toBe('100');
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+  });
+
+  it('uses the native-loading testid over a transparent window', () => {
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: false }),
+        transparent: true,
+        surface: emptySurface
+      }
+    });
+
+    expect(screen.getByTestId('native-loading')).toHaveClass('bg-backdrop');
+  });
+
+  it('keeps the translucent backdrop and spinner while buffering', () => {
+    render(PlayerShell, {
+      props: { backend: fakeBackend({ hasStarted: true, buffering: true }), surface: emptySurface }
+    });
+
+    expect(screen.getByTestId('buffering-overlay')).toHaveClass('bg-backdrop/60');
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+  });
+
+  it('shows an error at once, without the decode effect', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: false }))
+    );
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: false, error: 'Não foi possível reproduzir.' }),
+        surface: emptySurface
+      }
+    });
+
+    expect(screen.getByText('Não foi possível reproduzir.')).toBeVisible();
+    expect(screen.queryByTestId('decode-scramble')).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it('decodes the loading label when motion is allowed', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: false }))
+    );
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: false }),
+        loadingStage: 'preparing',
+        surface: emptySurface
+      }
+    });
+
+    expect(screen.getByTestId('decode-scramble')).toHaveAttribute('aria-hidden', 'true');
+    vi.unstubAllGlobals();
+  });
+
   it('starts with a generic loading message before any stage is known', () => {
     render(PlayerShell, {
       props: { backend: fakeBackend({ hasStarted: false }), surface: emptySurface }

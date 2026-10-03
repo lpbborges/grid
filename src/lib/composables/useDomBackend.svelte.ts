@@ -50,6 +50,7 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
     const el = getVideoElement();
     if (el) el.pause();
     request = undefined;
+    error = '';
     hasStarted = false;
     currentTime = 0;
     duration = 0;

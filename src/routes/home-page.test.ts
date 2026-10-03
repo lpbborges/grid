@@ -247,6 +247,8 @@ describe('Home page search', () => {
     });
 
     expect(screen.getByText('Carregando...')).toBeTruthy();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByTestId('skeleton')).toHaveAttribute('data-variant', 'row');
     expect(screen.queryByText('Popular Movie')).toBeNull();
 
     await act(async () => {

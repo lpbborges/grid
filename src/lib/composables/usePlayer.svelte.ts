@@ -112,7 +112,7 @@ export function usePlayer(
       // No fallback: on Windows <video> cannot play this content at all.
       error = backend.error;
       errorAction = 'otherSource';
-      await streamPlayer.stop();
+      await Promise.all([backend.stop(), streamPlayer.stop()]);
       return false;
     }
     return true;

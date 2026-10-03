@@ -32,6 +32,21 @@ describe('MediaGrid component', () => {
     ]);
   });
 
+  it('staggers the reveal by 40ms per card, capped at 11 steps', () => {
+    const items = Array.from({ length: 14 }, (_, i) => makeResult(`tt${i}`, `T${i}`, 'movie'));
+    render(MediaGrid, { items });
+
+    const delays = screen
+      .getAllByTestId('media-card')
+      .map((card) => card.parentElement!.style.animationDelay);
+    expect(delays.slice(0, 3)).toEqual(['0ms', '40ms', '80ms']);
+    expect(delays.slice(11)).toEqual(['440ms', '440ms', '440ms']);
+    expect(screen.getAllByTestId('media-card')[0].parentElement).toHaveClass(
+      'animate-boot-in',
+      'motion-reduce:animate-none'
+    );
+  });
+
   it('renders without a heading when none is given', () => {
     render(MediaGrid, { items: [makeResult('tt1', 'Alpha', 'movie')] });
 

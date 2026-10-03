@@ -93,6 +93,7 @@ describe('usePlayer', () => {
     expect(player.error).toBe('Não foi possível abrir o player. Tente novamente.');
     expect(player.errorAction).toBe('otherSource');
     expect(streamPlayer.stop).toHaveBeenCalled();
+    expect(backend.stop).toHaveBeenCalled();
   });
 
   it('writes progress from the backend clock exactly once per tick', async () => {

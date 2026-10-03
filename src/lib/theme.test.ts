@@ -51,6 +51,16 @@ describe('Tailwind Theme & CSS Variables Validation', () => {
     ).toEqual([]);
   });
 
+  it('honours prefers-reduced-motion globally', () => {
+    expect(appCss).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  });
+
+  it('defines the keyframes behind the loading effects', () => {
+    for (const name of ['scan-sweep', 'bracket-lock', 'boot-in']) {
+      expect(appCss).toContain(`@keyframes ${name}`);
+    }
+  });
+
   it('disallows duplicated utility prefixes in source files (e.g. text-text, accent-accent, bg-bg)', () => {
     const sourceFiles = import.meta.glob<string>(
       ['../*.{svelte,ts,js,html}', '../**/*.{svelte,ts,js,html}', '!**/*.test.ts'],
