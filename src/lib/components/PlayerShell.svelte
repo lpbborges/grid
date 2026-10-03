@@ -108,6 +108,12 @@
     }
   }
 
+  $effect(() => {
+    if (!backend.paused) scheduleHideControls();
+  });
+
+  $effect(() => () => clearTimeout(controlsTimeout));
+
   function handleMouseMove() {
     showControls = true;
     scheduleHideControls();

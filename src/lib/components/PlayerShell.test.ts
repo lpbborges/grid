@@ -551,6 +551,24 @@ describe('PlayerShell', () => {
     expect(title?.className).toContain('opacity-0');
   });
 
+  it('hides the controls again after resuming from a pause', async () => {
+    vi.useFakeTimers();
+    const { rerender } = render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ paused: true }),
+        surface: emptySurface,
+        title: 'Matrix'
+      }
+    });
+    const title = screen.getByTestId('player-title').parentElement?.parentElement;
+    await fireEvent.mouseMove(screen.getByTestId('video-player-container'));
+
+    await rerender({ backend: fakeBackend({ paused: false }) });
+    await vi.advanceTimersByTimeAsync(3100);
+
+    expect(title?.className).toContain('opacity-0');
+  });
+
   it('toggles fullscreen', async () => {
     const backend = fakeBackend();
     render(PlayerShell, { props: { backend, surface: emptySurface } });
