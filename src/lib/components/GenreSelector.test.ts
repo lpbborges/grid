@@ -102,4 +102,55 @@ describe('GenreSelector', () => {
 
     expect(screen.queryByRole('menu')).toBeNull();
   });
+
+  it('clamps at the edges of the grid instead of wrapping', async () => {
+    render(GenreSelector, { type: 'movie', genre: null, onselect: vi.fn() });
+    await fireEvent.click(screen.getByRole('button', { name: 'Gêneros' }));
+    await vi.waitFor(() => expect(screen.getAllByRole('menuitemradio')[0]).toHaveFocus());
+
+    await key('ArrowLeft');
+    expect(screen.getAllByRole('menuitemradio')[0]).toHaveFocus();
+    await key('ArrowUp');
+    expect(screen.getAllByRole('menuitemradio')[0]).toHaveFocus();
+
+    const all = screen.getAllByRole('menuitemradio');
+    all[all.length - 1].focus();
+    await key('ArrowRight');
+    expect(all[all.length - 1]).toHaveFocus();
+    await key('ArrowDown');
+    expect(all[all.length - 1]).toHaveFocus();
+  });
+
+  it('opens on the selected genre', async () => {
+    render(GenreSelector, { type: 'movie', genre: 'Action', onselect: vi.fn() });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Ação', expanded: false }));
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole('menuitemradio', { name: /Ação/ })).toHaveFocus()
+    );
+  });
+
+  it('stays open for the click that opened it and for clicks inside the panel', async () => {
+    render(GenreSelector, { type: 'movie', genre: null, onselect: vi.fn() });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Gêneros' }));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('menu'));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it('does not let Escape reach window listeners while focus is in the panel', async () => {
+    const onWindowKey = vi.fn();
+    window.addEventListener('keydown', onWindowKey);
+    render(GenreSelector, { type: 'movie', genre: null, onselect: vi.fn() });
+    await fireEvent.click(screen.getByRole('button', { name: 'Gêneros' }));
+    await vi.waitFor(() => expect(screen.getAllByRole('menuitemradio')[0]).toHaveFocus());
+
+    await key('Escape');
+
+    expect(onWindowKey).not.toHaveBeenCalled();
+    window.removeEventListener('keydown', onWindowKey);
+  });
 });

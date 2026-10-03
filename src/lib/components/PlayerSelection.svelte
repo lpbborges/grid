@@ -45,7 +45,7 @@
 
     <button
       onclick={() => onPlay(false)}
-      class="group bg-primary/20 hover:bg-primary text-main border-primary font-cyber relative flex w-full items-center justify-center gap-2 border py-4 text-lg tracking-widest uppercase transition-all duration-300 hover:shadow-[0_0_20px_rgba(107,33,168,0.8)]"
+      class="group bg-primary/20 hover:bg-primary text-main border-primary font-cyber hover:shadow-glow-primary relative flex w-full items-center justify-center gap-2 border py-4 text-lg tracking-widest uppercase transition-all duration-300"
     >
       <!-- Cyberpunk border effect -->
       <div

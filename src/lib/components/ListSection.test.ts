@@ -37,15 +37,11 @@ describe('ListSection', () => {
     expect(screen.queryByText('Nenhum título nesta lista ainda')).toBeNull();
   });
 
-  it('removes a title from this list only', async () => {
+  it('has no remove button on the cards', () => {
     listsStore.add('favorites', 'tt1', meta('Filme'));
-    listsStore.add('watch-later', 'tt1', meta('Filme'));
     render(ListSection, { list: listsStore.lists[0], ondelete: vi.fn() });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Remover de Favoritos' }));
-
-    expect(listsStore.has('favorites', 'tt1')).toBe(false);
-    expect(listsStore.has('watch-later', 'tt1')).toBe(true);
+    expect(screen.queryByRole('button', { name: /Remover de/ })).toBeNull();
   });
 
   const openOptions = (name: string) =>
@@ -110,6 +106,44 @@ describe('ListSection', () => {
     await openOptions('Cinema');
     await fireEvent.click(document.body);
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('stays open for the click that opened it and for clicks inside', async () => {
+    const id = customList();
+    render(ListSection, { list: listsStore.get(id)!, ondelete: vi.fn() });
+
+    await openOptions('Cinema');
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('menu'));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it('wraps around at both ends of the options', async () => {
+    const id = customList();
+    render(ListSection, { list: listsStore.get(id)!, ondelete: vi.fn() });
+    await openOptions('Cinema');
+
+    await fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowUp' });
+    expect(screen.getByRole('menuitem', { name: 'Excluir' })).toHaveFocus();
+
+    await fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' });
+    expect(screen.getByRole('menuitem', { name: 'Renomear' })).toHaveFocus();
+  });
+
+  it('does not take the focus back when the user clicks elsewhere', async () => {
+    const id = customList();
+    render(ListSection, { list: listsStore.get(id)!, ondelete: vi.fn() });
+    const outside = document.createElement('button');
+    document.body.append(outside);
+
+    await openOptions('Cinema');
+    outside.focus();
+    await fireEvent.click(outside);
+
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(outside).toHaveFocus();
+    outside.remove();
   });
 
   it('renames a list of the user', async () => {

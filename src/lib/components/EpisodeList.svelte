@@ -1,5 +1,7 @@
 <script lang="ts">
   import EmptyState from './EmptyState.svelte';
+  import Label from '$lib/components/ui/Label.svelte';
+  import Select from '$lib/components/ui/Select.svelte';
   import PreferenceSelectors from './PreferenceSelectors.svelte';
   import QualitySelector from './QualitySelector.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
@@ -51,33 +53,21 @@
 {#if episodes && episodes.length > 0}
   <div class="flex flex-col gap-4">
     <div class="border-primary/30 flex flex-col gap-3 border-b pb-3">
-      <h3 class="text-green text-sm font-bold tracking-widest uppercase">Episódios</h3>
+      <Label as="h3" tone="green">Episódios</Label>
       <div class="flex items-center gap-2">
-        <div class="relative flex-1">
-          <select
-            bind:value={selectedSeason}
-            class="border-primary/50 focus:border-green bg-surface text-main w-full appearance-none rounded border py-1 pr-6 pl-2 font-mono text-xs focus:outline-none"
-          >
-            {#each availableSeasons as season}
-              <option value={season} class="bg-surface text-main">Temporada {season}</option>
-            {/each}
-          </select>
-          <div
-            class="text-primary pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg
-            >
-          </div>
-        </div>
+        <Select
+          label="Temporada"
+          showLabel={false}
+          size="sm"
+          mono
+          class="flex-1"
+          options={availableSeasons.map((season) => ({
+            value: String(season),
+            label: `Temporada ${season}`
+          }))}
+          value={String(selectedSeason)}
+          onchange={(value) => (selectedSeason = Number(value))}
+        />
         <QualitySelector size="compact" showLabel={false} wrapperClass="flex-1" />
       </div>
       <div class="mt-2 flex items-center gap-2">
@@ -101,10 +91,10 @@
           {@attach isFocused ? scrollIntoList : undefined}
           aria-current={isFocused ? 'true' : undefined}
           class="group relative flex items-center justify-between rounded-sm border p-3 transition-all duration-300 {isFocused
-            ? 'border-green bg-surface/80 shadow-[0_0_15px_rgba(54,211,83,0.25)]'
+            ? 'border-green bg-surface/80 shadow-glow-green'
             : 'border-primary/30 bg-surface/40'} {isUnreleased
             ? 'opacity-50 grayscale'
-            : 'hover:border-green hover:bg-surface/80 hover:-translate-x-1 hover:shadow-[0_0_15px_rgba(54,211,83,0.3)]'}"
+            : 'hover:border-green hover:bg-surface/80 hover:shadow-glow-green hover:-translate-x-1'}"
           title={isUnreleased ? 'Este episódio ainda não foi lançado' : undefined}
         >
           <!-- Cyberpunk inner border left -->
@@ -201,7 +191,7 @@
               episode.season,
               episode.episode
             )
-              ? 'bg-green text-dark border-green shadow-[0_0_10px_rgba(54,211,83,0.8)]'
+              ? 'bg-green text-dark border-green shadow-glow-green-sm'
               : ''} {isUnreleased
               ? 'cursor-not-allowed opacity-50'
               : 'group-hover:bg-primary/20 hover:text-green hover:border-green'}"

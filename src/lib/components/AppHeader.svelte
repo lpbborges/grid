@@ -3,6 +3,12 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import GridLogo from '$lib/components/GridLogo.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
+  import IconButton from '$lib/components/ui/IconButton.svelte';
+  import Panel from '$lib/components/ui/Panel.svelte';
+  import TextField from '$lib/components/ui/TextField.svelte';
+  import { useDismissable } from '$lib/composables/useDismissable.svelte';
   import { logger } from '$lib/logger';
   import { searchQuery } from '$lib/stores.svelte';
   import { activeSection, type Section } from '$lib/utils/activeSection';
@@ -19,9 +25,9 @@
   ];
 
   const barLinkClass =
-    'text-muted hover:text-main focus-visible:outline-green relative block h-10 px-2 text-base leading-10 font-semibold tracking-wide whitespace-nowrap transition-colors focus-visible:rounded-xs focus-visible:outline-2 focus-visible:-outline-offset-2 aria-[current=page]:text-main aria-[current=page]:after:bg-green aria-[current=page]:after:absolute aria-[current=page]:after:inset-x-2 aria-[current=page]:after:bottom-0.5 aria-[current=page]:after:h-0.5 aria-[current=page]:after:rounded-[1px] aria-[current=page]:after:shadow-[0_0_8px_rgba(54,211,83,0.6)]';
+    'text-muted hover:text-main focus-visible:outline-green relative block h-10 px-2 text-base leading-10 font-semibold tracking-wide whitespace-nowrap transition-colors focus-visible:rounded-sm focus-visible:outline-2 focus-visible:-outline-offset-2 aria-[current=page]:text-main aria-[current=page]:after:bg-green aria-[current=page]:after:absolute aria-[current=page]:after:inset-x-2 aria-[current=page]:after:bottom-0.5 aria-[current=page]:after:h-0.5 aria-[current=page]:after:rounded-[1px] aria-[current=page]:after:shadow-glow-green-sm';
   const menuLinkClass =
-    'text-muted hover:text-main focus-visible:ring-green relative block rounded-xs px-3 py-2.5 text-[17px] font-semibold focus-visible:ring-2 focus-visible:outline-none aria-[current=page]:bg-primary/10 aria-[current=page]:text-main aria-[current=page]:before:bg-green aria-[current=page]:before:absolute aria-[current=page]:before:inset-y-2 aria-[current=page]:before:left-0 aria-[current=page]:before:w-0.5';
+    'text-muted hover:text-main focus-visible:ring-green relative block rounded-sm px-3 py-2.5 text-[17px] font-semibold focus-visible:ring-2 focus-visible:outline-none aria-[current=page]:bg-primary/10 aria-[current=page]:text-main aria-[current=page]:before:bg-green aria-[current=page]:before:absolute aria-[current=page]:before:inset-y-2 aria-[current=page]:before:left-0 aria-[current=page]:before:w-0.5';
 
   let searchOpen = $state(false);
   let menuOpen = $state(false);
@@ -84,12 +90,16 @@
     menuOpen = false;
   }
 
-  function onWindowKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && menuOpen) {
+  useDismissable({
+    open: () => menuOpen,
+    root: () => menuRoot,
+    onclose: (reason) => {
       menuOpen = false;
-      menuButton?.focus();
-      return;
+      if (reason === 'escape') menuButton?.focus();
     }
+  });
+
+  function onWindowKeydown(e: KeyboardEvent) {
     const ctrlK = e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey) && !e.altKey;
     const slash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey;
     if (!ctrlK && !slash) return;
@@ -101,15 +111,9 @@
     e.preventDefault();
     void openSearch();
   }
-
-  function onWindowClick(e: MouseEvent) {
-    if (menuOpen && menuRoot && e.target instanceof Node && !menuRoot.contains(e.target)) {
-      menuOpen = false;
-    }
-  }
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} onclick={onWindowClick} />
+<svelte:window onkeydown={onWindowKeydown} />
 
 {#snippet navLink(link: (typeof links)[number], className: string)}
   <a
@@ -122,12 +126,12 @@
 
 <header
   class="sticky top-0 z-20 -mb-16 flex h-16 items-center gap-2 px-10 transition-[background-color,box-shadow] duration-200 {solid
-    ? 'bg-dark shadow-[0_1px_0_rgba(147,51,234,0.25),0_8px_24px_rgba(0,0,0,0.45)]'
+    ? 'bg-dark shadow-header'
     : 'from-dark/92 bg-gradient-to-b to-transparent'}"
 >
   <a href="/" class="group mr-4 flex shrink-0 items-center" aria-label="Grid" onclick={onLinkClick}>
     <GridLogo
-      class="h-10 w-10 transition-transform duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]"
+      class="group-hover:drop-shadow-glow-primary-sm h-10 w-10 transition-transform duration-300 group-hover:scale-110"
     />
   </a>
 
@@ -138,145 +142,82 @@
   </nav>
 
   <div bind:this={menuRoot} class="relative min-[900px]:hidden">
-    <button
-      bind:this={menuButton}
-      type="button"
+    <Button
+      bind:element={menuButton}
+      variant="ghost"
       aria-expanded={menuOpen}
       aria-controls="app-menu"
       onclick={() => (menuOpen = !menuOpen)}
-      class="text-main focus-visible:ring-green flex h-10 cursor-pointer items-center gap-1.5 rounded-xs px-2.5 text-[17px] font-semibold focus-visible:ring-2 focus-visible:outline-none"
     >
       Navegar
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-        class={menuOpen ? 'rotate-180' : ''}><polyline points="6 9 12 15 18 9"></polyline></svg
-      >
-    </button>
+      {#snippet trailing()}
+        <Icon name="chevron-down" size="sm" class={menuOpen ? 'rotate-180' : ''} />
+      {/snippet}
+    </Button>
     {#if menuOpen}
-      <nav
+      <Panel
+        as="nav"
         id="app-menu"
         aria-label="Menu principal"
-        class="bg-surface border-primary/40 absolute top-full left-0 z-30 mt-2 flex w-60 flex-col rounded border p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.6)]"
+        padding="xs"
+        shadow="float"
+        class="z-dropdown absolute top-full left-0 mt-2 flex w-60 flex-col"
       >
         {#each links as link (link.section)}
           {@render navLink(link, menuLinkClass)}
         {/each}
-      </nav>
+      </Panel>
     {/if}
   </div>
 
   <div class="flex-1"></div>
 
   {#if searching}
-    <div
-      class="bg-surface/90 border-primary/50 focus-within:border-green flex h-10 w-56 items-center gap-2 rounded border pr-2 pl-3 shadow-[0_0_15px_rgba(54,211,83,0.25)] max-[900px]:w-64"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-        class="text-muted shrink-0"
-        ><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"
-        ></line></svg
-      >
-      <input
-        bind:this={searchInput}
-        type="search"
-        aria-label="Pesquisar"
-        {placeholder}
-        bind:value={searchQuery.value}
-        oninput={showResults}
-        onblur={collapseSearch}
-        onkeydown={onSearchKeydown}
-        class="text-main placeholder-muted min-w-0 flex-1 bg-transparent text-base font-medium outline-none [&::-webkit-search-cancel-button]:appearance-none"
-      />
-      {#if searchQuery.value}
-        <button
-          type="button"
-          class="text-muted hover:text-green grid h-6 w-6 shrink-0 cursor-pointer place-items-center transition-colors"
-          onclick={() => (searchQuery.value = '')}
-          onmousedown={(e) => e.preventDefault()}
-          aria-label="Limpar pesquisa"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            ><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"
-            ></line></svg
-          >
-        </button>
-      {/if}
-    </div>
-  {:else}
-    <button
-      bind:this={searchButton}
-      type="button"
+    <TextField
+      bind:element={searchInput}
+      bind:value={searchQuery.value}
+      type="search"
+      size="lg"
+      surface="page"
+      glow
       aria-label="Pesquisar"
-      title="Pesquisar (Ctrl+K ou /)"
-      onclick={openSearch}
-      class="text-main hover:text-green focus-visible:ring-green grid h-10 w-10 cursor-pointer place-items-center rounded-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      {placeholder}
+      oninput={showResults}
+      onblur={collapseSearch}
+      onkeydown={onSearchKeydown}
+      class="w-56 max-[900px]:w-64"
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-        ><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"
-        ></line></svg
-      >
-    </button>
+      {#snippet leading()}
+        <Icon name="search" size="md" class="text-muted shrink-0" />
+      {/snippet}
+      {#snippet trailing()}
+        {#if searchQuery.value}
+          <IconButton
+            size="sm"
+            label="Limpar pesquisa"
+            icon="x"
+            onclick={() => (searchQuery.value = '')}
+            onmousedown={(e) => e.preventDefault()}
+          />
+        {/if}
+      {/snippet}
+    </TextField>
+  {:else}
+    <IconButton
+      bind:element={searchButton}
+      label="Pesquisar"
+      title="Pesquisar (Ctrl+K ou /)"
+      icon="search"
+      onclick={openSearch}
+    />
   {/if}
 
   <a
     href="/settings"
     aria-label="Configurações"
     title="Configurações"
-    class="text-main hover:text-green focus-visible:ring-green grid h-10 w-10 place-items-center rounded-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+    class="text-main hover:text-green focus-visible:ring-green grid h-10 w-10 place-items-center rounded-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
   >
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-      ><path
-        d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-      /><circle cx="12" cy="12" r="3" /></svg
-    >
+    <Icon name="settings" size="md" />
   </a>
 </header>

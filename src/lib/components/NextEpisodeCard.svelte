@@ -21,7 +21,7 @@
   role="group"
   aria-labelledby={headingId}
   data-testid="up-next-card"
-  class="border-primary/50 border-l-green bg-surface/95 text-main animate-up-next-in absolute right-6 bottom-28 flex w-[22rem] max-w-[calc(100%-3rem)] cursor-default flex-col overflow-hidden rounded-sm border border-l-4 px-4 pt-3 pb-4 shadow-[0_10px_30px_rgba(0,0,0,0.9)] backdrop-blur-sm motion-reduce:animate-none"
+  class="border-primary/50 border-l-green bg-surface/95 text-main animate-up-next-in shadow-modal absolute right-6 bottom-28 flex w-[22rem] max-w-[calc(100%-3rem)] cursor-default flex-col overflow-hidden rounded-sm border border-l-4 px-4 pt-3 pb-4 backdrop-blur-sm motion-reduce:animate-none"
 >
   <div class="flex items-center justify-between gap-2">
     <p id={headingId} class="font-cyber text-xs tracking-wider uppercase">
@@ -43,7 +43,7 @@
     <button
       type="button"
       onclick={onplay}
-      class="bg-green text-dark hover:bg-green/85 focus-visible:ring-green focus-visible:ring-offset-surface font-cyber flex h-9 flex-1 cursor-pointer items-center justify-center gap-2 rounded-sm px-3 text-xs font-bold tracking-wider whitespace-nowrap uppercase shadow-[0_0_12px_rgba(54,211,83,0.35)] transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+      class="bg-green text-dark hover:bg-green/85 focus-visible:ring-green focus-visible:ring-offset-surface font-cyber shadow-glow-green flex h-9 flex-1 cursor-pointer items-center justify-center gap-2 rounded-sm px-3 text-xs font-bold tracking-wider whitespace-nowrap uppercase transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"
         ><polygon points="6 4 20 12 6 20 6 4" /></svg

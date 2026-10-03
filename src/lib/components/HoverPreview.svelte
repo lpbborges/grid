@@ -149,8 +149,8 @@
     class="hover-preview bg-surface border-primary/80 fixed z-40 flex flex-col border-2 {watchedStore.has(
       media.id
     )
-      ? 'shadow-[0_0_24px_rgba(54,211,83,0.45),0_10px_40px_rgba(0,0,0,0.9)]'
-      : 'shadow-[0_0_24px_rgba(107,33,168,0.5),0_10px_40px_rgba(0,0,0,0.9)]'}"
+      ? 'shadow-hud-green'
+      : 'shadow-hud-primary'}"
     style="left: {position.left}px; top: {position.top}px; width: {WIDTH}px"
     style:--clip={launch?.clip}
     style:--poster-x={launch && `${launch.x}px`}
@@ -189,7 +189,7 @@
       {#if active.progress}
         <div class="bg-main/20 pointer-events-none absolute bottom-0 left-0 h-1 w-full">
           <div
-            class="bg-secondary h-full shadow-[0_0_8px_rgba(249,115,22,0.8)]"
+            class="bg-secondary shadow-glow-orange h-full"
             data-testid="hover-preview-progress"
             style="width: {progressPercent}%"
           ></div>
@@ -228,7 +228,7 @@
           class="focus-visible:ring-green flex h-8 w-8 cursor-pointer items-center justify-center rounded-sm border-2 transition-all duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:outline-none {watchedStore.has(
             media.id
           )
-            ? 'bg-green/15 border-green text-green shadow-[0_0_10px_rgba(54,211,83,0.4)]'
+            ? 'bg-green/15 border-green text-green shadow-glow-green'
             : 'border-primary/50 text-muted bg-surface/60 hover:border-green hover:text-green'}"
         >
           <svg

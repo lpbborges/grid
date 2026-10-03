@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { MAX_LIST_NAME_LENGTH } from '$lib/stores/lists.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
+  import TextField from '$lib/components/ui/TextField.svelte';
 
   let {
     label,
@@ -16,14 +19,18 @@
     oncancel?: () => void;
   } = $props();
 
+  const errorId = $props.id();
   let name = $state('');
   let error = $state('');
   let input = $state<HTMLInputElement>();
 
   $effect(() => {
     name = value;
-    input?.focus();
-    input?.select();
+    // The field shows the new name only after the DOM updates; select what it shows then.
+    void tick().then(() => {
+      input?.focus();
+      input?.select();
+    });
   });
 
   function submit() {
@@ -42,34 +49,24 @@
 </script>
 
 <div class="flex gap-2">
-  <input
-    bind:this={input}
+  <TextField
+    bind:element={input}
     bind:value={name}
-    type="text"
+    size="sm"
     aria-label={label}
     placeholder="Nome da lista"
     maxlength={MAX_LIST_NAME_LENGTH}
+    aria-invalid={error ? true : undefined}
+    aria-describedby={error ? errorId : undefined}
     oninput={() => (error = '')}
     {onkeydown}
-    class="bg-dark border-primary/50 text-main placeholder-muted focus:border-green min-w-0 flex-1 rounded-xs border px-2 py-1.5 text-sm outline-none"
+    class="flex-1"
   />
-  <button
-    type="button"
-    onclick={submit}
-    class="border-green text-green hover:bg-green hover:text-dark focus-visible:ring-green cursor-pointer rounded-xs border px-3 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none"
-  >
-    {submitLabel}
-  </button>
+  <Button variant="accent" size="sm" onclick={submit}>{submitLabel}</Button>
   {#if oncancel}
-    <button
-      type="button"
-      onclick={oncancel}
-      class="border-primary/50 text-main hover:border-green focus-visible:ring-green cursor-pointer rounded-xs border px-3 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
-    >
-      Cancelar
-    </button>
+    <Button size="sm" onclick={oncancel}>Cancelar</Button>
   {/if}
 </div>
 {#if error}
-  <p class="text-error mt-1.5 text-xs" role="alert">{error}</p>
+  <p id={errorId} class="text-error mt-1.5 text-xs" role="alert">{error}</p>
 {/if}

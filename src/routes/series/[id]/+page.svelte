@@ -326,7 +326,7 @@
       <img
         src={series.large_cover_image}
         alt={series.title}
-        class="h-auto w-full rounded object-cover shadow-lg"
+        class="h-auto w-full rounded-sm object-cover shadow-lg"
       />
     </div>
 

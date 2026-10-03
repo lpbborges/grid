@@ -32,7 +32,7 @@
 {#if !appReady.value || !minElapsed}
   <div
     out:fade={{ duration: 500 }}
-    class="bg-dark fixed inset-0 z-[100] flex items-center justify-center"
+    class="bg-dark z-player fixed inset-0 flex items-center justify-center"
   >
     <div
       data-testid="splash-grid"

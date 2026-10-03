@@ -20,9 +20,7 @@
   <h1 class="text-main font-cyber text-[28px] font-bold tracking-wide">{title}</h1>
   {@render filters?.()}
 </div>
-<div
-  class="bg-primary mt-2.5 mb-6 h-[3px] w-10 rounded-sm shadow-[0_0_10px_rgba(168,85,247,0.6)]"
-></div>
+<div class="bg-primary shadow-glow-primary-sm mt-2.5 mb-6 h-[3px] w-10 rounded-sm"></div>
 
 {#each rows as row (row.heading)}
   <LazyCatalogRow {row} />

@@ -40,7 +40,7 @@
 
 <div
   data-titlebar
-  class="from-dark/90 via-dark/40 relative z-[110] flex h-8 items-center justify-between bg-gradient-to-b to-transparent transition-opacity duration-300 select-none {hidden
+  class="from-dark/90 via-dark/40 z-titlebar relative flex h-8 items-center justify-between bg-gradient-to-b to-transparent transition-opacity duration-300 select-none {hidden
     ? 'pointer-events-none opacity-0'
     : 'opacity-100'}"
   role="toolbar"

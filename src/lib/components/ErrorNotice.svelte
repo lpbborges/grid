@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/ui/Button.svelte';
   import { ERROR_ACTION_LABELS, type ErrorAction, type PageError } from '$lib/utils/pageError';
 
   let { error, onaction }: { error: PageError; onaction: (action: ErrorAction) => void } = $props();
@@ -9,10 +10,7 @@
   role="alert"
 >
   <span>{error.message}</span>
-  <button
-    onclick={() => onaction(error.action)}
-    class="border-orange text-orange hover:bg-orange hover:text-dark focus-visible:ring-orange w-fit cursor-pointer rounded border px-4 py-2 text-xs font-bold tracking-widest uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none"
-  >
+  <Button variant="warning" size="sm" onclick={() => onaction(error.action)}>
     {ERROR_ACTION_LABELS[error.action]}
-  </button>
+  </Button>
 </div>
