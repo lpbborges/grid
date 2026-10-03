@@ -11,7 +11,7 @@ import { endpoints } from './endpoints';
 import { fulfilledValues } from '$lib/utils/settled';
 import { vttObjectUrl } from '$lib/utils/vttUrl';
 
-// fetch_external_subtitle (src-tauri/src/lib.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
+// fetch_external_subtitle (src-tauri/src/subtitle_fetch.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
 // Popular titles list ~100 subtitles (dozens in English alone) with Portuguese
 // near the end, so fetching them all in API order got the user's language
 // rejected. Fetch a bounded, preference-first subset instead.

@@ -312,7 +312,7 @@ export function getStreamUrl(
   return `${STREAM_URL}/torrents/${infoHash}/stream/${fileIdx}${query}`;
 }
 
-// fetch_torrent_subtitle (src-tauri/src/lib.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
+// fetch_torrent_subtitle (src-tauri/src/subtitle_fetch.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
 const MAX_TORRENT_SUBTITLE_FETCHES = 25;
 
 export async function getTorrentSubtitles(

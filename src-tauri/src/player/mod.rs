@@ -19,7 +19,7 @@ pub mod surface_windows;
 
 // macOS has no libmpv (it keeps the `<video>` element), but the command list
 // is the frontend's contract and stays identical on every platform. An
-// uninhabited stand-in lets `lib.rs` name the controller everywhere without a
+// uninhabited stand-in lets `player_commands.rs` name the controller everywhere without a
 // cfg per command; nothing can ever construct one.
 #[cfg(not(any(target_os = "linux", windows)))]
 mod unavailable;

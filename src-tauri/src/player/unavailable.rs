@@ -2,8 +2,8 @@
 //!
 //! Uninhabited: `NativePlayerState` never hands one out there, so every method
 //! is unreachable by construction. It exists only so the native commands in
-//! `lib.rs` compile unchanged; keep the signatures in step with
-//! `controller::Controller` for the methods `lib.rs` calls.
+//! `player_commands.rs` compile unchanged; keep the signatures in step with
+//! `controller::Controller` for the methods `player_commands.rs` calls.
 
 use super::model::{Playback, PlayerEvent};
 use tokio::sync::mpsc::UnboundedReceiver;
