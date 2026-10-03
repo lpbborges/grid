@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn tells_an_ordered_report_from_every_failure() {
-        // lib.rs retries until this says yes, so a mismatch between the
+        // surface_windows retries until this says yes, so a mismatch between the
         // wording and the check would retry forever or give up immediately.
         assert!(is_ordered(&format!(
             "{ORDERED_REPORT_PREFIX}. children: [mpv (0x1)]"

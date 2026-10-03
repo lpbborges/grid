@@ -1,177 +1,17 @@
 import { logger } from '$lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
-import type { ExternalSubtitleEntry } from '$lib/types';
+import type { ExternalSubtitleEntry, SubtitleTrack } from '$lib/types';
+import {
+  getLanguageName,
+  normalizeLanguageCode,
+  preferredLanguageRank
+} from '$lib/utils/subtitleLanguage';
 import { endpoints } from './endpoints';
+import { fulfilledValues } from '$lib/utils/settled';
+import { vttObjectUrl } from '$lib/utils/vttUrl';
 
-export interface SubtitleTrack {
-  id: string;
-  url: string;
-  lang: string;
-  label: string;
-  group: 'Embedded' | 'Extra';
-}
-
-export function getLanguageName(code: string, strict = false): string | null {
-  const map: Record<string, string> = {
-    pob: 'Português BR',
-    pb: 'Português BR',
-    ptbr: 'Português BR',
-    brazilian: 'Português BR',
-    por: 'Português',
-    pt: 'Português',
-    portuguese: 'Português',
-    eng: 'Inglês',
-    en: 'Inglês',
-    english: 'Inglês',
-    fre: 'Francês',
-    fra: 'Francês',
-    fr: 'Francês',
-    french: 'Francês',
-    spa: 'Espanhol',
-    es: 'Espanhol',
-    spanish: 'Espanhol',
-    ger: 'Alemão',
-    deu: 'Alemão',
-    de: 'Alemão',
-    german: 'Alemão',
-    ita: 'Italiano',
-    it: 'Italiano',
-    italian: 'Italiano',
-    rus: 'Russo',
-    ru: 'Russo',
-    russian: 'Russo',
-    tur: 'Turco',
-    tr: 'Turco',
-    turkish: 'Turco',
-    heb: 'Hebraico',
-    he: 'Hebraico',
-    hebrew: 'Hebraico',
-    ara: 'Árabe',
-    ar: 'Árabe',
-    arabic: 'Árabe',
-    chi: 'Chinês',
-    zho: 'Chinês',
-    zh: 'Chinês',
-    zht: 'Chinês Tradicional',
-    chinese: 'Chinês',
-    jpn: 'Japonês',
-    ja: 'Japonês',
-    japanese: 'Japonês',
-    kor: 'Coreano',
-    ko: 'Coreano',
-    korean: 'Coreano',
-    hin: 'Hindi',
-    hi: 'Hindi',
-    hindi: 'Hindi',
-    ben: 'Bengali',
-    bn: 'Bengali',
-    bengali: 'Bengali',
-    pol: 'Polonês',
-    pl: 'Polonês',
-    polish: 'Polonês',
-    swe: 'Sueco',
-    sv: 'Sueco',
-    swedish: 'Sueco',
-    dan: 'Dinamarquês',
-    da: 'Dinamarquês',
-    danish: 'Dinamarquês',
-    fin: 'Finlandês',
-    fi: 'Finlandês',
-    finnish: 'Finlandês',
-    dut: 'Holandês',
-    nld: 'Holandês',
-    nl: 'Holandês',
-    dutch: 'Holandês',
-    cze: 'Tcheco',
-    ces: 'Tcheco',
-    cs: 'Tcheco',
-    czech: 'Tcheco',
-    ell: 'Grego',
-    gre: 'Grego',
-    el: 'Grego',
-    greek: 'Grego',
-    hrv: 'Croata',
-    scr: 'Croata',
-    hr: 'Croata',
-    croatian: 'Croata',
-    hun: 'Húngaro',
-    hu: 'Húngaro',
-    hungarian: 'Húngaro',
-    mac: 'Macedônio',
-    mkd: 'Macedônio',
-    mk: 'Macedônio',
-    macedonian: 'Macedônio',
-    nor: 'Norueguês',
-    nob: 'Norueguês',
-    nno: 'Norueguês',
-    no: 'Norueguês',
-    norwegian: 'Norueguês',
-    per: 'Persa',
-    fas: 'Persa',
-    fa: 'Persa',
-    persian: 'Persa',
-    farsi: 'Persa',
-    est: 'Estoniano',
-    estonian: 'Estoniano',
-    ind: 'Indonésio',
-    indonesian: 'Indonésio',
-    ukr: 'Ucraniano',
-    ukrainian: 'Ucraniano',
-    slv: 'Esloveno',
-    sl: 'Esloveno',
-    slovenian: 'Esloveno',
-    vie: 'Vietnamita',
-    vi: 'Vietnamita',
-    vietnamese: 'Vietnamita',
-    ron: 'Romeno',
-    rum: 'Romeno',
-    ro: 'Romeno',
-    romanian: 'Romeno',
-    spl: 'Espanhol (América Latina)'
-  };
-  const normalized = (code || '').toLowerCase().trim();
-  if (map[normalized]) return map[normalized];
-  if (strict) return null;
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-}
-
-// Language codes accepted for each subtitle preference offered in
-// PlayerSelection, in priority order. Codes come from OpenSubtitles (ISO 639-2
-// plus "pob") or from torrent filename suffixes (usually ISO 639-1).
-const PREFERRED_SUBTITLE_CODES: Record<string, string[][]> = {
-  pt: [
-    ['pob', 'pb', 'ptbr', 'pt-br', 'pt_br'],
-    ['por', 'pt', 'portuguese']
-  ],
-  en: [['eng', 'en', 'english']],
-  es: [['spa', 'es', 'es-419', 'spanish']]
-};
-
-function normalizeLanguageCode(code: string | undefined): string {
-  return (code || '').toLowerCase().trim();
-}
-
-/**
- * Index of the subtitle track that best matches a stored preference
- * ('pt' | 'en' | 'es'), or -1 when there is no match or the preference is
- * 'none'. Matches on the language code only: labels of unknown-language
- * torrent files are filenames, so substring matching on them gives false hits.
- */
-export function findPreferredSubtitleIndex(subtitles: SubtitleTrack[], preference: string): number {
-  const tiers = PREFERRED_SUBTITLE_CODES[preference];
-  if (!tiers) return -1;
-  for (const codes of tiers) {
-    const matches = (s: SubtitleTrack) => codes.includes(normalizeLanguageCode(s.lang));
-    const embedded = subtitles.findIndex((s) => s.group === 'Embedded' && matches(s));
-    if (embedded !== -1) return embedded;
-    const idx = subtitles.findIndex(matches);
-    if (idx !== -1) return idx;
-  }
-  return -1;
-}
-
-// fetch_external_subtitle (src-tauri/src/lib.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
+// fetch_external_subtitle (src-tauri/src/subtitle_fetch.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
 // Popular titles list ~100 subtitles (dozens in English alone) with Portuguese
 // near the end, so fetching them all in API order got the user's language
 // rejected. Fetch a bounded, preference-first subset instead.
@@ -208,13 +48,6 @@ function releaseMatchScore(entry: ExternalSubtitleEntry, fileTokens: Set<string>
   return score;
 }
 
-/** Sort key for a subtitle language: 0 is the most preferred. */
-export function preferredLanguageRank(lang: string | undefined, preference?: string): number {
-  const preferredCodes = (preference && PREFERRED_SUBTITLE_CODES[preference]?.flat()) || [];
-  const idx = preferredCodes.indexOf(normalizeLanguageCode(lang));
-  return idx === -1 ? preferredCodes.length : idx;
-}
-
 function selectSubtitlesToFetch(
   entries: ExternalSubtitleEntry[],
   preference?: string,
@@ -241,25 +74,40 @@ function selectSubtitlesToFetch(
   return selected;
 }
 
-// Converted VTT text by source URL, so replaying a title (or retrying within
-// the same minute) doesn't spend the Rust-side rate limit again.
+// Converted VTT text by source URL, so replaying a title doesn't spend the
+// Rust-side rate limit again.
 const MAX_CACHED_EXTERNAL_SUBTITLES = 100;
+export const MAX_CACHED_SUBTITLE_CHARS = 8 * 1024 * 1024;
 const externalSubtitleCache = new Map<string, string>();
+let externalSubtitleCacheChars = 0;
+
+function cacheExternalSubtitle(url: string, vtt: string): void {
+  externalSubtitleCache.set(url, vtt);
+  externalSubtitleCacheChars += vtt.length;
+  for (const [oldest, text] of externalSubtitleCache) {
+    if (
+      oldest === url ||
+      (externalSubtitleCache.size <= MAX_CACHED_EXTERNAL_SUBTITLES &&
+        externalSubtitleCacheChars <= MAX_CACHED_SUBTITLE_CHARS)
+    ) {
+      break;
+    }
+    externalSubtitleCache.delete(oldest);
+    externalSubtitleCacheChars -= text.length;
+  }
+}
 
 async function fetchExternalSubtitleContent(url: string): Promise<string> {
   const cached = externalSubtitleCache.get(url);
   if (cached !== undefined) return cached;
   const vtt = await invoke<string>('fetch_external_subtitle', { url });
-  if (externalSubtitleCache.size >= MAX_CACHED_EXTERNAL_SUBTITLES) {
-    const oldest = externalSubtitleCache.keys().next().value;
-    if (oldest !== undefined) externalSubtitleCache.delete(oldest);
-  }
-  externalSubtitleCache.set(url, vtt);
+  cacheExternalSubtitle(url, vtt);
   return vtt;
 }
 
 export function clearExternalSubtitleCache(): void {
   externalSubtitleCache.clear();
+  externalSubtitleCacheChars = 0;
 }
 
 // Stremio addon "extra" arguments, sent the same way Stremio sends them.
@@ -290,29 +138,18 @@ export async function getExternalSubtitles(
 
     const results = await Promise.allSettled(
       selectSubtitlesToFetch(data.subtitles, preference, release).map(async (sub) => {
-        const langName = getLanguageName(sub.lang);
         const vtt = await fetchExternalSubtitleContent(sub.url);
-        const blob = new Blob([vtt], { type: 'text/vtt' });
-        const url = URL.createObjectURL(blob);
         return {
           id: sub.id,
-          url,
+          url: vttObjectUrl(vtt),
           lang: sub.lang,
-          label: langName,
+          label: getLanguageName(sub.lang) ?? sub.lang,
           group: 'Extra'
-        } as SubtitleTrack;
+        } satisfies SubtitleTrack;
       })
     );
 
-    return results
-      .filter((result): result is PromiseFulfilledResult<SubtitleTrack> => {
-        if (result.status === 'rejected') {
-          logger.warn('Failed to fetch an external subtitle:', result.reason);
-          return false;
-        }
-        return true;
-      })
-      .map((result) => result.value);
+    return fulfilledValues(results, 'Failed to fetch an external subtitle:');
   } catch (error) {
     logger.error('Failed to fetch external subtitles:', error);
     return [];

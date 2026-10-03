@@ -108,6 +108,20 @@ describe('usePlayer', () => {
     expect(update).toHaveBeenCalledWith('tt1', 1, 2, 42, 3600, undefined);
   });
 
+  it('writes progress at most once per second of playback', async () => {
+    const update = vi.spyOn(progressStore, 'update');
+    const { player, backend } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:abc', { mediaId: 'tt1' });
+    backend.duration = 3600;
+
+    for (const time of [42.1, 42.4, 42.9, 43.2]) {
+      backend.currentTime = time;
+      await tick();
+    }
+
+    expect(update.mock.calls.map((call) => call[3])).toEqual([42.1, 43.2]);
+  });
+
   it('passes the page snapshot to the progress store on every tick', async () => {
     const update = vi.spyOn(progressStore, 'update');
     const progress = {

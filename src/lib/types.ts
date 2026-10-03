@@ -142,7 +142,6 @@ export interface TorrentEngineDetails {
   }[];
 }
 
-import type { SubtitleTrack } from '$lib/api/subtitles';
 import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
 
 /** Everything a backend needs to start one stream. */
@@ -217,4 +216,35 @@ export interface UpNextCard {
   secondsLeft: number;
   onplay: () => void;
   oncancel: () => void;
+}
+
+/** What `start_native_player` returns once mpv has loaded the file. */
+export interface NativePlayback {
+  tracks: NativeTrack[];
+  /** 0 when mpv could not determine it; progress is then not tracked. */
+  duration: number;
+  chapters: Chapter[];
+}
+
+/** One entry of mpv's `track-list`. */
+export interface NativeTrack {
+  id: number;
+  type: string;
+  lang: string | null;
+  title: string | null;
+  codec: string | null;
+  default: boolean;
+  forced: boolean;
+  external: boolean;
+  selected: boolean;
+  original: boolean;
+  hearing_impaired: boolean;
+}
+
+export interface SubtitleTrack {
+  id: string;
+  url: string;
+  lang: string;
+  label: string;
+  group: 'Embedded' | 'Extra';
 }

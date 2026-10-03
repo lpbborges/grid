@@ -5,6 +5,8 @@ import type { Episode } from '../types';
 import { endpoints } from './endpoints';
 
 const TRANSLATE_TIMEOUT_MS = 6000;
+// A season has dozens of episodes; firing them all at once trips the services' rate limits.
+const MAX_CONCURRENT_TRANSLATIONS = 4;
 
 // Module-level dedup map: concurrent requests for the same (text, targetLang)
 // share a single in-flight promise instead of firing redundant fetch cascades.
@@ -111,15 +113,17 @@ export async function translateEpisodesList(
   if (targetLang === 'en' || !episodes || episodes.length === 0) return {};
 
   const result: Record<string, string> = {};
+  const queue = episodes.flatMap((ep) => (ep.name ? [{ id: ep.id, name: ep.name }] : []));
+  let next = 0;
+  const worker = async () => {
+    while (next < queue.length) {
+      const ep = queue[next++];
+      const translated = await translateText(ep.name, targetLang);
+      if (translated) result[ep.id] = translated;
+    }
+  };
   await Promise.all(
-    episodes.map(async (ep) => {
-      if (ep.name) {
-        const translated = await translateText(ep.name, targetLang);
-        if (translated) {
-          result[ep.id] = translated;
-        }
-      }
-    })
+    Array.from({ length: Math.min(MAX_CONCURRENT_TRANSLATIONS, queue.length) }, worker)
   );
   return result;
 }

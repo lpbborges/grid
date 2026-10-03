@@ -244,10 +244,10 @@ describe('Movie page integration flow', () => {
     const { rerender } = render(MoviePage, {
       props: { data: { autoplay: false, movieId: 'tt1', movie, error: null } }
     });
-    expect(getMovieStreamsMock).toHaveBeenCalledWith('tt1');
+    expect(getMovieStreamsMock).toHaveBeenCalledWith('tt1', { audio: 'pt', subtitle: 'pt' });
 
     await rerender({ data: { autoplay: false, movieId: 'tt2', movie: movieB, error: null } });
-    expect(getMovieStreamsMock).toHaveBeenCalledWith('tt2');
+    expect(getMovieStreamsMock).toHaveBeenCalledWith('tt2', { audio: 'pt', subtitle: 'pt' });
 
     resolveB([]);
     await new Promise((r) => setTimeout(r, 0));

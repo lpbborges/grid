@@ -1,7 +1,6 @@
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { isRecord } from '../utils/isRecord';
 import { defaultTrackers, endpoints } from './endpoints';
-import { settingsStore } from '../stores/settings.svelte';
 import { isLowQuality } from '../engine/streamQuality';
 
 export interface Stream {
@@ -60,10 +59,18 @@ function isStream(value: unknown): value is Stream {
   );
 }
 
+/** The user's language preferences, which decide the language Torrentio is asked for. */
+export interface StreamLanguagePreferences {
+  audio: string;
+  subtitle: string;
+}
+
 /** Rejects when the service can't be reached, so callers can tell an outage from no sources. */
-async function fetchTorrentioStreams(path: string): Promise<Stream[]> {
-  const prefLang =
-    settingsStore.audio === 'original' ? settingsStore.subtitle : settingsStore.audio;
+async function fetchTorrentioStreams(
+  path: string,
+  preferences: StreamLanguagePreferences
+): Promise<Stream[]> {
+  const prefLang = preferences.audio === 'original' ? preferences.subtitle : preferences.audio;
   const lang = AUDIO_TO_TORRENTIO_LANG[prefLang];
   const config = [lang && `language=${lang}`, QUALITY_FILTER].filter(Boolean).join('|');
   const res = await fetchWithTimeout(`${endpoints.torrentio}/${config}/stream/${path}.json`);
@@ -78,11 +85,15 @@ async function fetchTorrentioStreams(path: string): Promise<Stream[]> {
 export function getSeriesStreams(
   seriesId: string,
   season: number,
-  episode: number
+  episode: number,
+  preferences: StreamLanguagePreferences
 ): Promise<Stream[]> {
-  return fetchTorrentioStreams(`series/${seriesId}:${season}:${episode}`);
+  return fetchTorrentioStreams(`series/${seriesId}:${season}:${episode}`, preferences);
 }
 
-export function getMovieStreams(movieId: string): Promise<Stream[]> {
-  return fetchTorrentioStreams(`movie/${movieId}`);
+export function getMovieStreams(
+  movieId: string,
+  preferences: StreamLanguagePreferences
+): Promise<Stream[]> {
+  return fetchTorrentioStreams(`movie/${movieId}`, preferences);
 }

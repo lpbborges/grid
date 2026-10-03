@@ -11,7 +11,7 @@ const HASH_1080 = 'a'.repeat(40);
 const HASH_720 = 'b'.repeat(40);
 const SERIES = { id: 'tt0000002', title: 'Grid Series' };
 const EPISODE = { season: 1, episode: 2 };
-const PREFERENCES = { quality: '1080p', audio: 'original' as const };
+const PREFERENCES = { quality: '1080p', audio: 'original' as const, subtitle: 'pt' };
 
 function answerWith(streams: unknown[]) {
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -52,7 +52,7 @@ describe('findEpisodeStream', () => {
       fileIdx: 3,
       infoHash: HASH_1080
     });
-    expect(getSeriesStreams).toHaveBeenCalledWith('tt0000002', 1, 2);
+    expect(getSeriesStreams).toHaveBeenCalledWith('tt0000002', 1, 2, PREFERENCES);
   });
 
   it('prefers the configured quality', async () => {

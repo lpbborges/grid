@@ -6,7 +6,7 @@
   import { findIntro } from '$lib/utils/intro';
   import { groupByLanguage } from '$lib/composables/useSubtitleSelection.svelte';
   import type { PlayerBackend, UpNextCard } from '$lib/types';
-  import type { SubtitleTrack } from '$lib/api/subtitles';
+  import type { SubtitleTrack } from '$lib/types';
   import type { Snippet } from 'svelte';
   import {
     loadingStageLabel,
@@ -22,9 +22,9 @@
     surface,
     onclose,
     upNext = null,
-    loadingLabel = '',
     title = '',
-    episodeLabel = ''
+    episodeLabel = '',
+    episodeName = ''
   } = $props<{
     backend: PlayerBackend;
     loadingStage?: LoadingStage | null;
@@ -33,10 +33,9 @@
     surface: Snippet;
     onclose?: () => void;
     upNext?: UpNextCard | null;
-    /** Names what is being prepared under the loading status. */
-    loadingLabel?: string;
     title?: string;
     episodeLabel?: string;
+    episodeName?: string;
   }>();
 
   let showControls = $state(true);
@@ -338,14 +337,6 @@
           ></div>
         </div>
       {/if}
-      {#if !backend.error && !backend.hasStarted && loadingLabel}
-        <p
-          class="text-muted mb-2 max-w-md truncate text-base font-semibold"
-          data-testid="loading-label"
-        >
-          {loadingLabel}
-        </p>
-      {/if}
       {#if !backend.error && shownPercent > 0}
         <div class="text-main font-mono text-sm">
           {shownPercent}%
@@ -408,6 +399,7 @@
     {onclose}
     {title}
     {episodeLabel}
+    {episodeName}
     onfullscreen={() => backend.toggleFullscreen()}
   />
 </div>

@@ -272,6 +272,25 @@ describe('translation helpers', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('translateEpisodesList keeps only a few requests in flight at once', async () => {
+    const { translateEpisodesList } = await freshTranslateModule();
+    let inFlight = 0;
+    let peak = 0;
+    globalThis.fetch = vi.fn(async () => {
+      peak = Math.max(peak, ++inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      inFlight--;
+      return { ok: true, json: async () => [[['Traduzido', 'Original']]] } as Response;
+    });
+    const episodes = Array.from({ length: 24 }, (_, i) => ({ id: String(i), name: `Name ${i}` }));
+
+    const res = await translateEpisodesList(episodes);
+
+    expect(Object.keys(res)).toHaveLength(24);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(24);
+    expect(peak).toBeLessThanOrEqual(4);
+  });
+
   it('translateEpisodesList issues no network requests on a repeat visit (cache hit)', async () => {
     const { translateEpisodesList } = await freshTranslateModule();
     const episodes = [

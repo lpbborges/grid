@@ -12,7 +12,8 @@ import {
   searchLocalizedCatalog,
   resolveMissingSnapshots,
   getPreviewMeta,
-  clearPreviewMetaCache
+  clearPreviewMetaCache,
+  MAX_CACHED_PREVIEW_METAS
 } from './cinemeta';
 
 const { translateTitleMock } = vi.hoisted(() => ({
@@ -115,6 +116,83 @@ describe('yts api', () => {
       expect.objectContaining({ signal: expect.anything() })
     );
     expect(movie.title).toBe('Test Movie');
+  });
+
+  it('asks Cinemeta about a movie without waiting for the movie service when it has the IMDb id', async () => {
+    (globalThis.fetch as any).mockReturnValue(new Promise(() => {}));
+
+    void getMovieDetails('tt12345');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const urls = (globalThis.fetch as any).mock.calls.map((call: unknown[]) => String(call[0]));
+    expect(urls).toHaveLength(2);
+    expect(urls.some((url: string) => url.includes('/meta/movie/tt12345.json'))).toBe(true);
+  });
+
+  it('encodes a movie id that is not an IMDb id before putting it in the query', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'ok', data: { movie: mockMovie } })
+    });
+
+    await getMovieDetails('a&b=c');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('movie_details.json?movie_id=a%26b%3Dc&'),
+      expect.anything()
+    );
+  });
+
+  it('encodes a series id before putting it in the path', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      statusText: 'Not Found'
+    });
+
+    await expect(getSeriesDetails('x/../y?z')).rejects.toThrow();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/meta/series/x%2F..%2Fy%3Fz.json'),
+      expect.anything()
+    );
+  });
+
+  it('skips entries Cinemeta lists without a usable title instead of failing the search', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        metas: [
+          null,
+          'oops',
+          { id: 'tt0', poster: 'p.jpg' },
+          {
+            id: 'tt1375666',
+            imdb_id: 'tt1375666',
+            name: 'Inception',
+            releaseInfo: '2010',
+            poster: 'i.jpg'
+          }
+        ]
+      })
+    });
+
+    const results = await searchMovies('inception');
+
+    expect(results.map((movie) => movie.title)).toEqual(['Inception']);
+  });
+
+  it('skips unusable catalog entries but still counts them as read', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        metas: [null, { id: 'tt1', imdb_id: 'tt1', name: 'Ok', releaseInfo: '2010', poster: 'a' }]
+      })
+    });
+
+    const page = await getCatalogPage({ type: 'movie', catalog: 'top' });
+
+    expect(page.titles.map((movie) => movie.title)).toEqual(['Ok']);
+    expect(page.consumed).toBe(2);
   });
 
   it('adds the genres, runtime and trailer from Cinemeta to a movie', async () => {
@@ -238,6 +316,26 @@ describe('yts api', () => {
     );
     expect(details.title).toBe('Test Series Detail');
     expect(details.id).toBe('tt987');
+  });
+
+  it('reads the year of a series from releaseInfo when year is missing, and keeps its release date', async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        meta: {
+          id: 'tt987',
+          name: 'Test Series Detail',
+          releaseInfo: '2011-2015',
+          released: '2011-04-17T00:00:00.000Z',
+          poster: 'img_series.jpg'
+        }
+      })
+    });
+
+    const details = await getSeriesDetails('tt987');
+
+    expect(details.year).toBe(2011);
+    expect(details.releaseDate).toBe('2011-04-17T00:00:00.000Z');
   });
 
   it('keeps the genres, runtime and first trailer of a series', async () => {
@@ -944,6 +1042,19 @@ describe('getPreviewMeta', () => {
 
     expect(again).toEqual({ runtime: '90 min' });
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets the oldest preview once the cache is full', async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(
+      async () => new Response(JSON.stringify({ meta: { name: 'Filme', poster: 'p.jpg' } }))
+    );
+
+    for (let i = 0; i <= MAX_CACHED_PREVIEW_METAS; i++) await getPreviewMeta('movie', `tt${i}`);
+    await getPreviewMeta('movie', `tt${MAX_CACHED_PREVIEW_METAS}`);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(MAX_CACHED_PREVIEW_METAS + 1);
+
+    await getPreviewMeta('movie', 'tt0');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(MAX_CACHED_PREVIEW_METAS + 2);
   });
 
   it('does not cache a failed request', async () => {

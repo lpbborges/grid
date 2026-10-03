@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useSubtitleSelection } from './useSubtitleSelection.svelte';
 import { settingsStore } from '$lib/stores/settings.svelte';
-import type { SubtitleTrack } from '$lib/api/subtitles';
+import type { SubtitleTrack } from '$lib/types';
 
 vi.mock('$lib/stores/settings.svelte', () => ({
   settingsStore: {

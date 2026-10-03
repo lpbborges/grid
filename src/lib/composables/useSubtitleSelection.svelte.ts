@@ -1,5 +1,6 @@
 import { logger } from '$lib/logger';
-import { findPreferredSubtitleIndex, type SubtitleTrack } from '$lib/api/subtitles';
+import { findPreferredSubtitleIndex } from '$lib/utils/subtitleLanguage';
+import type { SubtitleTrack } from '$lib/types';
 import { settingsStore } from '$lib/stores/settings.svelte';
 
 /* global HTMLVideoElement, VTTCue, TextTrackList */

@@ -1,6 +1,7 @@
 import { logger } from '$lib/logger';
 import { buildMagnet, getSeriesStreams, parseSeedCount, type Stream } from '$lib/api/torrentio';
 import { rankStreamOptions } from '$lib/engine/ranking';
+import { qualityOf } from '$lib/engine/streamOption';
 import type { AudioPreference, EpisodeRef } from '$lib/types';
 import type { PageError } from '$lib/utils/pageError';
 
@@ -16,11 +17,11 @@ const UNAVAILABLE: PageError = {
 export async function findEpisodeStream(
   series: { id: string; title: string },
   episode: EpisodeRef,
-  preferences: { quality: string; audio: AudioPreference },
+  preferences: { quality: string; audio: AudioPreference; subtitle: string },
   failed: ReadonlySet<string> = new Set()
 ): Promise<EpisodeStream> {
   try {
-    const streams = await getSeriesStreams(series.id, episode.season, episode.episode);
+    const streams = await getSeriesStreams(series.id, episode.season, episode.episode, preferences);
     const playable = streams.filter((s): s is Stream & { infoHash: string } => !!s.infoHash);
     if (playable.length === 0) return { error: UNAVAILABLE };
 
@@ -38,9 +39,7 @@ export async function findEpisodeStream(
       rankableStreams,
       (s) => {
         const text = ((s.title || '') + ' ' + (s.name || '')).toLowerCase();
-        const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
-        const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
-        return { quality, text, seeds: parseSeedCount(s.title) };
+        return { quality: qualityOf(s.name), text, seeds: parseSeedCount(s.title) };
       },
       { quality: preferences.quality, audioPreference: preferences.audio }
     );

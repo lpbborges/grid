@@ -2,205 +2,23 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { logger } from '$lib/logger';
-import type { Chapter, PlaybackRequest } from '$lib/types';
+import type { Chapter, NativePlayback, NativeTrack, PlaybackRequest } from '$lib/types';
 import { settingsStore } from '$lib/stores/settings.svelte';
-import { findPreferredSubtitleIndex, getLanguageName } from '$lib/api/subtitles';
-import { resolvePreferredAudioTrack, type ParsedAudioTrack } from '$lib/utils/audioTrack';
-import type { SubtitleTrack } from '$lib/api/subtitles';
+import type { SubtitleTrack } from '$lib/types';
+import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
+import {
+  nativeTrackLabel,
+  resolveNativeTracks,
+  trackLanguage,
+  withExternalLangs
+} from '$lib/utils/nativeTracks';
 
 /** Mirrors `MAX_SUBTITLE_FILES` in src-tauri/src/player/model.rs. */
 export const MAX_NATIVE_SUBTITLE_FILES = 25;
 
-/** What `start_native_player` returns once mpv has loaded the file. */
-export interface NativePlayback {
-  tracks: NativeTrack[];
-  /** 0 when mpv could not determine it; progress is then not tracked. */
-  duration: number;
-  chapters: Chapter[];
-}
-
-/** One entry of mpv's `track-list`. */
-export interface NativeTrack {
-  id: number;
-  type: string;
-  lang: string | null;
-  title: string | null;
-  codec: string | null;
-  default: boolean;
-  forced: boolean;
-  external: boolean;
-  selected: boolean;
-  original: boolean;
-  hearing_impaired: boolean;
-}
-
-export interface NativePlayOptions {
-  url: string;
-  mediaId: string | number;
-  season?: number;
-  episode?: number;
-  startSeconds?: number;
-  originalLanguage?: string;
-  /** Fetched subtitles, written to the app cache so mpv can load them. */
-  subtitles?: SubtitleTrack[];
-  /** Called when mpv exits, for any reason, so the page can clean up. */
-  onended?: () => void;
-  /** Called instead of `onended` when the file played to its end. */
-  onfinished?: () => void;
-}
-
 /**
- * Builds the label `resolvePreferredAudioTrack` matches against.
- *
- * That function was extracted from `VideoPlayer`, where it worked on DOM
- * `audioTracks` labels, so it matches on human-readable language names rather
- * than codes. It is also the label the audio and subtitle menus show.
- */
-export function nativeTrackLabel(track: NativeTrack): string {
-  const code = trackLanguage(track);
-  // Without a language the release's own title is all there is to go on.
-  if (!code) return track.title?.trim() ?? '';
-
-  const language = languageName(code);
-  // Release titles mostly restate the language ("German (Germany)"), which
-  // next to the Portuguese name reads as the language twice. Only a variant
-  // of the language itself is shown - never track details such as SDH or
-  // forced. Tracks that still share a label end up grouped as
-  // "Opção 1 / Opção 2" in the menu, like external subtitles.
-  // The tag's region counts too: "es-419" is Latin American Spanish.
-  const source = `${track.title ?? ''} ${track.lang ?? ''}`;
-  const variant = LANGUAGE_VARIANTS.find(([pattern]) => pattern.test(source))?.[1];
-  // A table entry like "Espanhol (América Latina)" already names its variant.
-  return variant && !language.includes('(') ? `${language} (${variant})` : language;
-}
-
-/** Variants of a language a release title can name, as the menus show them. */
-const LANGUAGE_VARIANTS: [RegExp, string][] = [
-  [/latin|latino|latam|419|mexic/i, 'Latino'],
-  [/canad|-ca\b/i, 'Canadá'],
-  [/simplified|\bhans\b/i, 'Simplificado'],
-  [/traditional|\bhant\b/i, 'Tradicional']
-];
-
-/**
- * The track's language code, with Brazilian and European Portuguese told
- * apart: they are two languages, not a variant of one. Any other region tag
- * ("en-US", "es-419") is reduced to its language, which is what the menus
- * name and the preferences match on; nativeTrackLabel still reads the region
- * for a variant.
- *
- * Matroska often tags both "por" and only the title says which one it is;
- * newer files carry the region in the tag ("pt-BR", "pt-PT"). Brazilian comes
- * back as "pob" and European as "por" - the codes getLanguageName names
- * "Português BR" and "Português", and the 'pt' subtitle preference ranks
- * Brazilian first.
- */
-export function trackLanguage(track: NativeTrack): string | null {
-  if (!track.lang) return null;
-  const code = track.lang.toLowerCase().replace('_', '-');
-  if (['pob', 'pb', 'ptbr', 'pt-br'].includes(code)) return 'pob';
-  if (code === 'pt-pt') return 'por';
-  if (
-    (code === 'por' || code === 'pt') &&
-    /brazil|brasil|\bpt-?br\b|\(br\)/i.test(track.title ?? '')
-  ) {
-    return 'pob';
-  }
-  const [base] = code.split('-');
-  return base !== code ? base : track.lang;
-}
-
-/**
- * Grid's own Portuguese names first (they match what the preference resolvers
- * expect), then the platform's for everything the table lacks - "bg" becomes
- * "Búlgaro" rather than "Bg".
- */
-function languageName(code: string): string {
-  const known = getLanguageName(code, true);
-  if (known) return known;
-  try {
-    const name = new Intl.DisplayNames(['pt-BR'], { type: 'language' }).of(code);
-    if (name && name.toLowerCase() !== code.toLowerCase()) {
-      return name.charAt(0).toUpperCase() + name.slice(1);
-    }
-  } catch {
-    // Not a valid language tag; fall through to the capitalised code.
-  }
-  // Non-strict getLanguageName never returns null: an unrecognised code comes
-  // back capitalised, which is still a usable label.
-  return getLanguageName(code) ?? code;
-}
-
-/**
- * mpv's per-type track ids for the audio and subtitle tracks that best match the
- * stored preferences, reusing the same resolvers the `<video>` path uses.
- *
- * `null` means mpv's `no` sentinel. For audio that would mute the film, so when
- * nothing matches the track mpv already selected is kept instead. For subtitles
- * `null` is correct: no match means no subtitles, exactly as on Linux.
- */
-export function resolveNativeTracks(
-  tracks: NativeTrack[],
-  preferences: { audio: string | undefined; subtitle: string | undefined },
-  originalLanguage?: string,
-  externalLangs: string[] = []
-): { aid: number | null; sid: number | null } {
-  const audio = tracks.filter((t) => t.type === 'audio');
-  const subs = tracks.filter((t) => t.type === 'sub');
-
-  const parsedAudio: ParsedAudioTrack[] = audio.map((track, index) => ({
-    index,
-    id: String(track.id),
-    label: nativeTrackLabel(track),
-    enabled: track.selected
-  }));
-  const audioMatch = resolvePreferredAudioTrack(parsedAudio, preferences.audio, originalLanguage);
-  const selectedAudio = audio.find((t) => t.selected) ?? audio[0];
-  const aid = audioMatch !== -1 ? audio[audioMatch].id : (selectedAudio?.id ?? null);
-
-  // findPreferredSubtitleIndex matches on `lang`, and mpv reports none for a
-  // file passed with --sub-file. Grid knows what it wrote, and mpv lists
-  // external tracks in the order they were given, so the languages are matched
-  // back on by position.
-  let externalSeen = 0;
-  const parsedSubs: SubtitleTrack[] = subs.map((track) => ({
-    id: String(track.id),
-    url: '',
-    lang: track.external ? (externalLangs[externalSeen++] ?? '') : (trackLanguage(track) ?? ''),
-    label: nativeTrackLabel(track),
-    group: track.external ? 'Extra' : 'Embedded'
-  }));
-  const subMatch = findPreferredSubtitleIndex(parsedSubs, preferences.subtitle ?? 'none');
-  const sid = subMatch !== -1 ? subs[subMatch].id : null;
-
-  return { aid, sid };
-}
-
-/**
- * Fills in the language of every external subtitle track.
- *
- * mpv reports no `lang` for a track added with `--sub-file`, which is how Grid
- * passes every subtitle it fetched, so those tracks would label themselves
- * "Legenda 3" in the menu with no way to tell Portuguese from English. Grid
- * knows what it wrote and mpv lists external tracks in the order they were
- * given, so the languages are matched back on by position - the same rule
- * `resolveNativeTracks` applies when picking the preferred one.
- */
-export function withExternalLangs(tracks: NativeTrack[], externalLangs: string[]): NativeTrack[] {
-  let seen = 0;
-  return tracks.map((track) => {
-    if (track.type !== 'sub' || !track.external) return track;
-    const lang = externalLangs[seen++];
-    return lang && !track.lang ? { ...track, lang } : track;
-  });
-}
-
-/**
- * Reads the already-fetched subtitle text back out of its `blob:` URL and hands
- * it to Rust to write into the app cache.
- *
- * Reading the blob avoids fetching anything twice and leaves the strem.io
- * allowlist and rate limit on the original fetch path untouched. A subtitle
+ * Reads the fetched subtitle text back out of its `blob:` URL and hands it to
+ * Rust to write into the app cache, so nothing is fetched twice. A subtitle
  * that cannot be read is dropped rather than failing playback.
  */
 async function cacheSubtitles(subtitles: SubtitleTrack[]): Promise<string[]> {
@@ -243,17 +61,21 @@ export function useMpvBackend() {
     }
   }
 
-  async function finish(finished = false) {
-    if (!isRunning) return;
-    isRunning = false;
-    await detach();
+  function clearPlayback() {
     currentTime = 0;
     paused = false;
-    volume = 1;
     tracks = [];
     chapters = [];
     hasVideo = false;
     durationState = 0;
+  }
+
+  async function finish(finished = false) {
+    if (!isRunning) return;
+    isRunning = false;
+    await detach();
+    clearPlayback();
+    volume = 1;
     const request = current;
     current = undefined;
     const callback = finished && request?.onfinished ? request.onfinished : request?.onended;
@@ -325,10 +147,9 @@ export function useMpvBackend() {
       isRunning = true;
 
       const { aid, sid } = resolveNativeTracks(
-        playback.tracks,
+        tracks,
         { audio: settingsStore.audio, subtitle: settingsStore.subtitle },
-        options.originalLanguage,
-        external.map((subtitle) => subtitle.lang)
+        options.originalLanguage
       );
       await invoke('native_player_set_volume', { percent: volume * 100 });
       await invoke('native_player_set_subtitle_position', { percent: subtitlePosition });
@@ -345,6 +166,7 @@ export function useMpvBackend() {
       await detach();
       isRunning = false;
       current = undefined;
+      clearPlayback();
       // Leave nothing behind if mpv started but a later step failed.
       try {
         await invoke('stop_native_player');

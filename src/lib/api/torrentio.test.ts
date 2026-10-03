@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getSeriesStreams, getMovieStreams, parseSeedCount, buildMagnet } from './torrentio';
-import { settingsStore } from '../stores/settings.svelte';
+
+const PT = { audio: 'pt', subtitle: 'pt' };
 
 globalThis.fetch = vi.fn() as any;
 
@@ -35,28 +36,24 @@ describe('torrentio api', () => {
         })
       )
     );
-    expect(await getMovieStreams('tt1')).toEqual([{ name: 'Torrentio', infoHash: 'a' }]);
+    expect(await getMovieStreams('tt1', PT)).toEqual([{ name: 'Torrentio', infoHash: 'a' }]);
 
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ streams: 'x' }))
     );
-    expect(await getMovieStreams('tt1')).toEqual([]);
+    expect(await getMovieStreams('tt1', PT)).toEqual([]);
   });
 
   it('asks Torrentio to leave out cinema recordings, screeners and 3D even without a language', async () => {
-    settingsStore.audio = 'original';
-    settingsStore.subtitle = 'off';
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ streams: [] }))
     );
 
-    await getMovieStreams('tt1');
+    await getMovieStreams('tt1', { audio: 'original', subtitle: 'off' });
 
     expect(vi.mocked(globalThis.fetch).mock.calls[0][0]).toBe(
       'https://torrentio.strem.fun/qualityfilter=threed,cam,scr/stream/movie/tt1.json'
     );
-    settingsStore.audio = 'pt';
-    settingsStore.subtitle = 'pt';
   });
 
   it('drops the low-quality releases Torrentio still returns', async () => {
@@ -67,11 +64,11 @@ describe('torrentio api', () => {
       new Response(JSON.stringify({ streams: [cam, good, screener] }))
     );
 
-    expect(await getMovieStreams('tt1')).toEqual([good]);
+    expect(await getMovieStreams('tt1', PT)).toEqual([good]);
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(JSON.stringify({ streams: [cam, screener] }))
     );
-    expect(await getSeriesStreams('tt1', 1, 1)).toEqual([]);
+    expect(await getSeriesStreams('tt1', 1, 1, PT)).toEqual([]);
   });
 
   describe('getSeriesStreams', () => {
@@ -92,7 +89,7 @@ describe('torrentio api', () => {
         json: () => Promise.resolve(mockResponse)
       });
 
-      const streams = await getSeriesStreams('tt123456', 1, 1);
+      const streams = await getSeriesStreams('tt123456', 1, 1, PT);
       expect(fetch).toHaveBeenCalledWith(
         'https://torrentio.strem.fun/language=portuguese|qualityfilter=threed,cam,scr/stream/series/tt123456:1:1.json',
         expect.objectContaining({ signal: expect.anything() })
@@ -103,12 +100,12 @@ describe('torrentio api', () => {
 
     it('rejects when the service answers with an error', async () => {
       (fetch as any).mockResolvedValue({ ok: false, statusText: 'Bad Gateway' });
-      await expect(getSeriesStreams('tt123456', 1, 1)).rejects.toThrow('Bad Gateway');
+      await expect(getSeriesStreams('tt123456', 1, 1, PT)).rejects.toThrow('Bad Gateway');
     });
 
     it('rejects when the service cannot be reached', async () => {
       (fetch as any).mockRejectedValue(new Error('Network error'));
-      await expect(getSeriesStreams('tt123456', 1, 1)).rejects.toThrow('Network error');
+      await expect(getSeriesStreams('tt123456', 1, 1, PT)).rejects.toThrow('Network error');
     });
   });
 
@@ -130,7 +127,7 @@ describe('torrentio api', () => {
         json: () => Promise.resolve(mockResponse)
       });
 
-      const streams = await getMovieStreams('tt123456');
+      const streams = await getMovieStreams('tt123456', PT);
       expect(fetch).toHaveBeenCalledWith(
         'https://torrentio.strem.fun/language=portuguese|qualityfilter=threed,cam,scr/stream/movie/tt123456.json',
         expect.objectContaining({ signal: expect.anything() })
@@ -141,12 +138,12 @@ describe('torrentio api', () => {
 
     it('rejects when the service answers with an error', async () => {
       (fetch as any).mockResolvedValue({ ok: false, statusText: 'Bad Gateway' });
-      await expect(getMovieStreams('tt123456')).rejects.toThrow('Bad Gateway');
+      await expect(getMovieStreams('tt123456', PT)).rejects.toThrow('Bad Gateway');
     });
 
     it('rejects when the service cannot be reached', async () => {
       (fetch as any).mockRejectedValue(new Error('Network error'));
-      await expect(getMovieStreams('tt123456')).rejects.toThrow('Network error');
+      await expect(getMovieStreams('tt123456', PT)).rejects.toThrow('Network error');
     });
   });
 });

@@ -63,6 +63,9 @@
   <div
     class="group-hover:border-green group-focus-visible:border-green pointer-events-none absolute -top-[1px] -left-[1px] z-40 h-2 w-2 border-t-2 border-l-2 border-transparent transition-colors duration-300"
   ></div>
+  <div
+    class="group-hover:border-green group-focus-visible:border-green pointer-events-none absolute -right-[1px] -bottom-[1px] z-40 h-2 w-2 border-r-2 border-b-2 border-transparent transition-colors duration-300"
+  ></div>
 
   <div class="relative h-[270px] w-full overflow-hidden">
     <img
@@ -78,43 +81,6 @@
       <div
         class="pointer-events-none absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
       ></div>
-    {/if}
-    {#if watchedStore.has(media.id)}
-      <div
-        class="text-green pointer-events-none absolute top-2.5 right-2.5 z-20 [filter:drop-shadow(0_0_8px_rgba(54,211,83,0.9))] transition-transform duration-300 will-change-transform {fullEffect
-          ? 'group-hover:scale-110'
-          : ''}"
-        title="Assistido"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
-      </div>
-    {/if}
-    {#if episodeLabel}
-      <span
-        aria-hidden="true"
-        data-testid="media-card-episode"
-        class="{upNext
-          ? 'border-green bg-green text-dark'
-          : 'border-primary/60 bg-dark/85 text-main'} pointer-events-none absolute bottom-3 left-2 z-20 flex items-center gap-1.5 rounded-sm border px-1.5 py-0.5 font-mono text-xs font-bold tracking-wider backdrop-blur-sm"
-      >
-        {#if upNext}
-          <span class="font-cyber text-[10px] tracking-widest uppercase">Próximo</span>
-        {/if}
-        {episodeLabel}
-      </span>
     {/if}
     {#if shownProgress}
       {#if progress}
@@ -132,9 +98,7 @@
     {/if}
   </div>
 
-  <div
-    class="bg-surface/80 border-primary/20 group-hover:border-primary relative h-[45px] border-t p-3 transition-colors duration-300"
-  >
+  <div class="bg-surface/80 relative h-[45px] p-3">
     <div class="text-main font-cyber w-full truncate text-center text-sm tracking-wider uppercase">
       {media.title}
     </div>

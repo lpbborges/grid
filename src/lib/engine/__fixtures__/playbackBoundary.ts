@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Stream } from '$lib/api/torrentio';
 import type { ExternalSubtitleEntry } from '$lib/types';
 import { createFakeRqbit, type FakeRqbit, type FakeTorrentFile } from './fakeRqbit';
-import type { NativeTrack } from '$lib/composables/useMpvBackend.svelte';
+import type { NativeTrack } from '$lib/types';
 import type { Chapter } from '$lib/types';
 
 /** Torrentio asked the way the app must: in Portuguese and without recordings, screeners or 3D. */

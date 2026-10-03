@@ -48,7 +48,7 @@ Grid uses `rqbit` as a streaming engine sidecar. For native playback on Linux an
 
 ## Data sources and privacy
 
-Grid talks directly to Cinemeta and a YTS mirror for metadata, Wikidata to search by Brazilian or original titles (sending the search text), Torrentio for stream sources, and OpenSubtitles for external subtitles (sending the video file name and size). Metadata is sent to Google Translate or MyMemory if the system language is not English. The streaming engine announces streams to trackers and the DHT. The trailer button opens the trailer on YouTube in the system browser; the app itself never contacts YouTube.
+Grid talks directly to Cinemeta and a YTS mirror for metadata, Wikidata to search by Brazilian or original titles (sending the search text), Torrentio for stream sources, and OpenSubtitles for external subtitles (sending the video file name and size). Titles, synopses and episode names are sent to Google Translate or MyMemory if the system language is not English. The streaming engine announces streams to trackers and the DHT. The trailer button opens the trailer on YouTube in the system browser; the app itself never contacts YouTube.
 
 ## Troubleshooting
 

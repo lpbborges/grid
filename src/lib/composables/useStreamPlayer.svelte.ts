@@ -1,7 +1,7 @@
 import { logger } from '$lib/logger';
 import { prepareStream, finalizeStream } from '$lib/engine/orchestrator';
 import { EngineStartError } from '$lib/engine/torrent';
-import type { SubtitleTrack } from '$lib/api/subtitles';
+import type { SubtitleTrack } from '$lib/types';
 import type { CacheEntry } from '$lib/engine/cache';
 import { playerState } from '$lib/stores.svelte';
 import type { LoadingStage } from '$lib/utils/loadingStage';

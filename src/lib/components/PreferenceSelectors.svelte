@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getLanguageName } from '$lib/api/subtitles';
+  import { getLanguageName } from '$lib/utils/subtitleLanguage';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { isAudioPreference } from '$lib/types';
 

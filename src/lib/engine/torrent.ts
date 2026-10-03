@@ -1,10 +1,17 @@
 import { logger } from '$lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import type { TorrentEngineDetails } from '../types';
-import { getLanguageName, preferredLanguageRank } from '../api/subtitles';
+import type { SubtitleTrack } from '../types';
+import {
+  getLanguageName,
+  preferredLanguageRank,
+  subtitleFileLanguage
+} from '../utils/subtitleLanguage';
 import { FetchTimeoutError, fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { hasExtension } from '../utils/fileExtension';
 import { isRecord } from '../utils/isRecord';
+import { fulfilledValues } from '../utils/settled';
+import { vttObjectUrl } from '../utils/vttUrl';
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm'];
 const SUBTITLE_EXTENSIONS = ['.srt', '.vtt'];
@@ -13,7 +20,7 @@ let ENGINE_URL = 'http://127.0.0.1:3030';
 let STREAM_URL = ENGINE_URL;
 
 export function isValidInfoHash(value: string): boolean {
-  return /^[a-f0-9]{40}$/i.test(value) || /^[a-f0-9]{64}$/i.test(value);
+  return /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(value);
 }
 
 export function isValidFileIdx(value: number): boolean {
@@ -48,6 +55,8 @@ function isHttpUrl(url: string | undefined): url is string {
   return !!url?.startsWith('http');
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<void> {
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -58,7 +67,7 @@ export async function waitForEngine(maxRetries = 60, delayMs = 500): Promise<voi
     } catch {
       // Ignored, wait and retry
     }
-    await new Promise((r) => setTimeout(r, delayMs));
+    await sleep(delayMs);
   }
   throw new Error('Torrent engine failed to become ready in time');
 }
@@ -104,7 +113,7 @@ export async function waitForTorrentLive(
     if (status?.state === 'error') {
       throw new Error(`Torrent entered an error state: ${status.error ?? 'unknown error'}`);
     }
-    await new Promise((r) => setTimeout(r, delayMs));
+    await sleep(delayMs);
   }
   throw new Error('Torrent failed to become ready in time');
 }
@@ -124,29 +133,25 @@ export async function getLoadedTorrentInfoHashes(): Promise<string[]> {
   }
 }
 
-export async function forgetTorrent(infoHash: string): Promise<void> {
+async function postTorrentAction(infoHash: string, action: 'forget' | 'delete'): Promise<void> {
   if (!isValidInfoHash(infoHash)) {
-    logger.warn(`Refusing to forget an invalid info hash: ${infoHash}`);
+    logger.warn(`Refusing to ${action} an invalid info hash: ${infoHash}`);
     return;
   }
   try {
-    await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/forget`, { method: 'POST' }, 8000);
+    await fetchWithTimeout(
+      `${ENGINE_URL}/torrents/${infoHash}/${action}`,
+      { method: 'POST' },
+      8000
+    );
   } catch (error) {
-    logger.warn('Failed to forget torrent:', error);
+    logger.warn(`Failed to ${action} torrent:`, error);
   }
 }
 
-export async function deleteTorrent(infoHash: string): Promise<void> {
-  if (!isValidInfoHash(infoHash)) {
-    logger.warn(`Refusing to delete an invalid info hash: ${infoHash}`);
-    return;
-  }
-  try {
-    await fetchWithTimeout(`${ENGINE_URL}/torrents/${infoHash}/delete`, { method: 'POST' }, 8000);
-  } catch (error) {
-    logger.warn('Failed to delete torrent:', error);
-  }
-}
+export const forgetTorrent = (infoHash: string) => postTorrentAction(infoHash, 'forget');
+
+export const deleteTorrent = (infoHash: string) => postTorrentAction(infoHash, 'delete');
 
 // rqbit tries each source only once while resolving a magnet, so a source that
 // accepts the connection and never answers hangs the add forever. A new add
@@ -307,39 +312,14 @@ export function getStreamUrl(
   return `${STREAM_URL}/torrents/${infoHash}/stream/${fileIdx}${query}`;
 }
 
-// fetch_torrent_subtitle (src-tauri/src/lib.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
+// fetch_torrent_subtitle (src-tauri/src/subtitle_fetch.rs) is rate limited (SUBTITLE_RATE_LIMIT_BURST).
 const MAX_TORRENT_SUBTITLE_FETCHES = 25;
-
-const BRAZILIAN_MARKERS = new Set(['br', 'ptbr', 'pob', 'pb', 'brazil', 'brazilian', 'brasil']);
-const PORTUGUESE_NAMES = new Set(['pt', 'por', 'portuguese']);
-const SUBTITLE_TAGS = new Set(['forced', 'sdh', 'cc', 'full', 'default']);
-
-function subtitleFileLanguage(path: string): string {
-  const baseName = (path.split(/[/\\]/).pop() || path).replace(/\.[^.]+$/, '');
-  const tokens = baseName.split(/[^a-zA-Z0-9]+/).filter(Boolean);
-  while (tokens.length > 1 && SUBTITLE_TAGS.has(tokens[tokens.length - 1].toLowerCase())) {
-    tokens.pop();
-  }
-  const code = tokens[tokens.length - 1] ?? '';
-  const last = code.toLowerCase();
-  const previous = tokens[tokens.length - 2]?.toLowerCase() ?? '';
-  if (
-    BRAZILIAN_MARKERS.has(last) ||
-    (PORTUGUESE_NAMES.has(last) && BRAZILIAN_MARKERS.has(previous))
-  ) {
-    return 'pob';
-  }
-  if (getLanguageName(last, true) || (tokens.length > 1 && /^[a-z]{2,3}$/.test(last))) return code;
-  return 'Unknown';
-}
 
 export async function getTorrentSubtitles(
   infoHash: string,
   files: { name: string; length: number }[],
   preference?: string
-): Promise<
-  { id: string; url: string; lang: string; label: string; group: 'Embedded' | 'Extra' }[]
-> {
+): Promise<SubtitleTrack[]> {
   const candidates: {
     idx: number;
     lang: string;
@@ -364,12 +344,10 @@ export async function getTorrentSubtitles(
         infoHash,
         fileIdx: idx
       });
-      const blob = new Blob([vtt], { type: 'text/vtt' });
-      const url = URL.createObjectURL(blob);
 
       return {
         id: `torrent-${idx}`,
-        url,
+        url: vttObjectUrl(vtt),
         lang,
         label: lang === 'Unknown' ? 'Desconhecido' : langName || lang,
         group: 'Embedded' as const
@@ -377,25 +355,7 @@ export async function getTorrentSubtitles(
     })
   );
 
-  return results
-    .filter(
-      (
-        result
-      ): result is PromiseFulfilledResult<{
-        id: string;
-        url: string;
-        lang: string;
-        label: string;
-        group: 'Embedded';
-      }> => {
-        if (result.status === 'rejected') {
-          logger.warn('Failed to fetch a torrent subtitle:', result.reason);
-          return false;
-        }
-        return true;
-      }
-    )
-    .map((result) => result.value);
+  return fulfilledValues(results, 'Failed to fetch a torrent subtitle:');
 }
 
 export interface TorrentStats {

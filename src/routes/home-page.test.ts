@@ -336,31 +336,10 @@ describe('Home page continue watching', () => {
     render(HomePage, { data: popularDataWith([], []) });
     await act(async () => {});
 
-    expect(screen.getByText('T2:E5')).toBeTruthy();
     expect(screen.getAllByTestId('media-card').map((c) => c.getAttribute('href'))).toEqual([
       '/series/tt2?s=2&e=5',
       '/movie/tt1'
     ]);
-  });
-
-  it('marks a title advanced to its next episode as up next', async () => {
-    progressStore.progress = {
-      'tt2-S3E1': { time: 0, duration: 100, updatedAt: 2, meta: seriesMeta, upNext: true }
-    };
-    render(HomePage, { data: popularDataWith([], []) });
-    await act(async () => {});
-
-    expect(screen.getByTestId('media-card-episode').textContent).toContain('Próximo');
-  });
-
-  it('does not mark an episode closed at the very start as up next', async () => {
-    progressStore.progress = {
-      'tt2-S3E1': { time: 0, duration: 100, updatedAt: 2, meta: seriesMeta }
-    };
-    render(HomePage, { data: popularDataWith([], []) });
-    await act(async () => {});
-
-    expect(screen.getByTestId('media-card-episode').textContent).not.toContain('Próximo');
   });
 
   it('skips only the title whose metadata failed and keeps the popular rows', async () => {

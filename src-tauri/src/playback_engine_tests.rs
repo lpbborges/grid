@@ -244,7 +244,7 @@ async fn start_swarm(fixture: &str, peers: EnginePeers) -> Swarm {
         .spawn()
         .expect("seeder starts");
     let engine = rqbit(&log_path(&temp, "engine"))
-        .envs(crate::engine_environment())
+        .envs(crate::engine_lifecycle::engine_environment())
         .env("RQBIT_TRACKERS_FILENAME", &trackers_file)
         .arg("--disable-dht-persistence")
         .arg("--http-api-listen-addr")

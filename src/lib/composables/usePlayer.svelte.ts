@@ -1,6 +1,7 @@
 import { untrack } from 'svelte';
 import { useStreamPlayer } from '$lib/composables/useStreamPlayer.svelte';
 import { getTorrentStats } from '$lib/engine/torrent';
+import { fileDownloadedBytes } from '$lib/engine/torrentStats';
 import { playbackMode } from '$lib/engine/platform';
 import { useDomBackend } from '$lib/composables/useDomBackend.svelte';
 import { useMpvBackend } from '$lib/composables/useMpvBackend.svelte';
@@ -44,6 +45,7 @@ export function usePlayer(
   let advancing = $state(false);
   let advanceGeneration = 0;
   let lastDuration = 0;
+  let lastWrittenSecond = -1;
 
   $effect(() => {
     if (!streamPlayer.isPlaying || !streamPlayer.infoHash) return;
@@ -53,16 +55,7 @@ export function usePlayer(
       const stats = await getTorrentStats(streamPlayer.infoHash);
       if (cancelled) return;
       if (stats && streamPlayer.totalBytes > 0) {
-        let downloaded = 0;
-        if (
-          streamPlayer.fileIdx !== undefined &&
-          stats.file_progress &&
-          stats.file_progress[streamPlayer.fileIdx] !== undefined
-        ) {
-          downloaded = stats.file_progress[streamPlayer.fileIdx];
-        } else if (stats.live?.snapshot) {
-          downloaded = stats.live.snapshot.downloaded_and_checked_bytes || 0;
-        }
+        const downloaded = fileDownloadedBytes(stats, streamPlayer.fileIdx) ?? 0;
         downloadPercent = Math.min((downloaded / streamPlayer.totalBytes) * 100, 100);
       }
       timer = setTimeout(poll, 1000);
@@ -78,6 +71,7 @@ export function usePlayer(
     error = '';
     watchedTriggered = false;
     lastDuration = 0;
+    lastWrittenSecond = -1;
     downloadPercent = 0;
     const ok = await streamPlayer.play(magnet, playOptions);
     // A play cancelled by closing the player fails without an error.
@@ -127,8 +121,6 @@ export function usePlayer(
   async function release() {
     await Promise.all([backend.stop(), streamPlayer.stop()]);
   }
-
-  // The single progress writer. Both backends used to keep their own.
 
   async function stop() {
     advanceGeneration++;
@@ -185,6 +177,9 @@ export function usePlayer(
     if (backend.currentTime / backend.duration > 0.95) markWatched();
     const { currentTime, duration } = backend;
     lastDuration = duration;
+    const second = Math.floor(currentTime);
+    if (second === lastWrittenSecond) return;
+    lastWrittenSecond = second;
     untrack(() =>
       progressStore.update(
         request.mediaId,

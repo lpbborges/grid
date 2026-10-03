@@ -131,4 +131,54 @@ describe('hoverPreview', () => {
     vi.advanceTimersByTime(HOVER_DELAY_MS);
     expect(hoverPreview.active).toMatchObject({ el: card });
   });
+  describe('when scrolling ends with the pointer still over a card', () => {
+    const hovered = (el: HTMLElement) =>
+      vi.spyOn(el, 'matches').mockImplementation((selector) => selector === ':hover');
+
+    it('opens it after the usual delay if the pointer arrived while scrolling', () => {
+      hovered(card);
+      hoverPreview.noteScroll();
+      hoverPreview.request(card, movie, 'movie');
+
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+      expect(hoverPreview.active).toBeNull();
+
+      vi.advanceTimersByTime(SCROLL_QUIET_MS + 5);
+      expect(hoverPreview.active).toMatchObject({ el: card });
+    });
+
+    it('reopens the card an open preview was closed on by the scroll', () => {
+      hovered(card);
+      hoverPreview.request(card, movie, 'movie');
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+      hoverPreview.noteScroll();
+      expect(hoverPreview.active).toBeNull();
+
+      vi.advanceTimersByTime(SCROLL_QUIET_MS + HOVER_DELAY_MS + 5);
+
+      expect(hoverPreview.active).toMatchObject({ el: card });
+    });
+
+    it('stays closed when the pointer is no longer over the card', () => {
+      hoverPreview.request(card, movie, 'movie');
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+      hoverPreview.noteScroll();
+
+      vi.advanceTimersByTime(SCROLL_QUIET_MS + HOVER_DELAY_MS + 5);
+
+      expect(hoverPreview.active).toBeNull();
+    });
+
+    it('stays closed when the pointer left the card meanwhile', () => {
+      hovered(card);
+      hoverPreview.request(card, movie, 'movie');
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+      hoverPreview.noteScroll();
+      hoverPreview.leave(card);
+
+      vi.advanceTimersByTime(SCROLL_QUIET_MS + HOVER_DELAY_MS + 5);
+
+      expect(hoverPreview.active).toBeNull();
+    });
+  });
 });

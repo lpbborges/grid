@@ -110,7 +110,7 @@ pub fn pick_eviction_candidates(
     let mut evicted = Vec::new();
 
     for entry in candidates {
-        if usage + needed_bytes <= limit_bytes {
+        if usage.saturating_add(needed_bytes) <= limit_bytes {
             break;
         }
         usage -= entry.downloaded_bytes;
@@ -154,6 +154,12 @@ pub fn remove_entry_files(downloads_dir: &Path, entry: &CacheEntry) {
     if top != "manifest.json" {
         remove_path_best_effort(&downloads_dir.join(top));
     }
+}
+
+/// A non-empty relative path that never leaves the folder it is joined to.
+pub fn is_relative_path_inside(name: &str) -> bool {
+    let mut components = Path::new(name).components().peekable();
+    components.peek().is_some() && components.all(|c| matches!(c, std::path::Component::Normal(_)))
 }
 
 pub fn remove_path_best_effort(path: &Path) {
@@ -299,6 +305,15 @@ mod tests {
         upsert_entry(&mut manifest, entry("current", 100, 1));
         let candidates = pick_eviction_candidates(&manifest, "current", 5000, 1000);
         assert!(!candidates.contains(&"current".to_string()));
+    }
+
+    #[test]
+    fn pick_eviction_candidates_copes_with_a_need_too_large_to_add() {
+        let mut manifest = Manifest { entries: vec![] };
+        upsert_entry(&mut manifest, entry("oldest", 400, 1));
+        upsert_entry(&mut manifest, entry("newest", 400, 2));
+        let candidates = pick_eviction_candidates(&manifest, "new", u64::MAX, 1000);
+        assert_eq!(candidates, vec!["oldest".to_string(), "newest".to_string()]);
     }
 
     #[test]

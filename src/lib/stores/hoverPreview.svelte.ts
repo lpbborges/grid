@@ -32,20 +32,41 @@ class HoverPreviewStore {
   #openTimer: ReturnType<typeof setTimeout> | undefined;
   #closeTimer: ReturnType<typeof setTimeout> | undefined;
   #scrollingUntil = 0;
+  #over: { el: HTMLElement; media: CardMedia; type: MediaType; row: PreviewRowContext } | null =
+    null;
+  #rearmTimer: ReturnType<typeof setTimeout> | undefined;
+
+  #enabled(): boolean {
+    return settingsStore.hoverPreview && !playerState.isPlaying;
+  }
 
   #allowed(): boolean {
-    return (
-      settingsStore.hoverPreview && !playerState.isPlaying && Date.now() >= this.#scrollingUntil
-    );
+    return this.#enabled() && Date.now() >= this.#scrollingUntil;
+  }
+
+  /** Asks again for the card the pointer is still on once scrolling goes quiet. */
+  #rearm() {
+    clearTimeout(this.#rearmTimer);
+    const over = this.#over;
+    if (!over) return;
+    const wait = Math.max(0, this.#scrollingUntil - Date.now()) + 1;
+    this.#rearmTimer = setTimeout(() => {
+      if (this.#over !== over || !over.el.matches(':hover')) return;
+      this.request(over.el, over.media, over.type, over.row);
+    }, wait);
   }
 
   request(el: HTMLElement, media: CardMedia, type: MediaType, row: PreviewRowContext = {}) {
     this.keep();
     clearTimeout(this.#openTimer);
     this.#pending = null;
+    this.#over = { el, media, type, row };
     if (this.active?.el === el) return;
     this.active = null;
-    if (!this.#allowed()) return;
+    if (!this.#allowed()) {
+      if (this.#enabled()) this.#rearm();
+      return;
+    }
     this.#pending = { el, media, type, ...row };
     this.#openTimer = setTimeout(() => {
       const pending = this.#pending;
@@ -56,6 +77,7 @@ class HoverPreviewStore {
 
   /** The pointer or focus left `el`; an open preview closes after a short grace. */
   leave(el: HTMLElement) {
+    if (this.#over?.el === el) this.#over = null;
     if (this.#pending?.el === el) {
       clearTimeout(this.#openTimer);
       this.#pending = null;
@@ -87,6 +109,7 @@ class HoverPreviewStore {
   noteScroll() {
     this.close();
     this.#scrollingUntil = Date.now() + SCROLL_QUIET_MS;
+    if (this.#enabled()) this.#rearm();
   }
 }
 

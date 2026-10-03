@@ -109,3 +109,40 @@ describe('settingsStore.hoverPreview', () => {
     expect(localStorage.getItem('grid-hover-preview')).toBe('false');
   });
 });
+
+describe('settingsStore stored preferences', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('loads valid stored preferences', async () => {
+    localStorage.setItem('grid-subtitle', 'en');
+    localStorage.setItem('grid-quality', '720p');
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    expect(settingsStore.subtitle).toBe('en');
+    expect(settingsStore.quality).toBe('720p');
+  });
+
+  it('ignores a stored subtitle or quality that is not an offered option', async () => {
+    localStorage.setItem('grid-subtitle', 'klingon');
+    localStorage.setItem('grid-quality', '8k');
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    expect(settingsStore.subtitle).toBe('pt');
+    expect(settingsStore.quality).toBe('1080p');
+  });
+
+  it('keeps the defaults when reading storage throws', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    expect(settingsStore.audio).toBe('pt');
+    expect(settingsStore.subtitle).toBe('pt');
+    expect(settingsStore.quality).toBe('1080p');
+    expect(settingsStore.hoverPreview).toBe(true);
+  });
+});

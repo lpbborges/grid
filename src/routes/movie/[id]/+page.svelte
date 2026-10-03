@@ -3,7 +3,8 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { logger } from '$lib/logger';
   import { translateMediaInfo } from '$lib/api/translate';
-  import { buildMagnet, getMovieStreams, parseSeedCount } from '$lib/api/torrentio';
+  import { buildMagnet, getMovieStreams } from '$lib/api/torrentio';
+  import { streamOption, type StreamOption } from '$lib/engine/streamOption';
   import Player from '$lib/components/Player.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
@@ -89,23 +90,7 @@
     }
   });
 
-  interface CombinedStreamOption {
-    hash: string;
-    quality: string;
-    type: string;
-    seeds?: number;
-    peers?: number;
-    url?: string;
-    rawStream?: {
-      title?: string;
-      name?: string;
-      fileIdx?: number;
-      infoHash?: string;
-      sources?: string[];
-    };
-  }
-
-  let combinedTorrents = $state<CombinedStreamOption[]>([]);
+  let combinedTorrents = $state<StreamOption[]>([]);
 
   $effect(() => {
     if (movie && movie.id && untrack(() => combinedTorrents.length) === 0) {
@@ -116,41 +101,21 @@
 
   function loadSources(target: Movie) {
     const requestedId = target.id;
-    getMovieStreams(requestedId.toString())
+    getMovieStreams(requestedId.toString(), {
+      audio: settingsStore.audio,
+      subtitle: settingsStore.subtitle
+    })
       .then((streams) => {
         if (movie?.id !== requestedId) return;
-        const torrentioOptions = streams
-          .map((s) => {
-            const qualityMatch = s.name?.match(/(4k|1080p|720p|480p)/i);
-            const quality = qualityMatch ? qualityMatch[1].toLowerCase() : 'unknown';
-
-            let type = 'Torrentio';
-            const titleLower = (s.title || '').toLowerCase();
-            if (
-              titleLower.includes('dublado') ||
-              titleLower.includes('pt-br') ||
-              titleLower.includes('🇧🇷')
-            )
-              type += ' (PT)';
-            else if (titleLower.includes('dual')) type += ' (Dual)';
-
-            return {
-              hash: s.infoHash ?? '',
-              quality,
-              type,
-              seeds: parseSeedCount(s.title),
-              rawStream: s
-            };
-          })
-          .filter((t) => t.hash);
+        const torrentioOptions = streams.map(streamOption).filter((t) => t.hash);
 
         const existingHashes: Record<string, boolean> = {};
         for (const t of combinedTorrents) if (t.hash) existingHashes[t.hash] = true;
         let changed = false;
         for (const opt of torrentioOptions) {
-          if (opt.hash && !existingHashes[opt.hash]) {
+          if (!existingHashes[opt.hash]) {
             combinedTorrents.push(opt);
-            if (opt.hash) existingHashes[opt.hash] = true;
+            existingHashes[opt.hash] = true;
             changed = true;
           }
         }

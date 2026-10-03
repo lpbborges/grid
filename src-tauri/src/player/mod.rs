@@ -19,7 +19,7 @@ pub mod surface_windows;
 
 // macOS has no libmpv (it keeps the `<video>` element), but the command list
 // is the frontend's contract and stays identical on every platform. An
-// uninhabited stand-in lets `lib.rs` name the controller everywhere without a
+// uninhabited stand-in lets `player_commands.rs` name the controller everywhere without a
 // cfg per command; nothing can ever construct one.
 #[cfg(not(any(target_os = "linux", windows)))]
 mod unavailable;
@@ -32,9 +32,9 @@ pub use unavailable::Controller;
 #[cfg(any(target_os = "linux", windows))]
 use controller::VideoOutput;
 
-/// The app's single player, created on the first playback (spec L5).
+/// The app's single player, created on the first playback.
 ///
-/// A creation failure is kept, not retried: with no `<video>` fallback (L3),
+/// A creation failure is kept, not retried: with no `<video>` fallback,
 /// every later Play shows the same error instead of re-running GTK surgery.
 /// Empty where there is no libmpv: every call then reports it unavailable.
 #[derive(Default)]
