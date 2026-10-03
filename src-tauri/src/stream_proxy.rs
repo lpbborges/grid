@@ -19,7 +19,7 @@ const PROBE_REQUEST_TIMEOUT: std::time::Duration = if cfg!(test) {
 } else {
     std::time::Duration::from_secs(30)
 };
-/// How much of each end of a stream the proxy asks the engine for up front.
+/// How much of the end of a stream the proxy asks the engine for up front.
 /// Players read the Matroska cues or the MP4 `moov` away from the playhead, and
 /// the engine only prioritises pieces somebody is reading, so without this they
 /// are fetched last and playback waits on them.
@@ -159,8 +159,7 @@ async fn forward(
     let (info_hash, file_idx) = parse_stream_path(&request.path).ok_or(StatusCode::NOT_FOUND)?;
     let port = engine_port().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let url = engine_stream_url(port, info_hash, file_idx);
-    if false
-        && request.method == Method::GET
+    if request.method == Method::GET
         && cache
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -182,32 +181,24 @@ async fn forward(
     Ok((response, patch))
 }
 
-/// Opens reads on both ends of a stream so the engine queues those pieces
-/// first. The responses are discarded; dropping the connection ends the read.
+/// Opens a read on the tail of a stream so the engine queues those pieces
+/// first. The head needs no help: the player reads it straight away. The
+/// response is discarded; dropping the connection ends the read.
 async fn warm_stream(client: reqwest::Client, url: String) {
     let Some(total) = stream_length(&client, &url).await else {
         return;
     };
-    let tail_start = total.saturating_sub(WARM_BYTES);
-    let head = fetch_range(
-        &client,
-        &url,
-        0,
-        WARM_BYTES.min(total),
-        WARM_REQUEST_TIMEOUT,
-    );
-    if tail_start == 0 {
-        let _ = head.await;
+    if total <= WARM_BYTES * 2 {
         return;
     }
-    let tail = fetch_range(
+    let _ = fetch_range(
         &client,
         &url,
-        tail_start,
-        total - tail_start,
+        total - WARM_BYTES,
+        WARM_BYTES,
         WARM_REQUEST_TIMEOUT,
-    );
-    let _ = futures_util::future::join(head, tail).await;
+    )
+    .await;
 }
 
 async fn stream_length(client: &reqwest::Client, url: &str) -> Option<u64> {
@@ -633,8 +624,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
-    async fn asks_the_engine_for_the_head_and_tail_of_a_stream_it_has_not_seen_before() {
+    async fn asks_the_engine_for_the_tail_of_a_stream_it_has_not_seen_before() {
         let body: Vec<u8> = (0..50_000u32).map(|i| (i % 256) as u8).collect();
         let (engine, _, recorded) = spawn_recording_engine(body).await;
         let proxy = spawn_proxy(engine).await;
@@ -649,8 +639,7 @@ mod tests {
                 .iter()
                 .filter_map(|(_, r)| r.clone())
                 .collect();
-            ranges.contains(&format!("0-{}", WARM_BYTES - 1))
-                && ranges.contains(&format!("{}-49999", 50_000 - WARM_BYTES))
+            ranges.contains(&format!("{}-49999", 50_000 - WARM_BYTES))
         };
         for _ in 0..40 {
             if warmed(&recorded) {
