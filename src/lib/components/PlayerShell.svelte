@@ -2,6 +2,9 @@
   import { playerState } from '$lib/stores.svelte';
   import PlayerControls from './PlayerControls.svelte';
   import NextEpisodeCard from './NextEpisodeCard.svelte';
+  import DecodeText from './DecodeText.svelte';
+  import HudProgress from './HudProgress.svelte';
+  import HudSpinner from './HudSpinner.svelte';
   import { UP_NEXT_COUNTDOWN_SECONDS } from '$lib/utils/upNext';
   import { findIntro } from '$lib/utils/intro';
   import { groupByLanguage } from '$lib/composables/useSubtitleSelection.svelte';
@@ -301,38 +304,29 @@
           />
         </svg>
       {:else}
-        <div class="relative mb-6 h-16 w-16" data-testid="loading-spinner">
-          <div
-            class="border-t-green border-b-primary absolute inset-0 animate-spin rounded-full border-4 border-transparent"
-          ></div>
-          <div
-            class="border-l-primary border-r-green absolute inset-2 animate-[spin_1.5s_linear_reverse] rounded-full border-4 border-transparent"
-          ></div>
+        <div class="mb-6 flex h-16 w-16 items-center justify-center" data-testid="loading-spinner">
+          <HudSpinner />
         </div>
       {/if}
       {#if backend.error || !backend.hasStarted}
         <div
           class="font-cyber mb-2 text-xl tracking-widest uppercase {backend.error
             ? 'text-error [text-shadow:0_0_10px_rgba(239,68,68,0.8)]'
-            : 'text-green [text-shadow:0_0_10px_rgba(54,211,83,0.8)]'}"
+            : 'text-green [text-shadow:0_0_10px_var(--glow-green)]'}"
         >
-          {backend.error || (loadingStage ? loadingStageLabel(loadingStage) : 'Carregando...')}
+          {#if backend.error}
+            {backend.error}
+          {:else}
+            <DecodeText text={loadingStage ? loadingStageLabel(loadingStage) : 'Carregando...'} />
+          {/if}
         </div>
       {/if}
       {#if !backend.error && !backend.hasStarted && loadingStage}
-        <div
-          class="bg-surface mb-3 h-1.5 w-64 overflow-hidden rounded-full"
-          role="progressbar"
-          aria-label="Progresso do carregamento"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-valuenow={loadingStageProgress(loadingStage)}
-        >
-          <div
-            class="bg-green h-full rounded-full transition-[width] duration-700 ease-out"
-            style="width: {loadingStageProgress(loadingStage)}%"
-          ></div>
-        </div>
+        <HudProgress
+          class="mb-3"
+          value={loadingStageProgress(loadingStage)}
+          label="Progresso do carregamento"
+        />
       {/if}
       {#if !backend.error && shownPercent > 0}
         <div class="text-main font-mono text-sm">
