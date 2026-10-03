@@ -3,13 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRawSnippet } from 'svelte';
 import { playerState, searchQuery } from '$lib/stores.svelte';
 
-const { pageState, gotoMock, navigation } = vi.hoisted(() => ({
+const { pageState, navigatingState, gotoMock, navigation } = vi.hoisted(() => ({
   pageState: { url: new URL('http://localhost/') },
+  navigatingState: { to: null as { route: { id: string | null }; url: URL } | null },
   gotoMock: vi.fn(),
   navigation: { callbacks: [] as ((nav: unknown) => void)[] }
 }));
 
-vi.mock('$app/state', () => ({ page: pageState }));
+vi.mock('$app/state', () => ({ page: pageState, navigating: navigatingState }));
 vi.mock('$app/navigation', () => ({
   goto: gotoMock,
   afterNavigate: (callback: (nav: unknown) => void) => {
@@ -45,8 +46,52 @@ describe('Layout', () => {
     searchQuery.value = '';
     playerState.isPlaying = false;
     pageState.url = new URL('http://localhost/');
+    navigatingState.to = null;
     gotoMock.mockReset();
     navigation.callbacks = [];
+  });
+
+  describe('while a details page loads', () => {
+    const content = createRawSnippet(() => ({
+      render: () => '<div data-testid="page-content">conteúdo</div>'
+    }));
+    const navigateTo = (routeId: string, path: string) => {
+      navigatingState.to = { route: { id: routeId }, url: new URL(`http://localhost${path}`) };
+    };
+
+    it.each([
+      ['/movie/[id]', '/movie/tt1'],
+      ['/series/[id]', '/series/tt1']
+    ])('shows a hero skeleton on the way to %s', (routeId, path) => {
+      navigateTo(routeId, path);
+      render(Layout, { children: content });
+
+      expect(screen.getByTestId('skeleton')).toHaveAttribute('data-variant', 'hero');
+      expect(screen.getByRole('status')).toHaveTextContent('Carregando...');
+      expect(screen.getByTestId('page-content')).not.toBeVisible();
+    });
+
+    it('shows the page itself when no navigation is pending', () => {
+      render(Layout, { children: content });
+
+      expect(screen.queryByTestId('skeleton')).toBeNull();
+      expect(screen.getByTestId('page-content')).toBeVisible();
+    });
+
+    it('leaves other destinations alone', () => {
+      navigateTo('/', '/');
+      render(Layout, { children: content });
+
+      expect(screen.queryByTestId('skeleton')).toBeNull();
+    });
+
+    it('skips the skeleton when playback starts straight away', () => {
+      navigateTo('/movie/[id]', '/movie/tt1?play=1');
+      render(Layout, { children: content });
+
+      expect(screen.queryByTestId('skeleton')).toBeNull();
+      expect(screen.getByTestId('page-content')).toBeVisible();
+    });
   });
 
   it('shows the header with its navigation', () => {
