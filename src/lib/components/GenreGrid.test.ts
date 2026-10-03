@@ -37,6 +37,16 @@ describe('GenreGrid', () => {
     getPageMock.mockReset();
   });
 
+  it('announces loading once while showing poster placeholders', () => {
+    getPageMock.mockReturnValue(new Promise(() => {}));
+
+    render(GenreGrid, { type: 'movie', genre: 'Action', onclear: vi.fn() });
+
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('Carregando...');
+    expect(screen.getAllByTestId('skeleton-shape')).toHaveLength(12);
+  });
+
   it('shows the first page of the genre, released titles only', async () => {
     getPageMock.mockResolvedValue(page([title('tt1', 'Um'), title('tt2', 'Dois')]));
 

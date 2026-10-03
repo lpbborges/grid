@@ -1,5 +1,5 @@
 <script lang="ts">
-  import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import MediaGrid from '$lib/components/MediaGrid.svelte';
   import { getCatalogPage } from '$lib/api/cinemeta';
@@ -82,7 +82,12 @@
 </script>
 
 {#if loading}
-  <LoadingIndicator label="Carregando..." />
+  <Skeleton
+    variant="poster"
+    count={12}
+    label="Carregando..."
+    class="grid grid-cols-[repeat(auto-fill,180px)] justify-between gap-x-5 gap-y-8 px-4 pt-4 pb-8"
+  />
 {:else if failed}
   <div class="flex min-h-[400px] items-center justify-center">
     <EmptyState message="Erro ao carregar dados" />

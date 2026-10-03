@@ -23,6 +23,13 @@ describe('SearchResults', () => {
     expect(screen.getByText('Pesquisando...')).toBeInTheDocument();
   });
 
+  it('announces the loading state once while showing poster placeholders', () => {
+    render(SearchResults, { query: 'x', results: [], loading: true });
+
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getAllByTestId('skeleton-shape')).toHaveLength(12);
+  });
+
   it('says nothing was found for the query', () => {
     render(SearchResults, { query: 'matrix', results: [], loading: false });
 

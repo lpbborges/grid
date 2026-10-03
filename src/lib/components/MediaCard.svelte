@@ -4,6 +4,7 @@
   import { progressStore } from '$lib/stores/progress.svelte';
   import { hoverPreview } from '$lib/stores/hoverPreview.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import Skeleton from './Skeleton.svelte';
 
   let {
     media,
@@ -30,6 +31,12 @@
 
   // The details card covers the poster, so the poster only keeps its glow; without
   // the card, the full lift, zoom and scanline effect is the only feedback.
+  let imageSettled = $state(false);
+
+  function markIfCached(node: HTMLImageElement) {
+    if (node.complete) imageSettled = true;
+  }
+
   let fullEffect = $derived(!settingsStore.hoverPreview);
 
   function rowContext() {
@@ -68,11 +75,17 @@
   ></div>
 
   <div class="relative h-[270px] w-full overflow-hidden">
+    {#if !imageSettled}
+      <Skeleton variant="block" effect="pulse" brackets={false} class="absolute inset-0" />
+    {/if}
     <img
       src={media.medium_cover_image}
       alt={media.title}
       loading="lazy"
-      class="h-full w-full object-cover {fullEffect
+      onload={() => (imageSettled = true)}
+      onerror={() => (imageSettled = true)}
+      {@attach markIfCached}
+      class="h-full w-full object-cover {imageSettled ? '' : 'opacity-0'} {fullEffect
         ? 'transition-transform duration-500 will-change-transform group-hover:scale-110 group-hover:opacity-80'
         : ''}"
     />

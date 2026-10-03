@@ -1,5 +1,6 @@
 <script lang="ts">
   import MediaCard from './MediaCard.svelte';
+  import Skeleton from './Skeleton.svelte';
   import MediaRow from './MediaRow.svelte';
   import { getCatalog } from '$lib/api/cinemeta';
   import { getMixedCatalog, isMixedQuery } from '$lib/api/mixedCatalog';
@@ -48,7 +49,9 @@
 </script>
 
 {#if !settled}
-  <div class="h-[340px]" data-testid="catalog-row-placeholder" {@attach loadWhenNear}></div>
+  <div class="h-[340px]" data-testid="catalog-row-placeholder" {@attach loadWhenNear}>
+    <Skeleton variant="row" count={6} />
+  </div>
 {:else}
   <MediaRow heading={row.heading} {items}>
     {#snippet card(item)}

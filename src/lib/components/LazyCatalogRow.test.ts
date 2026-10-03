@@ -118,6 +118,32 @@ describe('LazyCatalogRow', () => {
     ]);
   });
 
+  it('shows a skeleton row until it settles, without announcing a status', async () => {
+    let resolve!: (titles: Movie[]) => void;
+    getCatalogMock.mockReturnValue(new Promise<Movie[]>((r) => (resolve = r)));
+    render(LazyCatalogRow, { row });
+
+    expect(screen.getByTestId('catalog-row-placeholder')).toContainElement(
+      screen.getByTestId('skeleton')
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+
+    await act(() => reportVisible(true));
+    await act(() => resolve([title('tt1', 'Série')]));
+
+    expect(screen.queryByTestId('catalog-row-placeholder')).toBeNull();
+    expect(screen.queryAllByTestId('skeleton-poster')).toHaveLength(0);
+  });
+
+  it('leaves no skeleton behind when its catalog fails', async () => {
+    getCatalogMock.mockRejectedValue(new Error('offline'));
+    render(LazyCatalogRow, { row });
+
+    await act(() => reportVisible(true));
+
+    expect(screen.queryByTestId('skeleton')).toBeNull();
+  });
+
   it('disappears when its catalog fails, leaving the rest of the page alone', async () => {
     getCatalogMock.mockRejectedValue(new Error('offline'));
     const { container } = render(LazyCatalogRow, { row });

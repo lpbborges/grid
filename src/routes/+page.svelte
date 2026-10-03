@@ -4,7 +4,7 @@
   import MediaCard from '$lib/components/MediaCard.svelte';
   import { catalogRows } from '$lib/utils/catalogRows';
   import EmptyState from '$lib/components/EmptyState.svelte';
-  import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import SearchResults from '$lib/components/SearchResults.svelte';
   import { useCatalogSearch } from '$lib/composables/useCatalogSearch.svelte';
   import type { Movie } from '$lib/types';
@@ -64,7 +64,7 @@
 {:else}
   <ContinueWatchingRow items={continueWatchingItems} />
   {#if popularLoading}
-    <LoadingIndicator label="Carregando..." />
+    <Skeleton variant="row" count={6} label="Carregando..." />
   {:else if !popular.length}
     <div class="flex h-full min-h-[400px] items-center justify-center">
       <EmptyState

@@ -23,6 +23,23 @@ describe('MediaCard component', () => {
     progressStore.progress = {};
   });
 
+  it('shows a skeleton over the poster until the image loads', async () => {
+    render(MediaCard, { media: mockMovie, type: 'movie' });
+
+    expect(screen.getByTestId('skeleton')).toBeInTheDocument();
+    await fireEvent.load(screen.getByAltText('Test Movie'));
+
+    expect(screen.queryByTestId('skeleton')).toBeNull();
+  });
+
+  it('drops the skeleton when the image fails to load', async () => {
+    render(MediaCard, { media: mockMovie, type: 'movie' });
+
+    await fireEvent.error(screen.getByAltText('Test Movie'));
+
+    expect(screen.queryByTestId('skeleton')).toBeNull();
+  });
+
   it('shows the progress bar for a partially watched movie', () => {
     progressStore.update(123, undefined, undefined, 25, 100);
     const { getByTestId } = render(MediaCard, { media: mockMovie, type: 'movie' });
