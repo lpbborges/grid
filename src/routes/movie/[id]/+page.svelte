@@ -6,6 +6,7 @@
   import { buildMagnet, getMovieStreams } from '$lib/api/torrentio';
   import { streamOption, type StreamOption } from '$lib/engine/streamOption';
   import Player from '$lib/components/Player.svelte';
+  import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import ErrorNotice from '$lib/components/ErrorNotice.svelte';
@@ -50,6 +51,7 @@
   let selectedTorrentHash = $state('');
   let sourcesLoaded = $state(false);
   let autoplayStarted = false;
+  let autoplayPending = $state(untrack(() => data.autoplay));
 
   let translatedTitle = $state('');
   let translatedSynopsis = $state('');
@@ -64,6 +66,7 @@
       selectedTorrentHash = '';
       sourcesLoaded = false;
       autoplayStarted = false;
+      autoplayPending = untrack(() => data.autoplay);
       combinedTorrents = [];
       failedSources = new SvelteSet();
       if (hasMountedTorrentEffect) {
@@ -173,7 +176,7 @@
   $effect(() => {
     if (data.autoplay && movie && sourcesLoaded && !autoplayStarted) {
       autoplayStarted = true;
-      untrack(() => void playMovie());
+      untrack(() => void playMovie().finally(() => (autoplayPending = false)));
     }
   });
 
@@ -246,6 +249,8 @@
 
 {#if error}
   <ErrorNotice {error} onaction={handleErrorAction} />
+{:else if movie && autoplayPending && !player.isPlaying}
+  <LoadingIndicator label="Carregando..." />
 {:else if movie}
   {#if (movie.background_image_original || movie.background_image) && !player.isPlaying}
     <div class="pointer-events-none fixed inset-0">

@@ -78,6 +78,24 @@ describe('Movie playback wiring', () => {
     settingsStore.cacheLimitBytes = DEFAULT_CACHE_LIMIT;
   });
 
+  it('goes straight to the player when opened from the hover card, without showing the details', async () => {
+    boundary = installPlaybackBoundary(baseOptions);
+    render(MoviePage, {
+      props: { data: { autoplay: true, movieId: movie.id, movie, error: null } }
+    });
+
+    const detailsShown = vi.fn();
+    const observer = new MutationObserver(() => {
+      if (screen.queryByText('Fixture movie')) detailsShown();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    expect(screen.queryByText('Fixture movie')).not.toBeInTheDocument();
+    await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    observer.disconnect();
+
+    expect(detailsShown).not.toHaveBeenCalled();
+  });
+
   it('saves the movie snapshot with its progress', async () => {
     await openAndPlay();
     const video = await screen.findByTestId('video-element', {}, { timeout: 5000 });

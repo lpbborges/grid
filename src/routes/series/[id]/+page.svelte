@@ -4,6 +4,7 @@
   import { logger } from '$lib/logger';
   import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
   import Player from '$lib/components/Player.svelte';
+  import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
   import ErrorNotice from '$lib/components/ErrorNotice.svelte';
@@ -133,9 +134,11 @@
   // with an immediate play() click (see the video-cache feature's Task 9).
   let hasMountedTorrentEffect = false;
   let autoplayStarted = false;
+  let autoplayPending = $state(untrack(() => data.autoplay));
   $effect(() => {
     if (seriesId) {
       autoplayStarted = false;
+      autoplayPending = untrack(() => data.autoplay);
       selectedSeason = untrack(() => focusEpisode?.season) ?? null;
       translatedEpisodes = {};
       if (hasMountedTorrentEffect) {
@@ -181,7 +184,11 @@
     const target =
       shown.videos.find((v) => focusEpisode && sameEpisode(v, focusEpisode)) ??
       firstEpisode(shown.videos);
-    if (target) untrack(() => void playEpisode(target));
+    if (target) {
+      untrack(() => void playEpisode(target).finally(() => (autoplayPending = false)));
+    } else {
+      autoplayPending = false;
+    }
   });
 
   function episodePlayOptions(
@@ -299,6 +306,8 @@
 
 {#if error}
   <ErrorNotice {error} onaction={handleErrorAction} />
+{:else if series && autoplayPending && !player.isPlaying}
+  <LoadingIndicator label="Carregando..." />
 {:else if series}
   {#if (series.background_image_original || series.background_image) && !player.isPlaying}
     <div class="pointer-events-none fixed inset-0">

@@ -167,6 +167,31 @@ describe('Series playback wiring', () => {
     );
   });
 
+  it('goes straight to the player when opened from the hover card, without showing the details', async () => {
+    boundary = installPlaybackBoundary({
+      files,
+      streams: [
+        { name: 'Torrentio\n1080p', title: 'Season pack\n👤 30', infoHash: HASH, fileIdx: 0 }
+      ]
+    });
+    render(SeriesPage, {
+      props: {
+        data: { autoplay: true, seriesId: series.id, series, requestedEpisode: null, error: null }
+      }
+    });
+
+    expect(screen.queryByText(/Second/)).not.toBeInTheDocument();
+    const detailsShown = vi.fn();
+    const observer = new MutationObserver(() => {
+      if (screen.queryByText(/Second/)) detailsShown();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    observer.disconnect();
+
+    expect(detailsShown).not.toHaveBeenCalled();
+  });
+
   it('falls back to the largest video when the stream has no file index', async () => {
     await playEpisode(/Second/, {
       streams: [{ name: 'Torrentio\n1080p', title: 'Season pack\n👤 30', infoHash: HASH }]
