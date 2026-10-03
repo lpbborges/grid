@@ -103,6 +103,74 @@ async function removeAbandonedTorrent(infoHash: string, keepFiles: boolean): Pro
   }
 }
 
+interface CacheEntryPlan {
+  infoHash: string;
+  parsedInfoHash: string | null;
+  magnet: string;
+  mediaId?: string;
+  season?: number;
+  episode?: number;
+  videoPath: string;
+  fileIdx: number;
+  totalBytes: number;
+  fileProgress?: number[];
+  existingEntry?: CacheEntry;
+}
+
+/** The manifest entry for the video about to play, and how many bytes it still needs. */
+function planCacheEntry(plan: CacheEntryPlan): { entry: CacheEntry; neededBytes: number } {
+  const { infoHash, parsedInfoHash, totalBytes, fileProgress, existingEntry } = plan;
+  const fileName = parsedInfoHash ? `${parsedInfoHash}/${plan.videoPath}` : plan.videoPath;
+  const sameFile = existingEntry?.fileName === fileName;
+  const fileBytes = fileProgress?.[plan.fileIdx] ?? (sameFile ? existingEntry.downloadedBytes : 0);
+  const onDisk = fileProgress
+    ? sumFileProgress(fileProgress)
+    : (existingEntry?.downloadedBytes ?? 0);
+  return {
+    neededBytes: Math.max(totalBytes - fileBytes, 0),
+    entry: {
+      infoHash,
+      magnet: plan.magnet,
+      mediaId: plan.mediaId,
+      season: plan.season,
+      episode: plan.episode,
+      fileName,
+      totalBytes,
+      downloadedBytes: onDisk,
+      complete: fileProgress ? fileBytes >= totalBytes : sameFile && existingEntry.complete,
+      lastAccessedAt: Date.now()
+    }
+  };
+}
+
+// Subtitle failures must never block video playback, which does not depend on
+// them, so each source is isolated with its own catch and fetched concurrently.
+async function fetchSubtitles(
+  details: { info_hash: string; files: { name: string; length: number }[] },
+  fileIdx: number,
+  totalBytes: number,
+  media: { mediaId?: string; season?: number; episode?: number }
+): Promise<SubtitleTrack[]> {
+  const videoFileName = details.files[fileIdx]?.name.split(/[/\\]/).pop();
+  const release = videoFileName ? { filename: videoFileName, videoSize: totalBytes } : undefined;
+  const { mediaId, season, episode } = media;
+  const [torrentSubtitles, externalSubtitles] = await Promise.all([
+    getTorrentSubtitles(details.info_hash, details.files, settingsStore.subtitle).catch((error) => {
+      logger.warn('Failed to fetch torrent subtitles, continuing without them:', error);
+      return [];
+    }),
+    mediaId
+      ? getExternalSubtitles(mediaId, season, episode, settingsStore.subtitle, release).catch(
+          (error) => {
+            logger.warn('Failed to fetch external subtitles, continuing without them:', error);
+            return [];
+          }
+        )
+      : Promise.resolve([])
+  ]);
+  return [...torrentSubtitles, ...externalSubtitles];
+}
+
 export async function prepareStream({
   magnet,
   onStage,
@@ -166,59 +234,33 @@ export async function prepareStream({
     const isCacheable = totalBytes > 0 && totalBytes <= cacheLimitBytes;
 
     if (isCacheable) {
-      const fileName = parsedInfoHash
-        ? `${parsedInfoHash}/${details.files[bestFileIdx].name}`
-        : details.files[bestFileIdx].name;
-      const sameFile = existingEntry?.fileName === fileName;
       const fileProgress = (await getTorrentStats(infoHash))?.file_progress;
-      const fileBytes =
-        fileProgress?.[bestFileIdx] ?? (sameFile ? existingEntry.downloadedBytes : 0);
-      const onDisk = fileProgress
-        ? sumFileProgress(fileProgress)
-        : (existingEntry?.downloadedBytes ?? 0);
-      const neededBytes = Math.max(totalBytes - fileBytes, 0);
-      await evictForSpace(infoHash, neededBytes, cacheLimitBytes);
-      signal?.throwIfAborted();
-
-      cacheEntry = {
+      const planned = planCacheEntry({
         infoHash,
+        parsedInfoHash,
         magnet,
         mediaId,
         season,
         episode,
-        fileName,
+        videoPath: details.files[bestFileIdx].name,
+        fileIdx: bestFileIdx,
         totalBytes,
-        downloadedBytes: onDisk,
-        complete: fileProgress ? fileBytes >= totalBytes : sameFile && existingEntry.complete,
-        lastAccessedAt: Date.now()
-      };
+        fileProgress,
+        existingEntry
+      });
+      await evictForSpace(infoHash, planned.neededBytes, cacheLimitBytes);
+      signal?.throwIfAborted();
+
+      cacheEntry = planned.entry;
       await upsertCacheEntry(cacheEntry);
       signal?.throwIfAborted();
     }
 
-    // Subtitle failures must never block video playback, which does not
-    // depend on them, so each source is isolated with its own catch and
-    // fetched concurrently rather than sequentially.
-    const videoFileName = details.files[bestFileIdx]?.name.split(/[/\\]/).pop();
-    const release = videoFileName ? { filename: videoFileName, videoSize: totalBytes } : undefined;
-    const [tSubs, eSubs] = await Promise.all([
-      getTorrentSubtitles(details.info_hash, details.files, settingsStore.subtitle).catch(
-        (error) => {
-          logger.warn('Failed to fetch torrent subtitles, continuing without them:', error);
-          return [];
-        }
-      ),
-      mediaId
-        ? getExternalSubtitles(mediaId, season, episode, settingsStore.subtitle, release).catch(
-            (error) => {
-              logger.warn('Failed to fetch external subtitles, continuing without them:', error);
-              return [];
-            }
-          )
-        : Promise.resolve([])
-    ]);
-
-    const subtitles = [...tSubs, ...eSubs];
+    const subtitles = await fetchSubtitles(details, bestFileIdx, totalBytes, {
+      mediaId,
+      season,
+      episode
+    });
     if (signal?.aborted) {
       revokeBlobUrls(subtitles.map((s) => s.url));
       signal.throwIfAborted();
