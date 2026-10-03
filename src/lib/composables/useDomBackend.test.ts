@@ -141,4 +141,17 @@ describe('useDomBackend', () => {
     expect(backend.error).not.toBe('');
     expect(backend.buffering).toBe(false);
   });
+
+  it('forgets a playback failure on stop() so the next attempt does not show it', async () => {
+    const backend = await mountBackend();
+    await backend.start(request());
+    const video = screen.getByTestId('video-element') as HTMLVideoElement;
+    Object.defineProperty(video, 'error', { value: { code: 4, message: '' }, configurable: true });
+    await fireEvent.error(video);
+    expect(backend.error).not.toBe('');
+
+    await backend.stop();
+
+    expect(backend.error).toBe('');
+  });
 });

@@ -225,6 +225,7 @@ export function useMpvBackend() {
     } catch (e) {
       logger.error('Erro ao parar o player nativo', e);
     }
+    error = '';
     await finish();
   }
 
