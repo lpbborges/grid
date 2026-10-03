@@ -4,6 +4,7 @@ import { createRawSnippet } from 'svelte';
 import PlayerShell from './PlayerShell.svelte';
 import type { PlayerBackend } from '$lib/types';
 import { playerState } from '$lib/stores.svelte';
+import { SLOW_START_MS } from '$lib/utils/loadingStage';
 
 function fakeBackend(overrides: Partial<PlayerBackend> = {}): PlayerBackend {
   return {
@@ -54,6 +55,54 @@ function upNextCard(overrides = {}) {
 describe('PlayerShell', () => {
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('tells the viewer the connection is slow when the first frame takes too long', async () => {
+    vi.useFakeTimers();
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: false }),
+        loadingStage: 'loading',
+        surface: emptySurface
+      }
+    });
+    expect(screen.queryByTestId('slow-start-hint')).not.toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(SLOW_START_MS + 1);
+
+    expect(screen.getByTestId('slow-start-hint')).toHaveTextContent('Conexão lenta');
+  });
+
+  it('does not nag about a slow connection before the video is ready to start', async () => {
+    vi.useFakeTimers();
+    render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: false }),
+        loadingStage: 'preparing',
+        surface: emptySurface
+      }
+    });
+
+    await vi.advanceTimersByTimeAsync(SLOW_START_MS * 3);
+
+    expect(screen.queryByTestId('slow-start-hint')).not.toBeInTheDocument();
+  });
+
+  it('drops the slow connection hint once the video has started', async () => {
+    vi.useFakeTimers();
+    const view = render(PlayerShell, {
+      props: {
+        backend: fakeBackend({ hasStarted: false }),
+        loadingStage: 'loading',
+        surface: emptySurface
+      }
+    });
+    await vi.advanceTimersByTimeAsync(SLOW_START_MS + 1);
+    expect(screen.getByTestId('slow-start-hint')).toBeInTheDocument();
+
+    await view.rerender({ backend: fakeBackend({ hasStarted: true }), loadingStage: 'loading' });
+
+    expect(screen.queryByTestId('slow-start-hint')).not.toBeInTheDocument();
   });
 
   it('shows the next episode card over the picture', () => {
