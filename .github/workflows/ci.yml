@@ -17,7 +17,53 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decides which jobs a change needs, so a README edit does not rebuild the
+  # app on three runners. Push events compare against the previous head;
+  # scheduled and manual runs always run everything.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      rust: ${{ steps.filter.outputs.rust }}
+      packaging: ${{ steps.filter.outputs.packaging }}
+      deps: ${{ steps.filter.outputs.deps }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          base=""
+          case "$EVENT" in
+            pull_request) base="$PR_BASE" ;;
+            push) base="$PUSH_BEFORE" ;;
+          esac
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "No usable base for $EVENT: running everything"
+            files="all"
+          else
+            files="$(git diff --name-only "$base" HEAD)"
+            echo "$files"
+          fi
+          matches() { [ "$files" = all ] || printf '%s\n' "$files" | grep -Eq "$1"; }
+          flag() { if matches "$2"; then echo "$1=true"; else echo "$1=false"; fi; }
+          {
+            # Anything that is not documentation or editor/agent config.
+            flag code '^(src/|src-tauri/|e2e/|tests/|scripts/|static/|package(-lock)?\.json$|[^/]*\.(js|ts|json|cjs|mjs)$|\.github/workflows/ci\.yml$|\.husky/)'
+            flag rust '^(src-tauri/|tests/|scripts/|\.github/workflows/ci\.yml$)'
+            flag packaging '^(src-tauri/|scripts/|package(-lock)?\.json$|\.github/workflows/ci\.yml$)'
+            flag deps '^(package(-lock)?\.json$|src-tauri/Cargo\.(toml|lock)$|\.github/workflows/ci\.yml$)'
+          } | tee -a "$GITHUB_OUTPUT"
+
   frontend:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -34,6 +80,8 @@ jobs:
       - run: npm run test:frontend
 
   rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -67,6 +115,8 @@ jobs:
       - run: cargo test
 
   audit:
+    needs: changes
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.deps == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -75,7 +125,8 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm audit --audit-level=high
+      # Dev-only advisories (e.g. braces via mocha) have no fix and never ship in the app.
+      - run: npm audit --omit=dev --audit-level=high
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
@@ -83,7 +134,8 @@ jobs:
         working-directory: src-tauri
 
   package-linux:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    needs: changes
+    if: (github.event_name == 'pull_request' && needs.changes.outputs.packaging == 'true') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -259,7 +311,8 @@ jobs:
           [ "${passed:-0}" -gt 0 ] || { echo "::error::no player tests ran"; exit 1; }
 
   package-windows:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    needs: changes
+    if: (github.event_name == 'pull_request' && needs.changes.outputs.packaging == 'true') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -298,7 +351,9 @@ jobs:
           $required | ForEach-Object { Write-Host "carried by the NSIS installer: $_" }
 
   e2e:
-    needs: [frontend, rust]
+    needs: [changes, frontend, rust]
+    # Skipped needs are fine (a frontend-only change skips rust); a failed one is not.
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.code == 'true' }}
     strategy:
       fail-fast: false
       matrix:
