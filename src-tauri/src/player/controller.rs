@@ -81,12 +81,20 @@ pub fn options_for(output: VideoOutput) -> Vec<(&'static str, String)> {
             options.push(("hwdec", "auto-safe".into()));
         }
         VideoOutput::Window(handle) => {
-            options.push(("vo", "gpu".into()));
+            // Not `gpu`: its LUT-based scalers intermittently present a black
+            // window on a software (WARP) adapter, which CI runners and
+            // remote desktops use.
+            options.push(("vo", "gpu-next".into()));
             options.push(("gpu-api", "d3d11".into()));
             options.push(("hwdec", "auto-safe".into()));
             options.push(("wid", handle.to_string()));
             options.push(("force-window", "no".into()));
         }
+    }
+    if output != VideoOutput::Null && std::env::var_os("GRID_E2E_RENDER").is_some() {
+        // The render smoke test samples the screen while the fixture plays;
+        // on a slow runner the clip can end first and close the player.
+        options.push(("loop-file", "inf".into()));
     }
     options
 }
@@ -537,6 +545,10 @@ impl Controller {
                     result => result?,
                 }
             }
+            if let Some(path) = std::env::var_os("GRID_E2E_MPV_LOG") {
+                init.set_option("log-file", path.to_string_lossy().as_ref())?;
+                init.set_option("msg-level", "all=v")?;
+            }
             Ok(())
         })
         .map_err(|e| format!("mpv could not start: {}", describe_error(&e)))?;
@@ -876,7 +888,7 @@ mod tests {
     fn window_output_draws_into_the_given_parent() {
         let options = options_for(VideoOutput::Window(123456));
         assert!(has(&options, "wid", "123456"));
-        assert!(has(&options, "vo", "gpu"));
+        assert!(has(&options, "vo", "gpu-next"));
         assert!(has(&options, "gpu-api", "d3d11"));
     }
 
