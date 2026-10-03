@@ -125,7 +125,8 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm audit --audit-level=high
+      # Dev-only advisories (e.g. braces via mocha) have no fix and never ship in the app.
+      - run: npm audit --omit=dev --audit-level=high
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
