@@ -55,6 +55,20 @@ describe('findEpisodeStream', () => {
     expect(getSeriesStreams).toHaveBeenCalledWith('tt0000002', 1, 2, PREFERENCES);
   });
 
+  it('skips a mini-episodes batch even when it has far more seeds', async () => {
+    const miniEpisodes: Stream = {
+      name: 'Torrentio\n1080p',
+      title: 'Grid.Series.S01E02.Mini-Episode.2.1080p.mkv\n👤 378',
+      infoHash: HASH_720,
+      fileIdx: 1
+    };
+    answerWith([miniEpisodes, stream1080]);
+
+    const found = await findEpisodeStream(SERIES, EPISODE, PREFERENCES);
+
+    expect(found).toMatchObject({ infoHash: HASH_1080, fileIdx: 3 });
+  });
+
   it('prefers the configured quality', async () => {
     answerWith([stream1080, stream720]);
 

@@ -54,6 +54,8 @@ export function scoreStreamOption(
 
   if (input.quality === params.quality) score += 100;
 
+  if (/mini[- ]episode/.test(text)) score -= 1000;
+
   const wantPt = params.audioPreference === 'pt';
   const wantOriginal = params.audioPreference === 'original';
 
