@@ -4,6 +4,7 @@
   import NextEpisodeCard from './NextEpisodeCard.svelte';
   import DecodeText from './DecodeText.svelte';
   import HudProgress from './HudProgress.svelte';
+  import Panel from './ui/Panel.svelte';
   import { UP_NEXT_COUNTDOWN_SECONDS } from '$lib/utils/upNext';
   import { findIntro } from '$lib/utils/intro';
   import { groupByLanguage } from '$lib/composables/useSubtitleSelection.svelte';
@@ -355,13 +356,16 @@
   {/if}
 
   {#if feedback}
-    <div
-      class="bg-backdrop/80 text-main pointer-events-none absolute top-8 left-1/2 z-50 -translate-x-1/2 rounded-sm px-4 py-2 font-mono text-lg font-bold"
+    <Panel
+      glass
+      shadow="glow-primary"
+      padding="none"
+      class="text-main pointer-events-none absolute top-8 left-1/2 z-50 -translate-x-1/2 px-5 py-2 font-mono text-lg font-bold"
       data-testid="player-feedback"
       aria-live="polite"
     >
       {feedback}
-    </div>
+    </Panel>
   {/if}
 
   {#if showSkipIntro && intro}
