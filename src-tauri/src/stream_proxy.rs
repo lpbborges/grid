@@ -19,6 +19,12 @@ const PROBE_REQUEST_TIMEOUT: std::time::Duration = if cfg!(test) {
 } else {
     std::time::Duration::from_secs(30)
 };
+/// How much of the end of a stream the proxy asks the engine for up front.
+/// Players read the Matroska cues or the MP4 `moov` away from the playhead, and
+/// the engine only prioritises pieces somebody is reading, so without this they
+/// are fetched last and playback waits on them.
+const WARM_BYTES: u64 = if cfg!(test) { 10_000 } else { 8 * 1024 * 1024 };
+const WARM_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 const ENGINE_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Header patches by stream URL, dropping the oldest past `MAX_CACHED_PATCHES`.
@@ -26,6 +32,7 @@ const ENGINE_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 struct PatchCache {
     cells: HashMap<String, PatchCell>,
     order: VecDeque<String>,
+    warmed: VecDeque<String>,
 }
 
 impl PatchCache {
@@ -42,6 +49,18 @@ impl PatchCache {
         self.cells.insert(url.to_string(), cell.clone());
         self.order.push_back(url.to_string());
         cell
+    }
+
+    /// True the first time a stream URL is seen, until it ages out.
+    fn first_sight(&mut self, url: &str) -> bool {
+        if self.warmed.iter().any(|seen| seen == url) {
+            return false;
+        }
+        if self.warmed.len() >= MAX_CACHED_PATCHES {
+            self.warmed.pop_front();
+        }
+        self.warmed.push_back(url.to_string());
+        true
     }
 
     #[cfg(test)]
@@ -140,6 +159,14 @@ async fn forward(
     let (info_hash, file_idx) = parse_stream_path(&request.path).ok_or(StatusCode::NOT_FOUND)?;
     let port = engine_port().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let url = engine_stream_url(port, info_hash, file_idx);
+    if request.method == Method::GET
+        && cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .first_sight(&url)
+    {
+        tokio::spawn(warm_stream(client.clone(), url.clone()));
+    }
     let patch = if request.method == Method::GET && !wants_raw(&request.path) {
         patch_for(client, &url, cache).await
     } else {
@@ -152,6 +179,43 @@ async fn forward(
             StatusCode::BAD_GATEWAY
         })?;
     Ok((response, patch))
+}
+
+/// Opens a read on the tail of a stream so the engine queues those pieces
+/// first. The head needs no help: the player reads it straight away. The
+/// response is discarded; dropping the connection ends the read.
+async fn warm_stream(client: reqwest::Client, url: String) {
+    let Some(total) = stream_length(&client, &url).await else {
+        return;
+    };
+    if total <= WARM_BYTES * 2 {
+        return;
+    }
+    let _ = fetch_range(
+        &client,
+        &url,
+        total - WARM_BYTES,
+        WARM_BYTES,
+        WARM_REQUEST_TIMEOUT,
+    )
+    .await;
+}
+
+async fn stream_length(client: &reqwest::Client, url: &str) -> Option<u64> {
+    let response = client
+        .head(url)
+        .timeout(PROBE_REQUEST_TIMEOUT)
+        .send()
+        .await
+        .ok()?;
+    response
+        .headers()
+        .get(reqwest::header::CONTENT_LENGTH)?
+        .to_str()
+        .ok()?
+        .parse()
+        .ok()
+        .filter(|len| *len > 0)
 }
 
 async fn send_with_engine_restart_retry(
@@ -263,7 +327,8 @@ async fn probe_patch(
         match media_patch::next_step(&view) {
             Step::Done(patch) => return Ok(patch.map(Arc::new)),
             Step::Fetch { offset, len } => {
-                let (bytes, file_len) = fetch_range(client, url, offset, len).await?;
+                let (bytes, file_len) =
+                    fetch_range(client, url, offset, len, PROBE_REQUEST_TIMEOUT).await?;
                 if bytes.is_empty() {
                     return Ok(None);
                 }
@@ -279,10 +344,11 @@ async fn fetch_range(
     url: &str,
     offset: u64,
     len: u64,
+    timeout: std::time::Duration,
 ) -> Result<(Vec<u8>, u64), ProbeFailed> {
     let response = client
         .get(url)
-        .timeout(PROBE_REQUEST_TIMEOUT)
+        .timeout(timeout)
         .header(
             reqwest::header::RANGE,
             format!("bytes={}-{}", offset, offset + len - 1),
@@ -389,15 +455,25 @@ mod tests {
     const HASH: &str = "31810da7088bdd8b9293b3f5649d4ece574c930d";
 
     async fn spawn_mock_engine(body: Vec<u8>) -> (u16, Arc<AtomicUsize>) {
+        let (port, requests, _) = spawn_recording_engine(body).await;
+        (port, requests)
+    }
+
+    type RecordedRequests = Arc<Mutex<Vec<(String, Option<String>)>>>;
+
+    async fn spawn_recording_engine(body: Vec<u8>) -> (u16, Arc<AtomicUsize>, RecordedRequests) {
+        let recorded = RecordedRequests::default();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let requests = Arc::new(AtomicUsize::new(0));
         let body = Arc::new(body);
         let counter = requests.clone();
+        let log = recorded.clone();
         tokio::spawn(async move {
             while let Ok((mut socket, _)) = listener.accept().await {
                 counter.fetch_add(1, Ordering::SeqCst);
                 let body = body.clone();
+                let log = log.clone();
                 tokio::spawn(async move {
                     let mut head = Vec::new();
                     let mut buf = [0u8; 1024];
@@ -421,6 +497,15 @@ mod tests {
                             let end = end.parse().unwrap_or(total - 1).min(total - 1);
                             Some((start, end))
                         });
+                    log.lock().unwrap().push((
+                        head.split_whitespace()
+                            .next()
+                            .unwrap_or_default()
+                            .to_string(),
+                        head.lines()
+                            .find_map(|line| line.strip_prefix("range: bytes="))
+                            .map(|spec| spec.trim().to_string()),
+                    ));
                     let (status, start, end) = match range {
                         Some((start, end)) => ("206 Partial Content", start, end),
                         None => ("200 OK", 0, total - 1),
@@ -448,7 +533,7 @@ mod tests {
                 });
             }
         });
-        (port, requests)
+        (port, requests, recorded)
     }
 
     #[tokio::test]
@@ -536,6 +621,36 @@ mod tests {
             .send()
             .await
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn asks_the_engine_for_the_tail_of_a_stream_it_has_not_seen_before() {
+        let body: Vec<u8> = (0..50_000u32).map(|i| (i % 256) as u8).collect();
+        let (engine, _, recorded) = spawn_recording_engine(body).await;
+        let proxy = spawn_proxy(engine).await;
+
+        let response = get_range(proxy, "bytes=20000-20009".to_string()).await;
+        assert_eq!(response.status(), 206);
+
+        let warmed = |recorded: &RecordedRequests| {
+            let ranges: Vec<_> = recorded
+                .lock()
+                .unwrap()
+                .iter()
+                .filter_map(|(_, r)| r.clone())
+                .collect();
+            ranges.contains(&format!("{}-49999", 50_000 - WARM_BYTES))
+        };
+        for _ in 0..40 {
+            if warmed(&recorded) {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        panic!(
+            "the engine never saw the head and tail requests: {:?}",
+            recorded.lock().unwrap()
+        );
     }
 
     #[tokio::test]

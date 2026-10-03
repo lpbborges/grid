@@ -112,6 +112,7 @@ describe('useMpvBackend', () => {
       expect.arrayContaining([
         'native-player-time',
         'native-player-paused',
+        'native-player-buffering',
         'native-player-presenting',
         'native-player-duration',
         'native-player-ended',
@@ -661,11 +662,30 @@ describe('useMpvBackend', () => {
     expect(backend.activeSubtitleIndex).toBe(-1);
   });
 
-  it('reports no DOM-only subtitle failures and never buffers', async () => {
+  it('reports no DOM-only subtitle failures', async () => {
     const backend = await startWithTracks([]);
 
     expect(backend.failedSubtitleIndexes).toEqual([]);
     expect(backend.subtitleError).toBe('');
+  });
+
+  it('buffers while mpv waits for the stream to deliver data', async () => {
+    const backend = await startWithTracks([]);
+    expect(backend.buffering).toBe(false);
+
+    handlers['native-player-buffering']({ payload: true });
+    expect(backend.buffering).toBe(true);
+
+    handlers['native-player-buffering']({ payload: false });
+    expect(backend.buffering).toBe(false);
+  });
+
+  it('forgets a buffering state when the playback ends', async () => {
+    const backend = await startWithTracks([]);
+    handlers['native-player-buffering']({ payload: true });
+
+    await backend.stop();
+
     expect(backend.buffering).toBe(false);
   });
 });

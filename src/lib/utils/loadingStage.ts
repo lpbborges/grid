@@ -16,3 +16,6 @@ export function loadingStageLabel(stage: LoadingStage): string {
 export function loadingStageProgress(stage: LoadingStage): number {
   return STAGES[stage].progress;
 }
+
+/** How long the last stage may wait for the first frame before the viewer is told it is slow. */
+export const SLOW_START_MS = 20_000;

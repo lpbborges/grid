@@ -30,6 +30,7 @@ pub const LOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const OBSERVE_TIME: u64 = 1;
 const OBSERVE_PAUSE: u64 = 2;
 const OBSERVE_DURATION: u64 = 3;
+const OBSERVE_BUFFERING: u64 = 4;
 
 /// Where mpv draws.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -282,6 +283,11 @@ fn map_event(event: &RawEvent, throttle: &mut TimeThrottle, now: Instant) -> Opt
             name,
             value: PropertyValue::Flag(paused),
         } if name == "pause" => Some(PlayerEvent::Paused(*paused)),
+        // Not throttled: a dropped change leaves the buffering overlay stuck on or off.
+        RawEvent::Property {
+            name,
+            value: PropertyValue::Flag(starved),
+        } if name == "paused-for-cache" => Some(PlayerEvent::Buffering(*starved)),
         // Not throttled: it fires once or twice per file, and dropping it pins the seek bar at zero.
         RawEvent::Property {
             name,
@@ -558,6 +564,7 @@ impl Controller {
             ("time-pos", Format::Double, OBSERVE_TIME),
             ("pause", Format::Flag, OBSERVE_PAUSE),
             ("duration", Format::Double, OBSERVE_DURATION),
+            ("paused-for-cache", Format::Flag, OBSERVE_BUFFERING),
         ] {
             mpv.observe_property(name, format, id)
                 .map_err(|e| format!("mpv could not observe {name}: {}", describe_error(&e)))?;
@@ -955,6 +962,24 @@ mod tests {
         assert_eq!(
             map_event(&duration, &mut throttle, now),
             Some(PlayerEvent::Duration(90.5))
+        );
+    }
+
+    #[test]
+    fn maps_paused_for_cache_to_buffering_without_throttling_it() {
+        let mut throttle = TimeThrottle::new();
+        let now = Instant::now();
+        let starved = |flag| RawEvent::Property {
+            name: "paused-for-cache".to_string(),
+            value: PropertyValue::Flag(flag),
+        };
+        assert_eq!(
+            map_event(&starved(true), &mut throttle, now),
+            Some(PlayerEvent::Buffering(true))
+        );
+        assert_eq!(
+            map_event(&starved(false), &mut throttle, now),
+            Some(PlayerEvent::Buffering(false))
         );
     }
 

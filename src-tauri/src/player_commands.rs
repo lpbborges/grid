@@ -245,6 +245,7 @@ fn pump_player_events(
             let emitted = match event {
                 PlayerEvent::Time(seconds) => app.emit("native-player-time", seconds),
                 PlayerEvent::Paused(paused) => app.emit("native-player-paused", paused),
+                PlayerEvent::Buffering(starved) => app.emit("native-player-buffering", starved),
                 PlayerEvent::Duration(seconds) => app.emit("native-player-duration", seconds),
                 // Consumed by `load`; a second one would only mean a reload.
                 PlayerEvent::Loaded => Ok(()),

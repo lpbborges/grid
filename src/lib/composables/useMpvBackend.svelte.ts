@@ -42,6 +42,7 @@ export function useMpvBackend() {
   let volume = $state(1);
   let tracks = $state<NativeTrack[]>([]);
   let hasVideo = $state(false);
+  let buffering = $state(false);
   let durationState = $state(0);
   let chapters = $state<Chapter[]>([]);
   let subtitlePosition = 80;
@@ -67,6 +68,7 @@ export function useMpvBackend() {
     tracks = [];
     chapters = [];
     hasVideo = false;
+    buffering = false;
     durationState = 0;
   }
 
@@ -100,6 +102,7 @@ export function useMpvBackend() {
     currentTime = 0;
     paused = false;
     hasVideo = false;
+    buffering = false;
 
     try {
       const external = (options.subtitles ?? []).slice(0, MAX_NATIVE_SUBTITLE_FILES);
@@ -122,6 +125,9 @@ export function useMpvBackend() {
         }),
         listen<boolean>('native-player-paused', (event) => {
           paused = event.payload;
+        }),
+        listen<boolean>('native-player-buffering', (event) => {
+          buffering = event.payload;
         }),
         listen('native-player-presenting', () => {
           // Latched: it fires again on every seek, and the UI only needs to
@@ -362,7 +368,7 @@ export function useMpvBackend() {
       return hasVideo;
     },
     get buffering() {
-      return false;
+      return buffering;
     },
     start,
     stop,

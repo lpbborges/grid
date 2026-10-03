@@ -58,6 +58,9 @@ pub enum PlayerEvent {
     /// can change it now, but mpv still pauses itself on EOF and on a failed
     /// seek, so the UI follows the property rather than assuming.
     Paused(bool),
+    /// mpv's `paused-for-cache` property changed: playback is waiting for the
+    /// stream to deliver more data. Without it a starved player looks frozen.
+    Buffering(bool),
     /// mpv began painting. Fires after loading and after every seek; the UI
     /// latches it, because until the first frame is on screen there is
     /// nothing behind the webview to composite against.

@@ -13,6 +13,7 @@
   import {
     loadingStageLabel,
     loadingStageProgress,
+    SLOW_START_MS,
     type LoadingStage
   } from '$lib/utils/loadingStage';
 
@@ -39,6 +40,15 @@
     episodeLabel?: string;
     episodeName?: string;
   }>();
+
+  let slowStart = $state(false);
+
+  $effect(() => {
+    slowStart = false;
+    if (loadingStage !== 'loading' || backend.hasStarted || backend.error) return;
+    const timer = setTimeout(() => (slowStart = true), SLOW_START_MS);
+    return () => clearTimeout(timer);
+  });
 
   let showControls = $state(true);
   let controlsTimeout: number | undefined;
@@ -324,6 +334,11 @@
           value={loadingStageProgress(loadingStage)}
           label="Progresso do carregamento"
         />
+      {/if}
+      {#if slowStart && !backend.error && !backend.hasStarted}
+        <div class="text-muted mb-2 text-sm" data-testid="slow-start-hint" role="status">
+          Conexão lenta, ainda carregando…
+        </div>
       {/if}
       {#if !backend.error && shownPercent > 0}
         <div class="text-main font-mono text-sm">
