@@ -3,6 +3,7 @@
   import MediaCard from '$lib/components/MediaCard.svelte';
   import { hoverPreview } from '$lib/stores/hoverPreview.svelte';
   import SectionHeading from '$lib/components/SectionHeading.svelte';
+  import { bootDelay } from '$lib/utils/bootDelay';
   import type { CardMedia, MediaType } from '$lib/types';
 
   let {
@@ -71,12 +72,14 @@
       onscroll={onScroll}
       class="scrollbar-hide -mt-4 -mb-12 flex gap-5 overflow-x-auto scroll-smooth px-4 pt-8 pb-24"
     >
-      {#each items as item (item.id)}
-        {#if card}
-          {@render card(item)}
-        {:else}
-          <MediaCard media={item} {type} />
-        {/if}
+      {#each items as item, i (item.id)}
+        <div class="animate-boot-in shrink-0 motion-reduce:animate-none" style={bootDelay(i)}>
+          {#if card}
+            {@render card(item)}
+          {:else}
+            <MediaCard media={item} {type} />
+          {/if}
+        </div>
       {/each}
     </div>
 

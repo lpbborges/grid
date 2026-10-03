@@ -32,6 +32,16 @@ describe('MediaRow component', () => {
     expect(screen.getAllByText('Beta')[0]).toBeTruthy();
   });
 
+  it('staggers the reveal of the cards, capped at 11 steps', () => {
+    const items = Array.from({ length: 13 }, (_, i) => makeMovie(`tt${i}`, `T${i}`));
+    render(MediaRow, { heading: 'Filmes', items, type: 'movie' });
+
+    const wrappers = screen.getAllByTestId('media-card').map((card) => card.parentElement!);
+    expect(wrappers.map((w) => w.style.animationDelay).slice(0, 2)).toEqual(['0ms', '40ms']);
+    expect(wrappers[12].style.animationDelay).toBe('440ms');
+    expect(wrappers[0]).toHaveClass('animate-boot-in');
+  });
+
   it('links items to the correct route for the given type', () => {
     render(MediaRow, {
       heading: 'Séries Populares',
