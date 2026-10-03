@@ -42,6 +42,8 @@ Use VS Code with the Svelte, Tauri, and rust-analyzer extensions.
 
 The SvelteKit frontend runs in the Tauri webview, fetching from APIs and invoking Rust commands. The Rust backend handles sidecar spawning, stream proxying, cache management, and native playback via libmpv. WebKitGTK requires a stream proxy (`src-tauri/src/stream_proxy.rs`) to patch headers in Matroska and MP4 files so embedded subtitles work. Hovering a card for a moment (or focusing it with the keyboard) opens a details card with the genres and runtime, read from Cinemeta and cached in memory; Settings can turn it off. Preferences, progress and the user's lists (Favoritos, Assistir depois and their own) live in `localStorage`, translations in IndexedDB, and the video cache in the app data directory.
 
+The UI is built from internal primitives in `src/lib/components/ui/` (Button, IconButton, Icon, Menu, Select, TextField, Panel, Modal, Label) and the design tokens in `src/app.css` (border tints, shadows, stacking layers). Dismiss, menu keyboard and focus-trap behaviour live in `src/lib/composables/` (`useDismissable`, `useMenu`, `useFocusTrap`). Component tests may use `vitest-axe` for accessibility checks.
+
 ## Sidecars and dependencies
 
 Grid uses `rqbit` as a streaming engine sidecar. For native playback on Linux and Windows, Grid links libmpv in-process. Development builds link the system library, while release builds bundle an LGPL build.
