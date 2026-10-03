@@ -4,7 +4,6 @@
   import NextEpisodeCard from './NextEpisodeCard.svelte';
   import DecodeText from './DecodeText.svelte';
   import HudProgress from './HudProgress.svelte';
-  import HudSpinner from './HudSpinner.svelte';
   import { UP_NEXT_COUNTDOWN_SECONDS } from '$lib/utils/upNext';
   import { findIntro } from '$lib/utils/intro';
   import { groupByLanguage } from '$lib/composables/useSubtitleSelection.svelte';
@@ -291,7 +290,7 @@
     >
       {#if backend.error}
         <svg
-          class="text-error mb-6 h-16 w-16 [filter:drop-shadow(0_0_10px_rgba(239,68,68,0.8))]"
+          class="text-error mb-6 h-16 w-16"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -304,9 +303,7 @@
           />
         </svg>
       {:else}
-        <div class="mb-6 flex h-16 w-16 items-center justify-center" data-testid="loading-spinner">
-          <HudSpinner />
-        </div>
+        <div data-testid="loading-spinner" hidden></div>
       {/if}
       {#if backend.error || !backend.hasStarted}
         <div
