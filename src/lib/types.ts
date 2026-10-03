@@ -205,6 +205,8 @@ export interface PlayerBackend {
   selectSubtitle(index: number): void | Promise<void>;
   /** DOM: element fullscreen. mpv: the Tauri window's. */
   toggleFullscreen(): void | Promise<void>;
+  /** Leaves fullscreen; does nothing when the player is not fullscreen. */
+  exitFullscreen(): void | Promise<void>;
   /** Lifts the subtitles above whatever the shell draws over the bottom of the picture. */
   syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean, cardVisible: boolean): void;
 }

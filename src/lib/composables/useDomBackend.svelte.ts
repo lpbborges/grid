@@ -233,6 +233,9 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
         document.exitFullscreen();
       }
     },
+    exitFullscreen: () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+    },
     selectAudio: (index: number) => audioSelection.selectAudioTrack(getVideoElement(), index),
     selectSubtitle: (index: number) => subtitleSelection.selectTrack(index),
     syncOverlayLayout: (

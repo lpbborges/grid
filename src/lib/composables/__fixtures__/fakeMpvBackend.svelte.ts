@@ -48,6 +48,7 @@ export function createFakeMpvBackend() {
     setVolume: vi.fn(),
     togglePlay: vi.fn(),
     toggleFullscreen: vi.fn(),
+    exitFullscreen: vi.fn(),
     selectAudio: vi.fn(),
     selectSubtitle: vi.fn(),
     syncOverlayLayout: vi.fn(),

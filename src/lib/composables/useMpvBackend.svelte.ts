@@ -194,6 +194,15 @@ export function useMpvBackend() {
     }
   }
 
+  async function exitFullscreen() {
+    try {
+      const window = getCurrentWindow();
+      if (await window.isFullscreen()) await window.setFullscreen(false);
+    } catch (e) {
+      logger.error('Erro ao sair da tela cheia', e);
+    }
+  }
+
   function syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean, cardVisible: boolean) {
     const next = cardVisible ? 55 : menusOpen ? 70 : controlsVisible ? 80 : 100;
     if (next === subtitlePosition) return;
@@ -362,6 +371,7 @@ export function useMpvBackend() {
     selectAudio,
     selectSubtitle,
     toggleFullscreen,
+    exitFullscreen,
     syncOverlayLayout
   };
 }

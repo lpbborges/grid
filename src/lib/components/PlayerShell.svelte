@@ -231,12 +231,9 @@
         if (showCard && upNext) {
           e.preventDefault();
           upNext.oncancel();
-        } else if (document.fullscreenElement) {
+        } else {
           e.preventDefault();
-          backend.toggleFullscreen();
-        } else if (onclose) {
-          e.preventDefault();
-          onclose();
+          backend.exitFullscreen();
         }
         break;
       case 'Home':

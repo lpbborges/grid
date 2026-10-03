@@ -29,6 +29,7 @@ function fakeBackend(overrides: Partial<PlayerBackend> = {}): PlayerBackend {
     selectAudio: vi.fn(),
     selectSubtitle: vi.fn(),
     toggleFullscreen: vi.fn(),
+    exitFullscreen: vi.fn(),
     syncOverlayLayout: vi.fn(),
     ...overrides
   };
@@ -114,17 +115,17 @@ describe('PlayerShell', () => {
     expect(onclose).not.toHaveBeenCalled();
   });
 
-  it('closes the player with Escape while the card is not on screen yet', async () => {
+  it('only leaves fullscreen with Escape while the card is not on screen yet', async () => {
     const upNext = upNextCard();
     const onclose = vi.fn();
-    render(PlayerShell, {
-      props: { backend: fakeBackend({ hasStarted: false }), surface: emptySurface, upNext, onclose }
-    });
+    const backend = fakeBackend({ hasStarted: false });
+    render(PlayerShell, { props: { backend, surface: emptySurface, upNext, onclose } });
 
     await fireEvent.keyDown(window, { key: 'Escape' });
 
     expect(upNext.oncancel).not.toHaveBeenCalled();
-    expect(onclose).toHaveBeenCalledTimes(1);
+    expect(backend.exitFullscreen).toHaveBeenCalledTimes(1);
+    expect(onclose).not.toHaveBeenCalled();
   });
 
   it('does not move focus onto the card', () => {
