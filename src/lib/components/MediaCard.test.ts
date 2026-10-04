@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import MediaCard from './MediaCard.svelte';
 import type { Movie } from '../types';
-import { settingsStore } from '$lib/stores/settings.svelte';
 import { progressStore } from '$lib/stores/progress.svelte';
 import { hoverPreview, HOVER_DELAY_MS } from '$lib/stores/hoverPreview.svelte';
 
@@ -165,31 +164,14 @@ describe('MediaCard component', () => {
     expect(getByTestId('media-card').textContent).not.toContain('assistido');
   });
 
-  describe('hover effects', () => {
-    afterEach(() => {
-      settingsStore.hoverPreview = true;
-    });
+  it('only glows while the hover preview covers the poster', () => {
+    const { getByTestId, getByAltText } = render(MediaCard, { media: mockMovie, type: 'movie' });
 
-    it('only glows while the hover preview covers the poster', () => {
-      settingsStore.hoverPreview = true;
-      const { getByTestId, getByAltText } = render(MediaCard, { media: mockMovie, type: 'movie' });
-
-      const card = getByTestId('media-card');
-      expect(card.className).not.toContain('hover:-translate-y-2');
-      expect(card.className).toContain('focus-visible:shadow-');
-      expect(getByAltText('Test Movie').className).not.toContain('group-hover:scale-110');
-      expect(card.querySelector('.bg-\\[length\\:100\\%_4px\\]')).toBeNull();
-    });
-
-    it('keeps the full lift, zoom and scanline when the preview is off', () => {
-      settingsStore.hoverPreview = false;
-      const { getByTestId, getByAltText } = render(MediaCard, { media: mockMovie, type: 'movie' });
-
-      const card = getByTestId('media-card');
-      expect(card.className).toContain('hover:-translate-y-2');
-      expect(getByAltText('Test Movie').className).toContain('group-hover:scale-110');
-      expect(card.querySelector('.bg-\\[length\\:100\\%_4px\\]')).not.toBeNull();
-    });
+    const card = getByTestId('media-card');
+    expect(card.className).not.toContain('hover:-translate-y-2');
+    expect(card.className).toContain('focus-visible:shadow-');
+    expect(getByAltText('Test Movie').className).not.toContain('group-hover:scale-110');
+    expect(card.innerHTML).not.toContain('4px');
   });
 
   describe('hover preview', () => {

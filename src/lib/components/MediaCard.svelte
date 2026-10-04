@@ -3,7 +3,6 @@
   import { watchedStore } from '$lib/stores/watched.svelte';
   import { progressStore } from '$lib/stores/progress.svelte';
   import { hoverPreview } from '$lib/stores/hoverPreview.svelte';
-  import { settingsStore } from '$lib/stores/settings.svelte';
   import Skeleton from './Skeleton.svelte';
 
   let {
@@ -37,8 +36,6 @@
     if (node.complete) imageSettled = true;
   }
 
-  let fullEffect = $derived(!settingsStore.hoverPreview);
-
   function rowContext() {
     return { href, onremove, progress, episodeLabel, upNext };
   }
@@ -51,9 +48,9 @@
 
 <a
   href={href ?? `/${type}/${media.id}`}
-  class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent focus-visible:ring-2 focus-visible:outline-none {fullEffect
-    ? 'transition-all duration-300 will-change-transform hover:-translate-y-2'
-    : 'transition-shadow duration-[600ms]'} {watchedStore.has(media.id)
+  class="group bg-surface/50 focus-visible:ring-green relative isolate flex w-[180px] shrink-0 cursor-pointer flex-col border border-transparent transition-shadow duration-[600ms] focus-visible:ring-2 focus-visible:outline-none {watchedStore.has(
+    media.id
+  )
     ? 'hover:shadow-glow-green focus-visible:shadow-glow-green'
     : 'hover:shadow-glow-primary focus-visible:shadow-glow-primary'}"
   data-testid="media-card"
@@ -85,16 +82,8 @@
       onload={() => (imageSettled = true)}
       onerror={() => (imageSettled = true)}
       {@attach markIfCached}
-      class="h-full w-full object-cover {imageSettled ? '' : 'opacity-0'} {fullEffect
-        ? 'transition-transform duration-500 will-change-transform group-hover:scale-110 group-hover:opacity-80'
-        : ''}"
+      class="h-full w-full object-cover {imageSettled ? '' : 'opacity-0'}"
     />
-    <!-- Scanline effect overlay on hover -->
-    {#if fullEffect}
-      <div
-        class="pointer-events-none absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-      ></div>
-    {/if}
     {#if shownProgress}
       {#if progress}
         <div

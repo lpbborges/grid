@@ -284,6 +284,20 @@ describe('Movie playback wiring', () => {
     });
   });
 
+  it('sizes the cues from the stored subtitle size and follows the subtitle menu', async () => {
+    settingsStore.subtitleScale = 125;
+    await openAndPlay();
+    await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    const root = document.documentElement;
+    expect(root.style.getPropertyValue('--subtitle-scale')).toBe('1.25');
+
+    await fireEvent.click(await screen.findByLabelText('Menu de Legendas', {}, { timeout: 5000 }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Aumentar tamanho da legenda' }));
+
+    expect(root.style.getPropertyValue('--subtitle-scale')).toBe('1.5');
+    settingsStore.subtitleScale = 100;
+  });
+
   it('records a cacheable stream and forgets it from the engine when the player closes', async () => {
     await openAndPlay();
     await screen.findByTestId('video-element', {}, { timeout: 5000 });

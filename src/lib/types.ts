@@ -209,6 +209,8 @@ export interface PlayerBackend {
   exitFullscreen(): void | Promise<void>;
   /** Lifts the subtitles above whatever the shell draws over the bottom of the picture. */
   syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean, cardVisible: boolean): void;
+  /** Subtitle size as a percentage of the normal one. */
+  setSubtitleScale(percent: number): void;
 }
 
 /** What the player's next episode card shows and does. */

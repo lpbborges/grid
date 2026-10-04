@@ -34,6 +34,7 @@ function domBackendWith(overrides: any): any {
     selectAudio: vi.fn(),
     selectSubtitle: vi.fn(),
     syncOverlayLayout: vi.fn(),
+    setSubtitleScale: vi.fn(),
     handleLoadedMetadata: vi.fn(),
     handleTimeUpdate: vi.fn(),
     handlePlaying: vi.fn(),
@@ -72,6 +73,7 @@ function fakeMpvBackend(overrides: any): any {
     selectAudio: vi.fn(),
     selectSubtitle: vi.fn(),
     syncOverlayLayout: vi.fn(),
+    setSubtitleScale: vi.fn(),
     ...overrides
   };
 }

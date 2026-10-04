@@ -4,7 +4,9 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Label from '$lib/components/ui/Label.svelte';
   import MenuItem from '$lib/components/ui/MenuItem.svelte';
+  import IconButton from '$lib/components/ui/IconButton.svelte';
   import Panel from '$lib/components/ui/Panel.svelte';
+  import { SUBTITLE_SCALE_STEPS } from '$lib/stores/settings.svelte';
 
   interface SubtitleGroup {
     label: string;
@@ -20,9 +22,11 @@
     expandedGroups,
     subtitleError,
     showMenu,
+    scale,
     ontoggle,
     onselect,
-    ontogglegroup
+    ontogglegroup,
+    onscale
   }: {
     subtitles: SubtitleTrack[];
     torrentSubsGrouped: SubtitleGroup[];
@@ -32,10 +36,13 @@
     expandedGroups: Record<string, boolean>;
     subtitleError: string;
     showMenu: boolean;
+    scale: number;
     ontoggle: () => void;
     onselect: (index: number) => void;
     ontogglegroup: (groupKey: string, label: string) => void;
+    onscale: (percent: number) => void;
   } = $props();
+  const scaleIndex = $derived(SUBTITLE_SCALE_STEPS.findIndex((step) => step === scale));
   // Open state belongs to PlayerShell, whose global click and key handlers close it and which
   // recognises these elements by data-menu-element. That is why this does not use ui/Menu.
 </script>
@@ -110,17 +117,39 @@
     {#if showMenu}
       <Panel
         data-menu-element
-        role="menu"
-        aria-label="Legendas"
         glass
         padding="xs"
         shadow="glow-primary"
         class="z-dropdown absolute right-0 bottom-full mb-2 max-h-[60vh] w-56 overflow-y-auto"
       >
-        <MenuItem selected={activeIndex === -1} onclick={() => onselect(-1)}>Desativado</MenuItem>
+        <div role="group" aria-label="Tamanho da legenda" class="flex items-center gap-2 px-1 pb-2">
+          <Label class="flex-1">Tamanho</Label>
+          <IconButton
+            data-menu-element
+            size="sm"
+            icon="minus"
+            label="Diminuir tamanho da legenda"
+            disabled={scaleIndex <= 0}
+            onclick={() => onscale(SUBTITLE_SCALE_STEPS[scaleIndex - 1])}
+          />
+          <span aria-live="polite" class="text-main w-12 text-center text-sm font-bold">
+            {scale}%
+          </span>
+          <IconButton
+            data-menu-element
+            size="sm"
+            icon="plus"
+            label="Aumentar tamanho da legenda"
+            disabled={scaleIndex < 0 || scaleIndex >= SUBTITLE_SCALE_STEPS.length - 1}
+            onclick={() => onscale(SUBTITLE_SCALE_STEPS[scaleIndex + 1])}
+          />
+        </div>
+        <div role="menu" aria-label="Legendas">
+          <MenuItem selected={activeIndex === -1} onclick={() => onselect(-1)}>Desativado</MenuItem>
 
-        {@render subtitleGroupSection('Embedded', 'Embutida', torrentSubsGrouped)}
-        {@render subtitleGroupSection('Extra', 'Externa', externalSubsGrouped)}
+          {@render subtitleGroupSection('Embedded', 'Embutida', torrentSubsGrouped)}
+          {@render subtitleGroupSection('Extra', 'Externa', externalSubsGrouped)}
+        </div>
       </Panel>
     {/if}
   </div>

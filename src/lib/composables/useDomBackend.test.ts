@@ -39,6 +39,14 @@ describe('useDomBackend', () => {
     return backend!;
   }
 
+  it('scales the cues through a custom property', async () => {
+    const backend = await mountBackend();
+
+    backend.setSubtitleScale(150);
+
+    expect(document.documentElement.style.getPropertyValue('--subtitle-scale')).toBe('1.5');
+  });
+
   it('exposes the stream URL only after start()', async () => {
     const backend = await mountBackend();
     expect(backend.src).toBe('');

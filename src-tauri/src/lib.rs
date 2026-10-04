@@ -68,6 +68,7 @@ pub fn run() {
             player_commands::native_player_select_audio,
             player_commands::native_player_select_subtitle,
             player_commands::native_player_set_subtitle_position,
+            player_commands::native_player_set_subtitle_scale,
             player_commands::stop_native_player,
             player_commands::cache_native_subtitles
         ])

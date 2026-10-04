@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { axe } from 'vitest-axe';
+import { settingsStore } from '$lib/stores/settings.svelte';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import PlayerShell from './PlayerShell.svelte';
@@ -32,6 +34,7 @@ function fakeBackend(overrides: Partial<PlayerBackend> = {}): PlayerBackend {
     toggleFullscreen: vi.fn(),
     exitFullscreen: vi.fn(),
     syncOverlayLayout: vi.fn(),
+    setSubtitleScale: vi.fn(),
     ...overrides
   };
 }
@@ -446,8 +449,74 @@ describe('PlayerShell', () => {
       await fireEvent.click(screen.getByLabelText('Menu de Legendas'));
       const menu = screen.getByRole('menu', { name: 'Legendas' });
 
-      expect(menu).toHaveAttribute('data-menu-element');
+      expect(menu.closest('[data-menu-element]')).not.toBeNull();
       expect(within(menu).getAllByRole('menuitem')[0]).toHaveTextContent('Desativado');
+    });
+  });
+
+  describe('subtitle size', () => {
+    beforeEach(() => {
+      localStorage.clear();
+      settingsStore.subtitleScale = 100;
+    });
+
+    async function openSubtitleMenu(backend = fakeBackend({ hasStarted: true })) {
+      render(PlayerShell, { props: { backend, surface: emptySurface } });
+      await fireEvent.click(screen.getByLabelText('Menu de Legendas'));
+      return backend;
+    }
+
+    it('hands the stored size to the backend as soon as it renders', () => {
+      settingsStore.subtitleScale = 150;
+      const backend = fakeBackend({ hasStarted: true });
+      render(PlayerShell, { props: { backend, surface: emptySurface } });
+
+      expect(backend.setSubtitleScale).toHaveBeenCalledWith(150);
+    });
+
+    it('stores and applies the next step from the stepper, and says so', async () => {
+      const backend = await openSubtitleMenu();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Aumentar tamanho da legenda' }));
+
+      expect(settingsStore.subtitleScale).toBe(125);
+      expect(backend.setSubtitleScale).toHaveBeenLastCalledWith(125);
+      expect(screen.getByTestId('player-feedback')).toHaveTextContent('Legenda 125%');
+      expect(screen.getByRole('menu', { name: 'Legendas' })).toBeInTheDocument();
+    });
+
+    it.each(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'])(
+      '%s on the focused stepper does not seek or change the volume',
+      async (key) => {
+        const backend = await openSubtitleMenu();
+        const increase = screen.getByRole('button', { name: 'Aumentar tamanho da legenda' });
+        increase.focus();
+
+        await fireEvent.keyDown(increase, { key });
+
+        expect(backend.seek).not.toHaveBeenCalled();
+        expect(backend.setVolume).not.toHaveBeenCalled();
+      }
+    );
+
+    it('still seeks with the arrows when no menu is open', async () => {
+      const backend = fakeBackend({ hasStarted: true, currentTime: 50 });
+      render(PlayerShell, { props: { backend, surface: emptySurface } });
+      const trigger = screen.getByLabelText('Menu de Legendas');
+      trigger.focus();
+
+      await fireEvent.keyDown(trigger, { key: 'ArrowRight' });
+
+      expect(backend.seek).toHaveBeenCalledWith(60);
+    });
+
+    it('has no accessibility violations with the menu open', async () => {
+      render(PlayerShell, {
+        props: { backend: fakeBackend({ hasStarted: true }), surface: emptySurface }
+      });
+      await fireEvent.click(screen.getByLabelText('Menu de Legendas'));
+
+      expect(await axe(screen.getByTestId('video-player-container'))).toHaveNoViolations();
     });
   });
 

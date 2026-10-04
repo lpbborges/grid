@@ -721,6 +721,13 @@ impl Controller {
             .map_err(|e| describe_error(&e))
     }
 
+    /// `scale` is mpv's `sub-scale`: 1.0 keeps the subtitles at their normal size.
+    pub fn set_subtitle_scale(&self, scale: f64) -> Result<(), String> {
+        self.mpv
+            .set_property("sub-scale", scale)
+            .map_err(|e| describe_error(&e))
+    }
+
     /// `None` means no subtitles.
     pub fn set_subtitle_track(&self, id: Option<i64>) -> Result<(), String> {
         self.mpv
@@ -1252,6 +1259,15 @@ mod tests {
         player.set_subtitle_position(80.0).unwrap();
         let position: f64 = player.mpv().get_property("sub-pos").unwrap();
         assert_eq!(position, 80.0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn resizes_the_subtitles_to_the_requested_scale() {
+        let player = Controller::new(VideoOutput::Null).unwrap();
+        let (_playback, _events) = player.load(&fixture_mkv(), 0.0, &[]).await.unwrap();
+        player.set_subtitle_scale(1.5).unwrap();
+        let scale: f64 = player.mpv().get_property("sub-scale").unwrap();
+        assert_eq!(scale, 1.5);
     }
 
     #[tokio::test(flavor = "multi_thread")]

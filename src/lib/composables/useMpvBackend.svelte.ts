@@ -46,6 +46,7 @@ export function useMpvBackend() {
   let durationState = $state(0);
   let chapters = $state<Chapter[]>([]);
   let subtitlePosition = 86;
+  let subtitleScale = settingsStore.subtitleScale;
 
   let unlisteners: UnlistenFn[] = [];
   let current: PlaybackRequest | undefined;
@@ -159,6 +160,7 @@ export function useMpvBackend() {
       );
       await invoke('native_player_set_volume', { percent: volume * 100 });
       await invoke('native_player_set_subtitle_position', { percent: subtitlePosition });
+      await invoke('native_player_set_subtitle_scale', { scale: subtitleScale / 100 });
       // mpv launches paused; this applies the preferences and starts playback.
       await invoke('native_player_set_tracks', { aid, sid });
       // The flags still describe mpv's own defaults, so without this the menu
@@ -216,6 +218,15 @@ export function useMpvBackend() {
     if (!isRunning) return;
     invoke('native_player_set_subtitle_position', { percent: next }).catch((e) =>
       logger.error('Erro ao posicionar as legendas', e)
+    );
+  }
+
+  function setSubtitleScale(percent: number) {
+    if (percent === subtitleScale) return;
+    subtitleScale = percent;
+    if (!isRunning) return;
+    invoke('native_player_set_subtitle_scale', { scale: percent / 100 }).catch((e) =>
+      logger.error('Erro ao redimensionar as legendas', e)
     );
   }
 
@@ -379,6 +390,7 @@ export function useMpvBackend() {
     selectSubtitle,
     toggleFullscreen,
     exitFullscreen,
-    syncOverlayLayout
+    syncOverlayLayout,
+    setSubtitleScale
   };
 }

@@ -41,6 +41,10 @@ impl Controller {
         match *self {}
     }
 
+    pub fn set_subtitle_scale(&self, _scale: f64) -> Result<(), String> {
+        match *self {}
+    }
+
     pub fn set_audio_track(&self, _id: Option<i64>) -> Result<(), String> {
         match *self {}
     }

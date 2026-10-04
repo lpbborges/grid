@@ -33,6 +33,7 @@
     expandedGroups = {},
     subtitleError = '',
     showSubtitleMenu = false,
+    subtitleScale = 100,
     audioTracks = [],
     activeAudioIndex,
     showAudioMenu = false,
@@ -45,6 +46,7 @@
     ontogglesubtitlemenu,
     ontoggleaudiomenu,
     ontogglegroup,
+    onsubtitlescale,
     onclose,
     title = '',
     episodeLabel = '',
@@ -64,6 +66,7 @@
     expandedGroups?: Record<string, boolean>;
     subtitleError?: string;
     showSubtitleMenu?: boolean;
+    subtitleScale?: number;
     audioTracks?: ParsedAudioTrack[];
     activeAudioIndex: number;
     showAudioMenu?: boolean;
@@ -76,6 +79,7 @@
     ontogglesubtitlemenu?: () => void;
     ontoggleaudiomenu?: () => void;
     ontogglegroup?: (groupKey: string, label: string) => void;
+    onsubtitlescale?: (percent: number) => void;
     onclose?: () => void;
     /** What is playing; shown right after the close button. */
     title?: string;
@@ -302,6 +306,8 @@
         {expandedGroups}
         {subtitleError}
         showMenu={showSubtitleMenu}
+        scale={subtitleScale}
+        onscale={(percent) => onsubtitlescale?.(percent)}
         ontoggle={ontogglesubtitlemenu}
         onselect={(index) => {
           onselectsubtitle(index);

@@ -4,6 +4,7 @@ export type IconName =
   | 'chevron-right'
   | 'x'
   | 'plus'
+  | 'minus'
   | 'check'
   | 'search'
   | 'dots-vertical'
@@ -35,6 +36,7 @@ export const ICONS: Record<IconName, IconDef> = {
       { tag: 'line', attrs: { x1: 6, y1: 6, x2: 18, y2: 18 } }
     ]
   },
+  minus: { shapes: [{ tag: 'path', attrs: { d: 'M5 12h14' } }] },
   plus: { shapes: [{ tag: 'path', attrs: { d: 'M12 5v14M5 12h14' } }] },
   check: { shapes: [{ tag: 'polyline', attrs: { points: '20 6 9 17 4 12' } }] },
   search: {

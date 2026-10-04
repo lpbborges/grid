@@ -5,7 +5,6 @@ import {
   LEAVE_GRACE_MS,
   SCROLL_QUIET_MS
 } from './hoverPreview.svelte';
-import { settingsStore } from './settings.svelte';
 import { playerState } from '$lib/stores.svelte';
 
 const movie = { id: 'tt1', title: 'Um', medium_cover_image: 'a.jpg' };
@@ -19,7 +18,6 @@ describe('hoverPreview', () => {
     vi.useFakeTimers();
     card = document.createElement('a');
     otherCard = document.createElement('a');
-    settingsStore.hoverPreview = true;
     playerState.isPlaying = false;
   });
 
@@ -90,15 +88,6 @@ describe('hoverPreview', () => {
 
   it('does not open while the player is playing', () => {
     playerState.isPlaying = true;
-    hoverPreview.request(card, movie, 'movie');
-
-    vi.advanceTimersByTime(HOVER_DELAY_MS);
-
-    expect(hoverPreview.active).toBeNull();
-  });
-
-  it('does not open when the setting is off', () => {
-    settingsStore.hoverPreview = false;
     hoverPreview.request(card, movie, 'movie');
 
     vi.advanceTimersByTime(HOVER_DELAY_MS);

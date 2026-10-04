@@ -208,6 +208,25 @@ pub async fn native_player_set_subtitle_position(
     running_player(&state)?.set_subtitle_position(percent)
 }
 
+const MIN_SUBTITLE_SCALE: f64 = 0.5;
+const MAX_SUBTITLE_SCALE: f64 = 3.0;
+
+fn is_valid_subtitle_scale(scale: f64) -> bool {
+    scale.is_finite() && (MIN_SUBTITLE_SCALE..=MAX_SUBTITLE_SCALE).contains(&scale)
+}
+
+/// Resizes the subtitles, on mpv's `sub-scale` factor (1.0 is the normal size).
+#[tauri::command]
+pub async fn native_player_set_subtitle_scale(
+    state: State<'_, player::NativePlayerState>,
+    scale: f64,
+) -> Result<(), String> {
+    if !is_valid_subtitle_scale(scale) {
+        return Err("Invalid subtitle scale".to_string());
+    }
+    running_player(&state)?.set_subtitle_scale(scale)
+}
+
 /// Ends the current file. The player itself lives for the whole app run.
 #[tauri::command]
 pub async fn stop_native_player(
@@ -274,4 +293,20 @@ pub(crate) fn start_stream_proxy(app: &tauri::AppHandle) -> std::io::Result<u16>
         }
     });
     Ok(port)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_only_finite_subtitle_scales_within_bounds() {
+        assert!(is_valid_subtitle_scale(0.5));
+        assert!(is_valid_subtitle_scale(1.0));
+        assert!(is_valid_subtitle_scale(3.0));
+        assert!(!is_valid_subtitle_scale(0.49));
+        assert!(!is_valid_subtitle_scale(3.01));
+        assert!(!is_valid_subtitle_scale(f64::NAN));
+        assert!(!is_valid_subtitle_scale(f64::INFINITY));
+    }
 }

@@ -7,7 +7,11 @@
   import PreferenceSelectors from '$lib/components/PreferenceSelectors.svelte';
   import QualitySelector from '$lib/components/QualitySelector.svelte';
   import { DISCLAIMER_TEXT } from '$lib/components/DisclaimerModal.svelte';
-  import { MAX_CACHE_LIMIT_BYTES, settingsStore } from '$lib/stores/settings.svelte';
+  import {
+    MAX_CACHE_LIMIT_BYTES,
+    SUBTITLE_SCALE_STEPS,
+    settingsStore
+  } from '$lib/stores/settings.svelte';
   import { BYTES_PER_GB, formatGigabytes } from '$lib/utils/formatBytes';
   import { clearDownloadedVideos } from '$lib/engine/orchestrator';
   import { getCacheUsageBytes } from '$lib/engine/cache';
@@ -15,6 +19,10 @@
   import { version } from '../../../package.json';
 
   let { data } = $props();
+
+  let subtitleScaleIndex = $derived(
+    (SUBTITLE_SCALE_STEPS as readonly number[]).indexOf(settingsStore.subtitleScale)
+  );
 
   let cacheUsageBytes = $derived(data.cacheUsageBytes);
   let cacheLimitGb = $derived(Math.round(settingsStore.cacheLimitBytes / BYTES_PER_GB));
@@ -46,8 +54,8 @@
 </script>
 
 <div class="mx-auto flex max-w-3xl flex-col gap-10 pb-10">
-  <div class="flex items-center gap-3">
-    <Button variant="ghost" onclick={goBack}>
+  <div class="flex flex-col items-start gap-3">
+    <Button variant="ghost" size="sm" class="-ml-3" onclick={goBack}>
       {#snippet leading()}
         <Icon name="chevron-left" size="md" />
       {/snippet}
@@ -65,17 +73,35 @@
         <QualitySelector />
       </div>
     </div>
-    <label class="text-main mt-6 flex cursor-pointer items-center gap-3 text-sm">
-      <input
-        type="checkbox"
-        bind:checked={settingsStore.hoverPreview}
-        class="accent-green focus-visible:ring-green h-4 w-4 cursor-pointer focus-visible:ring-2 focus-visible:outline-none"
-      />
-      Prévia ao passar o mouse
-    </label>
-    <p class="text-muted mt-1 text-sm">
-      Mostra os detalhes de um título ao passar o mouse sobre ele.
-    </p>
+    <div class="mt-4 flex flex-col gap-3">
+      <div class="flex flex-col gap-2">
+        <div class="flex items-baseline justify-between">
+          <Label as="label" for="subtitle-scale">Tamanho da legenda</Label>
+          <span class="text-main font-mono text-sm">{settingsStore.subtitleScale}%</span>
+        </div>
+        <input
+          id="subtitle-scale"
+          type="range"
+          min="0"
+          max={SUBTITLE_SCALE_STEPS.length - 1}
+          step="1"
+          value={subtitleScaleIndex}
+          aria-valuetext={`${settingsStore.subtitleScale}%`}
+          oninput={(e) =>
+            (settingsStore.subtitleScale = SUBTITLE_SCALE_STEPS[Number(e.currentTarget.value)])}
+          class="accent-green focus-visible:ring-green w-full cursor-pointer focus-visible:ring-2 focus-visible:outline-none"
+        />
+        <p class="text-muted text-sm">Também pode ser ajustado durante a reprodução.</p>
+      </div>
+      <div
+        data-testid="subtitle-preview"
+        aria-hidden="true"
+        class="subtitle-preview border-line-strong w-full overflow-hidden rounded-sm border px-4 py-3 text-center"
+        style:--subtitle-scale={settingsStore.subtitleScale / 100}
+      >
+        <p class="subtitle-preview-text">Eu disse que voltaria antes do amanhecer.</p>
+      </div>
+    </div>
   </section>
 
   <section>

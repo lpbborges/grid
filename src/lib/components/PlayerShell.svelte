@@ -5,6 +5,7 @@
   import DecodeText from './DecodeText.svelte';
   import HudProgress from './HudProgress.svelte';
   import Panel from './ui/Panel.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
   import { UP_NEXT_COUNTDOWN_SECONDS } from '$lib/utils/upNext';
   import { findIntro } from '$lib/utils/intro';
   import { groupByLanguage } from '$lib/composables/useSubtitleSelection.svelte';
@@ -90,6 +91,15 @@
   $effect(() => {
     backend.syncOverlayLayout(controlsVisible, menusOpen, showCard);
   });
+
+  $effect(() => {
+    backend.setSubtitleScale(settingsStore.subtitleScale);
+  });
+
+  function changeSubtitleScale(percent: number) {
+    settingsStore.subtitleScale = percent;
+    showFeedback(`Legenda ${percent}%`);
+  }
 
   $effect(() => {
     playerState.showControls = controlsVisible;
@@ -208,6 +218,15 @@
     const isSlider = active && active.getAttribute('role') === 'slider';
 
     if (isInput || e.ctrlKey || e.metaKey || e.altKey) return;
+
+    // A menu owns the arrows and Home/End while focus is inside it.
+    if (
+      (showSubtitleMenu || showAudioMenu) &&
+      active?.closest('[data-menu-element]') &&
+      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)
+    ) {
+      return;
+    }
 
     switch (e.key.length === 1 ? e.key.toLowerCase() : e.key) {
       case ' ':
@@ -397,6 +416,8 @@
     {expandedGroups}
     subtitleError={backend.subtitleError}
     {showSubtitleMenu}
+    subtitleScale={settingsStore.subtitleScale}
+    onsubtitlescale={changeSubtitleScale}
     audioTracks={backend.audioTracks}
     activeAudioIndex={backend.activeAudioIndex}
     {showAudioMenu}

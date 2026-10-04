@@ -1,6 +1,5 @@
 import type { CardMedia, MediaType } from '$lib/types';
 import { playerState } from '$lib/stores.svelte';
-import { settingsStore } from './settings.svelte';
 
 export const HOVER_DELAY_MS = 600;
 export const LEAVE_GRACE_MS = 120;
@@ -37,7 +36,7 @@ class HoverPreviewStore {
   #rearmTimer: ReturnType<typeof setTimeout> | undefined;
 
   #enabled(): boolean {
-    return settingsStore.hoverPreview && !playerState.isPlaying;
+    return !playerState.isPlaying;
   }
 
   #allowed(): boolean {

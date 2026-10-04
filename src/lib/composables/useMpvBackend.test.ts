@@ -80,6 +80,7 @@ describe('useMpvBackend', () => {
       'start_native_player',
       'native_player_set_volume',
       'native_player_set_subtitle_position',
+      'native_player_set_subtitle_scale',
       'native_player_set_tracks'
     ]);
     // D4 is dropped: mpv renders inside this window, so minimizing it would
@@ -434,6 +435,39 @@ describe('useMpvBackend', () => {
     });
 
     expect(invoke).toHaveBeenCalledWith('native_player_set_subtitle_position', { percent: 100 });
+  });
+
+  it('applies the stored subtitle size when mpv starts', async () => {
+    settingsStore.subtitleScale = 150;
+    await start();
+
+    expect(invoke).toHaveBeenCalledWith('native_player_set_subtitle_scale', { scale: 1.5 });
+    settingsStore.subtitleScale = 100;
+  });
+
+  it('resizes the subtitles while playing', async () => {
+    const { player } = await start();
+
+    player.setSubtitleScale(125);
+
+    expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_scale', { scale: 1.25 });
+  });
+
+  it('keeps a subtitle size chosen before mpv started for the start', async () => {
+    const player = await mount();
+    player.setSubtitleScale(75);
+    expect(invoke).not.toHaveBeenCalledWith('native_player_set_subtitle_scale', {
+      scale: 0.75
+    });
+
+    await player.start({
+      url: 'http://127.0.0.1:1/x',
+      mediaId: 'tt1',
+      subtitles: [],
+      startSeconds: 0
+    });
+
+    expect(invoke).toHaveBeenCalledWith('native_player_set_subtitle_scale', { scale: 0.75 });
   });
 
   it('tracks position from native-player-time', async () => {

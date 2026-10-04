@@ -52,6 +52,7 @@ export function createFakeMpvBackend() {
     selectAudio: vi.fn(),
     selectSubtitle: vi.fn(),
     syncOverlayLayout: vi.fn(),
+    setSubtitleScale: vi.fn(),
     onended: undefined as (() => void) | undefined,
     emitEnded() {
       if (this.onended) this.onended();
