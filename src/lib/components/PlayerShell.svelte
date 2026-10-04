@@ -64,8 +64,11 @@
   let episodePanelElement = $state<HTMLElement | undefined>();
   let expandedGroups = $state<Record<string, boolean>>({});
 
+  const showCard = $derived(!!upNext && backend.hasStarted && !backend.buffering && !backend.error);
+  // The up-next card sits where the panel opens, so it takes the place.
+  const episodePanelOpen = $derived(showEpisodePanel && !showCard);
   const controlsVisible = $derived(
-    showControls || backend.paused || showSubtitleMenu || showAudioMenu || showEpisodePanel
+    showControls || backend.paused || showSubtitleMenu || showAudioMenu || episodePanelOpen
   );
   const shownPercent = $derived(Math.round(downloadPercent));
   const intro = $derived(findIntro(backend.chapters));
@@ -77,8 +80,7 @@
       backend.currentTime >= intro.start &&
       backend.currentTime < intro.end - 1
   );
-  const menusOpen = $derived(showSubtitleMenu || showAudioMenu || showEpisodePanel);
-  const showCard = $derived(!!upNext && backend.hasStarted && !backend.buffering && !backend.error);
+  const menusOpen = $derived(showSubtitleMenu || showAudioMenu || episodePanelOpen);
   // Never reads secondsLeft, so it is announced once rather than every second.
   const upNextAnnouncement = $derived(
     showCard && upNext
@@ -125,7 +127,11 @@
   }
 
   $effect(() => {
-    if (showEpisodePanel) episodePanelElement?.focus();
+    if (showCard) showEpisodePanel = false;
+  });
+
+  $effect(() => {
+    if (episodePanelOpen) episodePanelElement?.focus();
   });
 
   function toggleGroup(groupKey: string, label: string) {
@@ -430,21 +436,23 @@
   {/if}
   <p class="sr-only" aria-live="polite" data-testid="up-next-announcement">{upNextAnnouncement}</p>
 
-  {#if episodePanel && showEpisodePanel}
-    <Panel
-      bind:element={episodePanelElement}
-      data-menu-element
-      role="dialog"
-      aria-label="Lista de episódios"
-      tabindex={-1}
-      glass
-      padding="sm"
-      shadow="glow-primary"
-      class="z-dropdown absolute top-24 right-6 flex max-h-[45vh] w-[min(26rem,calc(100vw-3rem))] flex-col overflow-hidden"
-    >
-      {@render episodePanel(closeEpisodePanel)}
-    </Panel>
-  {/if}
+  {#snippet episodePanelView()}
+    {#if episodePanel && episodePanelOpen}
+      <Panel
+        bind:element={episodePanelElement}
+        data-menu-element
+        role="dialog"
+        aria-label="Lista de episódios"
+        tabindex={-1}
+        glass
+        padding="sm"
+        shadow="glow-primary"
+        class="z-dropdown absolute right-0 bottom-full mb-2 flex max-h-[45vh] w-[min(26rem,calc(100vw-3rem))] flex-col overflow-hidden"
+      >
+        {@render episodePanel(closeEpisodePanel)}
+      </Panel>
+    {/if}
+  {/snippet}
 
   <PlayerControls
     currentTime={backend.currentTime}
@@ -465,8 +473,13 @@
     audioTracks={backend.audioTracks}
     activeAudioIndex={backend.activeAudioIndex}
     {showAudioMenu}
-    {showEpisodePanel}
-    ontoggleepisodes={episodePanel ? () => (showEpisodePanel = !showEpisodePanel) : undefined}
+    showEpisodePanel={episodePanelOpen}
+    episodePanel={episodePanel ? episodePanelView : undefined}
+    ontoggleepisodes={episodePanel
+      ? () => {
+          if (!showCard) showEpisodePanel = !showEpisodePanel;
+        }
+      : undefined}
     onplaypause={() => backend.togglePlay()}
     onseek={(seconds) => backend.seek(seconds)}
     onvolume={(value) => backend.setVolume(value)}

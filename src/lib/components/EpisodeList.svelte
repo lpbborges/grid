@@ -19,7 +19,8 @@
     onPlayEpisode,
     originalLanguage,
     focusEpisode = null,
-    playing = false
+    playing = false,
+    showPreferences = true
   } = $props<{
     seriesId: string;
     episodes: Episode[];
@@ -31,6 +32,8 @@
     focusEpisode?: EpisodeRef | null;
     /** The focused episode is on screen right now (inside the player). */
     playing?: boolean;
+    /** Show the quality, audio and subtitle selectors above the list. */
+    showPreferences?: boolean;
   }>();
 
   let availableSeasons = $derived(
@@ -56,7 +59,9 @@
 {#if episodes && episodes.length > 0}
   <div class="flex min-h-0 flex-col gap-4">
     <div class="border-primary/30 flex flex-col gap-3 border-b pb-3">
-      <Label as="h3" tone="green">Episódios</Label>
+      {#if showPreferences}
+        <Label as="h3" tone="green">Episódios</Label>
+      {/if}
       <div class="flex items-center gap-2">
         <Select
           label="Temporada"
@@ -71,11 +76,15 @@
           value={String(selectedSeason)}
           onchange={(value) => (selectedSeason = Number(value))}
         />
-        <QualitySelector size="compact" showLabel={false} wrapperClass="flex-1" />
+        {#if showPreferences}
+          <QualitySelector size="compact" showLabel={false} wrapperClass="flex-1" />
+        {/if}
       </div>
-      <div class="mt-2 flex items-center gap-2">
-        <PreferenceSelectors {originalLanguage} size="compact" />
-      </div>
+      {#if showPreferences}
+        <div class="mt-2 flex items-center gap-2">
+          <PreferenceSelectors {originalLanguage} size="compact" />
+        </div>
+      {/if}
     </div>
 
     <div

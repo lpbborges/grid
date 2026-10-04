@@ -641,15 +641,35 @@ describe('PlayerShell', () => {
       expect(backend.exitFullscreen).not.toHaveBeenCalled();
     });
 
-    it('keeps the card ahead of the panel for Escape', async () => {
-      const upNext = upNextCard();
-      renderPanel(fakeBackend({ hasStarted: true }), { upNext });
+    it('hides while the up-next card is showing and stays closed afterwards', async () => {
+      const backend = fakeBackend({ hasStarted: true });
+      const view = render(PlayerShell, {
+        props: { backend, surface: emptySurface, episodePanel }
+      });
+      await openPanel();
+      expect(screen.getByRole('dialog', { name: 'Lista de episódios' })).toBeInTheDocument();
+
+      await view.rerender({ upNext: upNextCard() });
+      expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Lista de episódios' })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      );
+
+      await view.rerender({ upNext: undefined });
+      expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
+    });
+
+    it('opens upward from the list button, like the audio and subtitle menus', async () => {
+      renderPanel();
       await openPanel();
 
-      await fireEvent.keyDown(window, { key: 'Escape' });
-
-      expect(upNext.oncancel).toHaveBeenCalledTimes(1);
-      expect(screen.getByRole('dialog', { name: 'Lista de episódios' })).toBeInTheDocument();
+      const trigger = screen.getByRole('button', { name: 'Lista de episódios' });
+      const panel = screen.getByRole('dialog', { name: 'Lista de episódios' });
+      expect(trigger.parentElement).toContainElement(panel);
+      expect(panel.className).toContain('bottom-full');
+      expect(panel.className).toContain('right-0');
+      expect(panel.className).not.toContain('top-');
     });
 
     it.each(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'])(

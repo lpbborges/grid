@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { formatTime } from '$lib/utils/formatTime';
   import type { SubtitleTrack } from '$lib/types';
   import type { SubtitleGroup } from '$lib/composables/useSubtitleSelection.svelte';
@@ -49,6 +50,7 @@
     ontoggleaudiomenu,
     ontogglegroup,
     ontoggleepisodes,
+    episodePanel,
     onsubtitlescale,
     onclose,
     title = '',
@@ -85,6 +87,8 @@
     ontogglegroup?: (groupKey: string, label: string) => void;
     /** Only series pass this; it is what puts the episode list button on the bar. */
     ontoggleepisodes?: () => void;
+    /** The episode panel, rendered anchored above the episode list button. */
+    episodePanel?: Snippet;
     onsubtitlescale?: (percent: number) => void;
     onclose?: () => void;
     /** What is playing; shown right after the close button. */
@@ -323,17 +327,20 @@
       />
 
       {#if ontoggleepisodes}
-        <IconButton
-          data-menu-element
-          data-episodes-trigger
-          icon="list"
-          label="Lista de episódios"
-          size="sm"
-          surface="player"
-          aria-haspopup="dialog"
-          aria-expanded={showEpisodePanel}
-          onclick={ontoggleepisodes}
-        />
+        <div class="relative">
+          <IconButton
+            data-menu-element
+            data-episodes-trigger
+            icon="list"
+            label="Lista de episódios"
+            size="sm"
+            surface="player"
+            aria-haspopup="dialog"
+            aria-expanded={showEpisodePanel}
+            onclick={ontoggleepisodes}
+          />
+          {@render episodePanel?.()}
+        </div>
       {/if}
 
       {#if onfullscreen}

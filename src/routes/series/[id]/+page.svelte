@@ -333,9 +333,9 @@
         close();
         void switchEpisode(episode, startOver);
       }}
-      originalLanguage={series.language}
       focusEpisode={preparingEpisode}
       playing
+      showPreferences={false}
     />
   {/if}
 {/snippet}
