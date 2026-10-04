@@ -56,13 +56,32 @@ export async function getCatalogPage(
   }
 }
 
+/** Pages a year row may read to fill up: the newest releases are often not out yet. */
+const MAX_YEAR_PAGES = 5;
+
 export async function getCatalog(
   query: CatalogQuery,
   limit = 24,
   customFetch?: typeof fetch,
   skip = 0
 ): Promise<Movie[]> {
-  return (await getCatalogPage(query, limit, customFetch, skip)).titles;
+  if (query.catalog !== 'year') {
+    return (await getCatalogPage(query, limit, customFetch, skip)).titles;
+  }
+  const titles: Movie[] = [];
+  const seen = new Set<Movie['id']>();
+  for (let pages = 0; pages < MAX_YEAR_PAGES && titles.length < limit; pages++) {
+    const page = await getCatalogPage(query, limit, customFetch, skip);
+    for (const title of page.titles) {
+      if (titles.length < limit && !seen.has(title.id)) {
+        seen.add(title.id);
+        titles.push(title);
+      }
+    }
+    if (page.ended) break;
+    skip += page.consumed;
+  }
+  return titles;
 }
 
 export function getPopularMovies(limit = 24, customFetch?: typeof fetch): Promise<Movie[]> {

@@ -940,6 +940,70 @@ describe('getCatalog', () => {
     expect(movies.map((m) => m.title)).toEqual(['Um', 'Dois']);
   });
 
+  it('keeps reading further pages of a year catalog until the row is full', async () => {
+    const page = (...metas: unknown[]) =>
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas })));
+    page(
+      { id: 'tt1', name: 'Futuro', released: '2999-01-01T00:00:00.000Z', poster: 'a.jpg' },
+      { id: 'tt2', name: 'Um', released: '2020-01-01T00:00:00.000Z', poster: 'b.jpg' }
+    );
+    page(
+      { id: 'tt3', name: 'Dois', released: '2020-01-01T00:00:00.000Z', poster: 'c.jpg' },
+      { id: 'tt4', name: 'Tres', released: '2020-01-01T00:00:00.000Z', poster: 'd.jpg' }
+    );
+
+    const movies = await getCatalog({ type: 'movie', catalog: 'year', genre: '2020' }, 3);
+
+    expect(movies.map((m) => m.title)).toEqual(['Um', 'Dois', 'Tres']);
+    expect(vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url))).toEqual([
+      'https://v3-cinemeta.strem.io/catalog/movie/year/genre=2020.json',
+      'https://v3-cinemeta.strem.io/catalog/movie/year/genre=2020&skip=2.json'
+    ]);
+  });
+
+  it('lists a title once when consecutive pages of a year catalog overlap', async () => {
+    const page = (...metas: unknown[]) =>
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas })));
+    const meta = (id: string) => ({
+      id,
+      name: id,
+      released: '2020-01-01T00:00:00.000Z',
+      poster: 'a.jpg'
+    });
+    page(meta('tt1'), meta('tt2'));
+    page(meta('tt2'), meta('tt3'));
+
+    const movies = await getCatalog({ type: 'movie', catalog: 'year', genre: '2020' }, 3);
+
+    expect(movies.map((m) => m.id)).toEqual(['tt1', 'tt2', 'tt3']);
+  });
+
+  it('stops reading a year catalog when it ends or after a few pages', async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            metas: [{ id: 'tt1', name: 'Futuro', released: '2999-01-01T00:00:00.000Z' }]
+          })
+        )
+    );
+
+    expect(await getCatalog({ type: 'movie', catalog: 'year', genre: '2020' })).toEqual([]);
+    expect(vi.mocked(globalThis.fetch).mock.calls.length).toBeLessThanOrEqual(5);
+  });
+
+  it('reads a single page of any other catalog', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ metas: [{ id: 'tt1', name: 'Futuro', released: '2999-01-01' }] })
+      )
+    );
+
+    await getCatalog({ type: 'movie', catalog: 'top' });
+
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1);
+  });
+
   it('treats an unexpected answer as an empty catalog', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ metas: 'x' })));
 
