@@ -155,6 +155,13 @@ describe('Movie playback wiring', () => {
     );
   });
 
+  it('has no episode list in the player', async () => {
+    await openAndPlay();
+    await screen.findByTestId('player-title', {}, { timeout: 5000 });
+
+    expect(screen.queryByRole('button', { name: 'Lista de episódios' })).toBeNull();
+  });
+
   it('never plays a cinema recording, even with the most seeds', async () => {
     const recording = {
       name: 'Torrentio\n1080p',
@@ -282,6 +289,20 @@ describe('Movie playback wiring', () => {
       command: 'fetch_external_subtitle',
       args: { url: 'https://subs5.strem.io/en/fixture.srt' }
     });
+  });
+
+  it('sizes the cues from the stored subtitle size and follows the subtitle menu', async () => {
+    settingsStore.subtitleScale = 125;
+    await openAndPlay();
+    await screen.findByTestId('video-element', {}, { timeout: 5000 });
+    const root = document.documentElement;
+    expect(root.style.getPropertyValue('--subtitle-scale')).toBe('1.25');
+
+    await fireEvent.click(await screen.findByLabelText('Menu de Legendas', {}, { timeout: 5000 }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Aumentar tamanho da legenda' }));
+
+    expect(root.style.getPropertyValue('--subtitle-scale')).toBe('1.5');
+    settingsStore.subtitleScale = 100;
   });
 
   it('records a cacheable stream and forgets it from the engine when the player closes', async () => {

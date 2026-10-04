@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import SeriesPage from './+page.svelte';
 import { installPlaybackBoundary } from '$lib/engine/__fixtures__/playbackBoundary';
 import { invoke } from '@tauri-apps/api/core';
@@ -110,6 +110,25 @@ describe('Series native playback wiring', () => {
     expect(torrentioRequests(1, 2)).toBe(1);
     expect(watchedStore.has(series.id, 1, 1)).toBe(true);
     expect(screen.getByTestId('native-player-surface')).toBeInTheDocument();
+  });
+
+  it('switches to the chosen episode through the list without finishing the current one', async () => {
+    await playPilotToPicture();
+    handlers['native-player-time']({ payload: 600 });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Lista de episódios' }));
+    const panel = screen.getByRole('dialog', { name: 'Lista de episódios' });
+
+    await fireEvent.click(within(panel).getByText(/Second/));
+
+    await waitFor(() => expect(commands('start_native_player')).toBe(2), { timeout: 5000 });
+    const order = vi.mocked(invoke).mock.calls.map((call) => call[0]);
+    const stop = order.indexOf('stop_native_player');
+    expect(stop).toBeGreaterThan(order.indexOf('start_native_player'));
+    expect(stop).toBeLessThan(order.lastIndexOf('start_native_player'));
+    expect(torrentioRequests(1, 2)).toBe(1);
+    expect(watchedStore.has(series.id, 1, 1)).toBe(false);
+    expect(progressStore.get(series.id, 1, 1)?.time).toBe(600);
+    expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
   });
 
   it('closes the player when mpv ends far from the end', async () => {

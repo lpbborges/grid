@@ -68,6 +68,7 @@ pub fn run() {
             player_commands::native_player_select_audio,
             player_commands::native_player_select_subtitle,
             player_commands::native_player_set_subtitle_position,
+            player_commands::native_player_set_subtitle_scale,
             player_commands::stop_native_player,
             player_commands::cache_native_subtitles
         ])
@@ -167,6 +168,19 @@ mod tests {
                 "missing {permission}"
             );
         }
+    }
+
+    #[test]
+    fn main_window_minimum_width_fits_a_half_screen_tile() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("tauri.conf.json is valid JSON");
+        let min_width = config["app"]["windows"][0]["minWidth"]
+            .as_f64()
+            .expect("minWidth is a number");
+        assert!(
+            min_width <= 760.0,
+            "a half-screen tile on a 1600px display is ~790px wide; a larger minimum clips the window controls"
+        );
     }
 
     #[test]

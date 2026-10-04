@@ -77,36 +77,13 @@ describe('settingsStore persistence', () => {
   });
 });
 
-describe('settingsStore.hoverPreview', () => {
-  beforeEach(() => {
+describe('settingsStore stale hover preview value', () => {
+  it('ignores a value stored by an older version', async () => {
     localStorage.clear();
-  });
-
-  it('is on by default', async () => {
-    vi.resetModules();
-    const { settingsStore } = await import('./settings.svelte');
-    expect(settingsStore.hoverPreview).toBe(true);
-  });
-
-  it('loads a stored off value', async () => {
     localStorage.setItem('grid-hover-preview', 'false');
     vi.resetModules();
     const { settingsStore } = await import('./settings.svelte');
-    expect(settingsStore.hoverPreview).toBe(false);
-  });
-
-  it('ignores a stored value that is not a boolean', async () => {
-    localStorage.setItem('grid-hover-preview', 'maybe');
-    vi.resetModules();
-    const { settingsStore } = await import('./settings.svelte');
-    expect(settingsStore.hoverPreview).toBe(true);
-  });
-
-  it('persists the new value when set', async () => {
-    vi.resetModules();
-    const { settingsStore } = await import('./settings.svelte');
-    settingsStore.hoverPreview = false;
-    expect(localStorage.getItem('grid-hover-preview')).toBe('false');
+    expect('hoverPreview' in settingsStore).toBe(false);
   });
 });
 
@@ -143,6 +120,60 @@ describe('settingsStore stored preferences', () => {
     expect(settingsStore.audio).toBe('pt');
     expect(settingsStore.subtitle).toBe('pt');
     expect(settingsStore.quality).toBe('1080p');
-    expect(settingsStore.hoverPreview).toBe(true);
+  });
+});
+
+describe('settingsStore.subtitleScale', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps every step within the factor range the native command accepts', async () => {
+    const { SUBTITLE_SCALE_STEPS } = await import('./settings.svelte');
+    for (const step of SUBTITLE_SCALE_STEPS) {
+      expect(step / 100).toBeGreaterThanOrEqual(0.5);
+      expect(step / 100).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('defaults to 100 when nothing is stored', async () => {
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    expect(settingsStore.subtitleScale).toBe(100);
+  });
+
+  it('loads a stored step', async () => {
+    localStorage.setItem('grid-subtitle-scale', '150');
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    expect(settingsStore.subtitleScale).toBe(150);
+  });
+
+  it.each(['abc', '0', '-100', 'NaN', 'Infinity', '110', '9999', ''])(
+    'falls back to 100 for the stored value %j',
+    async (stored) => {
+      localStorage.setItem('grid-subtitle-scale', stored);
+      vi.resetModules();
+      const { settingsStore } = await import('./settings.svelte');
+      expect(settingsStore.subtitleScale).toBe(100);
+    }
+  );
+
+  it('persists a new step', async () => {
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    settingsStore.subtitleScale = 125;
+    expect(settingsStore.subtitleScale).toBe(125);
+    expect(localStorage.getItem('grid-subtitle-scale')).toBe('125');
+  });
+
+  it('ignores a value that is not a step', async () => {
+    vi.resetModules();
+    const { settingsStore } = await import('./settings.svelte');
+    settingsStore.subtitleScale = 110;
+    settingsStore.subtitleScale = Number.NaN;
+    expect(settingsStore.subtitleScale).toBe(100);
+    expect(localStorage.getItem('grid-subtitle-scale')).toBeNull();
   });
 });

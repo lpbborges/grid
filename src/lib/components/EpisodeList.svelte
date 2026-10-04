@@ -18,7 +18,9 @@
     selectedSeason = $bindable(),
     onPlayEpisode,
     originalLanguage,
-    focusEpisode = null
+    focusEpisode = null,
+    playing = false,
+    showPreferences = true
   } = $props<{
     seriesId: string;
     episodes: Episode[];
@@ -28,6 +30,10 @@
     onPlayEpisode: (episode: Episode, startOver?: boolean) => void;
     originalLanguage?: string;
     focusEpisode?: EpisodeRef | null;
+    /** The focused episode is on screen right now (inside the player). */
+    playing?: boolean;
+    /** Show the quality, audio and subtitle selectors above the list. */
+    showPreferences?: boolean;
   }>();
 
   let availableSeasons = $derived(
@@ -51,9 +57,11 @@
 </script>
 
 {#if episodes && episodes.length > 0}
-  <div class="flex flex-col gap-4">
+  <div class="flex min-h-0 flex-col gap-4">
     <div class="border-primary/30 flex flex-col gap-3 border-b pb-3">
-      <Label as="h3" tone="green">Episódios</Label>
+      {#if showPreferences}
+        <Label as="h3" tone="green">Episódios</Label>
+      {/if}
       <div class="flex items-center gap-2">
         <Select
           label="Temporada"
@@ -68,15 +76,19 @@
           value={String(selectedSeason)}
           onchange={(value) => (selectedSeason = Number(value))}
         />
-        <QualitySelector size="compact" showLabel={false} wrapperClass="flex-1" />
+        {#if showPreferences}
+          <QualitySelector size="compact" showLabel={false} wrapperClass="flex-1" />
+        {/if}
       </div>
-      <div class="mt-2 flex items-center gap-2">
-        <PreferenceSelectors {originalLanguage} size="compact" />
-      </div>
+      {#if showPreferences}
+        <div class="mt-2 flex items-center gap-2">
+          <PreferenceSelectors {originalLanguage} size="compact" />
+        </div>
+      {/if}
     </div>
 
     <div
-      class="scrollbar-thumb-primary/50 flex max-h-[600px] scrollbar-thin flex-col gap-3 overflow-y-auto pr-2"
+      class="scrollbar-thumb-primary/50 flex max-h-[600px] min-h-0 flex-1 scrollbar-thin flex-col gap-3 overflow-y-auto pr-2"
     >
       {#each filteredEpisodes as episode (episode.id)}
         {@const isUnreleased = episode.firstAired
@@ -134,7 +146,11 @@
                 <span
                   class="border-green/60 text-green mt-1 w-fit rounded-sm border px-1.5 py-px font-mono text-[10px] font-bold tracking-widest uppercase"
                 >
-                  {resumeAt === null ? 'Continuar' : `Continuar de ${formatTime(resumeAt)}`}
+                  {isFocused && playing
+                    ? 'Reproduzindo'
+                    : resumeAt === null
+                      ? 'Continuar'
+                      : `Continuar de ${formatTime(resumeAt)}`}
                 </span>
               {/if}
             </div>

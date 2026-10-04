@@ -80,6 +80,7 @@ describe('Movie native playback wiring', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     settingsStore.cacheLimitBytes = 3 * 1024 * 1024 * 1024;
+    settingsStore.subtitleScale = 100;
     document.body.classList.remove('native-player-active');
   });
 
@@ -135,6 +136,13 @@ describe('Movie native playback wiring', () => {
     // mpv decodes this; a <video> on Windows cannot.
     expect(screen.queryByTestId('video-element')).toBeNull();
     expect(boundary.unhandledRequests).toEqual([]);
+  });
+
+  it('has no episode list in the player', async () => {
+    await openAndPlay();
+    await screen.findByTestId('native-player-surface', {}, { timeout: 5000 });
+
+    expect(screen.queryByRole('button', { name: 'Lista de episódios' })).toBeNull();
   });
 
   it('stays opaque while the stream is still being prepared', async () => {
@@ -230,7 +238,7 @@ describe('Movie native playback wiring', () => {
     await waitFor(
       () =>
         expect(invoke).toHaveBeenCalledWith('native_player_set_subtitle_position', {
-          percent: 80
+          percent: 86
         }),
       { timeout: 5000 }
     );
@@ -242,6 +250,48 @@ describe('Movie native playback wiring', () => {
         percent: 100
       })
     );
+  });
+
+  it('starts mpv at the stored subtitle size and resizes it from the subtitle menu', async () => {
+    settingsStore.subtitleScale = 150;
+    boundary = installPlaybackBoundary({
+      ...baseOptions,
+      nativePlayback: {
+        tracks: [
+          {
+            id: 1,
+            type: 'sub',
+            lang: 'en',
+            title: null,
+            codec: 'subrip',
+            default: false,
+            forced: false,
+            external: false,
+            selected: false,
+            original: false,
+            hearing_impaired: false
+          }
+        ],
+        duration: 100
+      }
+    });
+    render(MoviePage, {
+      props: { data: { autoplay: false, movieId: movie.id, movie, error: null } }
+    });
+    await fireEvent.click(await screen.findByRole('button', { name: /reproduzir/i }));
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await waitFor(
+      () => expect(invoke).toHaveBeenCalledWith('native_player_set_subtitle_scale', { scale: 1.5 }),
+      { timeout: 5000 }
+    );
+
+    await fireEvent.click(await screen.findByLabelText('Menu de Legendas'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Aumentar tamanho da legenda' }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_scale', { scale: 2 })
+    );
+    expect(settingsStore.subtitleScale).toBe(200);
   });
 
   it('surfaces mid-playback errors on the overlay rather than tearing down silently', async () => {

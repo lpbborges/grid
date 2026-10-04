@@ -15,7 +15,7 @@
         "title": "Grid",
         "width": 1280,
         "height": 800,
-        "minWidth": 960,
+        "minWidth": 760,
         "minHeight": 600,
         "decorations": false,
         "transparent": true

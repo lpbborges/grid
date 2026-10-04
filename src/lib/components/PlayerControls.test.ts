@@ -95,4 +95,23 @@ describe('PlayerControls', () => {
 
     expect(screen.queryByText('Carregando vídeo...')).toBeNull();
   });
+
+  it('has no episode list button unless the host provides one', () => {
+    render(PlayerControls, baseProps());
+
+    expect(screen.queryByRole('button', { name: 'Lista de episódios' })).toBeNull();
+  });
+
+  it('names the episode list button, reports its state and toggles it', async () => {
+    const ontoggleepisodes = vi.fn();
+    render(PlayerControls, baseProps({ ontoggleepisodes, showEpisodePanel: true }));
+    const button = screen.getByRole('button', { name: 'Lista de episódios' });
+
+    expect(button).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(button).toHaveAttribute('data-menu-element');
+
+    await fireEvent.click(button);
+    expect(ontoggleepisodes).toHaveBeenCalledTimes(1);
+  });
 });

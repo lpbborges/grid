@@ -269,25 +269,43 @@
     if (!ok && player.error) error = playbackError();
   }
 
-  async function advanceTo(ref: EpisodeRef) {
+  async function moveTo(
+    ref: EpisodeRef,
+    run: typeof player.advance,
+    startOver: boolean
+  ): Promise<void> {
     const episode = series?.videos.find((v) => sameEpisode(v, ref));
     if (!series || !episode) return;
     const shown = series;
     const requestedId = seriesId;
     error = null;
     advancingTo = episode;
-    const ok = await player.advance(async (): Promise<NextPlaybackResult> => {
-      // Set only after the release, so the finished file's clock never counts as the next one's.
+    const ok = await run(async (): Promise<NextPlaybackResult> => {
+      // Set only after the release, so the left file's clock never counts as the next one's.
       lastAttemptedEpisode = episode;
-      lastStartOver = false;
+      lastStartOver = startOver;
       const found = await findSource(shown, episode);
       if (seriesId !== requestedId) return null;
       if ('error' in found) return found;
-      return { magnet: found.magnet, options: episodePlayOptions(shown, episode, found.fileIdx) };
+      return {
+        magnet: found.magnet,
+        options: { ...episodePlayOptions(shown, episode, found.fileIdx), startOver }
+      };
     });
     advancingTo = null;
     if (seriesId !== requestedId) return;
     if (!ok && player.error) error = playbackError();
+  }
+
+  function advanceTo(ref: EpisodeRef) {
+    return moveTo(ref, player.advance, false);
+  }
+
+  /** Picked from the list while watching: the episode left behind is neither finished nor watched. */
+  function switchEpisode(episode: Episode, startOver = false) {
+    if (lastAttemptedEpisode && sameEpisode(lastAttemptedEpisode, episode) && !startOver) return;
+    upNext.cancel();
+    return moveTo(episode, player.switchTo, startOver);
   }
 
   function handleErrorAction(action: ErrorAction) {
@@ -303,6 +321,24 @@
     playEpisode(lastAttemptedEpisode, lastStartOver);
   }
 </script>
+
+{#snippet episodePanel(close: () => void)}
+  {#if series}
+    <EpisodeList
+      {seriesId}
+      episodes={series.videos}
+      {translatedEpisodes}
+      bind:selectedSeason
+      onPlayEpisode={(episode, startOver) => {
+        close();
+        void switchEpisode(episode, startOver);
+      }}
+      focusEpisode={preparingEpisode}
+      playing
+      showPreferences={false}
+    />
+  {/if}
+{/snippet}
 
 {#if error}
   <ErrorNotice {error} onaction={handleErrorAction} />
@@ -341,6 +377,7 @@
           title={translatedTitle || series.title}
           episodeLabel={preparingEpisode ? episodeLabel(preparingEpisode) : ''}
           episodeName={preparingEpisode ? episodeName(preparingEpisode) : ''}
+          {episodePanel}
           onclose={() => {
             player.stop();
           }}

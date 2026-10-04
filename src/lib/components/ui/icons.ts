@@ -4,10 +4,12 @@ export type IconName =
   | 'chevron-right'
   | 'x'
   | 'plus'
+  | 'minus'
   | 'check'
   | 'search'
   | 'dots-vertical'
   | 'play'
+  | 'list'
   | 'settings';
 
 export type IconSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
@@ -35,6 +37,7 @@ export const ICONS: Record<IconName, IconDef> = {
       { tag: 'line', attrs: { x1: 6, y1: 6, x2: 18, y2: 18 } }
     ]
   },
+  minus: { shapes: [{ tag: 'path', attrs: { d: 'M5 12h14' } }] },
   plus: { shapes: [{ tag: 'path', attrs: { d: 'M12 5v14M5 12h14' } }] },
   check: { shapes: [{ tag: 'polyline', attrs: { points: '20 6 9 17 4 12' } }] },
   search: {
@@ -52,6 +55,16 @@ export const ICONS: Record<IconName, IconDef> = {
     ]
   },
   play: { shapes: [{ tag: 'polygon', attrs: { points: '5 3 19 12 5 21 5 3' } }] },
+  list: {
+    shapes: [
+      { tag: 'line', attrs: { x1: 8, y1: 6, x2: 21, y2: 6 } },
+      { tag: 'line', attrs: { x1: 8, y1: 12, x2: 21, y2: 12 } },
+      { tag: 'line', attrs: { x1: 8, y1: 18, x2: 21, y2: 18 } },
+      { tag: 'line', attrs: { x1: 3, y1: 6, x2: 3.01, y2: 6 } },
+      { tag: 'line', attrs: { x1: 3, y1: 12, x2: 3.01, y2: 12 } },
+      { tag: 'line', attrs: { x1: 3, y1: 18, x2: 3.01, y2: 18 } }
+    ]
+  },
   settings: {
     shapes: [
       {

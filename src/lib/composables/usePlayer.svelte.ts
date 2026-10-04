@@ -148,13 +148,31 @@ export function usePlayer(
     markWatched();
   }
 
-  /** Finishes the current file and plays what `load` resolves, without closing the player. */
-  async function advance(load: () => Promise<NextPlaybackResult>): Promise<boolean> {
+  /** Saves where the viewer is, without treating the episode as finished. */
+  function saveCurrentPosition() {
+    const request = currentRequest;
+    if (!request || lastDuration <= 0) return;
+    const { currentTime, duration } = backend;
+    if (duration <= 0 || currentTime / duration > 0.95) return;
+    progressStore.update(
+      request.mediaId,
+      request.season,
+      request.episode,
+      currentTime,
+      duration,
+      currentProgress
+    );
+  }
+
+  async function transition(
+    load: () => Promise<NextPlaybackResult>,
+    leave: () => void
+  ): Promise<boolean> {
     const generation = ++advanceGeneration;
     advancing = true;
     error = '';
     try {
-      finishCurrent();
+      leave();
       currentRequest = undefined;
       await release();
       if (generation !== advanceGeneration) return false;
@@ -169,6 +187,16 @@ export function usePlayer(
     } finally {
       if (generation === advanceGeneration) advancing = false;
     }
+  }
+
+  /** Finishes the current file and plays what `load` resolves, without closing the player. */
+  function advance(load: () => Promise<NextPlaybackResult>): Promise<boolean> {
+    return transition(load, finishCurrent);
+  }
+
+  /** Leaves the current file where it is (not watched) and plays what `load` resolves. */
+  function switchTo(load: () => Promise<NextPlaybackResult>): Promise<boolean> {
+    return transition(load, saveCurrentPosition);
   }
 
   $effect(() => {
@@ -216,6 +244,7 @@ export function usePlayer(
     },
     play,
     stop,
-    advance
+    advance,
+    switchTo
   };
 }

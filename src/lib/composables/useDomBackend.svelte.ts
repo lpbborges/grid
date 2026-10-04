@@ -250,6 +250,10 @@ export function useDomBackend(getVideoElement: () => HTMLVideoElement | null) {
       subtitleSelection.applyCueLayout();
     },
 
+    setSubtitleScale: (percent: number) => {
+      document.documentElement.style.setProperty('--subtitle-scale', String(percent / 100));
+    },
+
     handleLoadedMetadata,
     handleTimeUpdate,
     handlePlaying,

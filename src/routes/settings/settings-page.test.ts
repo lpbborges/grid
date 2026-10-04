@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import SettingsPage from './+page.svelte';
-import { settingsStore } from '$lib/stores/settings.svelte';
+import { axe } from 'vitest-axe';
+import { tick } from 'svelte';
+import { SUBTITLE_SCALE_STEPS, settingsStore } from '$lib/stores/settings.svelte';
 import { BYTES_PER_GB } from '$lib/utils/formatBytes';
 import { version } from '../../../package.json';
 
@@ -37,7 +39,7 @@ describe('Settings page', () => {
     settingsStore.quality = '1080p';
     settingsStore.subtitle = 'pt';
     settingsStore.cacheLimitBytes = 3 * BYTES_PER_GB;
-    settingsStore.hoverPreview = true;
+    settingsStore.subtitleScale = 100;
   });
 
   it('titles the page with a slim bar instead of the catalog header', () => {
@@ -45,6 +47,72 @@ describe('Settings page', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Configurações' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Voltar' })).toBeTruthy();
+  });
+
+  it('puts the back button on its own row above the title', () => {
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+    const back = screen.getByRole('button', { name: 'Voltar' });
+    const title = screen.getByRole('heading', { level: 1, name: 'Configurações' });
+
+    expect(back.parentElement).toBe(title.parentElement);
+    expect(back.parentElement?.classList.contains('flex-col')).toBe(true);
+    expect(back.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('has no accessibility violations', async () => {
+    const { container } = render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('shows the current subtitle size on a slider with the same steps as the player', () => {
+    settingsStore.subtitleScale = 125;
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+    const slider = screen.getByLabelText('Tamanho da legenda') as HTMLInputElement;
+
+    expect(slider.type).toBe('range');
+    expect(slider.min).toBe('0');
+    expect(slider.max).toBe(String(SUBTITLE_SCALE_STEPS.length - 1));
+    expect(slider.value).toBe('2');
+    expect(slider.getAttribute('aria-valuetext')).toBe('125%');
+  });
+
+  it('saves the subtitle size in the shared settings', async () => {
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+
+    await fireEvent.input(screen.getByLabelText('Tamanho da legenda'), { target: { value: '3' } });
+
+    expect(settingsStore.subtitleScale).toBe(150);
+    expect(localStorage.getItem('grid-subtitle-scale')).toBe('150');
+  });
+
+  it('follows a size changed elsewhere, such as the player menu', async () => {
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+
+    settingsStore.subtitleScale = 75;
+    await tick();
+
+    expect((screen.getByLabelText('Tamanho da legenda') as HTMLInputElement).value).toBe('0');
+  });
+
+  it('previews the subtitle at the selected size, hidden from assistive technology', async () => {
+    settingsStore.subtitleScale = 150;
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+    const preview = screen.getByTestId('subtitle-preview');
+
+    expect(preview.getAttribute('aria-hidden')).toBe('true');
+    expect(preview.textContent?.trim()).toBeTruthy();
+    expect(preview.style.getPropertyValue('--subtitle-scale')).toBe('1.5');
+  });
+
+  it('updates the preview when the size changes', async () => {
+    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
+
+    await fireEvent.input(screen.getByLabelText('Tamanho da legenda'), { target: { value: '0' } });
+
+    expect(screen.getByTestId('subtitle-preview').style.getPropertyValue('--subtitle-scale')).toBe(
+      '0.75'
+    );
   });
 
   it('goes back to the previous page when there is one', async () => {
@@ -165,17 +233,5 @@ describe('Settings page load', () => {
     const { load } = await import('./+page');
 
     expect(await load({} as never)).toEqual({ cacheUsageBytes: null });
-  });
-
-  it('turns the hover preview off and on', async () => {
-    render(SettingsPage, { data: { cacheUsageBytes: 0 } });
-    const toggle = screen.getByRole('checkbox', { name: 'Prévia ao passar o mouse' });
-    expect((toggle as HTMLInputElement).checked).toBe(true);
-
-    await fireEvent.click(toggle);
-    expect(settingsStore.hoverPreview).toBe(false);
-
-    await fireEvent.click(toggle);
-    expect(settingsStore.hoverPreview).toBe(true);
   });
 });

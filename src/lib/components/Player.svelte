@@ -1,6 +1,7 @@
 <script lang="ts">
   import PlayerShell from './PlayerShell.svelte';
   import { isDomBackend } from '$lib/composables/useDomBackend.svelte';
+  import type { Snippet } from 'svelte';
   import type { PlayerBackend, UpNextCard } from '$lib/types';
   import type { LoadingStage } from '$lib/utils/loadingStage';
 
@@ -13,7 +14,8 @@
     upNext = null,
     title = '',
     episodeLabel = '',
-    episodeName = ''
+    episodeName = '',
+    episodePanel
   } = $props<{
     backend: PlayerBackend;
     videoElement?: HTMLVideoElement | null;
@@ -24,6 +26,7 @@
     title?: string;
     episodeLabel?: string;
     episodeName?: string;
+    episodePanel?: Snippet<[() => void]>;
   }>();
 
   const dom = $derived(isDomBackend(backend) ? backend : undefined);
@@ -90,4 +93,5 @@
   {title}
   {episodeLabel}
   {episodeName}
+  {episodePanel}
 />

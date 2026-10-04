@@ -6,6 +6,13 @@ import { BYTES_PER_GB } from '$lib/utils/formatBytes';
 export const SUBTITLE_PREFERENCES = ['none', 'pt', 'en', 'es'] as const;
 export const QUALITY_PREFERENCES = ['4k', '1080p', '720p', '480p'] as const;
 
+export const SUBTITLE_SCALE_STEPS = [75, 100, 125, 150, 200] as const;
+export const DEFAULT_SUBTITLE_SCALE = 100;
+
+function isSubtitleScale(value: number): boolean {
+  return (SUBTITLE_SCALE_STEPS as readonly number[]).includes(value);
+}
+
 function isOneOf<T extends string>(options: readonly T[], value: string | null): value is T {
   return value !== null && (options as readonly string[]).includes(value);
 }
@@ -23,7 +30,7 @@ class SettingsStore {
   #quality = $state('1080p');
   #cacheLimitBytes = $state(3 * BYTES_PER_GB);
   #acceptedDisclaimer = $state(false);
-  #hoverPreview = $state(true);
+  #subtitleScale = $state<number>(DEFAULT_SUBTITLE_SCALE);
 
   constructor() {
     if (browser) {
@@ -38,9 +45,9 @@ class SettingsStore {
 
       if (readStored('grid-accepted-disclaimer') === 'true') this.#acceptedDisclaimer = true;
 
-      const storedHoverPreview = readStored('grid-hover-preview');
-      if (storedHoverPreview === 'true' || storedHoverPreview === 'false') {
-        this.#hoverPreview = storedHoverPreview === 'true';
+      const storedScale = readStored('grid-subtitle-scale');
+      if (storedScale && isSubtitleScale(Number(storedScale))) {
+        this.#subtitleScale = Number(storedScale);
       }
 
       const storedCacheLimit = readStored('grid-cache-limit-bytes');
@@ -87,20 +94,21 @@ class SettingsStore {
     writeStored('grid-cache-limit-bytes', String(normalized));
   }
 
+  get subtitleScale() {
+    return this.#subtitleScale;
+  }
+  set subtitleScale(value: number) {
+    if (!isSubtitleScale(value)) return;
+    this.#subtitleScale = value;
+    writeStored('grid-subtitle-scale', String(value));
+  }
+
   get acceptedDisclaimer() {
     return this.#acceptedDisclaimer;
   }
   set acceptedDisclaimer(value: boolean) {
     this.#acceptedDisclaimer = value;
     writeStored('grid-accepted-disclaimer', String(value));
-  }
-
-  get hoverPreview() {
-    return this.#hoverPreview;
-  }
-  set hoverPreview(value: boolean) {
-    this.#hoverPreview = value;
-    writeStored('grid-hover-preview', String(value));
   }
 }
 

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import HoverPreview from './HoverPreview.svelte';
 import { hoverPreview, HOVER_DELAY_MS } from '$lib/stores/hoverPreview.svelte';
-import { settingsStore } from '$lib/stores/settings.svelte';
 import { watchedStore } from '$lib/stores/watched.svelte';
 import { playerState } from '$lib/stores.svelte';
 import type { PreviewMeta } from '$lib/api/cinemeta';
@@ -26,7 +25,6 @@ describe('HoverPreview', () => {
     vi.useFakeTimers();
     card = document.createElement('a');
     document.body.append(card);
-    settingsStore.hoverPreview = true;
     playerState.isPlaying = false;
     getPreviewMetaMock.mockReset();
   });

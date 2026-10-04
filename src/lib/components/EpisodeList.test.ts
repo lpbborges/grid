@@ -38,6 +38,43 @@ describe('EpisodeList component', () => {
     expect(onPlayEpisode).toHaveBeenCalledWith(episodes[0]);
   });
 
+  it('shows quality, audio and subtitle selectors by default', () => {
+    const { getByText, getByLabelText } = render(EpisodeList, {
+      props: {
+        seriesId: 's',
+        episodes: [{ id: '1', season: 1, episode: 1, name: 'Ep 1' }],
+        translatedEpisodes: {},
+        selectedSeason: 1,
+        onPlayEpisode: vi.fn()
+      }
+    });
+
+    expect(getByText('Episódios')).toBeInTheDocument();
+    expect(getByLabelText('Qualidade')).toBeInTheDocument();
+    expect(getByLabelText('Áudio')).toBeInTheDocument();
+    expect(getByLabelText('Legenda')).toBeInTheDocument();
+  });
+
+  it('keeps only the season select and the episodes when preferences are hidden', () => {
+    const { getByText, getByLabelText, queryByLabelText, queryByText } = render(EpisodeList, {
+      props: {
+        seriesId: 's',
+        episodes: [{ id: '1', season: 1, episode: 1, name: 'Ep 1' }],
+        translatedEpisodes: {},
+        selectedSeason: 1,
+        onPlayEpisode: vi.fn(),
+        showPreferences: false
+      }
+    });
+
+    expect(getByLabelText('Temporada')).toBeInTheDocument();
+    expect(getByText(/1\. Ep 1/)).toBeInTheDocument();
+    expect(queryByLabelText('Qualidade')).toBeNull();
+    expect(queryByLabelText('Áudio')).toBeNull();
+    expect(queryByLabelText('Legenda')).toBeNull();
+    expect(queryByText('Episódios')).toBeNull();
+  });
+
   it('offers to continue an episode with saved progress or to start it over', async () => {
     progressStore.progress = {
       'series-123-S1E2': { time: 750, duration: 2400, updatedAt: 1 },
@@ -140,6 +177,34 @@ describe('EpisodeList component', () => {
       );
       expect(focused.querySelector('button')!.textContent).toContain('Continuar');
       expect(container.querySelector('[data-episode="1"]')!.textContent).not.toContain('Continuar');
+    });
+
+    it('says Reproduzindo instead of Continuar for the episode that is playing', () => {
+      progressStore.update('series-123', 1, 2, 750, 2700);
+      const { container } = render(EpisodeList, {
+        props: {
+          seriesId: 'series-123',
+          episodes,
+          translatedEpisodes: {},
+          selectedSeason: 1,
+          onPlayEpisode: vi.fn(),
+          focusEpisode: { season: 1, episode: 2 },
+          playing: true
+        }
+      });
+
+      const focused = container.querySelector('[data-episode="2"]')!;
+      expect(focused.textContent).toContain('Reproduzindo');
+      expect(focused.textContent).not.toContain('Continuar');
+      progressStore.progress = {};
+    });
+
+    it('keeps the Continuar label when nothing is playing', () => {
+      const { container } = renderFocused({ season: 1, episode: 2 });
+
+      expect(container.querySelector('[data-episode="2"]')!.textContent).not.toContain(
+        'Reproduzindo'
+      );
     });
 
     it('scrolls the focused episode into view once, inside the list only', async () => {

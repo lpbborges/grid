@@ -1,10 +1,12 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { formatTime } from '$lib/utils/formatTime';
   import type { SubtitleTrack } from '$lib/types';
   import type { SubtitleGroup } from '$lib/composables/useSubtitleSelection.svelte';
   import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
   import AudioMenu from './AudioMenu.svelte';
   import SubtitleMenu from './SubtitleMenu.svelte';
+  import IconButton from './ui/IconButton.svelte';
 
   /**
    * The player's control bar, shared by both playback backends.
@@ -33,9 +35,11 @@
     expandedGroups = {},
     subtitleError = '',
     showSubtitleMenu = false,
+    subtitleScale = 100,
     audioTracks = [],
     activeAudioIndex,
     showAudioMenu = false,
+    showEpisodePanel = false,
     onplaypause,
     onseek,
     onvolume,
@@ -45,6 +49,9 @@
     ontogglesubtitlemenu,
     ontoggleaudiomenu,
     ontogglegroup,
+    ontoggleepisodes,
+    episodePanel,
+    onsubtitlescale,
     onclose,
     title = '',
     episodeLabel = '',
@@ -64,9 +71,11 @@
     expandedGroups?: Record<string, boolean>;
     subtitleError?: string;
     showSubtitleMenu?: boolean;
+    subtitleScale?: number;
     audioTracks?: ParsedAudioTrack[];
     activeAudioIndex: number;
     showAudioMenu?: boolean;
+    showEpisodePanel?: boolean;
     onplaypause: () => void;
     onseek: (seconds: number) => void;
     onvolume: (value: number) => void;
@@ -76,6 +85,11 @@
     ontogglesubtitlemenu?: () => void;
     ontoggleaudiomenu?: () => void;
     ontogglegroup?: (groupKey: string, label: string) => void;
+    /** Only series pass this; it is what puts the episode list button on the bar. */
+    ontoggleepisodes?: () => void;
+    /** The episode panel, rendered anchored above the episode list button. */
+    episodePanel?: Snippet;
+    onsubtitlescale?: (percent: number) => void;
     onclose?: () => void;
     /** What is playing; shown right after the close button. */
     title?: string;
@@ -302,6 +316,8 @@
         {expandedGroups}
         {subtitleError}
         showMenu={showSubtitleMenu}
+        scale={subtitleScale}
+        onscale={(percent) => onsubtitlescale?.(percent)}
         ontoggle={ontogglesubtitlemenu}
         onselect={(index) => {
           onselectsubtitle(index);
@@ -309,6 +325,23 @@
         }}
         {ontogglegroup}
       />
+
+      {#if ontoggleepisodes}
+        <div class="relative">
+          <IconButton
+            data-menu-element
+            data-episodes-trigger
+            icon="list"
+            label="Lista de episódios"
+            size="sm"
+            surface="player"
+            aria-haspopup="dialog"
+            aria-expanded={showEpisodePanel}
+            onclick={ontoggleepisodes}
+          />
+          {@render episodePanel?.()}
+        </div>
+      {/if}
 
       {#if onfullscreen}
         <button
