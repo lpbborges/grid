@@ -171,6 +171,19 @@ mod tests {
     }
 
     #[test]
+    fn main_window_minimum_width_fits_a_half_screen_tile() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("tauri.conf.json is valid JSON");
+        let min_width = config["app"]["windows"][0]["minWidth"]
+            .as_f64()
+            .expect("minWidth is a number");
+        assert!(
+            min_width <= 760.0,
+            "a half-screen tile on a 1600px display is ~790px wide; a larger minimum clips the window controls"
+        );
+    }
+
+    #[test]
     fn csp_allows_blob_media_for_subtitle_tracks() {
         // Subtitles are rendered as <track src="blob:..."> (getTorrentSubtitles /
         // getExternalSubtitles). WebKit checks <track> URLs against media-src, so
