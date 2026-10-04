@@ -142,6 +142,34 @@ describe('EpisodeList component', () => {
       expect(container.querySelector('[data-episode="1"]')!.textContent).not.toContain('Continuar');
     });
 
+    it('says Reproduzindo instead of Continuar for the episode that is playing', () => {
+      progressStore.update('series-123', 1, 2, 750, 2700);
+      const { container } = render(EpisodeList, {
+        props: {
+          seriesId: 'series-123',
+          episodes,
+          translatedEpisodes: {},
+          selectedSeason: 1,
+          onPlayEpisode: vi.fn(),
+          focusEpisode: { season: 1, episode: 2 },
+          playing: true
+        }
+      });
+
+      const focused = container.querySelector('[data-episode="2"]')!;
+      expect(focused.textContent).toContain('Reproduzindo');
+      expect(focused.textContent).not.toContain('Continuar');
+      progressStore.progress = {};
+    });
+
+    it('keeps the Continuar label when nothing is playing', () => {
+      const { container } = renderFocused({ season: 1, episode: 2 });
+
+      expect(container.querySelector('[data-episode="2"]')!.textContent).not.toContain(
+        'Reproduzindo'
+      );
+    });
+
     it('scrolls the focused episode into view once, inside the list only', async () => {
       const { container, rerender } = renderFocused({ season: 1, episode: 2 });
 

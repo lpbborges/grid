@@ -155,6 +155,13 @@ describe('Movie playback wiring', () => {
     );
   });
 
+  it('has no episode list in the player', async () => {
+    await openAndPlay();
+    await screen.findByTestId('player-title', {}, { timeout: 5000 });
+
+    expect(screen.queryByRole('button', { name: 'Lista de episódios' })).toBeNull();
+  });
+
   it('never plays a cinema recording, even with the most seeds', async () => {
     const recording = {
       name: 'Torrentio\n1080p',

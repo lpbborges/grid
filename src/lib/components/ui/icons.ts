@@ -9,6 +9,7 @@ export type IconName =
   | 'search'
   | 'dots-vertical'
   | 'play'
+  | 'list'
   | 'settings';
 
 export type IconSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
@@ -54,6 +55,16 @@ export const ICONS: Record<IconName, IconDef> = {
     ]
   },
   play: { shapes: [{ tag: 'polygon', attrs: { points: '5 3 19 12 5 21 5 3' } }] },
+  list: {
+    shapes: [
+      { tag: 'line', attrs: { x1: 8, y1: 6, x2: 21, y2: 6 } },
+      { tag: 'line', attrs: { x1: 8, y1: 12, x2: 21, y2: 12 } },
+      { tag: 'line', attrs: { x1: 8, y1: 18, x2: 21, y2: 18 } },
+      { tag: 'line', attrs: { x1: 3, y1: 6, x2: 3.01, y2: 6 } },
+      { tag: 'line', attrs: { x1: 3, y1: 12, x2: 3.01, y2: 12 } },
+      { tag: 'line', attrs: { x1: 3, y1: 18, x2: 3.01, y2: 18 } }
+    ]
+  },
   settings: {
     shapes: [
       {

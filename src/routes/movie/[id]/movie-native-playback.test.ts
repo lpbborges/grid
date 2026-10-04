@@ -138,6 +138,13 @@ describe('Movie native playback wiring', () => {
     expect(boundary.unhandledRequests).toEqual([]);
   });
 
+  it('has no episode list in the player', async () => {
+    await openAndPlay();
+    await screen.findByTestId('native-player-surface', {}, { timeout: 5000 });
+
+    expect(screen.queryByRole('button', { name: 'Lista de episódios' })).toBeNull();
+  });
+
   it('stays opaque while the stream is still being prepared', async () => {
     await openAndPlay();
     await screen.findByTestId('native-player-surface', {}, { timeout: 5000 });

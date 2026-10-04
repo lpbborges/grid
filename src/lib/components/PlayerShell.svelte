@@ -29,7 +29,8 @@
     upNext = null,
     title = '',
     episodeLabel = '',
-    episodeName = ''
+    episodeName = '',
+    episodePanel
   } = $props<{
     backend: PlayerBackend;
     loadingStage?: LoadingStage | null;
@@ -41,6 +42,8 @@
     title?: string;
     episodeLabel?: string;
     episodeName?: string;
+    /** Series only: the episode list, given a function that closes the panel. */
+    episodePanel?: Snippet<[() => void]>;
   }>();
 
   let slowStart = $state(false);
@@ -57,10 +60,12 @@
 
   let showAudioMenu = $state(false);
   let showSubtitleMenu = $state(false);
+  let showEpisodePanel = $state(false);
+  let episodePanelElement = $state<HTMLElement | undefined>();
   let expandedGroups = $state<Record<string, boolean>>({});
 
   const controlsVisible = $derived(
-    showControls || backend.paused || showSubtitleMenu || showAudioMenu
+    showControls || backend.paused || showSubtitleMenu || showAudioMenu || showEpisodePanel
   );
   const shownPercent = $derived(Math.round(downloadPercent));
   const intro = $derived(findIntro(backend.chapters));
@@ -72,7 +77,7 @@
       backend.currentTime >= intro.start &&
       backend.currentTime < intro.end - 1
   );
-  const menusOpen = $derived(showSubtitleMenu || showAudioMenu);
+  const menusOpen = $derived(showSubtitleMenu || showAudioMenu || showEpisodePanel);
   const showCard = $derived(!!upNext && backend.hasStarted && !backend.buffering && !backend.error);
   // Never reads secondsLeft, so it is announced once rather than every second.
   const upNextAnnouncement = $derived(
@@ -103,6 +108,24 @@
 
   $effect(() => {
     playerState.showControls = controlsVisible;
+  });
+
+  function closeMenus() {
+    showSubtitleMenu = false;
+    showAudioMenu = false;
+    showEpisodePanel = false;
+  }
+
+  function closeEpisodePanel() {
+    const hadFocus = !!episodePanelElement?.contains(document.activeElement);
+    showEpisodePanel = false;
+    if (hadFocus) {
+      containerElement?.querySelector<HTMLElement>('[data-episodes-trigger]')?.focus();
+    }
+  }
+
+  $effect(() => {
+    if (showEpisodePanel) episodePanelElement?.focus();
   });
 
   function toggleGroup(groupKey: string, label: string) {
@@ -214,14 +237,16 @@
   function handleGlobalKeydown(e: KeyboardEvent) {
     const active = document.activeElement as HTMLElement;
     const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+    // A select keeps its own keys (typeahead, arrows); only Escape still closes the panel.
+    const isSelect = active && active.tagName === 'SELECT' && e.key !== 'Escape';
     const isButton = active && active.tagName === 'BUTTON';
     const isSlider = active && active.getAttribute('role') === 'slider';
 
-    if (isInput || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (isInput || isSelect || e.ctrlKey || e.metaKey || e.altKey) return;
 
     // A menu owns the arrows and Home/End while focus is inside it.
     if (
-      (showSubtitleMenu || showAudioMenu) &&
+      menusOpen &&
       active?.closest('[data-menu-element]') &&
       ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)
     ) {
@@ -269,6 +294,10 @@
         if (showCard && upNext) {
           e.preventDefault();
           upNext.oncancel();
+        } else if (menusOpen) {
+          e.preventDefault();
+          if (showEpisodePanel) closeEpisodePanel();
+          closeMenus();
         } else {
           e.preventDefault();
           backend.exitFullscreen();
@@ -286,11 +315,10 @@
   }
 
   function handleGlobalClick(e: MouseEvent) {
-    if (!showSubtitleMenu && !showAudioMenu) return;
+    if (!menusOpen) return;
     const target = e.target as HTMLElement;
     if (target.closest('[data-menu-element]')) return;
-    showSubtitleMenu = false;
-    showAudioMenu = false;
+    closeMenus();
   }
 </script>
 
@@ -402,6 +430,22 @@
   {/if}
   <p class="sr-only" aria-live="polite" data-testid="up-next-announcement">{upNextAnnouncement}</p>
 
+  {#if episodePanel && showEpisodePanel}
+    <Panel
+      bind:element={episodePanelElement}
+      data-menu-element
+      role="dialog"
+      aria-label="Lista de episódios"
+      tabindex={-1}
+      glass
+      padding="sm"
+      shadow="glow-primary"
+      class="z-dropdown absolute top-24 right-6 flex max-h-[45vh] w-[min(26rem,calc(100vw-3rem))] flex-col overflow-hidden"
+    >
+      {@render episodePanel(closeEpisodePanel)}
+    </Panel>
+  {/if}
+
   <PlayerControls
     currentTime={backend.currentTime}
     duration={backend.duration}
@@ -421,6 +465,8 @@
     audioTracks={backend.audioTracks}
     activeAudioIndex={backend.activeAudioIndex}
     {showAudioMenu}
+    {showEpisodePanel}
+    ontoggleepisodes={episodePanel ? () => (showEpisodePanel = !showEpisodePanel) : undefined}
     onplaypause={() => backend.togglePlay()}
     onseek={(seconds) => backend.seek(seconds)}
     onvolume={(value) => backend.setVolume(value)}

@@ -5,6 +5,7 @@
   import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
   import AudioMenu from './AudioMenu.svelte';
   import SubtitleMenu from './SubtitleMenu.svelte';
+  import IconButton from './ui/IconButton.svelte';
 
   /**
    * The player's control bar, shared by both playback backends.
@@ -37,6 +38,7 @@
     audioTracks = [],
     activeAudioIndex,
     showAudioMenu = false,
+    showEpisodePanel = false,
     onplaypause,
     onseek,
     onvolume,
@@ -46,6 +48,7 @@
     ontogglesubtitlemenu,
     ontoggleaudiomenu,
     ontogglegroup,
+    ontoggleepisodes,
     onsubtitlescale,
     onclose,
     title = '',
@@ -70,6 +73,7 @@
     audioTracks?: ParsedAudioTrack[];
     activeAudioIndex: number;
     showAudioMenu?: boolean;
+    showEpisodePanel?: boolean;
     onplaypause: () => void;
     onseek: (seconds: number) => void;
     onvolume: (value: number) => void;
@@ -79,6 +83,8 @@
     ontogglesubtitlemenu?: () => void;
     ontoggleaudiomenu?: () => void;
     ontogglegroup?: (groupKey: string, label: string) => void;
+    /** Only series pass this; it is what puts the episode list button on the bar. */
+    ontoggleepisodes?: () => void;
     onsubtitlescale?: (percent: number) => void;
     onclose?: () => void;
     /** What is playing; shown right after the close button. */
@@ -315,6 +321,20 @@
         }}
         {ontogglegroup}
       />
+
+      {#if ontoggleepisodes}
+        <IconButton
+          data-menu-element
+          data-episodes-trigger
+          icon="list"
+          label="Lista de episódios"
+          size="sm"
+          surface="player"
+          aria-haspopup="dialog"
+          aria-expanded={showEpisodePanel}
+          onclick={ontoggleepisodes}
+        />
+      {/if}
 
       {#if onfullscreen}
         <button

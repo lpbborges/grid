@@ -233,6 +233,101 @@ describe('usePlayer', () => {
     expect(progressStore.get('tt1', 1, 3)?.upNext).toBe(true);
   });
 
+  describe('switching episodes by hand', () => {
+    const progress = {
+      meta: { type: 'series' as const, title: 'Series', poster: 's.jpg' },
+      next: { season: 1, episode: 3 }
+    };
+
+    it('keeps the resume point and does not mark the episode watched', async () => {
+      const onwatched = vi.fn();
+      const { player, backend } = await mountPlayer({ mode: 'native', onwatched });
+      await player.play('magnet:?xt=urn:btih:one', {
+        mediaId: 'tt1',
+        season: 1,
+        episode: 2,
+        progress
+      });
+      backend.duration = 100;
+      backend.currentTime = 40.5;
+      await tick();
+
+      await player.switchTo(async () => null);
+
+      expect(onwatched).not.toHaveBeenCalled();
+      expect(progressStore.get('tt1', 1, 2)?.time).toBe(40.5);
+    });
+
+    it('releases the previous stream before looking up the next one', async () => {
+      const { player, backend, streamPlayer } = await mountPlayer({ mode: 'native' });
+      await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+      const load = vi.fn().mockResolvedValue({
+        magnet: 'magnet:?xt=urn:btih:two',
+        options: { mediaId: 'tt1', season: 1, episode: 3 }
+      });
+
+      expect(await player.switchTo(load)).toBe(true);
+
+      const released = Math.max(
+        backend.stop.mock.invocationCallOrder[0],
+        streamPlayer.stop.mock.invocationCallOrder[0]
+      );
+      expect(released).toBeLessThan(load.mock.invocationCallOrder[0]);
+      expect(streamPlayer.play).toHaveBeenLastCalledWith(
+        'magnet:?xt=urn:btih:two',
+        expect.objectContaining({ season: 1, episode: 3 })
+      );
+    });
+
+    it('stays playing while it switches', async () => {
+      const { player } = await mountPlayer({ mode: 'native' });
+      await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+      let resolveLoad!: (value: null) => void;
+      const switching = player.switchTo(() => new Promise((r) => (resolveLoad = r)));
+
+      await vi.waitFor(() => expect(resolveLoad).toBeDefined());
+      expect(player.advancing).toBe(true);
+      expect(player.isPlaying).toBe(true);
+
+      resolveLoad(null);
+      await switching;
+      expect(player.isPlaying).toBe(false);
+    });
+
+    it('lets a second switch supersede the first one', async () => {
+      const { player, streamPlayer } = await mountPlayer({ mode: 'native' });
+      await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+      let resolveFirst!: (value: NextPlayback) => void;
+      const first = player.switchTo(() => new Promise((r) => (resolveFirst = r)));
+      await vi.waitFor(() => expect(resolveFirst).toBeDefined());
+
+      const second = player.switchTo(async () => ({
+        magnet: 'magnet:?xt=urn:btih:three',
+        options: { mediaId: 'tt1', season: 1, episode: 3 }
+      }));
+      resolveFirst({ magnet: 'magnet:?xt=urn:btih:two', options: { mediaId: 'tt1', episode: 2 } });
+
+      expect(await first).toBe(false);
+      expect(await second).toBe(true);
+      expect(streamPlayer.play).not.toHaveBeenCalledWith(
+        'magnet:?xt=urn:btih:two',
+        expect.anything()
+      );
+    });
+
+    it('surfaces the error when the chosen episode cannot be found', async () => {
+      const { player } = await mountPlayer({ mode: 'native' });
+      await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });
+
+      const ok = await player.switchTo(async () => ({
+        error: { message: 'Nenhuma fonte encontrada para este episódio.', action: 'back' as const }
+      }));
+
+      expect(ok).toBe(false);
+      expect(player.error).toBe('Nenhuma fonte encontrada para este episódio.');
+    });
+  });
+
   it('cancels the advance when the player closes meanwhile', async () => {
     const { player, streamPlayer } = await mountPlayer({ mode: 'native' });
     await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });

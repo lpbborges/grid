@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import SeriesPage from './+page.svelte';
 import {
   installPlaybackBoundary,
@@ -54,6 +54,7 @@ const files = [
 ];
 
 let boundary: PlaybackBoundary;
+let rerender: ReturnType<typeof render>['rerender'];
 
 async function playEpisode(name: RegExp, overrides: Partial<PlaybackBoundaryOptions> = {}) {
   boundary = installPlaybackBoundary({
@@ -63,11 +64,11 @@ async function playEpisode(name: RegExp, overrides: Partial<PlaybackBoundaryOpti
     ],
     ...overrides
   });
-  render(SeriesPage, {
+  ({ rerender } = render(SeriesPage, {
     props: {
       data: { autoplay: false, seriesId: series.id, series, requestedEpisode: null, error: null }
     }
-  });
+  }));
   await fireEvent.click(await screen.findByText(name));
 }
 
@@ -406,6 +407,123 @@ describe('Series playback wiring', () => {
     expect(forget).toBeGreaterThan(adds[0]);
     expect(forget).toBeLessThan(adds[1]);
     expect(boundary.unhandledRequests).toEqual([]);
+  });
+
+  describe('episode list inside the player', () => {
+    async function openList() {
+      await fireEvent.click(await screen.findByRole('button', { name: 'Lista de episódios' }));
+      return screen.getByRole('dialog', { name: 'Lista de episódios' });
+    }
+
+    async function midEpisode() {
+      await playEpisode(/Pilot/);
+      const video = await startedVideo();
+      Object.defineProperty(video, 'duration', { configurable: true, value: 2700 });
+      Object.defineProperty(video, 'currentTime', { configurable: true, value: 600 });
+      await fireEvent.timeUpdate(video);
+      return video;
+    }
+
+    it('switches episode without finishing the one being left', async () => {
+      const video = await midEpisode();
+      const panel = await openList();
+
+      await fireEvent.click(within(panel).getByText(/Second/));
+      await nextVideo(video);
+
+      expect(torrentioRequests(1, 2)).toBe(1);
+      expect(progressStore.get(series.id, 1, 1)?.time).toBe(600);
+      expect(watchedStore.has(series.id, 1, 1)).toBe(false);
+      expect(screen.getByTestId('player-episode')).toHaveTextContent(/^T1:E2/);
+      expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
+      expect(screen.queryByTestId('up-next-card')).toBeNull();
+    });
+
+    it('forgets the stream it leaves before adding the next one', async () => {
+      const video = await midEpisode();
+      const panel = await openList();
+
+      await fireEvent.click(within(panel).getByText(/Second/));
+      await nextVideo(video);
+
+      const requests = boundary.rqbit.requests;
+      const adds = requests
+        .map((r, index) => (r.method === 'POST' && r.path === '/torrents' ? index : -1))
+        .filter((index) => index !== -1);
+      expect(adds).toHaveLength(2);
+      const forget = requests.findIndex(
+        (r, index) =>
+          index > adds[0] && r.method === 'POST' && r.path === `/torrents/${HASH}/forget`
+      );
+      expect(forget).toBeGreaterThan(adds[0]);
+      expect(forget).toBeLessThan(adds[1]);
+    });
+
+    it('marks the playing episode and offers the way back at the saved time', async () => {
+      const video = await midEpisode();
+      const panel = await openList();
+      expect(within(panel).getByText('Reproduzindo')).toBeInTheDocument();
+      await fireEvent.click(within(panel).getByText(/Second/));
+      await nextVideo(video);
+
+      const reopened = await openList();
+
+      expect(within(reopened).getByText('Reproduzindo')).toBeInTheDocument();
+      expect(within(reopened).getByText('Continuar de 10:00')).toBeInTheDocument();
+    });
+
+    it('resumes the chosen episode where it was left, or from the start on request', async () => {
+      progressStore.update(series.id, 1, 2, 750, 2700);
+      const video = await midEpisode();
+      const panel = await openList();
+
+      const second = panel.querySelector('[data-episode="2"]') as HTMLElement;
+      await fireEvent.click(within(second).getByRole('button', { name: 'Começar do início' }));
+      const next = (await nextVideo(video)) as HTMLVideoElement;
+      Object.defineProperty(next, 'duration', { configurable: true, value: 2700 });
+      await fireEvent.loadedMetadata(next);
+
+      expect(next.currentTime).toBe(0);
+    });
+
+    it('does nothing when the playing episode is picked again', async () => {
+      const video = await midEpisode();
+      const panel = await openList();
+
+      await fireEvent.click(within(panel).getByText(/Pilot/));
+
+      expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
+      expect(screen.getByTestId('video-element')).toBe(video);
+      expect(torrentioRequests(1, 1)).toBe(1);
+    });
+
+    it('plays nothing when the route moves to another series mid-switch', async () => {
+      const video = await midEpisode();
+      const panel = await openList();
+      const other = {
+        ...series,
+        id: 'tt0000003',
+        title: 'Grid Series Two',
+        videos: [{ id: 'tt0000003:1:1', season: 1, episode: 1, name: 'Other Pilot' }]
+      };
+
+      await fireEvent.click(within(panel).getByText(/Second/));
+      await rerender({
+        data: {
+          autoplay: false,
+          seriesId: other.id,
+          series: other,
+          requestedEpisode: null,
+          error: null
+        }
+      });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      expect(screen.queryByTestId('video-element')).toBeNull();
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.getByText(/Other Pilot/)).toBeInTheDocument();
+      expect(video).not.toBeInTheDocument();
+    });
   });
 
   it('starts an episode over from the beginning when asked', async () => {

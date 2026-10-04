@@ -520,6 +520,174 @@ describe('PlayerShell', () => {
     });
   });
 
+  describe('episode panel', () => {
+    const pick = vi.fn();
+    const episodePanel = createRawSnippet<[() => void]>((close) => ({
+      render: () =>
+        '<div><select aria-label="Temporada"><option>1</option><option>2</option></select><button type="button">Episódio 3</button></div>',
+      setup: (node) => {
+        node.querySelector('button')!.addEventListener('click', () => {
+          pick();
+          close()();
+        });
+      }
+    }));
+
+    function renderPanel(backend = fakeBackend({ hasStarted: true }), extra = {}) {
+      render(PlayerShell, { props: { backend, surface: emptySurface, episodePanel, ...extra } });
+      return backend;
+    }
+
+    async function openPanel() {
+      await fireEvent.click(screen.getByRole('button', { name: 'Lista de episódios' }));
+    }
+
+    beforeEach(() => pick.mockClear());
+
+    it('offers no episode list without a panel, as on a movie', () => {
+      render(PlayerShell, {
+        props: { backend: fakeBackend({ hasStarted: true }), surface: emptySurface }
+      });
+
+      expect(screen.queryByRole('button', { name: 'Lista de episódios' })).toBeNull();
+    });
+
+    it('opens from the trigger and marks trigger and panel as menu elements', async () => {
+      renderPanel();
+      const trigger = screen.getByRole('button', { name: 'Lista de episódios' });
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
+
+      await fireEvent.click(trigger);
+
+      const panel = screen.getByRole('dialog', { name: 'Lista de episódios' });
+      expect(trigger).toHaveAttribute('data-menu-element');
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      expect(panel).toHaveAttribute('data-menu-element');
+      expect(within(panel).getByRole('button', { name: 'Episódio 3' })).toBeInTheDocument();
+    });
+
+    it('closes from the trigger, from a click elsewhere, but not from a click inside', async () => {
+      renderPanel();
+      await openPanel();
+
+      await fireEvent.click(screen.getByRole('dialog', { name: 'Lista de episódios' }));
+      expect(screen.getByRole('dialog', { name: 'Lista de episódios' })).toBeInTheDocument();
+
+      await fireEvent.click(screen.getByTestId('video-player-container'));
+      expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
+
+      await openPanel();
+      await openPanel();
+      expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
+    });
+
+    it('closes when the panel asks to, after an episode is picked', async () => {
+      renderPanel();
+      await openPanel();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Episódio 3' }));
+
+      expect(pick).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
+    });
+
+    it('lifts the subtitles and keeps the controls up while it is open', async () => {
+      vi.useFakeTimers();
+      const backend = renderPanel();
+      await openPanel();
+
+      await fireEvent.mouseMove(screen.getByTestId('video-player-container'));
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+
+      expect(backend.syncOverlayLayout).toHaveBeenCalledWith(true, true, false);
+      expect(playerState.showControls).toBe(true);
+    });
+
+    it('closes with Escape before leaving fullscreen', async () => {
+      const backend = renderPanel();
+      await openPanel();
+
+      await fireEvent.keyDown(window, { key: 'Escape' });
+
+      expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
+      expect(backend.exitFullscreen).not.toHaveBeenCalled();
+
+      await fireEvent.keyDown(window, { key: 'Escape' });
+      expect(backend.exitFullscreen).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes with Escape pressed on the season select', async () => {
+      const backend = renderPanel();
+      await openPanel();
+      const select = screen.getByRole('combobox', { name: 'Temporada' });
+      select.focus();
+
+      await fireEvent.keyDown(select, { key: 'Escape' });
+
+      expect(screen.queryByRole('dialog', { name: 'Lista de episódios' })).toBeNull();
+      expect(backend.exitFullscreen).not.toHaveBeenCalled();
+    });
+
+    it('closes the audio and subtitle menus with Escape too', async () => {
+      const backend = fakeBackend({ hasStarted: true });
+      render(PlayerShell, { props: { backend, surface: emptySurface } });
+      await fireEvent.click(screen.getByLabelText('Menu de Legendas'));
+
+      await fireEvent.keyDown(window, { key: 'Escape' });
+
+      expect(screen.queryByRole('menu', { name: 'Legendas' })).toBeNull();
+      expect(backend.exitFullscreen).not.toHaveBeenCalled();
+    });
+
+    it('keeps the card ahead of the panel for Escape', async () => {
+      const upNext = upNextCard();
+      renderPanel(fakeBackend({ hasStarted: true }), { upNext });
+      await openPanel();
+
+      await fireEvent.keyDown(window, { key: 'Escape' });
+
+      expect(upNext.oncancel).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('dialog', { name: 'Lista de episódios' })).toBeInTheDocument();
+    });
+
+    it.each(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'])(
+      '%s inside the panel does not seek or change the volume',
+      async (key) => {
+        const backend = renderPanel();
+        await openPanel();
+        const select = screen.getByRole('combobox', { name: 'Temporada' });
+        select.focus();
+
+        await fireEvent.keyDown(select, { key });
+
+        expect(backend.seek).not.toHaveBeenCalled();
+        expect(backend.setVolume).not.toHaveBeenCalled();
+      }
+    );
+
+    it('does not fire shortcut letters while the season select has focus', async () => {
+      const backend = renderPanel();
+      await openPanel();
+      const select = screen.getByRole('combobox', { name: 'Temporada' });
+      select.focus();
+
+      await fireEvent.keyDown(select, { key: 'm' });
+      await fireEvent.keyDown(select, { key: 'f' });
+
+      expect(backend.setVolume).not.toHaveBeenCalled();
+      expect(backend.toggleFullscreen).not.toHaveBeenCalled();
+    });
+
+    it('has no accessibility violations with the panel open', async () => {
+      renderPanel();
+      await openPanel();
+
+      expect(await axe(screen.getByTestId('video-player-container'))).toHaveNoViolations();
+    });
+  });
+
   it('renders close button when onclose is provided', async () => {
     const onclose = vi.fn();
     render(PlayerShell, { props: { backend: fakeBackend(), surface: emptySurface, onclose } });

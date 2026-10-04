@@ -61,6 +61,35 @@ describe(`Playing ${FIXTURE_SERIES.title}`, () => {
     await backToCatalog();
   });
 
+  it('switches episode from the list inside the player', async () => {
+    await openTitle('series', FIXTURE_SERIES.id);
+    await playEpisode('Fixture Pilot');
+    const pilot = await waitForPlaybackPast(1);
+    expect(pilot.duration).toBeLessThan(12);
+
+    await $('[data-testid="video-player-container"]').moveTo();
+    const trigger = await $('button[aria-label="Lista de episódios"]');
+    await trigger.waitForClickable({ timeout: 15000 });
+    await trigger.click();
+    const panel = await $('[role="dialog"][aria-label="Lista de episódios"]');
+    const finale = await panel.$('button*=Fixture Finale');
+    await finale.waitForClickable({ timeout: 15000 });
+    await finale.click();
+
+    await browser.waitUntil(
+      async () => {
+        const state = await videoState();
+        return !!state && state.duration > 13 && state.currentTime > 1;
+      },
+      { timeout: 90000, interval: 250, timeoutMsg: 'the chosen episode never started playing' }
+    );
+    await expect($('[role="dialog"][aria-label="Lista de episódios"]')).not.toBeExisting();
+    await expect($('[data-testid="player-episode"]')).toHaveText(expect.stringContaining('E2'));
+
+    await closePlayer();
+    await backToCatalog();
+  });
+
   it('plays straight from the hover card without opening the details page', async () => {
     const card = await $(`a[href="/series/${FIXTURE_SERIES.id}"]`);
     await card.waitForClickable({ timeout: 30000 });
