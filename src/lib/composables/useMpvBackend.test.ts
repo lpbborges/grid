@@ -394,7 +394,7 @@ describe('useMpvBackend', () => {
     });
     player.syncOverlayLayout(true, false, false);
     expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {
-      percent: 80
+      percent: 86
     });
     player.syncOverlayLayout(true, true, false);
     expect(invoke).toHaveBeenLastCalledWith('native_player_set_subtitle_position', {

@@ -45,7 +45,7 @@ export function useMpvBackend() {
   let buffering = $state(false);
   let durationState = $state(0);
   let chapters = $state<Chapter[]>([]);
-  let subtitlePosition = 80;
+  let subtitlePosition = 86;
 
   let unlisteners: UnlistenFn[] = [];
   let current: PlaybackRequest | undefined;
@@ -210,7 +210,7 @@ export function useMpvBackend() {
   }
 
   function syncOverlayLayout(controlsVisible: boolean, menusOpen: boolean, cardVisible: boolean) {
-    const next = cardVisible ? 55 : menusOpen ? 70 : controlsVisible ? 80 : 100;
+    const next = cardVisible ? 55 : menusOpen ? 70 : controlsVisible ? 86 : 100;
     if (next === subtitlePosition) return;
     subtitlePosition = next;
     if (!isRunning) return;

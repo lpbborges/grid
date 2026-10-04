@@ -230,7 +230,7 @@ describe('Movie native playback wiring', () => {
     await waitFor(
       () =>
         expect(invoke).toHaveBeenCalledWith('native_player_set_subtitle_position', {
-          percent: 80
+          percent: 86
         }),
       { timeout: 5000 }
     );
