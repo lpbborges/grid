@@ -304,8 +304,10 @@
         <span class="sr-only">{Math.round(progressPercent)}% assistido</span>
       {/if}
       {#if genres.length > 0}
+        <!-- A taller line box with matching negative margins keeps the 16px row, but leaves
+             room for Orbitron's descent, which WebKitGTK otherwise clips at the bottom. -->
         <p
-          class="text-green font-cyber truncate text-xs tracking-widest uppercase"
+          class="text-green font-cyber -my-1 truncate text-xs leading-6 tracking-widest uppercase"
           data-testid="hover-preview-genres"
         >
           {genres.join(' · ')}
