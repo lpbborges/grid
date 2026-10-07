@@ -68,6 +68,19 @@ describe('TextField', () => {
     expect(field.className).toContain('has-[:focus-visible]:ring-green');
   });
 
+  it('draws one focus edge: the ring sits on the border, without an offset gap', () => {
+    render(TextField, { 'aria-label': 'x' });
+    const field = screen.getByRole('textbox').parentElement!;
+
+    expect(field.className).not.toContain('ring-offset');
+  });
+
+  it('hides the native search clear button, since callers render their own', () => {
+    render(TextField, { 'aria-label': 'x', type: 'search' });
+
+    expect(screen.getByRole('searchbox')).toHaveClass('[&::-webkit-search-cancel-button]:hidden');
+  });
+
   it('uses the dark background in panels and the translucent surface on the page', () => {
     const { unmount } = render(TextField, { 'aria-label': 'x' });
     expect(screen.getByRole('textbox').parentElement).toHaveClass('bg-dark');

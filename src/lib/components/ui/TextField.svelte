@@ -4,7 +4,7 @@
   import Label from './Label.svelte';
 
   const FIELD =
-    'flex w-full items-center gap-2 rounded-sm border px-3 text-main transition-colors has-[:focus-visible]:border-green has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-green has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-dark has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50';
+    'flex w-full items-center gap-2 rounded-sm border px-3 text-main transition-colors has-[:focus-visible]:border-green has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-green has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50';
 
   const SIZES = {
     sm: 'h-8 text-sm',
@@ -75,7 +75,7 @@
       id={inputId}
       aria-invalid={error ? true : undefined}
       aria-describedby={describedBy}
-      class="placeholder:text-muted min-w-0 flex-1 bg-transparent outline-none [&::-webkit-search-cancel-button]:appearance-none"
+      class="placeholder:text-muted min-w-0 flex-1 bg-transparent outline-none [&::-webkit-search-cancel-button]:hidden"
       {...rest}
     />
     {@render trailing?.()}
