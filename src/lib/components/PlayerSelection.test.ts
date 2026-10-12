@@ -40,7 +40,9 @@ describe('PlayerSelection component', () => {
     await fireEvent.click(getByRole('button', { name: 'Continuar de 42:10' }));
     expect(onPlay).toHaveBeenLastCalledWith(false);
 
-    await fireEvent.click(getByRole('button', { name: 'Começar do início' }));
+    const restartButton = getByRole('button', { name: 'Começar do início' });
+    expect(restartButton).toHaveClass('border-secondary/60', 'text-secondary', 'bg-surface/60');
+    await fireEvent.click(restartButton);
     expect(onPlay).toHaveBeenLastCalledWith(true);
   });
 

@@ -98,6 +98,7 @@ describe('EpisodeList component', () => {
     expect(getByText('Continuar de 12:30')).toBeInTheDocument();
     const restarts = getAllByRole('button', { name: 'Começar do início' });
     expect(restarts).toHaveLength(1);
+    expect(restarts[0]).toHaveClass('border-secondary/60', 'text-secondary', 'bg-surface/60');
 
     await fireEvent.click(restarts[0]);
     expect(onPlayEpisode).toHaveBeenCalledWith(episodes[1], true);

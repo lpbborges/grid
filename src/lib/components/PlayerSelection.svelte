@@ -68,7 +68,7 @@
     {#if resumeSeconds !== null}
       <button
         onclick={() => onPlay(true)}
-        class="group border-primary/50 text-muted hover:border-green hover:bg-green/10 hover:text-green focus-visible:ring-green flex w-full cursor-pointer items-center justify-center gap-2 rounded-sm border py-2.5 font-mono text-sm tracking-wider uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        class="group border-secondary/60 text-secondary bg-surface/60 hover:bg-secondary hover:text-dark focus-visible:ring-secondary flex w-full cursor-pointer items-center justify-center gap-2 rounded-sm border py-2.5 font-mono text-sm font-bold tracking-wider uppercase transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

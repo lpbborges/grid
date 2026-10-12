@@ -179,7 +179,7 @@
           </button>
           {#if resumeAt !== null}
             <button
-              class="border-primary/50 text-primary hover:text-green hover:border-green group-hover:bg-primary/20 ml-2 rounded-sm border p-2 transition-all duration-300"
+              class="border-secondary/60 text-secondary bg-surface/60 hover:bg-secondary hover:text-dark focus-visible:ring-secondary ml-2 rounded-sm border p-2 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none"
               title="Começar do início"
               aria-label="Começar do início"
               onclick={() => onPlayEpisode(episode, true)}
