@@ -77,6 +77,12 @@ describe('Select', () => {
     );
   });
 
+  it('draws one focus edge: the ring sits on the border, without an offset gap', () => {
+    render(Select, { label: 'a', options, value: '1080p' });
+
+    expect(screen.getByRole('combobox').className).not.toContain('ring-offset');
+  });
+
   it('flags an error through aria-invalid and a described alert', () => {
     render(Select, { label: 'a', options, value: '1080p', error: 'Escolha uma opção' });
     const select = screen.getByRole('combobox');

@@ -11,7 +11,7 @@
   import Label from './Label.svelte';
 
   const BASE =
-    'w-full appearance-none rounded-sm border bg-surface pr-8 pl-3 text-main transition-colors focus-visible:border-green focus-visible:ring-2 focus-visible:ring-green focus-visible:ring-offset-2 focus-visible:ring-offset-dark focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50';
+    'w-full appearance-none rounded-sm border bg-surface pr-8 pl-3 text-main transition-colors focus-visible:border-green focus-visible:ring-2 focus-visible:ring-green focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50';
 
   const SIZES = {
     sm: 'h-8 text-sm',
