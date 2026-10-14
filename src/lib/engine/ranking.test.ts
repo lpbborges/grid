@@ -59,6 +59,43 @@ describe('scoreStreamOption', () => {
     expect(dualAudioOriginal).toBeGreaterThan(dubbedOnlyOriginal);
   });
 
+  it('recognizes standalone dual and Portuguese markers (ptbr, pt_br, portugues) as pt audio', () => {
+    const standaloneDual: StreamRankingInput = {
+      quality: '1080p',
+      text: 'movie 1080p web-dl dual 5.1',
+      seeds: 0
+    };
+    const ptbr: StreamRankingInput = { quality: '1080p', text: 'movie 1080p ptbr', seeds: 0 };
+    const ptUnderscoreBr: StreamRankingInput = {
+      quality: '1080p',
+      text: 'movie 1080p pt_br',
+      seeds: 0
+    };
+    const portugues: StreamRankingInput = {
+      quality: '1080p',
+      text: 'movie 1080p audio portugues',
+      seeds: 0
+    };
+    const plain: StreamRankingInput = { quality: '1080p', text: 'movie 1080p web-dl', seeds: 0 };
+
+    for (const opt of [standaloneDual, ptbr, ptUnderscoreBr, portugues]) {
+      const scorePt = scoreStreamOption(opt, { quality: '1080p', audioPreference: 'pt' });
+      const plainScore = scoreStreamOption(plain, { quality: '1080p', audioPreference: 'pt' });
+      expect(scorePt).toBeGreaterThan(plainScore);
+    }
+
+    // Standalone dual should not be penalized when user wants original audio (since it contains both)
+    const dualOriginal = scoreStreamOption(standaloneDual, {
+      quality: '1080p',
+      audioPreference: 'original'
+    });
+    const plainOriginal = scoreStreamOption(plain, {
+      quality: '1080p',
+      audioPreference: 'original'
+    });
+    expect(dualOriginal).toBe(plainOriginal);
+  });
+
   it('penalizes dubbed-only releases when the user wants original audio', () => {
     const dubbedOnly: StreamRankingInput = { quality: '1080p', text: 'dublado 1080p', seeds: 0 };
     const neutral: StreamRankingInput = { quality: '1080p', text: 'plain release 1080p', seeds: 0 };

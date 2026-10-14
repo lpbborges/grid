@@ -59,12 +59,12 @@ export function scoreStreamOption(
   const wantPt = params.audioPreference === 'pt';
   const wantOriginal = params.audioPreference === 'original';
 
-  const isDubbedOnly = text.includes('dublado') && !text.includes('dual');
-  const isDual = text.includes('dual audio') || text.includes('multi-audio');
+  const isDual = /\b(dual([ -]?audio)?|multi([ -]?audio)?)\b/i.test(text);
+  const isDubbedOnly = text.includes('dublado') && !isDual;
   const hasPt =
     isDubbedOnly ||
     isDual ||
-    text.includes('pt-br') ||
+    /\b(pt[-_]?br|ptbr|portugu[eê]s)\b/i.test(text) ||
     text.includes('🇧🇷') ||
     text.includes('(pt)');
 
