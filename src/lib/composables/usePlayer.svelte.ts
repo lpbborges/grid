@@ -125,6 +125,8 @@ export function usePlayer(
   async function stop() {
     advanceGeneration++;
     advancing = false;
+    saveCurrentPosition();
+    progressStore.persistNow();
     await release();
   }
 
@@ -196,7 +198,10 @@ export function usePlayer(
 
   /** Leaves the current file where it is (not watched) and plays what `load` resolves. */
   function switchTo(load: () => Promise<NextPlaybackResult>): Promise<boolean> {
-    return transition(load, saveCurrentPosition);
+    return transition(load, () => {
+      saveCurrentPosition();
+      progressStore.persistNow();
+    });
   }
 
   $effect(() => {

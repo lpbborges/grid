@@ -346,6 +346,19 @@ describe('usePlayer', () => {
     expect(player.isPlaying).toBe(false);
   });
 
+  it('saves current position and flushes progress to localStorage immediately when stop is called', async () => {
+    const { player, backend } = await mountPlayer({ mode: 'native' });
+    await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1' });
+    backend.duration = 100;
+    backend.currentTime = 42;
+    await tick();
+
+    await player.stop();
+
+    const stored = JSON.parse(localStorage.getItem('grid-progress') ?? '{}');
+    expect(stored.tt1.time).toBe(42);
+  });
+
   it('surfaces the error when the next episode cannot be found', async () => {
     const { player } = await mountPlayer({ mode: 'native' });
     await player.play('magnet:?xt=urn:btih:one', { mediaId: 'tt1', season: 1, episode: 1 });

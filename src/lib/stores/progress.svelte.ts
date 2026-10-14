@@ -80,10 +80,13 @@ class ProgressStore {
     this.progress = readStoredProgress();
     if (browser) {
       window.addEventListener('pagehide', () => this.persistNow());
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') this.persistNow();
+      });
     }
   }
 
-  private persistNow() {
+  persistNow() {
     clearTimeout(this.#persistTimer);
     this.#persistTimer = undefined;
     writeStored('grid-progress', JSON.stringify(this.progress));

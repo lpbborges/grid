@@ -95,6 +95,27 @@ describe('progressStore persistence', () => {
     expect(storedProgress()['tt1-S1E2'].time).toBe(30);
   });
 
+  it('flushes a pending write when visibility changes to hidden', async () => {
+    const { progressStore } = await loadStore();
+
+    progressStore.update('tt1', 1, 3, 45, 100);
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(storedProgress()['tt1-S1E3'].time).toBe(45);
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+  });
+
+  it('flushes a pending write when persistNow is called directly', async () => {
+    const { progressStore } = await loadStore();
+
+    progressStore.update('tt1', undefined, undefined, 55, 100);
+    expect(storedProgress()).toBeNull();
+
+    progressStore.persistNow();
+    expect(storedProgress().tt1.time).toBe(55);
+  });
+
   it('removes a finished entry and persists that immediately', async () => {
     const { progressStore, PROGRESS_PERSIST_INTERVAL_MS } = await loadStore();
 
