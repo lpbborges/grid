@@ -119,6 +119,12 @@ export function installPlaybackBoundary(options: PlaybackBoundaryOptions): Playb
       if (url.href.startsWith('https://opensubtitles-v3.strem.io/subtitles/')) {
         return json({ subtitles: options.externalSubtitles ?? [] });
       }
+      if (
+        url.href.startsWith('https://translate.googleapis.com/') ||
+        url.href.startsWith('https://api.mymemory.translated.net/')
+      ) {
+        return new Response('offline', { status: 503 });
+      }
       unhandledRequests.push(url.href);
       return new Response('offline', { status: 503 });
     })

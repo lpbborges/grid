@@ -2,6 +2,7 @@ import { logger } from '$lib/logger';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { getCached, setCached } from '../stores/translation-cache';
 import type { Episode } from '../types';
+import { settingsStore } from '$lib/stores/settings.svelte';
 import { endpoints } from './endpoints';
 
 const TRANSLATE_TIMEOUT_MS = 6000;
@@ -74,13 +75,24 @@ async function runTranslationCascade(text: string, targetLang: string): Promise<
 }
 
 export function getUserLanguage(): string {
+  // If the user explicitly configured English for both audio and subtitles, keep English metadata.
+  if (
+    typeof window !== 'undefined' &&
+    settingsStore.audio === 'en' &&
+    settingsStore.subtitle === 'en'
+  ) {
+    return 'en';
+  }
   if (typeof window !== 'undefined' && window.navigator) {
-    const userLang = window.navigator.language || 'en';
-    if (!userLang.startsWith('en')) {
-      return userLang.split('-')[0];
+    const userLang = window.navigator.language || 'pt';
+    const base = userLang.split('-')[0].toLowerCase();
+    // Non-English system locales (e.g. 'es') are preserved. English OS defaults to 'pt'
+    // because Grid is a Brazilian Portuguese app whose metadata should not be left in English.
+    if (base !== 'en') {
+      return base;
     }
   }
-  return 'en';
+  return 'pt';
 }
 
 /** A title in the user language, or unchanged when that is English. */

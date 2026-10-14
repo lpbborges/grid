@@ -218,12 +218,30 @@ describe('translation helpers', () => {
     expect(getUserLanguage()).toBe('pt');
   });
 
-  it('getUserLanguage returns en if language is english', async () => {
+  it('getUserLanguage preserves other languages such as spanish', async () => {
+    const { getUserLanguage } = await freshTranslateModule();
+    vi.stubGlobal('window', {
+      navigator: { language: 'es-ES' }
+    });
+    expect(getUserLanguage()).toBe('es');
+  });
+
+  it('getUserLanguage defaults to pt when OS language is english in pt-BR app', async () => {
     const { getUserLanguage } = await freshTranslateModule();
     vi.stubGlobal('window', {
       navigator: { language: 'en-US' }
     });
+    expect(getUserLanguage()).toBe('pt');
+  });
+
+  it('getUserLanguage returns en if user configured both audio and subtitles to english', async () => {
+    const { settingsStore } = await import('$lib/stores/settings.svelte');
+    settingsStore.audio = 'en';
+    settingsStore.subtitle = 'en';
+    const { getUserLanguage } = await freshTranslateModule();
     expect(getUserLanguage()).toBe('en');
+    settingsStore.audio = 'pt';
+    settingsStore.subtitle = 'pt';
   });
 
   it('translateMediaInfo translates title and synopsis', async () => {
@@ -233,12 +251,24 @@ describe('translation helpers', () => {
     expect(res.synopsis).toBe('Traduzido');
   });
 
-  it('translateMediaInfo returns original if language is english', async () => {
+  it('translateMediaInfo translates into pt even when OS language is english', async () => {
     const { translateMediaInfo } = await freshTranslateModule();
     vi.stubGlobal('window', { navigator: { language: 'en-US' } });
     const res = await translateMediaInfo('Title', 'Synopsis');
+    expect(res.title).toBe('Traduzido');
+    expect(res.synopsis).toBe('Traduzido');
+  });
+
+  it('translateMediaInfo returns original if user preferred language is english', async () => {
+    const { settingsStore } = await import('$lib/stores/settings.svelte');
+    settingsStore.audio = 'en';
+    settingsStore.subtitle = 'en';
+    const { translateMediaInfo } = await freshTranslateModule();
+    const res = await translateMediaInfo('Title', 'Synopsis');
     expect(res.title).toBe('Title');
     expect(res.synopsis).toBe('Synopsis');
+    settingsStore.audio = 'pt';
+    settingsStore.subtitle = 'pt';
   });
 
   it('translateTitle translates into the user language', async () => {
@@ -246,11 +276,15 @@ describe('translation helpers', () => {
     expect(await translateTitle('Title')).toBe('Traduzido');
   });
 
-  it('translateTitle keeps the title when the language is english', async () => {
+  it('translateTitle keeps the title when the user prefers english', async () => {
+    const { settingsStore } = await import('$lib/stores/settings.svelte');
+    settingsStore.audio = 'en';
+    settingsStore.subtitle = 'en';
     const { translateTitle } = await freshTranslateModule();
-    vi.stubGlobal('window', { navigator: { language: 'en-US' } });
     expect(await translateTitle('Title')).toBe('Title');
     expect(globalThis.fetch).not.toHaveBeenCalled();
+    settingsStore.audio = 'pt';
+    settingsStore.subtitle = 'pt';
   });
 
   it('translateEpisodesList translates list of episodes', async () => {
