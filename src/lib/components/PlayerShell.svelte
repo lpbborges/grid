@@ -240,6 +240,14 @@
     );
   }
 
+  function cycleAudio() {
+    if (backend.audioTracks.length === 0) return;
+    const next = backend.activeAudioIndex + 1;
+    const index = next < backend.audioTracks.length ? next : 0;
+    backend.selectAudio(index);
+    showFeedback(`Áudio: ${backend.audioTracks[index].label}`);
+  }
+
   function handleGlobalKeydown(e: KeyboardEvent) {
     const active = document.activeElement as HTMLElement;
     const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
@@ -261,6 +269,7 @@
 
     switch (e.key.length === 1 ? e.key.toLowerCase() : e.key) {
       case ' ':
+      case 'k':
         if (isButton || isSlider) return;
         e.preventDefault();
         backend.togglePlay();
@@ -295,6 +304,10 @@
       case 'c':
         e.preventDefault();
         cycleSubtitle();
+        break;
+      case 'a':
+        e.preventDefault();
+        cycleAudio();
         break;
       case 'Escape':
         if (showCard && upNext) {

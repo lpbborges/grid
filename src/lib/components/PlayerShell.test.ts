@@ -1006,6 +1006,48 @@ describe('PlayerShell keyboard shortcuts', () => {
     expect(screen.getByTestId('player-feedback').textContent).toBe('Legenda: Portuguese');
   });
 
+  it('toggles play/pause with K', async () => {
+    const backend = renderShell();
+
+    await press('k');
+
+    expect(backend.togglePlay).toHaveBeenCalledOnce();
+  });
+
+  it('cycles the audio tracks with A', async () => {
+    const audioTracks = [
+      { index: 0, id: '1', label: 'Português', enabled: true },
+      { index: 1, id: '2', label: 'Inglês', enabled: false }
+    ];
+    const backend = renderShell({ audioTracks, activeAudioIndex: 0 });
+
+    await press('a');
+
+    expect(backend.selectAudio).toHaveBeenCalledWith(1);
+    expect(screen.getByTestId('player-feedback').textContent).toBe('Áudio: Inglês');
+  });
+
+  it('wraps audio tracks with A back to the first one', async () => {
+    const audioTracks = [
+      { index: 0, id: '1', label: 'Português', enabled: false },
+      { index: 1, id: '2', label: 'Inglês', enabled: true }
+    ];
+    const backend = renderShell({ audioTracks, activeAudioIndex: 1 });
+
+    await press('a');
+
+    expect(backend.selectAudio).toHaveBeenCalledWith(0);
+    expect(screen.getByTestId('player-feedback').textContent).toBe('Áudio: Português');
+  });
+
+  it('does nothing with A when there are no audio tracks', async () => {
+    const backend = renderShell({ audioTracks: [] });
+
+    await press('a');
+
+    expect(backend.selectAudio).not.toHaveBeenCalled();
+  });
+
   it('ignores shortcuts while typing', async () => {
     const backend = renderShell();
     const input = document.createElement('input');
