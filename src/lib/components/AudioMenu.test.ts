@@ -66,6 +66,21 @@ describe('AudioMenu', () => {
     expect(onselect).toHaveBeenCalledWith(0);
   });
 
+  it('renders distinct menuitems for disambiguated tracks', () => {
+    const multiTracks = [
+      { index: 0, id: 'a0', label: 'Espanhol (Opção 1)', enabled: true },
+      { index: 1, id: 'a1', label: 'Espanhol (Opção 2)', enabled: false },
+      { index: 2, id: 'a2', label: 'Inglês (Opção 1)', enabled: false },
+      { index: 3, id: 'a3', label: 'Inglês (Opção 2)', enabled: false }
+    ];
+    renderMenu({ audioTracks: multiTracks, showAudioMenu: true });
+
+    expect(screen.getByRole('menuitem', { name: 'Espanhol (Opção 1)' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Espanhol (Opção 2)' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Inglês (Opção 1)' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Inglês (Opção 2)' })).toBeInTheDocument();
+  });
+
   it('floats above the video on the glass surface, keeping the purple glow', () => {
     renderMenu({ showAudioMenu: true });
 

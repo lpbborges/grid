@@ -27,10 +27,35 @@ export function nativeTrackLabel(track: NativeTrack): string {
 /** Variants of a language a release title can name, as the menus show them. */
 const LANGUAGE_VARIANTS: [RegExp, string][] = [
   [/latin|latino|latam|419|mexic/i, 'Latino'],
+  [/castel|castil/i, 'Castelhano'],
   [/canad|-ca\b/i, 'Canadá'],
   [/simplified|\bhans\b/i, 'Simplificado'],
   [/traditional|\bhant\b/i, 'Tradicional']
 ];
+
+/**
+ * Ensures tracks with identical labels (e.g. multiple "Inglês" or "Espanhol" tracks)
+ * are told apart as "Opção 1", "Opção 2", etc.
+ */
+export function disambiguateTrackLabels<T extends { label: string }>(tracks: T[]): T[] {
+  const counts = new Map<string, number>();
+  for (const track of tracks) {
+    counts.set(track.label, (counts.get(track.label) ?? 0) + 1);
+  }
+
+  const seen = new Map<string, number>();
+  return tracks.map((track) => {
+    const total = counts.get(track.label) ?? 0;
+    if (total <= 1) return track;
+
+    const current = (seen.get(track.label) ?? 0) + 1;
+    seen.set(track.label, current);
+    return {
+      ...track,
+      label: `${track.label} (Opção ${current})`
+    };
+  });
+}
 
 /**
  * The track's language code, with Brazilian and European Portuguese told
@@ -98,12 +123,14 @@ export function resolveNativeTracks(
   const audio = tracks.filter((t) => t.type === 'audio');
   const subs = tracks.filter((t) => t.type === 'sub');
 
-  const parsedAudio: ParsedAudioTrack[] = audio.map((track, index) => ({
-    index,
-    id: String(track.id),
-    label: nativeTrackLabel(track),
-    enabled: track.selected
-  }));
+  const parsedAudio: ParsedAudioTrack[] = disambiguateTrackLabels(
+    audio.map((track, index) => ({
+      index,
+      id: String(track.id),
+      label: nativeTrackLabel(track),
+      enabled: track.selected
+    }))
+  );
   const audioMatch = resolvePreferredAudioTrack(parsedAudio, preferences.audio, originalLanguage);
   const selectedAudio = audio.find((t) => t.selected) ?? audio[0];
   const aid = audioMatch !== -1 ? audio[audioMatch].id : (selectedAudio?.id ?? null);

@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { NativeTrack } from '$lib/types';
-import { nativeTrackLabel, resolveNativeTracks, withExternalLangs } from './nativeTracks';
+import {
+  disambiguateTrackLabels,
+  nativeTrackLabel,
+  resolveNativeTracks,
+  withExternalLangs
+} from './nativeTracks';
 
 function track(partial: Partial<NativeTrack> & { id: number; type: string }): NativeTrack {
   return {
@@ -39,6 +44,9 @@ describe('nativeTrackLabel', () => {
     expect(
       nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'spa', title: 'Spanish (Latin America)' }))
     ).toBe('Espanhol (Latino)');
+    expect(nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'spa', title: 'Castellano' }))).toBe(
+      'Espanhol (Castelhano)'
+    );
     expect(nativeTrackLabel(track({ id: 1, type: 'sub', lang: 'chi', title: 'Simplified' }))).toBe(
       'Chinês (Simplificado)'
     );
@@ -230,5 +238,46 @@ describe('resolveNativeTracks', () => {
       aid: null,
       sid: null
     });
+  });
+
+  it('falls back to original audio (e.g. English) when preferred dubbed language (pt) is missing', () => {
+    const foreignAndOriginal = [
+      track({ id: 1, type: 'audio', lang: 'spa', selected: true }),
+      track({ id: 2, type: 'audio', lang: 'spa' }),
+      track({ id: 3, type: 'audio', lang: 'en' }),
+      track({ id: 4, type: 'audio', lang: 'en' })
+    ];
+
+    // User wants Portuguese, but video only has Spanish and English.
+    // mpv had Spanish selected (aid: 1), but with English as originalLanguage (or detected original),
+    // it must fall back to the movie's original English track (aid: 3), NOT Spanish!
+    const { aid } = resolveNativeTracks(
+      foreignAndOriginal,
+      { audio: 'pt', subtitle: 'none' },
+      'en'
+    );
+    expect(aid).toBe(3);
+  });
+});
+
+describe('disambiguateTrackLabels', () => {
+  it('appends Opção numbers when multiple tracks share the same label', () => {
+    const tracks = [
+      { label: 'Espanhol' },
+      { label: 'Espanhol' },
+      { label: 'Inglês' },
+      { label: 'Inglês' }
+    ];
+    expect(disambiguateTrackLabels(tracks).map((t) => t.label)).toEqual([
+      'Espanhol (Opção 1)',
+      'Espanhol (Opção 2)',
+      'Inglês (Opção 1)',
+      'Inglês (Opção 2)'
+    ]);
+  });
+
+  it('leaves uniquely labeled tracks untouched', () => {
+    const tracks = [{ label: 'Português BR' }, { label: 'Inglês' }];
+    expect(disambiguateTrackLabels(tracks).map((t) => t.label)).toEqual(['Português BR', 'Inglês']);
   });
 });

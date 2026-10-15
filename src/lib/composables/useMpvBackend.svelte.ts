@@ -7,6 +7,7 @@ import { settingsStore } from '$lib/stores/settings.svelte';
 import type { SubtitleTrack } from '$lib/types';
 import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
 import {
+  disambiguateTrackLabels,
   nativeTrackLabel,
   resolveNativeTracks,
   trackLanguage,
@@ -303,12 +304,14 @@ export function useMpvBackend() {
   // `subtitles.indexOf(sub)` across separate reads (the list and the grouped
   // lists PlayerShell builds from it), which only works on the same objects.
   const audioRows: ParsedAudioTrack[] = $derived(
-    audioTrackList().map((track, index) => ({
-      index,
-      id: String(track.id),
-      label: nativeTrackLabel(track) || `Faixa ${index + 1}`,
-      enabled: track.selected
-    }))
+    disambiguateTrackLabels(
+      audioTrackList().map((track, index) => ({
+        index,
+        id: String(track.id),
+        label: nativeTrackLabel(track) || `Faixa ${index + 1}`,
+        enabled: track.selected
+      }))
+    )
   );
   const subtitleRows: SubtitleTrack[] = $derived(
     subtitleTrackList().map((track, index) => ({

@@ -96,6 +96,19 @@ describe('scoreStreamOption', () => {
     expect(dualOriginal).toBe(plainOriginal);
   });
 
+  it('does not mistake standalone multi or European multi releases for Portuguese audio', () => {
+    const multiRelease: StreamRankingInput = {
+      quality: '1080p',
+      text: 'movie 1080p web-dl multi aac',
+      seeds: 0
+    };
+    const plain: StreamRankingInput = { quality: '1080p', text: 'movie 1080p web-dl', seeds: 0 };
+
+    const multiScore = scoreStreamOption(multiRelease, { quality: '1080p', audioPreference: 'pt' });
+    const plainScore = scoreStreamOption(plain, { quality: '1080p', audioPreference: 'pt' });
+    expect(multiScore).toBe(plainScore);
+  });
+
   it('penalizes dubbed-only releases when the user wants original audio', () => {
     const dubbedOnly: StreamRankingInput = { quality: '1080p', text: 'dublado 1080p', seeds: 0 };
     const neutral: StreamRankingInput = { quality: '1080p', text: 'plain release 1080p', seeds: 0 };

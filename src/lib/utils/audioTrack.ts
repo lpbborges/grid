@@ -63,17 +63,23 @@ export function resolvePreferredAudioTrack(
       t.label.toLowerCase().includes('portug') || t.label.toLowerCase().includes('pt');
     const isBrazilian = (t: ParsedAudioTrack) => /\bbr\b|bras|brazil|pt-?br/i.test(t.label);
     const brazilian = tracks.findIndex((t) => isPortuguese(t) && isBrazilian(t));
-    return brazilian !== -1 ? brazilian : tracks.findIndex(isPortuguese);
+    const ptIdx = brazilian !== -1 ? brazilian : tracks.findIndex(isPortuguese);
+    if (ptIdx !== -1) return ptIdx;
+    return resolvePreferredAudioTrack(tracks, 'original', originalLanguage);
   }
   if (preference === 'en') {
-    return tracks.findIndex(
+    const enIdx = tracks.findIndex(
       (t) => t.label.toLowerCase().includes('ingl') || t.label.toLowerCase().includes('eng')
     );
+    if (enIdx !== -1) return enIdx;
+    return resolvePreferredAudioTrack(tracks, 'original', originalLanguage);
   }
   if (preference === 'es') {
-    return tracks.findIndex(
+    const esIdx = tracks.findIndex(
       (t) => t.label.toLowerCase().includes('espanh') || t.label.toLowerCase().includes('spa')
     );
+    if (esIdx !== -1) return esIdx;
+    return resolvePreferredAudioTrack(tracks, 'original', originalLanguage);
   }
 
   return -1;

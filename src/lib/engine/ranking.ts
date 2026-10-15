@@ -59,7 +59,7 @@ export function scoreStreamOption(
   const wantPt = params.audioPreference === 'pt';
   const wantOriginal = params.audioPreference === 'original';
 
-  const isDual = /\b(dual([ -]?audio)?|multi([ -]?audio)?)\b/i.test(text);
+  const isDual = /\bdual([ -]?audio)?\b/i.test(text);
   const isDubbedOnly = text.includes('dublado') && !isDual;
   const hasPt =
     isDubbedOnly ||

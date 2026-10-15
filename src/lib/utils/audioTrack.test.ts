@@ -87,4 +87,18 @@ describe('resolvePreferredAudioTrack', () => {
     const tracks = [track('Português')];
     expect(resolvePreferredAudioTrack(tracks, 'en')).toBe(-1);
   });
+
+  it('falls back to original language when preferred dubbed language is missing', () => {
+    const tracks = [track('Espanhol'), track('Inglês')];
+    // User prefers Portuguese, but title has Spanish and English.
+    // Original language is English, so it must fall back to English, not Spanish.
+    expect(resolvePreferredAudioTrack(tracks, 'pt', 'en')).toBe(1);
+    // Even without originalLanguage explicitly specified, original fallback finds English
+    expect(resolvePreferredAudioTrack(tracks, 'pt')).toBe(1);
+  });
+
+  it('falls back to original language when English preference is missing', () => {
+    const tracks = [track('Espanhol'), track('Japonês')];
+    expect(resolvePreferredAudioTrack(tracks, 'en', 'ja')).toBe(1);
+  });
 });

@@ -644,6 +644,22 @@ describe('useMpvBackend', () => {
     expect(backend.subtitles[0].group).toBe('Embedded');
   });
 
+  it('disambiguates audio tracks with identical language labels as Opção 1 / Opção 2', async () => {
+    const backend = await startWithTracks([
+      { id: 1, type: 'audio', lang: 'spa', title: null, selected: true },
+      { id: 2, type: 'audio', lang: 'spa', title: null },
+      { id: 3, type: 'audio', lang: 'eng', title: null },
+      { id: 4, type: 'audio', lang: 'eng', title: null }
+    ]);
+
+    expect(backend.audioTracks.map((t: any) => t.label)).toEqual([
+      'Espanhol (Opção 1)',
+      'Espanhol (Opção 2)',
+      'Inglês (Opção 1)',
+      'Inglês (Opção 2)'
+    ]);
+  });
+
   it('hands the menu the same track rows on every read', async () => {
     // SubtitleMenu finds a row with `subtitles.indexOf(sub)` across separate
     // reads (the list, the grouped lists). Fresh objects per read made every
