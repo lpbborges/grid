@@ -16,7 +16,7 @@ async function fetchTitleSnapshot(
   if (!result) return null;
   return {
     type: result.type,
-    title: await translateTitle(result.title),
+    title: await translateTitle(result.title, (result.id && String(result.id)) || id, customFetch),
     poster: result.medium_cover_image ?? ''
   };
 }

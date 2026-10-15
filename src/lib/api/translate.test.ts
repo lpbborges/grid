@@ -244,18 +244,54 @@ describe('translation helpers', () => {
     settingsStore.subtitle = 'pt';
   });
 
-  it('translateMediaInfo translates title and synopsis', async () => {
+  it('translateMediaInfo preserves title when not found on Wikidata and translates synopsis', async () => {
     const { translateMediaInfo } = await freshTranslateModule();
     const res = await translateMediaInfo('Title', 'Synopsis');
-    expect(res.title).toBe('Traduzido');
+    expect(res.title).toBe('Title');
     expect(res.synopsis).toBe('Traduzido');
+  });
+
+  it('translateMediaInfo uses localized title when found on Wikidata and translates synopsis', async () => {
+    globalThis.fetch = vi.fn(async (input: any) => {
+      const url = String(input);
+      if (url.includes('haswbstatement')) {
+        return {
+          ok: true,
+          json: async () => ({ query: { search: [{ title: 'Q12345' }] } })
+        } as Response;
+      }
+      if (url.includes('wbgetentities')) {
+        return {
+          ok: true,
+          json: async () => ({
+            entities: {
+              Q12345: {
+                labels: {
+                  en: { language: 'en', value: 'Project Hail Mary' },
+                  'pt-br': { language: 'pt-br', value: 'Devoradores de Estrelas' }
+                }
+              }
+            }
+          })
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => [[['Sinopse traduzida', 'Synopsis']]]
+      } as Response;
+    });
+
+    const { translateMediaInfo } = await freshTranslateModule();
+    const res = await translateMediaInfo('Project Hail Mary', 'Synopsis', 'tt12042730');
+    expect(res.title).toBe('Devoradores de Estrelas');
+    expect(res.synopsis).toBe('Sinopse traduzida');
   });
 
   it('translateMediaInfo translates into pt even when OS language is english', async () => {
     const { translateMediaInfo } = await freshTranslateModule();
     vi.stubGlobal('window', { navigator: { language: 'en-US' } });
     const res = await translateMediaInfo('Title', 'Synopsis');
-    expect(res.title).toBe('Traduzido');
+    expect(res.title).toBe('Title');
     expect(res.synopsis).toBe('Traduzido');
   });
 
@@ -271,9 +307,40 @@ describe('translation helpers', () => {
     settingsStore.subtitle = 'pt';
   });
 
-  it('translateTitle translates into the user language', async () => {
+  it('translateTitle uses localized title when found on Wikidata', async () => {
+    globalThis.fetch = vi.fn(async (input: any) => {
+      const url = String(input);
+      if (url.includes('haswbstatement')) {
+        return {
+          ok: true,
+          json: async () => ({ query: { search: [{ title: 'Q12345' }] } })
+        } as Response;
+      }
+      if (url.includes('wbgetentities')) {
+        return {
+          ok: true,
+          json: async () => ({
+            entities: {
+              Q12345: {
+                labels: {
+                  en: { language: 'en', value: 'Project Hail Mary' },
+                  'pt-br': { language: 'pt-br', value: 'Devoradores de Estrelas' }
+                }
+              }
+            }
+          })
+        } as Response;
+      }
+      return { ok: false } as Response;
+    });
+
     const { translateTitle } = await freshTranslateModule();
-    expect(await translateTitle('Title')).toBe('Traduzido');
+    expect(await translateTitle('Project Hail Mary', 'tt12042730')).toBe('Devoradores de Estrelas');
+  });
+
+  it('translateTitle keeps the original title when no localized title is found (no machine translation)', async () => {
+    const { translateTitle } = await freshTranslateModule();
+    expect(await translateTitle('Project Hail Mary')).toBe('Project Hail Mary');
   });
 
   it('translateTitle keeps the title when the user prefers english', async () => {

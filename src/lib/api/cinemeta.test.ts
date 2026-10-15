@@ -819,7 +819,7 @@ describe('continue watching metadata', () => {
     });
 
     expect((await resolve([entry('tt1')])).tt1?.title).toBe('Um Sonho de Liberdade');
-    expect(translateTitleMock).toHaveBeenCalledWith('The Shawshank Redemption');
+    expect(translateTitleMock).toHaveBeenCalledWith('The Shawshank Redemption', 'tt1', undefined);
   });
 
   it('looks a title up again after a failed lookup', async () => {

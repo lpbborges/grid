@@ -4,6 +4,7 @@ import { getCached, setCached } from '../stores/translation-cache';
 import type { Episode } from '../types';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { endpoints } from './endpoints';
+import { fetchLocalizedTitle } from './wikidata';
 
 const TRANSLATE_TIMEOUT_MS = 6000;
 // A season has dozens of episodes; firing them all at once trips the services' rate limits.
@@ -95,25 +96,36 @@ export function getUserLanguage(): string {
   return 'pt';
 }
 
-/** A title in the user language, or unchanged when that is English. */
-export async function translateTitle(title: string): Promise<string> {
+/** A title in the user language, or unchanged when that is English or no localized title is found. */
+export async function translateTitle(
+  title: string,
+  imdbId?: string,
+  customFetch?: typeof fetch
+): Promise<string> {
   const lang = getUserLanguage();
-  return lang === 'en' ? title : translateText(title, lang);
+  if (lang === 'en') return title;
+  const localized = await fetchLocalizedTitle(title, imdbId, lang, customFetch);
+  return localized || title;
 }
 
-export async function translateMediaInfo(title: string, synopsis: string) {
+export async function translateMediaInfo(
+  title: string,
+  synopsis: string,
+  imdbId?: string,
+  customFetch?: typeof fetch
+): Promise<{ title: string; synopsis: string }> {
   const targetLang = getUserLanguage();
   if (targetLang === 'en') {
     return { title, synopsis: synopsis || 'Nenhuma sinopse disponível.' };
   }
 
-  const [tTitle, tSynopsis] = await Promise.all([
-    translateText(title, targetLang),
+  const [localizedTitle, tSynopsis] = await Promise.all([
+    fetchLocalizedTitle(title, imdbId, targetLang, customFetch),
     synopsis ? translateText(synopsis, targetLang) : Promise.resolve('Nenhuma sinopse disponível.')
   ]);
 
   return {
-    title: tTitle || title,
+    title: localizedTitle || title,
     synopsis: tSynopsis || synopsis || 'Nenhuma sinopse disponível.'
   };
 }

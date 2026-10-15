@@ -156,7 +156,7 @@
       translatedTitle = currentTitle;
       translatedSynopsis = currentSynopsis || 'Nenhuma sinopse disponível.';
 
-      translateMediaInfo(currentTitle, currentSynopsis).then((res) => {
+      translateMediaInfo(currentTitle, currentSynopsis, String(series.id)).then((res) => {
         if (series && series.title === currentTitle) {
           translatedTitle = res.title;
           translatedSynopsis = res.synopsis;

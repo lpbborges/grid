@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { searchWikidataImdbIds } from './wikidata';
+import { clearLocalizedTitleCache, fetchLocalizedTitle, searchWikidataImdbIds } from './wikidata';
 
 function jsonResponse(body: unknown) {
   return { ok: true, json: async () => body } as Response;
@@ -100,5 +100,165 @@ describe('searchWikidataImdbIds', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: { code: 'bad' } }));
 
     expect(await searchWikidataImdbIds('A Origem', 8, fetchMock)).toEqual([]);
+  });
+});
+
+describe('fetchLocalizedTitle', () => {
+  let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
+
+  beforeEach(() => {
+    clearLocalizedTitleCache();
+    fetchMock = vi.fn<typeof fetch>();
+  });
+
+  it('looks up the localized title by IMDb ID and returns the pt-br label', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ query: { search: [{ title: 'Q107105860' }] } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          entities: {
+            Q107105860: {
+              labels: {
+                en: { language: 'en', value: 'Project Hail Mary' },
+                'pt-br': { language: 'pt-br', value: 'Devoradores de Estrelas' }
+              }
+            }
+          }
+        })
+      );
+
+    const title = await fetchLocalizedTitle('Project Hail Mary', 'tt12042730', 'pt-br', fetchMock);
+    expect(title).toBe('Devoradores de Estrelas');
+  });
+
+  it('uses pt-br alias when label matches English', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ query: { search: [{ title: 'Q172241' }] } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          entities: {
+            Q172241: {
+              labels: {
+                en: { language: 'en', value: 'The Shawshank Redemption' },
+                'pt-br': { language: 'pt-br', value: 'The Shawshank Redemption' }
+              },
+              aliases: {
+                'pt-br': [{ language: 'pt-br', value: 'Um Sonho de Liberdade' }]
+              }
+            }
+          }
+        })
+      );
+
+    const title = await fetchLocalizedTitle(
+      'The Shawshank Redemption',
+      'tt0111161',
+      'pt-br',
+      fetchMock
+    );
+    expect(title).toBe('Um Sonho de Liberdade');
+  });
+
+  it('falls back to searching by title when IMDb ID is not provided or not found', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ search: [{ id: 'Q1375666' }] }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          entities: {
+            Q1375666: {
+              labels: {
+                en: { language: 'en', value: 'Inception' },
+                'pt-br': { language: 'pt-br', value: 'A Origem' }
+              }
+            }
+          }
+        })
+      );
+
+    const title = await fetchLocalizedTitle('Inception', undefined, 'pt-br', fetchMock);
+    expect(title).toBe('A Origem');
+  });
+
+  it('falls back to original title regardless of language (P1476) when no localized title is available', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ query: { search: [{ title: 'Q29647346' }] } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          entities: {
+            Q29647346: {
+              labels: {
+                en: { language: 'en', value: 'Money Heist' }
+              },
+              claims: {
+                P1476: [
+                  {
+                    mainsnak: {
+                      datavalue: {
+                        value: { text: 'La casa de papel', language: 'es' }
+                      }
+                    },
+                    rank: 'normal'
+                  }
+                ]
+              }
+            }
+          }
+        })
+      );
+
+    const title = await fetchLocalizedTitle('Money Heist', 'tt6468322', 'pt-br', fetchMock);
+    expect(title).toBe('La casa de papel');
+  });
+
+  it('prefers preferred rank original title in P1476 when multiple claims exist', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ query: { search: [{ title: 'Q484048' }] } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          entities: {
+            Q484048: {
+              labels: {
+                en: { language: 'en', value: 'Amelie' }
+              },
+              claims: {
+                P1476: [
+                  {
+                    mainsnak: {
+                      datavalue: {
+                        value: { text: 'Amelie', language: 'en' }
+                      }
+                    },
+                    rank: 'normal'
+                  },
+                  {
+                    mainsnak: {
+                      datavalue: {
+                        value: { text: "Le Fabuleux Destin d'Amélie Poulain", language: 'fr' }
+                      }
+                    },
+                    rank: 'preferred'
+                  }
+                ]
+              }
+            }
+          }
+        })
+      );
+
+    const title = await fetchLocalizedTitle('Amelie', 'tt0211915', 'pt-br', fetchMock);
+    expect(title).toBe("Le Fabuleux Destin d'Amélie Poulain");
+  });
+
+  it('returns null and caches when no entity or localized title is found', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ query: { search: [] } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ search: [] }));
+
+    const title = await fetchLocalizedTitle('Unknown Movie', 'tt9999999', 'pt-br', fetchMock);
+    expect(title).toBeNull();
+
+    // Cache hit: should not fetch again
+    const cached = await fetchLocalizedTitle('Unknown Movie', 'tt9999999', 'pt-br', fetchMock);
+    expect(cached).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
