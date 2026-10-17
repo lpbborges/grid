@@ -366,6 +366,23 @@ body {
   font-family: 'Rajdhani', sans-serif;
 }
 
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+select:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+[role='button'][aria-disabled='true'],
+select:disabled {
+  cursor: not-allowed;
+}
+
+.cursor-none,
+.cursor-none * {
+  cursor: none !important;
+}
+
 h1,
 h2,
 h3,

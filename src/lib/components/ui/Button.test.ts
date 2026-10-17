@@ -71,6 +71,7 @@ describe('Button', () => {
 
     expect(button).toBeDisabled();
     expect(button.className).toContain('enabled:hover:');
+    expect(button).toHaveClass('cursor-pointer', 'disabled:cursor-not-allowed');
   });
 
   it('is busy while loading, keeps its label and is disabled', () => () => {

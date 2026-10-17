@@ -129,4 +129,9 @@ describe('Tailwind Theme & CSS Variables Validation', () => {
     expect(rootBlock).toContain('--green:');
     expect(rootBlock).toContain('--orange:');
   });
+
+  it('sets standard cursor styles for interactive and disabled controls in app.css', () => {
+    expect(appCss).toMatch(/button:not\(:disabled\)[\s\S]*cursor:\s*pointer;/);
+    expect(appCss).toMatch(/button:disabled[\s\S]*cursor:\s*not-allowed;/);
+  });
 });

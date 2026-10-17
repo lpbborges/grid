@@ -119,7 +119,7 @@
           <button
             class="flex flex-1 items-center justify-between gap-2 text-left {isUnreleased
               ? 'cursor-not-allowed'
-              : ''}"
+              : 'cursor-pointer'}"
             onclick={() => onPlayEpisode(episode)}
             disabled={isUnreleased}
           >
@@ -179,7 +179,7 @@
           </button>
           {#if resumeAt !== null}
             <button
-              class="border-secondary/60 text-secondary bg-surface/60 hover:bg-secondary hover:text-dark focus-visible:ring-secondary ml-2 rounded-sm border p-2 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none"
+              class="border-secondary/60 text-secondary bg-surface/60 hover:bg-secondary hover:text-dark focus-visible:ring-secondary ml-2 cursor-pointer rounded-sm border p-2 transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none"
               title="Começar do início"
               aria-label="Começar do início"
               onclick={() => onPlayEpisode(episode, true)}
@@ -210,7 +210,7 @@
               ? 'bg-green text-dark border-green shadow-glow-green-sm'
               : ''} {isUnreleased
               ? 'cursor-not-allowed opacity-50'
-              : 'group-hover:bg-primary/20 hover:text-green hover:border-green'}"
+              : 'group-hover:bg-primary/20 hover:text-green hover:border-green cursor-pointer'}"
             title={isUnreleased ? 'Este episódio ainda não foi lançado' : 'Marcar como assistido'}
             onclick={() => watchedStore.toggle(seriesId, episode.season, episode.episode)}
             disabled={isUnreleased}

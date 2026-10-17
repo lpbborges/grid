@@ -118,7 +118,7 @@
     {#if onclose}
       <button
         onclick={onclose}
-        class="hover:text-primary text-main pointer-events-auto shrink-0 p-2 transition-colors duration-300"
+        class="hover:text-primary text-main pointer-events-auto shrink-0 cursor-pointer p-2 transition-colors duration-300"
         aria-label="Fechar"
       >
         <svg
@@ -158,7 +158,7 @@
 <div
   class="from-backdrop absolute right-0 bottom-0 left-0 bg-gradient-to-t to-transparent p-4 transition-opacity duration-300 {visible
     ? 'opacity-100'
-    : 'opacity-0'}"
+    : 'pointer-events-none opacity-0'}"
 >
   <div
     class="group mb-3 flex w-full cursor-pointer items-center rounded-sm py-2"
@@ -205,7 +205,7 @@
       <button
         onclick={onplaypause}
         aria-label={paused ? 'Reproduzir' : 'Pausar'}
-        class="hover:text-primary rounded-sm transition-colors"
+        class="hover:text-primary cursor-pointer rounded-sm transition-colors"
       >
         {#if paused}
           <svg
@@ -241,7 +241,7 @@
         <button
           onclick={onmute}
           aria-label="Ativar/desativar mudo"
-          class="hover:text-primary rounded-sm p-2 transition-colors"
+          class="hover:text-primary cursor-pointer rounded-sm p-2 transition-colors"
         >
           {#if volume > 0}
             <svg
@@ -347,7 +347,7 @@
         <button
           onclick={onfullscreen}
           aria-label="Tela cheia"
-          class="hover:text-primary ml-2 rounded-sm p-2 transition-colors"
+          class="hover:text-primary ml-2 cursor-pointer rounded-sm p-2 transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

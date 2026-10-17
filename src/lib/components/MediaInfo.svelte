@@ -164,7 +164,7 @@
     aria-label={watchedStore.watchedIds.includes(String(id))
       ? 'Marcado como assistido'
       : 'Marcar como assistido'}
-    class="group focus-visible:ring-green relative flex h-11 w-11 items-center justify-center rounded-sm border transition-all duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:outline-none active:scale-95 {watchedStore.watchedIds.includes(
+    class="group focus-visible:ring-green relative flex h-11 w-11 cursor-pointer items-center justify-center rounded-sm border transition-all duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:outline-none active:scale-95 {watchedStore.watchedIds.includes(
       String(id)
     )
       ? 'bg-green/15 border-green text-green shadow-glow-green'
@@ -210,7 +210,7 @@
       onclick={() => watchTrailer(trailerYoutubeId)}
       aria-label="Assistir ao trailer"
       title="Assistir ao trailer (abre no navegador)"
-      class="border-secondary/60 text-secondary bg-surface/60 hover:bg-secondary hover:text-dark focus-visible:ring-secondary flex h-11 items-center gap-2 rounded-sm border px-4 font-mono text-sm font-bold tracking-wider uppercase transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none"
+      class="border-secondary/60 text-secondary bg-surface/60 hover:bg-secondary hover:text-dark focus-visible:ring-secondary flex h-11 cursor-pointer items-center gap-2 rounded-sm border px-4 font-mono text-sm font-bold tracking-wider uppercase transition-all duration-300 focus-visible:ring-2 focus-visible:outline-none"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

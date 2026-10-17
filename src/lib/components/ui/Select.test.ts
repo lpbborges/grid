@@ -18,6 +18,13 @@ describe('Select', () => {
     expect(select).toHaveValue('720p');
   });
 
+  it('has pointer cursor and disabled cursor-not-allowed styling', () => {
+    render(Select, { label: 'Qualidade', options, value: '720p' });
+    const select = screen.getByRole('combobox', { name: 'Qualidade' });
+
+    expect(select).toHaveClass('cursor-pointer', 'disabled:cursor-not-allowed');
+  });
+
   it('renders every option, keeping disabled ones disabled', () => {
     render(Select, { label: 'Qualidade', options, value: '1080p' });
 

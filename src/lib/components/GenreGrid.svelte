@@ -117,7 +117,7 @@
         type="button"
         disabled={loadingMore}
         onclick={loadMore}
-        class="border-primary/50 text-main hover:border-green hover:text-green focus-visible:ring-green cursor-pointer rounded-sm border px-6 py-2 font-semibold tracking-wide transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-default disabled:opacity-60"
+        class="border-primary/50 text-main hover:border-green hover:text-green focus-visible:ring-green cursor-pointer rounded-sm border px-6 py-2 font-semibold tracking-wide transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loadingMore ? 'Carregando...' : 'Carregar mais'}
       </button>
