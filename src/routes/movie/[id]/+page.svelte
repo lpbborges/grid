@@ -1,18 +1,19 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { SvelteSet } from 'svelte/reactivity';
   import { logger } from '$lib/logger';
-  import { translateMediaInfo } from '$lib/api/translate';
   import { buildMagnet, getMovieStreams } from '$lib/api/torrentio';
   import { streamOption, type StreamOption } from '$lib/engine/streamOption';
   import Player from '$lib/components/Player.svelte';
   import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
+  import MediaBackdrop from '$lib/components/MediaBackdrop.svelte';
   import PlayerSelection from '$lib/components/PlayerSelection.svelte';
   import ErrorNotice from '$lib/components/ErrorNotice.svelte';
   import LazyCatalogRow from '$lib/components/LazyCatalogRow.svelte';
   import { similarTitlesRow } from '$lib/utils/catalogRows';
   import { usePlayer } from '$lib/composables/usePlayer.svelte';
+  import { useTranslatedMedia } from '$lib/composables/useTranslatedMedia.svelte';
+  import { usePlaybackErrors } from '$lib/composables/usePlaybackErrors.svelte';
 
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { watchedStore } from '$lib/stores/watched.svelte';
@@ -20,18 +21,16 @@
   import { resumeSeconds } from '$lib/utils/resume';
   import { rankStreamOptions } from '$lib/engine/ranking';
   import type { Movie } from '$lib/types';
-  import type { ErrorAction, PageError } from '$lib/utils/pageError';
+  import type { ErrorAction } from '$lib/utils/pageError';
 
   let { data } = $props();
   let movieId = $derived(data.movieId);
   let movie = $derived(data.movie);
   let resumeAt = $derived(resumeSeconds(progressStore.get(movieId)));
-  let error = $state<PageError | null>(null);
+  const playbackErrors = usePlaybackErrors();
   let similarRow = $derived(movie ? similarTitlesRow('movie', movie.genres) : null);
   // Set when the source lookup itself failed, so "Tentar novamente" repeats it.
   let lookupFailed = false;
-  // Sources that failed for this movie; "Tentar outra fonte" skips them.
-  let failedSources = new SvelteSet<string>();
 
   let videoElement = $state<HTMLVideoElement | null>(null);
   const player = usePlayer(() => videoElement, {
@@ -42,9 +41,9 @@
   $effect(() => {
     if (data.error) {
       logger.error('Falha ao carregar filme:', data.error);
-      error = { message: 'Não foi possível carregar este título.', action: 'reload' };
+      playbackErrors.setError('Não foi possível carregar este título.', 'reload');
     } else if (movieId) {
-      error = null;
+      playbackErrors.clearError();
     }
   });
 
@@ -53,8 +52,7 @@
   let autoplayStarted = false;
   let autoplayPending = $state(untrack(() => data.autoplay));
 
-  let translatedTitle = $state('');
-  let translatedSynopsis = $state('');
+  const translated = useTranslatedMedia(() => movie);
 
   // Only stop an in-progress stream when movieId actually changes (navigating
   // to a different movie) — not on the initial mount, when there is nothing
@@ -68,28 +66,11 @@
       autoplayStarted = false;
       autoplayPending = untrack(() => data.autoplay);
       combinedTorrents = [];
-      failedSources = new SvelteSet();
+      playbackErrors.failedSources.clear();
       if (hasMountedTorrentEffect) {
         untrack(() => player.stop());
       }
       hasMountedTorrentEffect = true;
-    }
-  });
-
-  $effect(() => {
-    if (movie) {
-      const currentTitle = movie.title;
-      const currentSynopsis = movie.description_full || movie.summary;
-
-      translatedTitle = currentTitle;
-      translatedSynopsis = currentSynopsis || 'Nenhuma sinopse disponível.';
-
-      translateMediaInfo(currentTitle, currentSynopsis, String(movie.id)).then((res) => {
-        if (movie && movie.title === currentTitle) {
-          translatedTitle = res.title;
-          translatedSynopsis = res.synopsis;
-        }
-      });
     }
   });
 
@@ -131,17 +112,17 @@
         logger.error('Falha ao buscar streams do Torrentio:', e);
         if (combinedTorrents.length === 0) {
           lookupFailed = true;
-          error = {
-            message: 'Não foi possível buscar este filme. Verifique sua conexão.',
-            action: 'retry'
-          };
+          playbackErrors.setError(
+            'Não foi possível buscar este filme. Verifique sua conexão.',
+            'retry'
+          );
         }
       });
   }
 
   /** Selects the best ranked source that has not failed; false when none is left. */
   function reselectBestTorrent(): boolean {
-    const candidates = combinedTorrents.filter((t) => !failedSources.has(t.hash));
+    const candidates = combinedTorrents.filter((t) => !playbackErrors.failedSources.has(t.hash));
     if (candidates.length > 0) {
       const sorted = rankStreamOptions(
         candidates,
@@ -180,13 +161,11 @@
     }
   });
 
-  let lastStartOver = false;
-
   async function playMovie(startOver = false) {
-    lastStartOver = startOver;
-    error = null;
+    playbackErrors.lastStartOver = startOver;
+    playbackErrors.clearError();
     if (!movie || combinedTorrents.length === 0) {
-      error = { message: 'Este filme ainda não está disponível para assistir.', action: 'back' };
+      playbackErrors.setError('Este filme ainda não está disponível para assistir.', 'back');
       return;
     }
 
@@ -208,60 +187,49 @@
       progress: {
         meta: {
           type: 'movie',
-          title: translatedTitle || movie.title,
+          title: translated.title || movie.title,
           poster: movie.medium_cover_image
         }
       }
     });
     // The route moved to another title while the stream was being prepared.
     if (movieId !== requestedId) return;
-    if (!ok && player.error) error = { message: player.error, action: player.errorAction };
+    if (!ok && player.error) playbackErrors.setError(player.error, player.errorAction);
   }
 
   function tryAnotherSource() {
-    failedSources.add(selectedTorrentHash);
+    playbackErrors.failedSources.add(selectedTorrentHash);
     if (reselectBestTorrent()) {
-      playMovie(lastStartOver);
+      playMovie(playbackErrors.lastStartOver);
     } else {
-      error = {
-        message: 'Não encontramos outra fonte que funcione para este filme.',
-        action: 'back'
-      };
+      playbackErrors.setError('Não encontramos outra fonte que funcione para este filme.', 'back');
     }
   }
 
   function handleErrorAction(action: ErrorAction) {
-    if (action === 'reload') {
-      window.location.reload();
-    } else if (action === 'otherSource') {
-      tryAnotherSource();
-    } else if (action === 'retry' && lookupFailed && movie) {
-      lookupFailed = false;
-      error = null;
-      loadSources(movie);
-    } else if (action === 'retry') {
-      playMovie(lastStartOver);
-    } else {
-      error = null;
-    }
+    playbackErrors.handleAction(action, {
+      onOtherSource: tryAnotherSource,
+      onRetryLookup: () => {
+        if (lookupFailed && movie) {
+          lookupFailed = false;
+          playbackErrors.clearError();
+          loadSources(movie);
+        } else {
+          playMovie(playbackErrors.lastStartOver);
+        }
+      },
+      onRetry: () => playMovie(playbackErrors.lastStartOver)
+    });
   }
 </script>
 
-{#if error}
-  <ErrorNotice {error} onaction={handleErrorAction} />
+{#if playbackErrors.error}
+  <ErrorNotice error={playbackErrors.error} onaction={handleErrorAction} />
 {:else if movie && autoplayPending && !player.isPlaying}
   <LoadingIndicator label="Carregando..." />
 {:else if movie}
   {#if (movie.background_image_original || movie.background_image) && !player.isPlaying}
-    <div class="pointer-events-none fixed inset-0">
-      <img
-        src={movie.background_image_original || movie.background_image}
-        class="h-full w-full object-cover"
-        alt=""
-      />
-      <div class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"></div>
-      <div class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-r to-transparent"></div>
-    </div>
+    <MediaBackdrop src={movie.background_image_original || movie.background_image} />
   {/if}
 
   <div class="relative z-10 flex flex-col gap-8 lg:flex-row">
@@ -290,7 +258,7 @@
           bind:videoElement
           loadingStage={player.loadingStage}
           downloadPercent={player.downloadPercent}
-          title={translatedTitle || movie.title}
+          title={translated.title || movie.title}
           onclose={() => {
             player.stop();
           }}
@@ -300,11 +268,11 @@
           id={movie.id}
           type="movie"
           poster={movie.medium_cover_image}
-          title={translatedTitle || movie.title}
+          title={translated.title || movie.title}
           year={movie.year}
           director={movie.director}
           rating={movie.rating}
-          synopsis={translatedSynopsis}
+          synopsis={translated.synopsis}
           cast={movie.cast}
           genres={movie.genres}
           runtime={movie.runtime}

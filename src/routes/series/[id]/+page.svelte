@@ -1,11 +1,11 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { SvelteSet } from 'svelte/reactivity';
   import { logger } from '$lib/logger';
-  import { translateMediaInfo, translateEpisodesList } from '$lib/api/translate';
+  import { translateEpisodesList } from '$lib/api/translate';
   import Player from '$lib/components/Player.svelte';
   import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
   import MediaInfo from '$lib/components/MediaInfo.svelte';
+  import MediaBackdrop from '$lib/components/MediaBackdrop.svelte';
   import EpisodeList from '$lib/components/EpisodeList.svelte';
   import ErrorNotice from '$lib/components/ErrorNotice.svelte';
   import LazyCatalogRow from '$lib/components/LazyCatalogRow.svelte';
@@ -16,6 +16,8 @@
     type PlayerPlayOptions
   } from '$lib/composables/usePlayer.svelte';
   import { useUpNext } from '$lib/composables/useUpNext.svelte';
+  import { useTranslatedMedia } from '$lib/composables/useTranslatedMedia.svelte';
+  import { usePlaybackErrors } from '$lib/composables/usePlaybackErrors.svelte';
   import { findEpisodeStream } from '$lib/engine/episodeStream';
 
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -29,15 +31,14 @@
     nextEpisode,
     sameEpisode
   } from '$lib/utils/episodes';
-  import type { ErrorAction, PageError } from '$lib/utils/pageError';
+  import type { ErrorAction } from '$lib/utils/pageError';
 
   let { data } = $props();
   let seriesId = $derived(data.seriesId);
   let series = $derived(data.series);
-  let error = $state<PageError | null>(null);
+  const playbackErrors = usePlaybackErrors();
   let similarRow = $derived(series ? similarTitlesRow('series', series.genres) : null);
   let lastAttemptedEpisode = $state<Episode | null>(null);
-  let lastStartOver = false;
   let advancingTo = $state<Episode | null>(null);
   let focusEpisode = $derived(
     series
@@ -113,8 +114,7 @@
   // Windows plays through mpv embedded in this window; else mounts <video>.
   let videoElement = $state<HTMLVideoElement | null>(null);
 
-  let translatedTitle = $state('');
-  let translatedSynopsis = $state('');
+  const translated = useTranslatedMedia(() => series);
 
   let selectedSeason = $state<number | null>(null);
   let translatedEpisodes = $state<Record<string, string>>({});
@@ -122,9 +122,9 @@
   $effect(() => {
     if (data.error) {
       logger.error('Falha ao carregar série:', data.error);
-      error = { message: 'Não foi possível carregar este título.', action: 'reload' };
+      playbackErrors.setError('Não foi possível carregar este título.', 'reload');
     } else if (seriesId) {
-      error = null;
+      playbackErrors.clearError();
     }
   });
 
@@ -145,23 +145,6 @@
         untrack(() => player.stop());
       }
       hasMountedTorrentEffect = true;
-    }
-  });
-
-  $effect(() => {
-    if (series) {
-      const currentTitle = series.title;
-      const currentSynopsis = series.description_full || series.summary;
-
-      translatedTitle = currentTitle;
-      translatedSynopsis = currentSynopsis || 'Nenhuma sinopse disponível.';
-
-      translateMediaInfo(currentTitle, currentSynopsis, String(series.id)).then((res) => {
-        if (series && series.title === currentTitle) {
-          translatedTitle = res.title;
-          translatedSynopsis = res.synopsis;
-        }
-      });
     }
   });
 
@@ -205,7 +188,7 @@
       progress: {
         meta: {
           type: 'series',
-          title: translatedTitle || shown.title,
+          title: translated.title || shown.title,
           poster: shown.medium_cover_image
         },
         next: nextEpisode(shown.videos, episode)
@@ -214,14 +197,13 @@
   }
 
   // Sources that failed for the episode being tried; "Tentar outra fonte" skips them.
-  let failedSources = new SvelteSet<string>();
   let failedSourcesFor = '';
   let currentSource = '';
 
   async function findSource(shown: Series, episode: Episode) {
     const key = `${seriesId}:${episodeLabel(episode)}`;
     if (key !== failedSourcesFor) {
-      failedSources = new SvelteSet();
+      playbackErrors.failedSources.clear();
       failedSourcesFor = key;
     }
     const found = await findEpisodeStream(
@@ -232,14 +214,10 @@
         audio: settingsStore.audio,
         subtitle: settingsStore.subtitle
       },
-      failedSources
+      playbackErrors.failedSources
     );
     if (!('error' in found)) currentSource = found.infoHash;
     return found;
-  }
-
-  function playbackError(): PageError {
-    return { message: player.error, action: player.errorAction };
   }
 
   async function playEpisode(episode: Episode, startOver = false) {
@@ -247,15 +225,15 @@
     const shown = series;
 
     lastAttemptedEpisode = episode;
-    lastStartOver = startOver;
+    playbackErrors.lastStartOver = startOver;
     const requestedId = seriesId;
-    error = null;
+    playbackErrors.clearError();
 
     const found = await findSource(shown, episode);
     // The route moved to another series while the sources were loading.
     if (seriesId !== requestedId) return;
     if ('error' in found) {
-      error = found.error;
+      playbackErrors.error = found.error;
       return;
     }
 
@@ -266,7 +244,7 @@
 
     // The route moved to another series while the stream was being prepared.
     if (seriesId !== requestedId) return;
-    if (!ok && player.error) error = playbackError();
+    if (!ok && player.error) playbackErrors.setError(player.error, player.errorAction);
   }
 
   async function moveTo(
@@ -278,12 +256,12 @@
     if (!series || !episode) return;
     const shown = series;
     const requestedId = seriesId;
-    error = null;
+    playbackErrors.clearError();
     advancingTo = episode;
     const ok = await run(async (): Promise<NextPlaybackResult> => {
       // Set only after the release, so the left file's clock never counts as the next one's.
       lastAttemptedEpisode = episode;
-      lastStartOver = startOver;
+      playbackErrors.lastStartOver = startOver;
       const found = await findSource(shown, episode);
       if (seriesId !== requestedId) return null;
       if ('error' in found) return found;
@@ -294,7 +272,7 @@
     });
     advancingTo = null;
     if (seriesId !== requestedId) return;
-    if (!ok && player.error) error = playbackError();
+    if (!ok && player.error) playbackErrors.setError(player.error, player.errorAction);
   }
 
   function advanceTo(ref: EpisodeRef) {
@@ -309,16 +287,19 @@
   }
 
   function handleErrorAction(action: ErrorAction) {
-    if (action === 'reload') {
-      window.location.reload();
-      return;
-    }
-    if (action === 'back' || !lastAttemptedEpisode) {
-      error = null;
-      return;
-    }
-    if (action === 'otherSource') failedSources.add(currentSource);
-    playEpisode(lastAttemptedEpisode, lastStartOver);
+    playbackErrors.handleAction(action, {
+      onOtherSource: () => {
+        if (lastAttemptedEpisode) {
+          playbackErrors.failedSources.add(currentSource);
+          playEpisode(lastAttemptedEpisode, playbackErrors.lastStartOver);
+        }
+      },
+      onRetry: () => {
+        if (lastAttemptedEpisode) {
+          playEpisode(lastAttemptedEpisode, playbackErrors.lastStartOver);
+        }
+      }
+    });
   }
 </script>
 
@@ -340,21 +321,16 @@
   {/if}
 {/snippet}
 
-{#if error}
-  <ErrorNotice {error} onaction={handleErrorAction} />
+{#if playbackErrors.error}
+  <ErrorNotice error={playbackErrors.error} onaction={handleErrorAction} />
 {:else if series && autoplayPending && !player.isPlaying}
   <LoadingIndicator label="Carregando..." />
 {:else if series}
   {#if (series.background_image_original || series.background_image) && !player.isPlaying}
-    <div class="pointer-events-none fixed inset-0">
-      <img
-        src={series.background_image_original || series.background_image}
-        class="h-full w-full object-cover opacity-50"
-        alt=""
-      />
-      <div class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-t to-transparent"></div>
-      <div class="from-dark via-dark/80 absolute inset-0 bg-gradient-to-r to-transparent"></div>
-    </div>
+    <MediaBackdrop
+      src={series.background_image_original || series.background_image}
+      opacityClass="opacity-50"
+    />
   {/if}
 
   <div class="relative z-10 flex flex-col gap-8 lg:flex-row">
@@ -374,7 +350,7 @@
           loadingStage={player.loadingStage}
           downloadPercent={player.downloadPercent}
           upNext={upNextCard}
-          title={translatedTitle || series.title}
+          title={translated.title || series.title}
           episodeLabel={preparingEpisode ? episodeLabel(preparingEpisode) : ''}
           episodeName={preparingEpisode ? episodeName(preparingEpisode) : ''}
           {episodePanel}
@@ -387,11 +363,11 @@
           id={series.id}
           type="series"
           poster={series.medium_cover_image}
-          title={translatedTitle || series.title}
+          title={translated.title || series.title}
           year={series.year}
           director={series.director}
           rating={series.rating}
-          synopsis={translatedSynopsis}
+          synopsis={translated.synopsis}
           cast={series.cast}
           genres={series.genres}
           runtime={series.runtime}
