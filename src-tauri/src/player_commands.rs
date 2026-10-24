@@ -7,13 +7,17 @@ use tauri::{Manager, State};
 
 pub(crate) struct StreamProxyState {
     pub(crate) port: Mutex<Option<u16>>,
+    pub(crate) token: Mutex<Option<String>>,
 }
 
 #[tauri::command]
 pub async fn get_stream_proxy_url(state: State<'_, StreamProxyState>) -> Result<String, String> {
-    let port = lock(&state.port);
-    port.map(|p| format!("http://127.0.0.1:{}", p))
-        .ok_or_else(|| "Stream proxy not running".to_string())
+    let port = *lock(&state.port);
+    let token = lock(&state.token).clone();
+    match (port, token) {
+        (Some(p), Some(t)) => Ok(format!("http://127.0.0.1:{}/{}", p, t)),
+        _ => Err("Stream proxy not running".to_string()),
+    }
 }
 
 /// Writes the fetched subtitles where mpv can read them, replacing the previous
@@ -58,9 +62,10 @@ pub async fn start_native_player(
         .lock()
         .unwrap()
         .ok_or_else(|| "Stream proxy not running".to_string())?;
+    let token = proxy.token.lock().unwrap().clone();
     // libmpv never goes through the frontend fetch layer, so this is the only
     // thing keeping it pointed at our own proxy.
-    let Some(url) = player::model::local_stream_url(&url, port) else {
+    let Some(url) = player::model::local_stream_url(&url, port, token.as_deref()) else {
         return Err("Refusing to play a URL that is not the local stream proxy".to_string());
     };
     if !start_seconds.is_finite() || start_seconds < 0.0 {
@@ -279,20 +284,22 @@ fn pump_player_events(
     });
 }
 
-pub(crate) fn start_stream_proxy(app: &tauri::AppHandle) -> std::io::Result<u16> {
+pub(crate) fn start_stream_proxy(app: &tauri::AppHandle) -> std::io::Result<(u16, String)> {
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let port = listener.local_addr()?.port();
+    let token = stream_proxy::generate_proxy_token();
     let engine_app = app.clone();
     let engine_port: stream_proxy::EnginePort =
         std::sync::Arc::new(move || *lock(&engine_app.state::<EngineState>().port));
+    let serve_token = token.clone();
     tauri::async_runtime::spawn(async move {
         match tokio::net::TcpListener::from_std(listener) {
-            Ok(listener) => stream_proxy::serve(listener, engine_port).await,
+            Ok(listener) => stream_proxy::serve(listener, engine_port, Some(serve_token)).await,
             Err(e) => eprintln!("Failed to start the stream proxy: {}", e),
         }
     });
-    Ok(port)
+    Ok((port, token))
 }
 
 #[cfg(test)]

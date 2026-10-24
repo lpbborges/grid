@@ -488,6 +488,7 @@ async fn spawn_proxy(engine_port: u16) -> u16 {
     tokio::spawn(stream_proxy::serve(
         listener,
         Arc::new(move || Some(engine_port)),
+        None,
     ));
     port
 }

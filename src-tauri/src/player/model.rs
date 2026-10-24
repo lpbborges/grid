@@ -89,7 +89,11 @@ pub enum PlayerEvent {
 /// parsers disagree - WHATWG parsing (this check) reads `\` as `/` and drops
 /// tabs and newlines, while FFmpeg's URL handling inside mpv need not. A
 /// stream URL Grid builds itself never contains any of them.
-pub fn local_stream_url(raw_url: &str, proxy_port: u16) -> Option<String> {
+pub fn local_stream_url(
+    raw_url: &str,
+    proxy_port: u16,
+    expected_token: Option<&str>,
+) -> Option<String> {
     if raw_url
         .chars()
         .any(|c| c == '\\' || c == '@' || c.is_ascii_whitespace())
@@ -104,7 +108,16 @@ pub fn local_stream_url(raw_url: &str, proxy_port: u16) -> Option<String> {
         // request somewhere else while still reading as localhost.
         && parsed.username().is_empty()
         && parsed.password().is_none();
-    local.then(|| parsed.into())
+    if !local {
+        return None;
+    }
+    if let Some(token) = expected_token {
+        let mut segments = parsed.path_segments()?;
+        if segments.next() != Some(token) {
+            return None;
+        }
+    }
+    Some(parsed.into())
 }
 
 /// Rate-limits `time-pos` updates to one per [`TIME_EVENT_INTERVAL`].
@@ -272,7 +285,7 @@ mod tests {
     }
 
     fn is_local_stream_url(raw_url: &str, proxy_port: u16) -> bool {
-        local_stream_url(raw_url, proxy_port).is_some()
+        local_stream_url(raw_url, proxy_port, None).is_some()
     }
 
     #[test]
@@ -315,7 +328,7 @@ mod tests {
             "http://127.0.0.1:45000/torrents/x/stre\nam/0",
             "http://127.0.0.1:45000/torrents/x/stream/0\r",
         ] {
-            assert_eq!(local_stream_url(raw, PROXY_PORT), None, "{raw:?}");
+            assert_eq!(local_stream_url(raw, PROXY_PORT, None), None, "{raw:?}");
         }
     }
 
@@ -324,11 +337,23 @@ mod tests {
         assert_eq!(
             local_stream_url(
                 "HTTP://127.0.0.1:45000/torrents/x/stream/0?raw=1",
-                PROXY_PORT
+                PROXY_PORT,
+                None
             )
             .as_deref(),
             Some("http://127.0.0.1:45000/torrents/x/stream/0?raw=1")
         );
+    }
+
+    #[test]
+    fn validates_token_when_specified() {
+        let valid = format!("http://127.0.0.1:{PROXY_PORT}/secret/torrents/x/stream/0?raw=1");
+        let wrong = format!("http://127.0.0.1:{PROXY_PORT}/wrong/torrents/x/stream/0?raw=1");
+        let untokened = format!("http://127.0.0.1:{PROXY_PORT}/torrents/x/stream/0?raw=1");
+
+        assert!(local_stream_url(&valid, PROXY_PORT, Some("secret")).is_some());
+        assert!(local_stream_url(&wrong, PROXY_PORT, Some("secret")).is_none());
+        assert!(local_stream_url(&untokened, PROXY_PORT, Some("secret")).is_none());
     }
 
     #[test]

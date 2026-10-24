@@ -94,16 +94,24 @@ struct ProxyRequest {
 
 struct ProbeFailed;
 
+pub fn generate_proxy_token() -> String {
+    use std::hash::{BuildHasher, Hasher, RandomState};
+    let s1 = RandomState::new().build_hasher().finish();
+    let s2 = RandomState::new().build_hasher().finish();
+    format!("{:016x}{:016x}", s1, s2)
+}
+
 pub fn engine_stream_url(port: u16, info_hash: &str, file_idx: i64) -> String {
     format!("http://127.0.0.1:{port}/torrents/{info_hash}/stream/{file_idx}")
 }
 
-pub async fn serve(listener: TcpListener, engine_port: EnginePort) {
+pub async fn serve(listener: TcpListener, engine_port: EnginePort, auth_token: Option<String>) {
     let client = reqwest::Client::builder()
         .connect_timeout(ENGINE_CONNECT_TIMEOUT)
         .build()
         .expect("the stream proxy's HTTP client builds");
     let cache = SharedPatchCache::default();
+    let auth_token: Option<Arc<str>> = auth_token.map(Into::into);
     loop {
         match listener.accept().await {
             Ok((socket, _)) => {
@@ -112,6 +120,7 @@ pub async fn serve(listener: TcpListener, engine_port: EnginePort) {
                     engine_port.clone(),
                     client.clone(),
                     cache.clone(),
+                    auth_token.clone(),
                 ));
             }
             Err(e) => eprintln!("Stream proxy failed to accept a connection: {}", e),
@@ -124,13 +133,22 @@ async fn handle_connection(
     engine_port: EnginePort,
     client: reqwest::Client,
     cache: SharedPatchCache,
+    auth_token: Option<Arc<str>>,
 ) {
     let Ok(Some(request)) =
         tokio::time::timeout(REQUEST_HEAD_TIMEOUT, read_request(&mut socket)).await
     else {
         return;
     };
-    let result = match forward(request, &engine_port, &client, &cache).await {
+    let result = match forward(
+        request,
+        &engine_port,
+        &client,
+        &cache,
+        auth_token.as_deref(),
+    )
+    .await
+    {
         Ok((response, patch)) => relay_response(&mut socket, response, patch.as_deref()).await,
         Err(status) => write_empty_response(&mut socket, status).await,
     };
@@ -152,11 +170,13 @@ async fn forward(
     engine_port: &EnginePort,
     client: &reqwest::Client,
     cache: &SharedPatchCache,
+    expected_token: Option<&str>,
 ) -> Result<(reqwest::Response, Option<Arc<Patch>>), StatusCode> {
     if request.method != Method::GET && request.method != Method::HEAD {
         return Err(StatusCode::METHOD_NOT_ALLOWED);
     }
-    let (info_hash, file_idx) = parse_stream_path(&request.path).ok_or(StatusCode::NOT_FOUND)?;
+    let (info_hash, file_idx) =
+        parse_stream_path(&request.path, expected_token).ok_or(StatusCode::NOT_FOUND)?;
     let port = engine_port().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let url = engine_stream_url(port, info_hash, file_idx);
     if request.method == Method::GET
@@ -279,9 +299,19 @@ async fn read_request(socket: &mut TcpStream) -> Option<ProxyRequest> {
     })
 }
 
-fn parse_stream_path(path: &str) -> Option<(&str, i64)> {
+fn parse_stream_path<'a>(path: &'a str, expected_token: Option<&str>) -> Option<(&'a str, i64)> {
     let path = path.split('?').next()?;
-    let mut segments = path.strip_prefix("/torrents/")?.split('/');
+    let path = if let Some(token) = expected_token {
+        let after_slash = path.strip_prefix('/')?;
+        let (token_segment, remainder) = after_slash.split_once('/')?;
+        if token_segment != token {
+            return None;
+        }
+        remainder
+    } else {
+        path.strip_prefix('/')?
+    };
+    let mut segments = path.strip_prefix("torrents/")?.split('/');
     let info_hash = segments.next()?;
     if segments.next()? != "stream" {
         return None;
@@ -590,8 +620,49 @@ mod tests {
     async fn spawn_proxy_with(engine_port: EnginePort) -> u16 {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
-        tokio::spawn(serve(listener, engine_port));
+        tokio::spawn(serve(listener, engine_port, None));
         port
+    }
+
+    #[tokio::test]
+    async fn rejects_requests_without_expected_token() {
+        let body: Vec<u8> = vec![1, 2, 3, 4];
+        let (engine, _, _) = spawn_recording_engine(body).await;
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(serve(
+            listener,
+            Arc::new(move || Some(engine)),
+            Some("auth123".to_string()),
+        ));
+
+        // Untokened request
+        let res_no_token = reqwest::Client::new()
+            .get(format!("http://127.0.0.1:{port}/torrents/{HASH}/stream/0"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res_no_token.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Wrong token request
+        let res_wrong_token = reqwest::Client::new()
+            .get(format!(
+                "http://127.0.0.1:{port}/wrong/torrents/{HASH}/stream/0"
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res_wrong_token.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Correct token request
+        let res_ok = reqwest::Client::new()
+            .get(format!(
+                "http://127.0.0.1:{port}/auth123/torrents/{HASH}/stream/0"
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res_ok.status(), reqwest::StatusCode::OK);
     }
 
     async fn spawn_proxy(engine_port: u16) -> u16 {

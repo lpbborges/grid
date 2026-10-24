@@ -49,6 +49,7 @@ pub fn run() {
         .manage(player::NativePlayerState::default())
         .manage(StreamProxyState {
             port: Mutex::new(None),
+            token: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             engine_lifecycle::start_torrent_engine,
@@ -83,7 +84,11 @@ pub fn run() {
                 libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr());
             }
             match player_commands::start_stream_proxy(app.handle()) {
-                Ok(port) => *lock(&app.state::<StreamProxyState>().port) = Some(port),
+                Ok((port, token)) => {
+                    let state = app.state::<StreamProxyState>();
+                    *lock(&state.port) = Some(port);
+                    *lock(&state.token) = Some(token);
+                }
                 Err(e) => eprintln!("Failed to bind the stream proxy: {}", e),
             }
             if let Some(window) = app.get_webview_window("main") {
@@ -189,6 +194,13 @@ mod tests {
         // getExternalSubtitles). WebKit checks <track> URLs against media-src, so
         // without blob: every subtitle silently fails to load.
         assert!(csp_directive_sources("media-src").contains(&"blob:".to_string()));
+    }
+
+    #[test]
+    fn csp_allows_blob_connect_for_cached_subtitles() {
+        // useMpvBackend fetches subtitle text back out of blob: URLs to pass into
+        // cache_native_subtitles. Fetch calls check connect-src, so blob: must be allowed.
+        assert!(csp_directive_sources("connect-src").contains(&"blob:".to_string()));
     }
 
     #[test]
