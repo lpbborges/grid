@@ -98,15 +98,35 @@ export async function openTitle(type: 'movie' | 'series', id: string): Promise<v
 }
 
 export async function closePlayer(): Promise<void> {
-  const close = await $('[data-testid="video-player-container"] button[aria-label="Fechar"]');
-  await close.waitForClickable();
-  await close.click();
+  const container = $('[data-testid="video-player-container"]');
+  if (await container.isExisting()) {
+    const close = await container.$('button[aria-label="Fechar"]');
+    await close.waitForClickable();
+    await close.click();
+    await container.waitForExist({ reverse: true, timeout: 15000 });
+  }
 }
 
 export async function backToCatalog(): Promise<void> {
+  const currentPath = await browser.execute(() => window.location.pathname);
+  if (currentPath === '/') return;
+
   const back = await $('a[href="/"]');
   await back.waitForClickable();
   await back.click();
+  await browser.waitUntil(
+    async () => {
+      const path = await browser.execute(() => window.location.pathname);
+      if (path === '/') return true;
+      try {
+        await back.click();
+      } catch {
+        // ignore if element is stale or detached
+      }
+      return false;
+    },
+    { timeout: 15000, interval: 500, timeoutMsg: 'Navigation back to catalog failed' }
+  );
 }
 
 export function storedJson<T>(key: string): Promise<T | null> {
