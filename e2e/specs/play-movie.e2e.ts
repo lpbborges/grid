@@ -11,7 +11,8 @@ import {
   waitForPlaybackPast
 } from './helpers.ts';
 
-const STREAM_URL = /^http:\/\/127\.0\.0\.1:\d+\/torrents\/[a-f0-9]{40}\/stream\/\d+$/;
+const STREAM_URL =
+  /^http:\/\/127\.0\.0\.1:\d+(?:\/[a-f0-9]{32})?\/torrents\/[a-f0-9]{40}\/stream\/\d+$/;
 
 async function pressPlay(): Promise<void> {
   const play = await $('button*=Reproduzir');
