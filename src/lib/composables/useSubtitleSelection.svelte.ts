@@ -19,14 +19,10 @@ export interface SubtitleGroup {
  * way or the two menus drift apart.
  */
 export function groupByLanguage(subs: SubtitleTrack[]): SubtitleGroup[] {
-  const groups: Record<string, SubtitleTrack[]> = {};
-  for (const sub of subs) {
-    if (!groups[sub.label]) groups[sub.label] = [];
-    groups[sub.label].push(sub);
-  }
+  const groups = Object.groupBy(subs, (sub) => sub.label);
   return Object.keys(groups)
     .sort()
-    .map((label) => ({ label, subs: groups[label] }));
+    .map((label) => ({ label, subs: groups[label] ?? [] }));
 }
 
 export interface UseSubtitleSelectionOptions {

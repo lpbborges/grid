@@ -104,7 +104,7 @@ pub fn pick_eviction_candidates(
         .iter()
         .filter(|e| e.info_hash != exclude_info_hash)
         .collect();
-    candidates.sort_by_key(|e| e.last_accessed_at);
+    candidates.sort_unstable_by_key(|e| e.last_accessed_at);
 
     let mut usage = total_usage(manifest);
     let mut evicted = Vec::new();

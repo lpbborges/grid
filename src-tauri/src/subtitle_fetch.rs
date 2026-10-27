@@ -25,6 +25,45 @@ const MAX_SUBTITLE_REDIRECTS: usize = 10;
 /// hundred KB, and this bounds what a wrong `file_idx` or a hostile host can force.
 const MAX_SUBTITLE_RESPONSE_BYTES: usize = 5 * 1024 * 1024;
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum SubtitleFetchError {
+    EngineNotRunning,
+    TooManyRequests,
+    InvalidParameters,
+    NotASubtitle,
+    UrlNotAllowed,
+    DetailsFailed(String),
+    TorrentHasNoFileListing,
+    InvalidFileIndex,
+    FileIndexOutOfRange,
+    FetchFailed(String),
+}
+
+impl std::fmt::Display for SubtitleFetchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EngineNotRunning => write!(f, "Engine not running"),
+            Self::TooManyRequests => write!(f, "Too many requests"),
+            Self::InvalidParameters => write!(f, "Invalid parameters"),
+            Self::NotASubtitle => write!(f, "Requested file is not a subtitle"),
+            Self::UrlNotAllowed => write!(f, "URL not allowed"),
+            Self::DetailsFailed(msg) => write!(f, "{}", msg),
+            Self::TorrentHasNoFileListing => write!(f, "Torrent has no file listing"),
+            Self::InvalidFileIndex => write!(f, "Invalid file index"),
+            Self::FileIndexOutOfRange => write!(f, "File index out of range"),
+            Self::FetchFailed(msg) => write!(f, "{}", msg),
+        }
+    }
+}
+
+impl std::error::Error for SubtitleFetchError {}
+
+impl From<SubtitleFetchError> for tauri::ipc::InvokeError {
+    fn from(err: SubtitleFetchError) -> Self {
+        tauri::ipc::InvokeError::from(err.to_string())
+    }
+}
+
 fn check_subtitle_rate_limit(state: &SubtitleRateLimit, key: &str) -> bool {
     take_subtitle_token(state, key, Instant::now())
 }
@@ -51,10 +90,10 @@ pub async fn fetch_torrent_subtitle(
     file_idx: i64,
     state: State<'_, EngineState>,
     rate_limit: State<'_, SubtitleRateLimit>,
-) -> Result<String, String> {
+) -> Result<String, SubtitleFetchError> {
     let port = {
         let port_guard = lock(&state.port);
-        port_guard.ok_or_else(|| "Engine not running".to_string())?
+        port_guard.ok_or(SubtitleFetchError::EngineNotRunning)?
     };
     fetch_torrent_subtitle_impl(info_hash, file_idx, port, &rate_limit).await
 }
@@ -65,19 +104,19 @@ async fn fetch_torrent_subtitle_impl(
     file_idx: i64,
     port: u16,
     rate_limit: &SubtitleRateLimit,
-) -> Result<String, String> {
+) -> Result<String, SubtitleFetchError> {
     if !check_subtitle_rate_limit(rate_limit, "torrent") {
-        return Err("Too many requests".to_string());
+        return Err(SubtitleFetchError::TooManyRequests);
     }
     if !subtitles::is_valid_info_hash(&info_hash) || !subtitles::is_valid_file_idx(file_idx) {
-        return Err("Invalid parameters".to_string());
+        return Err(SubtitleFetchError::InvalidParameters);
     }
 
     // `file_idx` is only format-checked so far: reject anything the engine does not
     // list as a subtitle before fetching it, or the main video would be buffered.
     let file_name = resolve_torrent_file_name(port, &info_hash, file_idx).await?;
     if !subtitles::is_subtitle_file_name(&file_name) {
-        return Err("Requested file is not a subtitle".to_string());
+        return Err(SubtitleFetchError::NotASubtitle);
     }
 
     fetch_and_convert(&stream_proxy::engine_stream_url(port, &info_hash, file_idx)).await
@@ -99,40 +138,43 @@ async fn resolve_torrent_file_name(
     port: u16,
     info_hash: &str,
     file_idx: i64,
-) -> Result<String, String> {
+) -> Result<String, SubtitleFetchError> {
     let details_url = format!("http://127.0.0.1:{}/torrents/{}", port, info_hash);
-    let res = ENGINE_CLIENT
-        .get(&details_url)
-        .send()
-        .await
-        .map_err(|e| format!("Error fetching torrent details: {}", e))?;
+    let res = ENGINE_CLIENT.get(&details_url).send().await.map_err(|e| {
+        SubtitleFetchError::DetailsFailed(format!("Error fetching torrent details: {}", e))
+    })?;
 
     if !res.status().is_success() {
-        return Err("Failed to fetch torrent details".to_string());
+        return Err(SubtitleFetchError::DetailsFailed(
+            "Failed to fetch torrent details".to_string(),
+        ));
     }
 
-    let details: TorrentDetailsResponse = res.json().await.map_err(|e| e.to_string())?;
+    let details: TorrentDetailsResponse = res
+        .json()
+        .await
+        .map_err(|e| SubtitleFetchError::DetailsFailed(e.to_string()))?;
     let files = details
         .files
-        .ok_or_else(|| "Torrent has no file listing".to_string())?;
+        .ok_or(SubtitleFetchError::TorrentHasNoFileListing)?;
 
-    let idx = usize::try_from(file_idx).map_err(|_| "Invalid file index".to_string())?;
+    let idx = usize::try_from(file_idx).map_err(|_| SubtitleFetchError::InvalidFileIndex)?;
     files
         .get(idx)
         .map(|f| f.name.clone())
-        .ok_or_else(|| "File index out of range".to_string())
+        .ok_or(SubtitleFetchError::FileIndexOutOfRange)
 }
 
 #[tauri::command]
 pub async fn fetch_external_subtitle(
     url: String,
     rate_limit: State<'_, SubtitleRateLimit>,
-) -> Result<String, String> {
+) -> Result<String, SubtitleFetchError> {
     if !check_subtitle_rate_limit(&rate_limit, "external") {
-        return Err("Too many requests".to_string());
+        return Err(SubtitleFetchError::TooManyRequests);
     }
     if !subtitles::is_allowed_subtitle_url(&url) {
-        return Err("URL not allowed".to_string());
+        return Err(SubtitleFetchError::UrlNotAllowed);
     }
     fetch_and_convert(&url).await
 }
@@ -175,15 +217,16 @@ static ENGINE_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .expect("the engine HTTP client builds")
 });
 
-async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
-    let res = SUBTITLE_CLIENT
-        .get(target_url)
-        .send()
-        .await
-        .map_err(|e| format!("Error fetching subtitle: {}", e))?;
+async fn fetch_and_convert(target_url: &str) -> Result<String, SubtitleFetchError> {
+    let res =
+        SUBTITLE_CLIENT.get(target_url).send().await.map_err(|e| {
+            SubtitleFetchError::FetchFailed(format!("Error fetching subtitle: {}", e))
+        })?;
 
     if !res.status().is_success() {
-        return Err("Failed to fetch subtitle".to_string());
+        return Err(SubtitleFetchError::FetchFailed(
+            "Failed to fetch subtitle".to_string(),
+        ));
     }
 
     let text = read_capped_body_as_string(res, MAX_SUBTITLE_RESPONSE_BYTES).await?;
@@ -199,19 +242,21 @@ async fn fetch_and_convert(target_url: &str) -> Result<String, String> {
 async fn read_capped_body_as_string(
     res: reqwest::Response,
     max_bytes: usize,
-) -> Result<String, String> {
+) -> Result<String, SubtitleFetchError> {
     use futures_util::StreamExt;
 
     let mut stream = res.bytes_stream();
     let mut buf: Vec<u8> = Vec::new();
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Error reading response body: {}", e))?;
+        let chunk = chunk.map_err(|e| {
+            SubtitleFetchError::FetchFailed(format!("Error reading response body: {}", e))
+        })?;
         if buf.len() + chunk.len() > max_bytes {
-            return Err(format!(
+            return Err(SubtitleFetchError::FetchFailed(format!(
                 "Response body exceeded the {}-byte limit",
                 max_bytes
-            ));
+            )));
         }
         buf.extend_from_slice(&chunk);
     }
@@ -445,7 +490,7 @@ mod tests {
         let result = fetch_torrent_subtitle_impl("a".repeat(40), 0, port, &rate_limit).await;
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Requested file is not a subtitle");
+        assert_eq!(result.unwrap_err(), SubtitleFetchError::NotASubtitle);
     }
 
     const SUBTITLE_DETAILS_JSON: &str = r#"{"info_hash":"deadbeef","files":[{"name":"pt.srt"}]}"#;
@@ -501,7 +546,7 @@ mod tests {
         let result = fetch_torrent_subtitle_impl("a".repeat(40), 99, port, &rate_limit).await;
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "File index out of range");
+        assert_eq!(result.unwrap_err(), SubtitleFetchError::FileIndexOutOfRange);
     }
 
     #[tokio::test]
@@ -521,7 +566,7 @@ mod tests {
 
         let result = read_capped_body_as_string(res, 10).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("exceeded"));
+        assert!(result.unwrap_err().to_string().contains("exceeded"));
     }
 
     #[tokio::test]

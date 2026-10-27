@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { logger } from '$lib/logger';
   import { buildMagnet, getMovieStreams } from '$lib/api/torrentio';
   import { streamOption, type StreamOption } from '$lib/engine/streamOption';
@@ -58,19 +59,24 @@
   // to a different movie) — not on the initial mount, when there is nothing
   // to stop yet. Calling stop() unconditionally on mount let this effect race
   // with an immediate play() click (see the video-cache feature's Task 9).
-  let hasMountedTorrentEffect = false;
+  let lastMovieId: string | undefined = undefined;
+
+  function resetMovieNavigation() {
+    selectedTorrentHash = '';
+    sourcesLoaded = false;
+    autoplayStarted = false;
+    autoplayPending = untrack(() => data.autoplay);
+    combinedTorrents = [];
+    playbackErrors.failedSources.clear();
+    untrack(() => player.stop());
+  }
+
   $effect(() => {
     if (movieId) {
-      selectedTorrentHash = '';
-      sourcesLoaded = false;
-      autoplayStarted = false;
-      autoplayPending = untrack(() => data.autoplay);
-      combinedTorrents = [];
-      playbackErrors.failedSources.clear();
-      if (hasMountedTorrentEffect) {
-        untrack(() => player.stop());
+      if (lastMovieId !== undefined && lastMovieId !== movieId) {
+        resetMovieNavigation();
       }
-      hasMountedTorrentEffect = true;
+      lastMovieId = movieId;
     }
   });
 
@@ -93,13 +99,12 @@
         if (movie?.id !== requestedId) return;
         const torrentioOptions = streams.map(streamOption).filter((t) => t.hash);
 
-        const existingHashes: Record<string, boolean> = {};
-        for (const t of combinedTorrents) if (t.hash) existingHashes[t.hash] = true;
+        const existingHashes = new SvelteSet(combinedTorrents.map((t) => t.hash).filter(Boolean));
         let changed = false;
         for (const opt of torrentioOptions) {
-          if (!existingHashes[opt.hash]) {
+          if (!existingHashes.has(opt.hash)) {
             combinedTorrents.push(opt);
-            existingHashes[opt.hash] = true;
+            existingHashes.add(opt.hash);
             changed = true;
           }
         }

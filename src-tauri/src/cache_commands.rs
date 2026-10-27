@@ -4,41 +4,78 @@ use crate::{cache, subtitles};
 use std::path::Path;
 use tauri::Manager;
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum CacheCommandError {
+    AppDataDir(String),
+    TaskFailed(String),
+    InvalidInfoHash,
+    InvalidCacheFileName,
+    UpdateFailed(String),
+}
+
+impl std::fmt::Display for CacheCommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AppDataDir(msg) => write!(f, "{}", msg),
+            Self::TaskFailed(msg) => write!(f, "{}", msg),
+            Self::InvalidInfoHash => write!(f, "Invalid info hash"),
+            Self::InvalidCacheFileName => write!(f, "Invalid cache file name"),
+            Self::UpdateFailed(msg) => write!(f, "{}", msg),
+        }
+    }
+}
+
+impl std::error::Error for CacheCommandError {}
+
+impl From<CacheCommandError> for tauri::ipc::InvokeError {
+    fn from(err: CacheCommandError) -> Self {
+        tauri::ipc::InvokeError::from(err.to_string())
+    }
+}
+
 #[tauri::command]
-pub async fn get_cache_manifest(app: tauri::AppHandle) -> Result<Vec<cache::CacheEntry>, String> {
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+pub async fn get_cache_manifest(
+    app: tauri::AppHandle,
+) -> Result<Vec<cache::CacheEntry>, CacheCommandError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| CacheCommandError::AppDataDir(e.to_string()))?;
     tauri::async_runtime::spawn_blocking(move || {
         cache::read_manifest(&cache::manifest_path(&app_data_dir)).entries
     })
     .await
-    .map_err(|e| format!("Cache manifest task failed: {}", e))
+    .map_err(|e| CacheCommandError::TaskFailed(format!("Cache manifest task failed: {}", e)))
 }
 
 #[tauri::command]
 pub async fn upsert_cache_entry(
     app: tauri::AppHandle,
     entry: cache::CacheEntry,
-) -> Result<(), String> {
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+) -> Result<(), CacheCommandError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| CacheCommandError::AppDataDir(e.to_string()))?;
     tauri::async_runtime::spawn_blocking(move || upsert_cache_entry_blocking(&app_data_dir, entry))
         .await
-        .map_err(|e| format!("Cache update task failed: {}", e))?
+        .map_err(|e| CacheCommandError::TaskFailed(format!("Cache update task failed: {}", e)))?
 }
 
 fn upsert_cache_entry_blocking(
     app_data_dir: &Path,
     entry: cache::CacheEntry,
-) -> Result<(), String> {
+) -> Result<(), CacheCommandError> {
     if !subtitles::is_valid_info_hash(&entry.info_hash) {
-        return Err("Invalid info hash".to_string());
+        return Err(CacheCommandError::InvalidInfoHash);
     }
     if !cache::is_relative_path_inside(&entry.file_name) {
-        return Err("Invalid cache file name".to_string());
+        return Err(CacheCommandError::InvalidCacheFileName);
     }
     cache::update_manifest(&cache::manifest_path(app_data_dir), |manifest| {
         cache::upsert_entry(manifest, entry)
     })
-    .map_err(|e| e.to_string())
+    .map_err(|e| CacheCommandError::UpdateFailed(e.to_string()))
 }
 
 #[tauri::command]
@@ -47,13 +84,16 @@ pub async fn evict_for_space(
     exclude_info_hash: String,
     needed_bytes: u64,
     limit_bytes: u64,
-) -> Result<Vec<String>, String> {
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+) -> Result<Vec<String>, CacheCommandError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| CacheCommandError::AppDataDir(e.to_string()))?;
     tauri::async_runtime::spawn_blocking(move || {
         evict_for_space_blocking(&app_data_dir, &exclude_info_hash, needed_bytes, limit_bytes)
     })
     .await
-    .map_err(|e| format!("Cache eviction task failed: {}", e))?
+    .map_err(|e| CacheCommandError::TaskFailed(format!("Cache eviction task failed: {}", e)))?
 }
 
 fn evict_for_space_blocking(
@@ -61,7 +101,7 @@ fn evict_for_space_blocking(
     exclude_info_hash: &str,
     needed_bytes: u64,
     limit_bytes: u64,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, CacheCommandError> {
     let downloads_dir = cache::downloads_dir(app_data_dir);
     cache::update_manifest(&cache::manifest_path(app_data_dir), |manifest| {
         let to_evict =
@@ -74,28 +114,31 @@ fn evict_for_space_blocking(
         }
         to_evict
     })
-    .map_err(|e| e.to_string())
+    .map_err(|e| CacheCommandError::UpdateFailed(e.to_string()))
 }
 
 #[tauri::command]
 pub async fn clear_cache(
     app: tauri::AppHandle,
     exclude_info_hash: Option<String>,
-) -> Result<(), String> {
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+) -> Result<(), CacheCommandError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| CacheCommandError::AppDataDir(e.to_string()))?;
     tauri::async_runtime::spawn_blocking(move || {
         clear_cache_blocking(&app_data_dir, exclude_info_hash.as_deref())
     })
     .await
-    .map_err(|e| format!("Cache clearing task failed: {}", e))?
+    .map_err(|e| CacheCommandError::TaskFailed(format!("Cache clearing task failed: {}", e)))?
 }
 
 fn clear_cache_blocking(
     app_data_dir: &Path,
     exclude_info_hash: Option<&str>,
-) -> Result<(), String> {
+) -> Result<(), CacheCommandError> {
     if exclude_info_hash.is_some_and(|hash| !subtitles::is_valid_info_hash(hash)) {
-        return Err("Invalid info hash".to_string());
+        return Err(CacheCommandError::InvalidInfoHash);
     }
     let downloads_dir = cache::downloads_dir(app_data_dir);
     cache::update_manifest(&cache::manifest_path(app_data_dir), |manifest| {
@@ -112,7 +155,7 @@ fn clear_cache_blocking(
             }
         }
     })
-    .map_err(|e| e.to_string())
+    .map_err(|e| CacheCommandError::UpdateFailed(e.to_string()))
 }
 
 #[cfg(test)]

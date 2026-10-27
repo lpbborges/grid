@@ -20,27 +20,26 @@ export async function fetchWithTimeout(
 
   const fetchFn = customFetch || fetch;
 
-  const controller = new AbortController();
-  let timedOut = false;
+  const timeoutController = new AbortController();
   const timeoutId = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
+    timeoutController.abort();
   }, timeoutMs);
-  const abortFromCaller = () => controller.abort(callerSignal?.reason);
-  callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+
+  const combinedSignal = callerSignal
+    ? AbortSignal.any([callerSignal, timeoutController.signal])
+    : timeoutController.signal;
 
   try {
-    return await fetchFn(url, { ...init, signal: controller.signal });
+    return await fetchFn(url, { ...init, signal: combinedSignal });
   } catch (error) {
-    if (timedOut) {
-      throw new FetchTimeoutError(url, timeoutMs);
-    }
     if (callerSignal?.aborted) {
       throw callerSignal.reason;
+    }
+    if (timeoutController.signal.aborted) {
+      throw new FetchTimeoutError(url, timeoutMs);
     }
     throw error;
   } finally {
     clearTimeout(timeoutId);
-    callerSignal?.removeEventListener('abort', abortFromCaller);
   }
 }

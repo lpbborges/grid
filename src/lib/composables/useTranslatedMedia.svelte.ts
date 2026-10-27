@@ -8,37 +8,37 @@ export interface TranslatableMedia {
 }
 
 export function useTranslatedMedia(getMedia: () => TranslatableMedia | null | undefined) {
-  let translatedTitle = $state('');
-  let translatedSynopsis = $state('');
+  const media = $derived(getMedia());
+  let title = $derived(media?.title ?? '');
+  let synopsis = $derived(
+    media ? media.description_full || media.summary || 'Nenhuma sinopse disponível.' : ''
+  );
 
   $effect(() => {
-    const media = getMedia();
-    if (media) {
-      const currentTitle = media.title;
-      const currentSynopsis = media.description_full || media.summary || '';
+    const current = media;
+    if (!current) return;
 
-      translatedTitle = currentTitle;
-      translatedSynopsis = currentSynopsis || 'Nenhuma sinopse disponível.';
+    let cancelled = false;
+    const currentTitle = current.title;
+    const currentSynopsis = current.description_full || current.summary || '';
 
-      translateMediaInfo(currentTitle, currentSynopsis, String(media.id)).then((res) => {
-        const active = getMedia();
-        if (active && active.title === currentTitle) {
-          translatedTitle = res.title;
-          translatedSynopsis = res.synopsis;
-        }
-      });
-    } else {
-      translatedTitle = '';
-      translatedSynopsis = '';
-    }
+    translateMediaInfo(currentTitle, currentSynopsis, String(current.id)).then((res) => {
+      if (cancelled) return;
+      title = res.title;
+      synopsis = res.synopsis;
+    });
+
+    return () => {
+      cancelled = true;
+    };
   });
 
   return {
     get title() {
-      return translatedTitle;
+      return title;
     },
     get synopsis() {
-      return translatedSynopsis;
+      return synopsis;
     }
   };
 }

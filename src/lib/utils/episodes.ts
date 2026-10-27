@@ -44,7 +44,7 @@ export function focusedEpisode(
 
 /** The earliest listed episode, or undefined for a series without any. */
 export function firstEpisode(episodes: Episode[]): Episode | undefined {
-  return [...episodes].sort(compareEpisodes)[0];
+  return episodes.toSorted(compareEpisodes)[0];
 }
 
 /** The first aired episode after `current`, or null when there is none. */
@@ -53,11 +53,15 @@ export function nextEpisode(
   current: EpisodeRef,
   now: Date = new Date()
 ): EpisodeRef | null {
-  const next = episodes
-    .filter((e) => compareEpisodes(e, current) > 0)
-    .filter((e) => !e.firstAired || new Date(e.firstAired) <= now)
-    .sort(compareEpisodes)[0];
-  return next ? { season: next.season, episode: next.episode } : null;
+  let best: Episode | null = null;
+  for (const e of episodes) {
+    if (compareEpisodes(e, current) <= 0) continue;
+    if (e.firstAired && new Date(e.firstAired) > now) continue;
+    if (!best || compareEpisodes(e, best) < 0) {
+      best = e;
+    }
+  }
+  return best ? { season: best.season, episode: best.episode } : null;
 }
 
 const WHOLE_NUMBER = /^\d+$/;

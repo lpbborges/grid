@@ -83,8 +83,10 @@ pub fn is_valid_file_idx(value: i64) -> bool {
 /// resolve to a non-subtitle file (e.g. the main video) before we ever fetch
 /// its contents — the file could be multiple gigabytes.
 pub fn is_subtitle_file_name(name: &str) -> bool {
-    let lower = name.to_lowercase();
-    lower.ends_with(".srt") || lower.ends_with(".vtt")
+    std::path::Path::new(name)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("srt") || ext.eq_ignore_ascii_case("vtt"))
 }
 
 pub fn is_allowed_subtitle_url(raw_url: &str) -> bool {

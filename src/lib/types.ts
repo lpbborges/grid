@@ -1,3 +1,5 @@
+import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
+
 export interface Torrent {
   url: string;
   hash: string;
@@ -117,12 +119,13 @@ export interface CinemetaMeta {
 }
 
 /** A user's audio preference, as stored in `settingsStore.audio`. */
-export type AudioPreference = 'pt' | 'original' | 'en' | 'es';
+export const AUDIO_PREFERENCES = ['pt', 'original', 'en', 'es'] as const;
+export type AudioPreference = (typeof AUDIO_PREFERENCES)[number];
 
-export const AUDIO_PREFERENCES: readonly AudioPreference[] = ['pt', 'original', 'en', 'es'];
+const AUDIO_PREFERENCE_SET = new Set<string>(AUDIO_PREFERENCES);
 
 export function isAudioPreference(value: string): value is AudioPreference {
-  return (AUDIO_PREFERENCES as readonly string[]).includes(value);
+  return AUDIO_PREFERENCE_SET.has(value);
 }
 
 /** One entry of the OpenSubtitles (strem.io) addon's `subtitles` response array. */
@@ -141,8 +144,6 @@ export interface TorrentEngineDetails {
     length: number;
   }[];
 }
-
-import type { ParsedAudioTrack } from '$lib/utils/audioTrack';
 
 /** Everything a backend needs to start one stream. */
 export interface PlaybackRequest {

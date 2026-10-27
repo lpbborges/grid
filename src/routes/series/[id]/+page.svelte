@@ -132,19 +132,26 @@
   // to a different series) — not on the initial mount, when there is nothing
   // to stop yet. Calling stop() unconditionally on mount let this effect race
   // with an immediate play() click (see the video-cache feature's Task 9).
-  let hasMountedTorrentEffect = false;
   let autoplayStarted = false;
   let autoplayPending = $state(untrack(() => data.autoplay));
+  let lastSeriesId: string | undefined = undefined;
+
+  function resetSeriesNavigation() {
+    autoplayStarted = false;
+    autoplayPending = untrack(() => data.autoplay);
+    selectedSeason = untrack(() => focusEpisode?.season) ?? null;
+    translatedEpisodes = {};
+    untrack(() => player.stop());
+  }
+
   $effect(() => {
     if (seriesId) {
-      autoplayStarted = false;
-      autoplayPending = untrack(() => data.autoplay);
-      selectedSeason = untrack(() => focusEpisode?.season) ?? null;
-      translatedEpisodes = {};
-      if (hasMountedTorrentEffect) {
-        untrack(() => player.stop());
+      if (lastSeriesId !== undefined && lastSeriesId !== seriesId) {
+        resetSeriesNavigation();
+      } else if (lastSeriesId === undefined) {
+        selectedSeason = untrack(() => focusEpisode?.season) ?? null;
       }
-      hasMountedTorrentEffect = true;
+      lastSeriesId = seriesId;
     }
   });
 
